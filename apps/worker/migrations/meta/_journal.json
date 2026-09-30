@@ -71,6 +71,13 @@
       "when": 1790810351955,
       "tag": "0009_look_pins_feed",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790811557838,
+      "tag": "0010_backdrop_pins",
+      "breakpoints": true
     }
   ]
 }

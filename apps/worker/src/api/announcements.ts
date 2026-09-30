@@ -3,9 +3,11 @@ import { HTTPException } from 'hono/http-exception';
 import { and, eq, isNull } from 'drizzle-orm';
 import {
   commentSchema,
+  pinSchema,
   createAnnouncementSchema,
   reactionSchema,
   templateInputSchema,
+  readBackdrop,
   readPattern,
   type DesignTemplate,
 } from '@church/shared';
@@ -26,8 +28,10 @@ import {
   listComments,
   toggleReaction,
 } from '../lib/announcements';
+import { audit } from '../lib/audit';
 import { getAppUrl } from '../lib/church';
 import { assertGroupMedia, signedMediaUrl } from '../lib/media';
+import { markPostRead } from '../lib/feed';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi } from '../lib/telegram';
 import { idParam, parseBody } from './util';
@@ -50,6 +54,7 @@ groupAnnouncementRoutes.get('/:id/announcements', async (c) => {
       secret: c.env.WEBHOOK_SECRET,
       before,
       canModerate: () => moderate,
+      pinned: 'first',
     }),
   );
 });
@@ -110,6 +115,7 @@ myAnnouncementRoutes.get('/', async (c) => {
       viewer: user,
       secret: c.env.WEBHOOK_SECRET,
       limit: 5,
+      pinned: 'first',
       canModerate: (g) => user.isAdmin || moderated.has(g),
     }),
   );
@@ -127,6 +133,33 @@ async function loadPost(c: { get: (k: 'db' | 'user') => unknown }, id: number) {
   if (!access.member) throw new HTTPException(404, { message: 'not_found' });
   return { db, user, post, moderate: access.perms.has('announce') };
 }
+
+/** Pin or unpin: pinned posts lead the ministry's feed. */
+announcementRoutes.post('/:id/pin', async (c) => {
+  const { db, user, post, moderate } = await loadPost(c, idParam(c));
+  if (!moderate) throw new HTTPException(403, { message: 'forbidden' });
+  const { pinned } = await parseBody(c, pinSchema);
+  await db
+    .update(announcements)
+    .set({ pinnedAt: pinned ? new Date().toISOString() : null })
+    .where(eq(announcements.id, post.id));
+  await audit(db, {
+    actorUserId: user.id,
+    action: pinned ? 'announcement_pinned' : 'announcement_unpinned',
+    entity: 'group',
+    entityId: post.groupId,
+    groupId: post.groupId,
+    data: { announcementId: post.id },
+  });
+  return c.json({ ok: true });
+});
+
+/** Opening a post: its comments count as read. */
+announcementRoutes.post('/:id/read', async (c) => {
+  const { db, user, post } = await loadPost(c, idParam(c));
+  await markPostRead(db, user.id, post.id);
+  return c.json({ ok: true });
+});
 
 announcementRoutes.post('/:id/reactions', async (c) => {
   const { db, user, post } = await loadPost(c, idParam(c));
@@ -211,6 +244,10 @@ templateRoutes.get('/', async (c) => {
       pattern: readPattern(r.pattern),
       textColor: r.textColor,
       logoUrl: r.logoMediaId ? await signedMediaUrl(c.env.WEBHOOK_SECRET, r.logoMediaId) : null,
+      backdrop: readBackdrop(r.backdrop),
+      backdropUrl: readBackdrop(r.backdrop)
+        ? await signedMediaUrl(c.env.WEBHOOK_SECRET, readBackdrop(r.backdrop)!.mediaId)
+        : null,
       mine: r.createdBy === user.id,
     })),
   );
@@ -222,11 +259,9 @@ templateRoutes.post('/', async (c) => {
   const user = c.get('user');
   if (!(await canDesign(c))) throw new HTTPException(403, { message: 'forbidden' });
   const input = await parseBody(c, templateInputSchema);
-  if (input.logoMediaId) {
-    const m = await db.query.media.findFirst({
-      columns: { id: true },
-      where: eq(media.id, input.logoMediaId),
-    });
+  for (const id of [input.logoMediaId, input.backdrop?.mediaId]) {
+    if (!id) continue;
+    const m = await db.query.media.findFirst({ columns: { id: true }, where: eq(media.id, id) });
     if (!m) throw new HTTPException(400, { message: 'invalid_media' });
   }
   const [row] = await db
@@ -237,6 +272,7 @@ templateRoutes.post('/', async (c) => {
       pattern: input.pattern ? JSON.stringify(input.pattern) : null,
       textColor: input.textColor,
       logoMediaId: input.logoMediaId ?? null,
+      backdrop: input.backdrop ? JSON.stringify(input.backdrop) : null,
       createdBy: user.id,
     })
     .returning({ id: designTemplates.id });

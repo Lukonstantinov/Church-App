@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEnv } from '../lib/env';
 import { useT } from '../lib/i18n';
-import { PatternLayer, onBrandStyle } from './PatternLayer';
+import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 
 /** Page container. `tabs` leaves room for the floating tab bar. */
 export function Screen({ children, tabs }: { children: ReactNode; tabs?: boolean }) {
@@ -41,11 +41,14 @@ export function Section({
   footer,
   children,
   action,
+  sticky,
 }: {
   title?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
   action?: ReactNode;
+  /** Clip with overflow: clip, which (unlike hidden) lets a sticky child stay stuck. */
+  sticky?: boolean;
 }) {
   return (
     <section>
@@ -59,7 +62,9 @@ export function Section({
           {action}
         </div>
       )}
-      <div className="glass overflow-hidden rounded-[var(--radius-card)] shadow-card">
+      <div
+        className={`glass rounded-[var(--radius-card)] shadow-card ${sticky ? 'overflow-clip' : 'overflow-hidden'}`}
+      >
         {children}
       </div>
       {footer && <p className="mt-2 px-3 text-[13px] leading-snug text-hint">{footer}</p>}
@@ -382,13 +387,14 @@ export function HeroCard({
 }) {
   // Inside a ministry, its pattern decorates the hero blocks too.
   const { env } = useEnv();
-  const on = onBrandStyle(env?.textColor, !!env?.pattern);
+  const on = onBrandStyle(env?.textColor, !!env?.pattern || !!env?.backdropUrl);
   return (
     <div
       className={`brand-gradient relative overflow-hidden rounded-[var(--radius-card)] p-5 shadow-cta ${on.className} ${className}`}
       style={on.style}
     >
       <PatternLayer pattern={env?.pattern} logoUrl={env?.logoUrl} />
+      <BackdropLayer backdrop={env?.backdrop} url={env?.backdropUrl} />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/15 blur-2xl"

@@ -89,6 +89,8 @@ export const groups = sqliteTable('groups', {
   animation: text('animation').notNull().default('rise'),
   /** Colour of the "new posts" counter on the ministry card; NULL = the theme colour. */
   badgeColor: text('badge_color'),
+  /** Photo behind the ministry card (BackdropConfig JSON), NULL = colours only. */
+  backdrop: text('backdrop'),
   archivedAt: text('archived_at'),
   createdAt: createdAt(),
 });
@@ -291,6 +293,8 @@ export const announcements = sqliteTable(
     /** Design template used as the poster background when there are no photos. */
     templateId: integer('template_id'),
     recipients: integer('recipients').notNull().default(0),
+    /** Pinned posts come first in the ministry's feed. */
+    pinnedAt: text('pinned_at'),
     deletedAt: text('deleted_at'),
     createdAt: createdAt(),
   },
@@ -536,6 +540,8 @@ export const designTemplates = sqliteTable('design_templates', {
   textColor: text('text_color').notNull().default('auto'),
   /** Logo shown in the pattern when it uses the logo (media id). */
   logoMediaId: integer('logo_media_id'),
+  /** Photo background (BackdropConfig JSON). */
+  backdrop: text('backdrop'),
   createdBy: integer('created_by').references(() => users.id),
   createdAt: createdAt(),
 });
@@ -554,4 +560,19 @@ export const feedReads = sqliteTable(
     lastCommentId: integer('last_comment_id').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.userId, t.groupId] })],
+);
+
+/** The last comment each person has seen under a post (its own unread counter). */
+export const postReads = sqliteTable(
+  'post_reads',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    announcementId: integer('announcement_id')
+      .notNull()
+      .references(() => announcements.id),
+    lastCommentId: integer('last_comment_id').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.announcementId] })],
 );

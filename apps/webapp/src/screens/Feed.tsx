@@ -18,6 +18,8 @@ import {
   useFeed,
   useGroup,
   useMarkFeedRead,
+  useMarkPostRead,
+  usePinPost,
 } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
 
@@ -87,6 +89,8 @@ export function PostScreen({ groupId, postId }: { groupId: number; postId: numbe
   const add = useAddComment(groupId, postId);
   const delComment = useDeleteComment(groupId, postId);
   const delPost = useDeletePost(groupId);
+  const pin = usePinPost(groupId);
+  const { mutate: markRead } = useMarkPostRead();
   const [text, setText] = useState('');
   const [viewing, setViewing] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -95,6 +99,9 @@ export function PostScreen({ groupId, postId }: { groupId: number; postId: numbe
   useEffect(() => {
     if (count) endRef.current?.scrollIntoView({ block: 'end' });
   }, [count]);
+  // Seen on open, and again whenever new messages arrive while it's open.
+  const lastCommentId = comments.data?.at(-1)?.id ?? 0;
+  useEffect(() => markRead(postId), [markRead, postId, lastCommentId]);
 
   if (feed.isPending) return <Loading />;
   if (!post) return <Loading />;
@@ -145,6 +152,19 @@ export function PostScreen({ groupId, postId }: { groupId: number; postId: numbe
           </div>
           <p className="whitespace-pre-line text-[17px] leading-relaxed">{post.text}</p>
           <Reactions post={post} />
+          {post.canPin && (
+            <button
+              type="button"
+              disabled={pin.isPending}
+              onClick={() => {
+                haptic.tap();
+                pin.mutate({ postId: post.id, pinned: !post.pinned });
+              }}
+              className="flex items-center gap-1.5 self-start text-[14px] font-semibold text-link"
+            >
+              📌 {post.pinned ? t.feed.unpinPost : t.feed.pinPost}
+            </button>
+          )}
           {post.canDelete && (
             <button
               type="button"

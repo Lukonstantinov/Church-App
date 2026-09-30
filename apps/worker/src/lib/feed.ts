@@ -1,11 +1,17 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { announcementComments, announcements, feedReads, memberships } from '../db/schema';
+import {
+  announcementComments,
+  announcements,
+  feedReads,
+  memberships,
+  postReads,
+} from '../db/schema';
 
 /**
- * Unread counters per ministry for one person: posts and chat messages (comments)
- * by others that arrived after the last time they opened the feed — or, if they never
- * have, after they joined.
+ * Unread counters per ministry for one person: posts by others since they last opened
+ * the feed, and comments by others under each post since they last opened that post —
+ * never counting anything from before they joined.
  */
 export async function unreadCounts(
   db: Db,
@@ -32,7 +38,11 @@ export async function unreadCounts(
           and a.deleted_at is null
           and c.deleted_at is null
           and c.user_id <> ${userId}
-          and c.id > coalesce(${feedReads.lastCommentId}, 0)
+          and c.id > max(
+            coalesce(${feedReads.lastCommentId}, 0),
+            coalesce((select pr.last_comment_id from ${postReads} pr
+                      where pr.user_id = ${userId} and pr.announcement_id = a.id), 0)
+          )
           and c.created_at > coalesce(${memberships.joinedAt}, ${memberships.createdAt})
       )`,
     })
@@ -53,23 +63,69 @@ export async function unreadCounts(
   return out;
 }
 
+/** Opening the feed: every post in it counts as seen (comments count per post). */
 export async function markFeedRead(db: Db, userId: number, groupId: number) {
   const [post] = await db
     .select({ id: sql<number>`coalesce(max(${announcements.id}), 0)` })
     .from(announcements)
     .where(eq(announcements.groupId, groupId));
-  const [comment] = await db
-    .select({ id: sql<number>`coalesce(max(${announcementComments.id}), 0)` })
-    .from(announcementComments)
-    .innerJoin(announcements, eq(announcements.id, announcementComments.announcementId))
-    .where(eq(announcements.groupId, groupId));
   const lastPostId = Number(post?.id ?? 0);
-  const lastCommentId = Number(comment?.id ?? 0);
   await db
     .insert(feedReads)
-    .values({ userId, groupId, lastPostId, lastCommentId })
+    .values({ userId, groupId, lastPostId, lastCommentId: 0 })
+    .onConflictDoUpdate({ target: [feedReads.userId, feedReads.groupId], set: { lastPostId } });
+}
+
+/** Opening a post: its comments so far count as seen. */
+export async function markPostRead(db: Db, userId: number, announcementId: number) {
+  const [row] = await db
+    .select({ id: sql<number>`coalesce(max(${announcementComments.id}), 0)` })
+    .from(announcementComments)
+    .where(eq(announcementComments.announcementId, announcementId));
+  const lastCommentId = Number(row?.id ?? 0);
+  await db
+    .insert(postReads)
+    .values({ userId, announcementId, lastCommentId })
     .onConflictDoUpdate({
-      target: [feedReads.userId, feedReads.groupId],
-      set: { lastPostId, lastCommentId },
+      target: [postReads.userId, postReads.announcementId],
+      set: { lastCommentId },
     });
+}
+
+/** New comments by others under each of these posts, for one person. */
+export async function unreadByPost(
+  db: Db,
+  userId: number,
+  announcementIds: number[],
+): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (announcementIds.length === 0) return out;
+  const rows = await db
+    .select({ id: announcementComments.announcementId, n: sql<number>`count(*)` })
+    .from(announcementComments)
+    .innerJoin(announcements, eq(announcements.id, announcementComments.announcementId))
+    .leftJoin(
+      postReads,
+      and(eq(postReads.announcementId, announcements.id), eq(postReads.userId, userId)),
+    )
+    .leftJoin(
+      feedReads,
+      and(eq(feedReads.groupId, announcements.groupId), eq(feedReads.userId, userId)),
+    )
+    .leftJoin(
+      memberships,
+      and(eq(memberships.groupId, announcements.groupId), eq(memberships.userId, userId)),
+    )
+    .where(
+      and(
+        inArray(announcementComments.announcementId, announcementIds),
+        isNull(announcementComments.deletedAt),
+        ne(announcementComments.userId, userId),
+        sql`${announcementComments.id} > max(coalesce(${postReads.lastCommentId}, 0), coalesce(${feedReads.lastCommentId}, 0))`,
+        sql`${announcementComments.createdAt} > coalesce(${memberships.joinedAt}, ${memberships.createdAt}, '')`,
+      ),
+    )
+    .groupBy(announcementComments.announcementId);
+  for (const r of rows) out.set(r.id, Number(r.n));
+  return out;
 }

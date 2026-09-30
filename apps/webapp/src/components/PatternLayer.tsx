@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { patternBackground, resolveTextColor, type PatternConfig } from '@church/shared';
+import {
+  backdropGeometry,
+  patternBackground,
+  resolveTextColor,
+  type BackdropConfig,
+  type PatternConfig,
+} from '@church/shared';
 
 const dataUrlCache = new Map<string, string>();
 
@@ -69,6 +75,59 @@ export function PatternLayer({
         <span
           className="absolute inset-0"
           style={{ background: shade < 0 ? `rgba(0,0,0,${-shade})` : `rgba(255,255,255,${shade})` }}
+        />
+      )}
+    </span>
+  );
+}
+
+/**
+ * A photo over the card's colours: the whole card, or one part of it fading into the
+ * pattern on the rest. Goes after PatternLayer. Parent: relative + overflow-hidden.
+ */
+export function BackdropLayer({
+  backdrop,
+  url,
+}: {
+  backdrop: BackdropConfig | null | undefined;
+  url: string | null | undefined;
+}) {
+  if (!backdrop || !url) return null;
+  const { box, mask } = backdropGeometry(backdrop);
+  const focus = `${backdrop.focusX}% ${backdrop.focusY}%`;
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute overflow-hidden"
+      style={{
+        left: `${box.left}%`,
+        top: `${box.top}%`,
+        width: `${box.width}%`,
+        height: `${box.height}%`,
+        maskImage: mask ?? undefined,
+        WebkitMaskImage: mask ?? undefined,
+      }}
+    >
+      <img
+        src={url}
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{
+          objectPosition: focus,
+          transform: backdrop.zoom > 1 ? `scale(${backdrop.zoom})` : undefined,
+          transformOrigin: focus,
+        }}
+      />
+      {backdrop.dim !== 0 && (
+        <span
+          className="absolute inset-0"
+          style={{
+            background:
+              backdrop.dim < 0
+                ? `rgba(0,0,0,${-backdrop.dim})`
+                : `rgba(255,255,255,${backdrop.dim})`,
+          }}
         />
       )}
     </span>

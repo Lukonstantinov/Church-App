@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   ENTER_ANIMATIONS,
   PERMISSIONS,
+  readBackdrop,
   readPattern,
   type EnterAnimation,
   addExistingMemberSchema,
@@ -38,7 +39,7 @@ import { randomCode } from '../lib/codes';
 import { churchDefaultLocale } from '../lib/church';
 import { groupLogoUrl } from '../lib/groups';
 import { markFeedRead, unreadCounts } from '../lib/feed';
-import { assertGroupMedia } from '../lib/media';
+import { assertGroupMedia, signedMediaUrl } from '../lib/media';
 import { createDefaultPositions, defaultPositionId, permsOf, roleFor } from '../lib/positions';
 import { botApi, botUsername, inviteLink } from '../lib/telegram';
 import { startChatLink, unlinkChat } from '../lib/chats';
@@ -46,7 +47,12 @@ import { idParam, parseBody } from './util';
 
 export const groupRoutes = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
-async function summarize(db: Db, user: User, list: Group[]): Promise<GroupSummary[]> {
+async function summarize(
+  db: Db,
+  user: User,
+  list: Group[],
+  secret: string,
+): Promise<GroupSummary[]> {
   if (list.length === 0) return [];
   const ids = list.map((g) => g.id);
   const [counts, leaders, mine, unread] = await Promise.all([
@@ -94,41 +100,46 @@ async function summarize(db: Db, user: User, list: Group[]): Promise<GroupSummar
   ]);
   const countBy = new Map(counts.map((c) => [c.groupId, c]));
   const mineBy = new Map(mine.map((m) => [m.groupId, m]));
-  return list.map((g) => {
-    const m = mineBy.get(g.id);
-    const myRole: GroupRole | null = m?.role ?? null;
-    const myPermissions: Permission[] = user.isAdmin
-      ? [...PERMISSIONS]
-      : m?.permissions
-        ? normalizePermissions(m.permissions)
-        : m?.role === 'leader'
-          ? [...PERMISSIONS]
-          : [];
-    const manages = myPermissions.includes('people.manage');
-    return {
-      id: g.id,
-      name: g.name,
-      description: g.description,
-      archived: g.archivedAt !== null,
-      activeCount: Number(countBy.get(g.id)?.active ?? 0),
-      pendingCount: manages ? Number(countBy.get(g.id)?.pending ?? 0) : 0,
-      leaderNames: leaders.filter((l) => l.groupId === g.id).map(displayName),
-      myRole,
-      myPermissions,
-      positionName: m?.positionName ?? null,
-      brandColor: g.brandColor,
-      pattern: readPattern(g.pattern),
-      textColor: g.textColor,
-      badgeColor: g.badgeColor,
-      logoMediaId: g.logoMediaId,
-      unreadPosts: unread.get(g.id)?.posts ?? 0,
-      unreadComments: unread.get(g.id)?.comments ?? 0,
-      animation: (ENTER_ANIMATIONS as readonly string[]).includes(g.animation)
-        ? (g.animation as EnterAnimation)
-        : 'rise',
-      logoUrl: groupLogoUrl(g),
-    };
-  });
+  return Promise.all(
+    list.map(async (g) => {
+      const m = mineBy.get(g.id);
+      const myRole: GroupRole | null = m?.role ?? null;
+      const myPermissions: Permission[] = user.isAdmin
+        ? [...PERMISSIONS]
+        : m?.permissions
+          ? normalizePermissions(m.permissions)
+          : m?.role === 'leader'
+            ? [...PERMISSIONS]
+            : [];
+      const manages = myPermissions.includes('people.manage');
+      const backdrop = readBackdrop(g.backdrop);
+      return {
+        id: g.id,
+        name: g.name,
+        description: g.description,
+        archived: g.archivedAt !== null,
+        activeCount: Number(countBy.get(g.id)?.active ?? 0),
+        pendingCount: manages ? Number(countBy.get(g.id)?.pending ?? 0) : 0,
+        leaderNames: leaders.filter((l) => l.groupId === g.id).map(displayName),
+        myRole,
+        myPermissions,
+        positionName: m?.positionName ?? null,
+        brandColor: g.brandColor,
+        pattern: readPattern(g.pattern),
+        textColor: g.textColor,
+        badgeColor: g.badgeColor,
+        logoMediaId: g.logoMediaId,
+        unreadPosts: unread.get(g.id)?.posts ?? 0,
+        unreadComments: unread.get(g.id)?.comments ?? 0,
+        animation: (ENTER_ANIMATIONS as readonly string[]).includes(g.animation)
+          ? (g.animation as EnterAnimation)
+          : 'rise',
+        logoUrl: groupLogoUrl(g),
+        backdrop,
+        backdropUrl: backdrop ? await signedMediaUrl(secret, backdrop.mediaId) : null,
+      };
+    }),
+  );
 }
 
 /** Admins: all groups (archived with ?archived=1). Others: groups they actively belong to. */
@@ -156,7 +167,7 @@ groupRoutes.get('/', async (c) => {
       .orderBy(groups.sort, groups.name);
     list = rows.map((r) => r.group);
   }
-  return c.json(await summarize(db, user, list));
+  return c.json(await summarize(db, user, list, c.env.WEBHOOK_SECRET));
 });
 
 groupRoutes.post('/', async (c) => {
@@ -183,7 +194,7 @@ groupRoutes.get('/:id', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
   const group = await assertCanViewGroup(db, user, idParam(c));
-  const [summary] = await summarize(db, user, [group]);
+  const [summary] = await summarize(db, user, [group], c.env.WEBHOOK_SECRET);
   const perms = (await accessIn(db, user, group.id)).perms;
   const detail: GroupDetail = {
     ...summary!,
@@ -205,12 +216,14 @@ groupRoutes.patch('/:id', async (c) => {
   const group = await assertCan(db, user, idParam(c), 'settings');
   const input = await parseBody(c, updateGroupSchema);
   if (input.logoMediaId) await assertGroupMedia(db, group.id, input.logoMediaId);
-  const { pattern, ...rest } = input;
+  if (input.backdrop) await assertGroupMedia(db, group.id, input.backdrop.mediaId);
+  const { pattern, backdrop, ...rest } = input;
   await db
     .update(groups)
     .set({
       ...rest,
       ...(pattern !== undefined ? { pattern: pattern && JSON.stringify(pattern) } : {}),
+      ...(backdrop !== undefined ? { backdrop: backdrop && JSON.stringify(backdrop) } : {}),
     })
     .where(eq(groups.id, group.id));
   await audit(db, {

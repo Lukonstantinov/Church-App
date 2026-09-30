@@ -1,5 +1,5 @@
 import { displayName, type MeResponse } from '@church/shared';
-import { FeedEntry } from '../components/FeedEntry';
+import { FeedHighlights } from '../components/FeedEntry';
 import { PosterCard } from '../components/Poster';
 import { useEnv } from '../lib/env';
 import { AttendanceSummary } from '../components/AttendanceSummary';
@@ -41,7 +41,7 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
   const inScope = <T extends { groupId: number }>(list: T[] | undefined) =>
     groupId === undefined ? list : list?.filter((x) => x.groupId === groupId);
   const att = useMyAttendance(active.length > 0);
-  const news = useMyAnnouncements(active.length > 0);
+  const news = useMyAnnouncements(active.length > 0 && !env);
   const finance = useMyFinance(active.length > 0);
   const events = useMyEvents(active.length > 0);
   const chats = active.filter((m) => m.chatUrl);
@@ -70,6 +70,8 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
           ))}
         </Section>
       )}
+
+      {env && active.length > 0 && <FeedHighlights g={env} fallbackTheme={me.church.brandColor} />}
 
       {active.length === 0 && pending.length === 0 && (
         <Card>
@@ -154,9 +156,7 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
         <MyDuesCard key={g.groupId} g={g} showGroup={active.length > 1} />
       ))}
 
-      {env && <FeedEntry g={env} fallbackTheme={me.church.brandColor} />}
-
-      {(inScope(news.data) ?? []).length > 0 && (
+      {!env && (inScope(news.data) ?? []).length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
             {t.home.announcements}

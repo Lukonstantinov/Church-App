@@ -25,7 +25,7 @@ import { useT } from '../lib/i18n';
 import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
 import { useGroupStats, useMe } from '../lib/queries';
-import { FeedEntry } from '../components/FeedEntry';
+import { FeedHighlights } from '../components/FeedEntry';
 
 const HOUR = 3_600_000;
 
@@ -51,6 +51,8 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
         active={active}
         subtitle={t.common.members(active.activeCount)}
       />
+
+      <FeedHighlights g={active} fallbackTheme={me.data?.church.brandColor ?? 'blue'} />
 
       {!s ? (
         <>
@@ -125,8 +127,6 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
               </EmptyState>
             </Card>
           )}
-
-          <FeedEntry g={active} fallbackTheme={me.data?.church.brandColor ?? 'blue'} />
 
           {(can('announce') || can('meetings.manage') || can('people.manage')) && (
             <div className="grid grid-cols-3 gap-3">

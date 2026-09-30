@@ -11,7 +11,7 @@ import { useT } from '../lib/i18n';
 import { useMe, useReact } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 import { IconMegaphone } from './icons';
-import { PatternLayer, onBrandStyle } from './PatternLayer';
+import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 
 /**
  * The picture part of a post: a collage of up to four photos (with "+N" for more), a
@@ -36,7 +36,10 @@ export function PosterMedia({
   const me = useMe();
   if (photos.length === 0 && !title) return null;
   const theme = resolveBrand(look?.brandColor ?? me.data?.church.brandColor);
-  const on = onBrandStyle(look?.textColor ?? 'auto', photos.length > 0 || !!look?.pattern);
+  const on = onBrandStyle(
+    look?.textColor ?? 'auto',
+    photos.length > 0 || !!look?.pattern || !!look?.backdropUrl,
+  );
   const shown = photos.slice(0, 4);
   const extra = photos.length - shown.length;
 
@@ -92,7 +95,14 @@ export function PosterMedia({
           : { background: `linear-gradient(145deg, ${theme.light}, ${theme.partner})` }
       }
     >
-      {photos.length > 0 ? grid : <PatternLayer pattern={look?.pattern} logoUrl={look?.logoUrl} />}
+      {photos.length > 0 ? (
+        grid
+      ) : (
+        <>
+          <PatternLayer pattern={look?.pattern} logoUrl={look?.logoUrl} />
+          <BackdropLayer backdrop={look?.backdrop} url={look?.backdropUrl} />
+        </>
+      )}
       {tint && (
         <span
           aria-hidden="true"
@@ -191,7 +201,7 @@ export function PosterCard({
   const hasPoster = post.photos.length > 0 || !!post.title;
   return (
     <article
-      className="glass overflow-hidden rounded-[var(--radius-card)] shadow-card"
+      className={`glass overflow-hidden rounded-[var(--radius-card)] shadow-card ${post.pinned ? 'ring-2 ring-[var(--brand)]/45' : ''}`}
       onClick={onOpen}
       role="button"
       tabIndex={0}
@@ -212,6 +222,11 @@ export function PosterCard({
               <IconMegaphone size={15} />
             </span>
           )}
+          {post.pinned && (
+            <span className="shrink-0 rounded-full bg-brand/15 px-2 py-0.5 text-[12px] font-bold text-accent">
+              📌 {t.feed.pinnedPost}
+            </span>
+          )}
           <span className="truncate">
             {showGroup ? `${post.groupName} · ` : ''}
             {post.author ? `${displayName(post.author)} · ` : ''}
@@ -221,8 +236,13 @@ export function PosterCard({
         <p className="line-clamp-4 whitespace-pre-line text-[16px] leading-relaxed">{post.text}</p>
         <div className="flex items-center justify-between gap-2">
           <Reactions post={post} />
-          <span className="shrink-0 text-[13px] font-medium text-hint">
+          <span className="flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-hint">
             💬 {t.feed.comments(post.commentCount)}
+            {post.unreadComments > 0 && (
+              <span className="min-w-[20px] rounded-full bg-[#ef4444] px-1.5 text-center text-[12px] font-bold leading-[20px] text-white">
+                +{post.unreadComments > 99 ? '99' : post.unreadComments}
+              </span>
+            )}
           </span>
         </div>
       </div>

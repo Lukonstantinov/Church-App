@@ -7,7 +7,7 @@ import {
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { BrandHeader } from '../components/BrandHeader';
-import { PatternLayer, onBrandStyle } from '../components/PatternLayer';
+import { BackdropLayer, PatternLayer, onBrandStyle } from '../components/PatternLayer';
 import { UnreadBadges } from '../components/FeedEntry';
 import { IconPlus, IconSettings, IconUsers } from '../components/icons';
 import { Badge, Card, EmptyState, Loading, Row, Screen, Section } from '../components/ui';
@@ -144,7 +144,7 @@ export function EnvCard({
 }) {
   const t = useT();
   const theme = resolveBrand(g.brandColor ?? fallbackTheme);
-  const on = onBrandStyle(g.textColor, !!g.pattern);
+  const on = onBrandStyle(g.textColor, !!g.pattern || !!g.backdropUrl);
   const initials = g.name
     .split(/\s+/)
     .filter(Boolean)
@@ -163,6 +163,7 @@ export function EnvCard({
       }}
     >
       <PatternLayer pattern={g.pattern} logoUrl={g.logoUrl} />
+      <BackdropLayer backdrop={g.backdrop} url={g.backdropUrl} />
       <span
         aria-hidden="true"
         className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15 blur-2xl"

@@ -48,9 +48,18 @@ export function PostEditor({ groupId }: { groupId: number }) {
         pattern: tpl.pattern,
         textColor: tpl.textColor,
         logoUrl: tpl.logoUrl,
+        backdrop: tpl.backdrop,
+        backdropUrl: tpl.backdropUrl,
       }
     : g
-      ? { brandColor: g.brandColor, pattern: g.pattern, textColor: g.textColor, logoUrl: g.logoUrl }
+      ? {
+          brandColor: g.brandColor,
+          pattern: g.pattern,
+          textColor: g.textColor,
+          logoUrl: g.logoUrl,
+          backdrop: g.backdrop,
+          backdropUrl: g.backdropUrl,
+        }
       : null;
 
   async function addPhotos(files: FileList | null) {

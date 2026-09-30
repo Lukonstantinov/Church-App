@@ -473,6 +473,27 @@ export function useDeletePost(groupId: number) {
   });
 }
 
+export function usePinPost(groupId: number) {
+  const changed = useFeedChanged(groupId);
+  return useMutation({
+    mutationFn: ({ postId, pinned }: { postId: number; pinned: boolean }) =>
+      apiFetch(`/announcements/${postId}/pin`, send('POST', { pinned })),
+    onSuccess: changed,
+  });
+}
+
+/** Opening a post clears its own new-messages counter (and the card's red one). */
+export function useMarkPostRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (postId: number) => apiFetch(`/announcements/${postId}/read`, send('POST')),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.groups });
+      void qc.invalidateQueries({ queryKey: keys.myAnnouncements });
+    },
+  });
+}
+
 /** Opening the feed clears the unread counters on the ministry card. */
 export function useMarkFeedRead(groupId: number) {
   const qc = useQueryClient();

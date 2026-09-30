@@ -167,7 +167,7 @@ describe('ministry feed', () => {
     expect(feed).toEqual([]);
   });
 
-  it('counts unread posts and chat messages until the feed is opened', async () => {
+  it('counts new posts until the feed is opened, and new messages until their post is', async () => {
     const g = await createEnv('Счётчики');
     const m = fakeUser('Счётчик');
     await join(m, g);
@@ -188,7 +188,16 @@ describe('ministry feed', () => {
     });
     expect(await summaryFor(m, g.id)).toMatchObject({ unreadPosts: 2, unreadComments: 1 });
     await apiJson(`/api/groups/${g.id}/feed/read`, { method: 'POST', user: m });
+    expect(await summaryFor(m, g.id)).toMatchObject({ unreadPosts: 0, unreadComments: 1 });
+    const feed = await apiJson<AnnouncementRow[]>(`/api/groups/${g.id}/announcements`, { user: m });
+    expect(feed.find((p) => p.id === post.announcement.id)!.unreadComments).toBe(1);
+    expect(feed.find((p) => p.id !== post.announcement.id)!.unreadComments).toBe(0);
+    await apiJson(`/api/announcements/${post.announcement.id}/read`, { method: 'POST', user: m });
     expect(await summaryFor(m, g.id)).toMatchObject({ unreadPosts: 0, unreadComments: 0 });
+    const after = await apiJson<AnnouncementRow[]>(`/api/groups/${g.id}/announcements`, {
+      user: m,
+    });
+    expect(after.every((p) => p.unreadComments === 0)).toBe(true);
     // Own messages never count.
     await apiJson(`/api/announcements/${post.announcement.id}/comments`, {
       method: 'POST',
@@ -197,6 +206,100 @@ describe('ministry feed', () => {
     });
     expect((await summaryFor(m, g.id)).unreadComments).toBe(0);
     expect((await summaryFor(ADMIN, g.id)).unreadComments).toBe(0); // admin isn't a member
+  });
+
+  it('pinned posts lead the feed; only moderators pin', async () => {
+    const g = await createEnv('Закрепы');
+    const m = fakeUser('Смотрящий');
+    await join(m, g);
+    const post = (text: string) =>
+      apiJson<AnnouncementResult>(`/api/groups/${g.id}/announcements`, {
+        method: 'POST',
+        user: ADMIN,
+        json: { text, notify: false },
+      });
+    const old = await post('Старое важное');
+    await post('Новое');
+    await post('Новейшее');
+    expect(
+      (
+        await api(`/api/announcements/${old.announcement.id}/pin`, {
+          method: 'POST',
+          user: m,
+          json: { pinned: true },
+        })
+      ).status,
+    ).toBe(403);
+    await apiJson(`/api/announcements/${old.announcement.id}/pin`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { pinned: true },
+    });
+    const feed = await apiJson<AnnouncementRow[]>(`/api/groups/${g.id}/announcements`, { user: m });
+    expect(feed.map((p) => p.text)).toEqual(['Старое важное', 'Новейшее', 'Новое']);
+    expect(feed[0]).toMatchObject({ pinned: true, canPin: false });
+    // Paging back never repeats the pinned post.
+    const older = await apiJson<AnnouncementRow[]>(
+      `/api/groups/${g.id}/announcements?before=${feed[2]!.id}`,
+      { user: m },
+    );
+    expect(older).toEqual([]);
+    await apiJson(`/api/announcements/${old.announcement.id}/pin`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { pinned: false },
+    });
+    const plain = await apiJson<AnnouncementRow[]>(`/api/groups/${g.id}/announcements`, {
+      user: m,
+    });
+    expect(plain.map((p) => p.text)).toEqual(['Новейшее', 'Новое', 'Старое важное']);
+  });
+
+  it('photo background: whole card or split with the pattern; only own media', async () => {
+    const g = await createEnv('Фото фон');
+    const other = await createEnv('Чужое');
+    const mediaId = await upload(g.id);
+    const foreign = await upload(other.id);
+    const backdrop = {
+      mediaId,
+      split: 'left',
+      amount: 0.5,
+      focusX: 30,
+      focusY: 50,
+      zoom: 1.4,
+      dim: -0.3,
+      soft: 0.1,
+    };
+    await apiJson(`/api/groups/${g.id}`, { method: 'PATCH', user: ADMIN, json: { backdrop } });
+    const s = await summaryFor(ADMIN, g.id);
+    expect(s.backdrop).toEqual(backdrop);
+    expect(s.backdropUrl).toMatch(new RegExp(`^/media/m/${mediaId}\\?e=`));
+    expect((await api(s.backdropUrl!)).status).toBe(200);
+    const bad = await api(`/api/groups/${g.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { backdrop: { ...backdrop, mediaId: foreign } },
+    });
+    expect(bad.status).toBe(400);
+    const odd = await api(`/api/groups/${g.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { backdrop: { ...backdrop, split: 'spiral' } },
+    });
+    expect(odd.status).toBe(400);
+    // Posters without photos use the ministry's look, photo included.
+    const res = await apiJson<AnnouncementResult>(`/api/groups/${g.id}/announcements`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'С фоном', text: 'Текст', notify: false },
+    });
+    expect(res.announcement.look).toMatchObject({ backdrop });
+    await apiJson(`/api/groups/${g.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { backdrop: null },
+    });
+    expect((await summaryFor(ADMIN, g.id)).backdropUrl).toBeNull();
   });
 
   it('design templates: save, use as a poster background, delete', async () => {

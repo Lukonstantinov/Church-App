@@ -165,7 +165,7 @@ function Form({ g }: { g: GroupDetail }) {
         />
       </Section>
 
-      <Section title={t.env.look}>
+      <Section title={t.env.look} sticky>
         <PatternDesigner
           env={g}
           fallbackTheme={churchTheme}

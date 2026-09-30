@@ -1,17 +1,21 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import {
+  BACKDROP_SPLITS,
+  DEFAULT_BACKDROP,
   DEFAULT_PATTERN,
   ENTER_ANIMATIONS,
   PATTERN_ALTERNATES,
   PATTERN_KEYS,
   PATTERN_LAYOUTS,
   patternBackground,
+  type BackdropConfig,
   type EnterAnimation,
   type GroupSummary,
   type PatternConfig,
 } from '@church/shared';
 import { useT } from '../lib/i18n';
-import { useSaveTemplate, useTemplates } from '../lib/queries';
+import { preparePhoto } from '../lib/image';
+import { useSaveTemplate, useTemplates, useUploadMedia } from '../lib/queries';
 import { useToast } from './Toast';
 import { haptic } from '../lib/telegram';
 import { EnvCard } from '../screens/Hub';
@@ -40,6 +44,7 @@ export interface Look {
   animation: EnterAnimation;
   badgeColor: string | null;
   brandColor?: string | null;
+  backdrop: BackdropConfig | null;
 }
 
 const BADGE_COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#06b6d4', '#6366f1', '#d946ef', '#111418'];
@@ -66,6 +71,10 @@ export function PatternDesigner({
   const [animation, setAnimation] = useState<EnterAnimation>(env.animation);
   const [badgeColor, setBadgeColor] = useState<string | null>(env.badgeColor);
   const [brandColor, setBrandColor] = useState<string | null>(env.brandColor);
+  const [backdrop, setBackdrop] = useState<BackdropConfig | null>(env.backdrop);
+  const [backdropUrl, setBackdropUrl] = useState<string | null>(env.backdropUrl);
+  const upload = useUploadMedia(env.id, 'event');
+  const photoInput = useRef<HTMLInputElement>(null);
   const [templateName, setTemplateName] = useState('');
   const templates = useTemplates();
   const saveTemplate = useSaveTemplate();
@@ -85,7 +94,22 @@ export function PatternDesigner({
     textColor !== env.textColor ||
     animation !== env.animation ||
     badgeColor !== env.badgeColor ||
-    brandColor !== env.brandColor;
+    brandColor !== env.brandColor ||
+    JSON.stringify(backdrop) !== JSON.stringify(env.backdrop);
+  const setB = (patch: Partial<BackdropConfig>) => setBackdrop((b) => (b ? { ...b, ...patch } : b));
+  async function pickPhoto(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    try {
+      const m = await upload.mutateAsync(await preparePhoto(file, 1400));
+      setBackdrop((b) => ({ ...DEFAULT_BACKDROP, ...(b ?? {}), mediaId: m.id }));
+      setBackdropUrl(m.url);
+    } catch {
+      toast(t.treasury.uploadFailed, 'error');
+    } finally {
+      if (photoInput.current) photoInput.current.value = '';
+    }
+  }
   const customText = textColor.startsWith('#') ? textColor : null;
 
   const chip = (on: boolean, onClick: () => void, children: ReactNode, label: string) => (
@@ -121,22 +145,27 @@ export function PatternDesigner({
 
   return (
     <div className="flex flex-col gap-5 p-4">
-      <div className="sticky top-2 z-10 mx-auto w-1/2 min-w-[170px]">
-        <div key={replay} className={`env-anim-${animation}`}>
-          <EnvCard
-            g={{
-              ...env,
-              pattern,
-              textColor,
-              animation,
-              badgeColor,
-              brandColor,
-              unreadPosts: env.unreadPosts || 3,
-              unreadComments: env.unreadComments || 1,
-            }}
-            fallbackTheme={fallbackTheme}
-            onClick={() => setReplay((r) => r + 1)}
-          />
+      {/* Stays on screen while scrolling through the settings below. */}
+      <div className="glass-strong sticky top-0 z-10 -mx-4 -mt-4 rounded-b-[26px] px-4 pb-3 pt-4">
+        <div className="mx-auto w-1/2 min-w-[170px]">
+          <div key={replay} className={`env-anim-${animation}`}>
+            <EnvCard
+              g={{
+                ...env,
+                pattern,
+                textColor,
+                animation,
+                badgeColor,
+                brandColor,
+                backdrop,
+                backdropUrl,
+                unreadPosts: env.unreadPosts || 3,
+                unreadComments: env.unreadComments || 1,
+              }}
+              fallbackTheme={fallbackTheme}
+              onClick={() => setReplay((r) => r + 1)}
+            />
+          </div>
         </div>
       </div>
 
@@ -150,6 +179,10 @@ export function PatternDesigner({
                   setPattern(tpl.pattern);
                   setTextColor(tpl.textColor);
                   setBrandColor(tpl.brandColor);
+                  if (tpl.backdrop) {
+                    setBackdrop(tpl.backdrop);
+                    setBackdropUrl(tpl.backdropUrl);
+                  }
                 },
                 tpl.name,
               ),
@@ -157,6 +190,91 @@ export function PatternDesigner({
           </div>
         </Group>
       )}
+
+      <Group title={t.env.photo}>
+        <input
+          ref={photoInput}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void pickPhoto(e.target.files)}
+        />
+        <div className="flex flex-wrap gap-2">
+          <SmallButton onClick={() => photoInput.current?.click()}>
+            {upload.isPending
+              ? t.common.saving
+              : backdrop
+                ? t.env.photoChange
+                : `＋ ${t.env.photoAdd}`}
+          </SmallButton>
+          {backdrop && (
+            <SmallButton onClick={() => setBackdrop(null)}>{t.env.photoRemove}</SmallButton>
+          )}
+        </div>
+        {!backdrop && <p className="mt-2 text-[13px] text-hint">{t.env.photoHint}</p>}
+        {backdrop && (
+          <div className="mt-3 flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              {BACKDROP_SPLITS.map((sp) =>
+                pill(backdrop.split === sp, () => setB({ split: sp }), t.env.splits[sp]),
+              )}
+            </div>
+            {backdrop.split !== 'full' && (
+              <>
+                <Slider
+                  label={t.env.photoShare}
+                  value={Math.round(backdrop.amount * 100)}
+                  min={20}
+                  max={80}
+                  suffix="%"
+                  onChange={(v) => setB({ amount: v / 100 })}
+                />
+                <Slider
+                  label={t.env.photoSoft}
+                  value={Math.round(backdrop.soft * 100)}
+                  min={0}
+                  max={40}
+                  suffix="%"
+                  onChange={(v) => setB({ soft: v / 100 })}
+                />
+              </>
+            )}
+            <Slider
+              label={t.env.photoZoom}
+              value={Math.round(backdrop.zoom * 100)}
+              min={100}
+              max={300}
+              suffix="%"
+              onChange={(v) => setB({ zoom: v / 100 })}
+            />
+            <Slider
+              label={t.env.photoX}
+              value={backdrop.focusX}
+              min={0}
+              max={100}
+              suffix="%"
+              onChange={(v) => setB({ focusX: v })}
+            />
+            <Slider
+              label={t.env.photoY}
+              value={backdrop.focusY}
+              min={0}
+              max={100}
+              suffix="%"
+              onChange={(v) => setB({ focusY: v })}
+            />
+            <Slider
+              label={t.env.shade}
+              value={Math.round(backdrop.dim * 100)}
+              min={-80}
+              max={70}
+              suffix="%"
+              onChange={(v) => setB({ dim: v / 100 })}
+              extra={<SmallButton onClick={() => setB({ dim: 0 })}>{t.env.reset}</SmallButton>}
+            />
+          </div>
+        )}
+      </Group>
 
       <Group title={t.env.patternIcon}>
         <div className="flex flex-wrap gap-2">
@@ -373,7 +491,7 @@ export function PatternDesigner({
 
       <Button
         disabled={!changed || saving}
-        onClick={() => onSave({ pattern, textColor, animation, badgeColor, brandColor })}
+        onClick={() => onSave({ pattern, textColor, animation, badgeColor, brandColor, backdrop })}
       >
         {saving ? t.common.saving : t.common.save}
       </Button>
@@ -399,6 +517,7 @@ export function PatternDesigner({
                   pattern,
                   textColor,
                   logoMediaId: env.logoMediaId,
+                  backdrop,
                 });
                 setTemplateName('');
                 toast(t.feed.templateSaved);

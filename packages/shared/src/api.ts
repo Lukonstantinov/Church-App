@@ -4,6 +4,8 @@ import {
   isBrandValue,
   isTextColor,
   patternSchema,
+  backdropSchema,
+  type BackdropConfig,
   type BrandValue,
   type EnterAnimation,
   type PatternConfig,
@@ -113,6 +115,9 @@ export interface GroupSummary {
   unreadPosts: number;
   unreadComments: number;
   logoUrl: string | null;
+  /** Photo behind the card (whole or split with the pattern). */
+  backdrop: BackdropConfig | null;
+  backdropUrl: string | null;
 }
 
 export interface GroupDetail extends GroupSummary {
@@ -151,6 +156,7 @@ export const updateGroupSchema = z.object({
     .nullable()
     .optional(),
   logoMediaId: z.number().int().positive().nullable().optional(),
+  backdrop: backdropSchema.nullable().optional(),
   name: name.optional(),
   description: optionalText(300).optional(),
   chatUrl: chatUrlSchema.optional(),
@@ -398,6 +404,7 @@ export type CreateAnnouncementInput = z.input<typeof createAnnouncementSchema>;
 
 export const REACTIONS = ['👍', '❤️', '🙏', '🔥', '😂', '🎉'] as const;
 export const reactionSchema = z.object({ emoji: z.enum(REACTIONS) });
+export const pinSchema = z.object({ pinned: z.boolean() });
 export const commentSchema = z.object({ text: z.string().trim().min(1).max(1000) });
 
 export interface PosterLook {
@@ -405,6 +412,8 @@ export interface PosterLook {
   pattern: PatternConfig | null;
   textColor: string;
   logoUrl: string | null;
+  backdrop?: BackdropConfig | null;
+  backdropUrl?: string | null;
 }
 
 export interface AnnouncementRow {
@@ -423,6 +432,10 @@ export interface AnnouncementRow {
   look: PosterLook | null;
   reactions: { emoji: string; count: number; mine: boolean }[];
   commentCount: number;
+  /** Comments by others the viewer hasn't seen yet under this post. */
+  unreadComments: number;
+  pinned: boolean;
+  canPin: boolean;
   canDelete: boolean;
 }
 
@@ -443,6 +456,7 @@ export const templateInputSchema = z.object({
   pattern: patternSchema.nullable(),
   textColor: z.string().refine(isTextColor, 'text colour').default('auto'),
   logoMediaId: z.number().int().positive().nullish(),
+  backdrop: backdropSchema.nullish(),
 });
 export type TemplateInput = z.input<typeof templateInputSchema>;
 
@@ -453,6 +467,8 @@ export interface DesignTemplate {
   pattern: PatternConfig | null;
   textColor: string;
   logoUrl: string | null;
+  backdrop: BackdropConfig | null;
+  backdropUrl: string | null;
   mine: boolean;
 }
 

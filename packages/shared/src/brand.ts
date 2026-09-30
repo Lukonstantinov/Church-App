@@ -196,6 +196,107 @@ export function readPattern(raw: unknown): PatternConfig | null {
   return r.success ? r.data : null;
 }
 
+/**
+ * A photo behind a ministry card: over the whole card, or on one part of it (a half,
+ * a third…) with the colours and pattern on the rest. Focus and zoom pick the part of
+ * the photo that shows; `dim` darkens (negative) or lightens it; `soft` feathers the edge.
+ */
+export const BACKDROP_SPLITS = [
+  'full',
+  'left',
+  'right',
+  'top',
+  'bottom',
+  'diagonal',
+  'diagonal2',
+] as const;
+export type BackdropSplit = (typeof BACKDROP_SPLITS)[number];
+
+export interface BackdropConfig {
+  mediaId: number;
+  split: BackdropSplit;
+  /** Share of the card the photo covers (ignored for 'full'). */
+  amount: number;
+  focusX: number;
+  focusY: number;
+  zoom: number;
+  dim: number;
+  soft: number;
+}
+
+export const DEFAULT_BACKDROP: Omit<BackdropConfig, 'mediaId'> = {
+  split: 'full',
+  amount: 0.5,
+  focusX: 50,
+  focusY: 50,
+  zoom: 1,
+  dim: -0.25,
+  soft: 0.12,
+};
+
+export const backdropSchema = z.object({
+  mediaId: z.number().int().positive(),
+  split: z.enum(BACKDROP_SPLITS),
+  amount: z.number().min(0.2).max(0.8),
+  focusX: z.number().min(0).max(100),
+  focusY: z.number().min(0).max(100),
+  zoom: z.number().min(1).max(3),
+  dim: z.number().min(-0.8).max(0.7),
+  soft: z.number().min(0).max(0.4),
+});
+
+/** Parses a stored backdrop (JSON) defensively; null when absent or invalid. */
+export function readBackdrop(raw: unknown): BackdropConfig | null {
+  if (!raw) return null;
+  let v: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      v = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  const r = backdropSchema.safeParse(v);
+  return r.success ? r.data : null;
+}
+
+/**
+ * Where the photo sits (percent box inside the card) and the CSS mask that fades it
+ * into the rest. The box is the photo's part plus room for the soft edge.
+ */
+export function backdropGeometry(b: Pick<BackdropConfig, 'split' | 'amount' | 'soft'>): {
+  box: { left: number; top: number; width: number; height: number };
+  mask: string | null;
+} {
+  const a = b.amount * 100;
+  const s = b.soft * 50;
+  const fade = (dir: string, at: number) =>
+    `linear-gradient(${dir}, #000 ${Math.max(0, at - s).toFixed(1)}%, transparent ${Math.min(100, at + s).toFixed(1)}%)`;
+  const reach = Math.min(100, a + s);
+  switch (b.split) {
+    case 'full':
+      return { box: { left: 0, top: 0, width: 100, height: 100 }, mask: null };
+    case 'left':
+      return { box: { left: 0, top: 0, width: reach, height: 100 }, mask: fade('to right', a) };
+    case 'right':
+      return {
+        box: { left: 100 - reach, top: 0, width: reach, height: 100 },
+        mask: fade('to left', a),
+      };
+    case 'top':
+      return { box: { left: 0, top: 0, width: 100, height: reach }, mask: fade('to bottom', a) };
+    case 'bottom':
+      return {
+        box: { left: 0, top: 100 - reach, width: 100, height: reach },
+        mask: fade('to top', a),
+      };
+    case 'diagonal':
+      return { box: { left: 0, top: 0, width: 100, height: 100 }, mask: fade('135deg', a) };
+    case 'diagonal2':
+      return { box: { left: 0, top: 0, width: 100, height: 100 }, mask: fade('225deg', a) };
+  }
+}
+
 /** Icon markup centred on (0,0), `d` px wide. */
 function iconMarkup(p: PatternConfig, d: number, logoDataUrl?: string | null): string | null {
   if (p.kind === 'logo') {

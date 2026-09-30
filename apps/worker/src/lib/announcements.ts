@@ -1,8 +1,9 @@
-import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { InlineKeyboard } from 'grammy';
 import {
   displayName,
   messages,
+  readBackdrop,
   readPattern,
   type AnnouncementResult,
   type AnnouncementRow,
@@ -25,6 +26,7 @@ import {
 import { audit } from './audit';
 import { churchDefaultLocale, localeOf } from './church';
 import { groupLogoUrl } from './groups';
+import { unreadByPost } from './feed';
 import { escapeHtml } from './html';
 import { signedMediaUrl } from './media';
 import { enqueue } from './outbox';
@@ -129,6 +131,7 @@ interface RawRow {
     pattern: string | null;
     textColor: string;
     logoMediaId: number | null;
+    backdrop: string | null;
   };
   author: Pick<User, 'id' | 'firstName' | 'lastName'> | null;
 }
@@ -146,7 +149,7 @@ async function toRows(
   const templateIds = [
     ...new Set(rows.map((r) => r.a.templateId).filter((x): x is number => x !== null)),
   ];
-  const [reactions, comments, templates] = await Promise.all([
+  const [reactions, comments, templates, unread] = await Promise.all([
     db
       .select({
         announcementId: announcementReactions.announcementId,
@@ -170,6 +173,7 @@ async function toRows(
     templateIds.length
       ? db.select().from(designTemplates).where(inArray(designTemplates.id, templateIds))
       : Promise.resolve([]),
+    unreadByPost(db, viewer.id, ids),
   ]);
   const templateBy = new Map(templates.map((tpl) => [tpl.id, tpl]));
   const commentsBy = new Map(comments.map((c) => [c.announcementId, Number(c.n)]));
@@ -177,18 +181,24 @@ async function toRows(
   return Promise.all(
     rows.map(async ({ a, groupName, groupBrand, author }) => {
       const tpl = a.templateId ? templateBy.get(a.templateId) : undefined;
+      const backdrop = readBackdrop(tpl ? tpl.backdrop : groupBrand.backdrop);
+      const backdropUrl = backdrop ? await signedMediaUrl(secret, backdrop.mediaId) : null;
       const look: PosterLook = tpl
         ? {
             brandColor: tpl.brandColor,
             pattern: readPattern(tpl.pattern),
             textColor: tpl.textColor,
             logoUrl: tpl.logoMediaId ? await signedMediaUrl(secret, tpl.logoMediaId) : null,
+            backdrop,
+            backdropUrl,
           }
         : {
             brandColor: groupBrand.brandColor,
             pattern: readPattern(groupBrand.pattern),
             textColor: groupBrand.textColor,
             logoUrl: groupLogoUrl(groupBrand),
+            backdrop,
+            backdropUrl,
           };
       return {
         id: a.id,
@@ -211,6 +221,9 @@ async function toRows(
           .filter((r) => r.announcementId === a.id)
           .map((r) => ({ emoji: r.emoji, count: Number(r.n), mine: Number(r.mine) > 0 })),
         commentCount: commentsBy.get(a.id) ?? 0,
+        unreadComments: unread.get(a.id) ?? 0,
+        pinned: a.pinnedAt !== null,
+        canPin: canModerate(a.groupId),
         canDelete: author?.id === viewer.id || canModerate(a.groupId),
       };
     }),
@@ -227,9 +240,12 @@ export async function listAnnouncements(
     limit?: number;
     before?: number;
     canModerate?: (groupId: number) => boolean;
+    /** 'first': pinned posts lead the first page and are left out of the rest. */
+    pinned?: 'first' | 'only';
   },
 ): Promise<AnnouncementRow[]> {
   if (args.groupIds.length === 0) return [];
+  const pinnedOnly = args.pinned === 'only';
   const rows = await db
     .select({
       a: announcements,
@@ -240,6 +256,7 @@ export async function listAnnouncements(
         pattern: groups.pattern,
         textColor: groups.textColor,
         logoMediaId: groups.logoMediaId,
+        backdrop: groups.backdrop,
       },
       author: { id: users.id, firstName: users.firstName, lastName: users.lastName },
     })
@@ -251,17 +268,29 @@ export async function listAnnouncements(
         inArray(announcements.groupId, args.groupIds),
         isNull(announcements.deletedAt),
         args.before ? lt(announcements.id, args.before) : undefined,
+        pinnedOnly
+          ? isNotNull(announcements.pinnedAt)
+          : args.pinned === 'first'
+            ? isNull(announcements.pinnedAt)
+            : undefined,
       ),
     )
-    .orderBy(desc(announcements.id))
+    .orderBy(pinnedOnly ? desc(announcements.pinnedAt) : desc(announcements.id))
     .limit(args.limit ?? 20);
-  return toRows(
-    db,
-    args.secret,
-    args.viewer,
-    rows.map((r) => ({ ...r, author: r.author?.id ? r.author : null })),
-    args.canModerate,
-  );
+  const pins =
+    args.pinned === 'first' && !args.before
+      ? await listAnnouncements(db, { ...args, pinned: 'only', limit: 10 })
+      : [];
+  return [
+    ...pins,
+    ...(await toRows(
+      db,
+      args.secret,
+      args.viewer,
+      rows.map((r) => ({ ...r, author: r.author?.id ? r.author : null })),
+      args.canModerate,
+    )),
+  ];
 }
 
 /** Adds the reaction, or removes it when the person already reacted with that emoji. */
