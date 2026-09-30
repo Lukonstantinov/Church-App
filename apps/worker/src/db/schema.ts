@@ -73,6 +73,13 @@ export const groups = sqliteTable('groups', {
   brandColor: text('brand_color'),
   logoMediaId: integer('logo_media_id'),
   sort: integer('sort').notNull().default(0),
+  /** Telegram group chat run by the bot: only members of the ministry get in. */
+  tgChatId: integer('tg_chat_id'),
+  tgChatTitle: text('tg_chat_title'),
+  /** One-time code in the "add bot to group" link; cleared once the chat is linked. */
+  chatLinkCode: text('chat_link_code'),
+  /** Decorative pattern over the theme colours (PATTERNS key), NULL = plain. */
+  pattern: text('pattern'),
   archivedAt: text('archived_at'),
   createdAt: createdAt(),
 });

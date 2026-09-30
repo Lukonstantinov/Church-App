@@ -16,6 +16,7 @@ import { groups, memberships, positions, users } from '../db/schema';
 import { accessIn, canManageUser, visibleGroupIds } from '../lib/access';
 import { defaultPositionId, effectivePermissions, permsOf, roleFor } from '../lib/positions';
 import { groupLogoUrl } from '../lib/groups';
+import { removeFromChat } from '../lib/chats';
 import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
 import { memberAttendance } from '../lib/meetings';
@@ -116,6 +117,7 @@ membershipRoutes.patch('/:id', async (c) => {
           positionId: await defaultPositionId(db, membership.groupId),
         })
         .where(eq(memberships.id, membership.id));
+      await removeFromChat(db, membership.groupId, membership.userId);
       await audit(db, {
         actorUserId: actor.id,
         action: 'member_removed',

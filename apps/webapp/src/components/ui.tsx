@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
+import { useEnv } from '../lib/env';
 import { useT } from '../lib/i18n';
+import { PatternLayer } from './PatternLayer';
 
 /** Page container. `tabs` leaves room for the floating tab bar. */
 export function Screen({ children, tabs }: { children: ReactNode; tabs?: boolean }) {
@@ -378,10 +380,13 @@ export function HeroCard({
   children: ReactNode;
   className?: string;
 }) {
+  // Inside a ministry, its pattern decorates the hero blocks too.
+  const { env } = useEnv();
   return (
     <div
       className={`brand-gradient relative overflow-hidden rounded-[var(--radius-card)] p-5 text-white shadow-cta ${className}`}
     >
+      <PatternLayer pattern={env?.pattern} logoUrl={env?.logoUrl} />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/15 blur-2xl"

@@ -698,3 +698,40 @@ export function useAddExisting(groupId: number) {
     },
   });
 }
+
+// ---------- ministry chat & lifecycle ----------
+
+export function useLinkChat(groupId: number) {
+  return useMutation({
+    mutationFn: () => apiFetch<{ url: string }>(`/groups/${groupId}/chat/link`, send('POST')),
+  });
+}
+
+export function useUnlinkChat(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch(`/groups/${groupId}/chat`, send('DELETE')),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.group(groupId) });
+      void qc.invalidateQueries({ queryKey: keys.me });
+    },
+  });
+}
+
+export function useRestoreGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (groupId: number) => apiFetch(`/groups/${groupId}/restore`, send('POST')),
+    onSuccess: () => void qc.invalidateQueries(),
+  });
+}
+
+/** Admins only: deleted (archived) ministries. */
+export function useArchivedGroups(enabled: boolean) {
+  return useQuery({
+    queryKey: ['groups', 'archived'],
+    queryFn: async () =>
+      (await apiFetch<GroupSummary[]>('/groups?archived=1')).filter((g) => g.archived),
+    enabled,
+  });
+}

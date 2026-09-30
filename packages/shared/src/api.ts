@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isBrandValue, type BrandValue } from './brand';
+import { isBrandValue, patternSchema, type BrandValue, type PatternConfig } from './brand';
 import type { Permission } from './permissions';
 import { chatUrlSchema } from './events';
 import { LOCALES, type Locale } from './i18n/locales';
@@ -92,6 +92,7 @@ export interface GroupSummary {
   myPermissions: Permission[];
   positionName: string | null;
   brandColor: string | null;
+  pattern: PatternConfig | null;
   logoUrl: string | null;
 }
 
@@ -101,6 +102,8 @@ export interface GroupDetail extends GroupSummary {
   canManage: boolean;
   /** The group's Telegram chat, if linked. */
   chatUrl: string | null;
+  /** Chat managed by the bot (members-only): its title; null when not linked. */
+  managedChat: { title: string | null; pending: boolean } | null;
 }
 
 const name = z.string().trim().min(1).max(64);
@@ -120,6 +123,7 @@ export type CreateGroupInput = z.input<typeof createGroupSchema>;
 
 export const updateGroupSchema = z.object({
   brandColor: z.string().refine(isBrandValue, 'theme').nullable().optional(),
+  pattern: patternSchema.nullable().optional(),
   logoMediaId: z.number().int().positive().nullable().optional(),
   name: name.optional(),
   description: optionalText(300).optional(),

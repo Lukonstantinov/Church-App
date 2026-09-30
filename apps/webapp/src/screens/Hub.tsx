@@ -1,6 +1,7 @@
 import { displayName, resolveBrand, type GroupSummary, type MeResponse } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { BrandHeader } from '../components/BrandHeader';
+import { PatternLayer } from '../components/PatternLayer';
 import { IconPlus, IconSettings, IconUsers } from '../components/icons';
 import { Badge, Card, EmptyState, Loading, Row, Screen, Section } from '../components/ui';
 import { useT } from '../lib/i18n';
@@ -93,7 +94,7 @@ export function Hub({ me }: { me: MeResponse }) {
 }
 
 /** A tile in the ministry's own colours, with its logo and the person's position. */
-function EnvCard({
+export function EnvCard({
   g,
   fallbackTheme,
   onClick,
@@ -118,6 +119,7 @@ function EnvCard({
       className="relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left text-white shadow-cta transition active:scale-[0.97]"
       style={{ background: `linear-gradient(145deg, ${theme.light} 0%, ${theme.partner} 100%)` }}
     >
+      <PatternLayer pattern={g.pattern} logoUrl={g.logoUrl} />
       <span
         aria-hidden="true"
         className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15 blur-2xl"

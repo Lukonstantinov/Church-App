@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   PERMISSIONS,
+  readPattern,
   addExistingMemberSchema,
   addOfflineMemberSchema,
   normalizePermissions,
@@ -29,14 +30,15 @@ import {
   type Group,
   type User,
 } from '../db/schema';
-import { accessIn, assertCan, assertCanViewGroup } from '../lib/access';
+import { accessIn, assertCan, assertCanViewGroup, loadGroupOr404 } from '../lib/access';
 import { audit } from '../lib/audit';
 import { randomCode } from '../lib/codes';
 import { churchDefaultLocale } from '../lib/church';
 import { groupLogoUrl } from '../lib/groups';
 import { assertGroupMedia } from '../lib/media';
 import { createDefaultPositions, defaultPositionId, permsOf, roleFor } from '../lib/positions';
-import { botUsername, inviteLink } from '../lib/telegram';
+import { botApi, botUsername, inviteLink } from '../lib/telegram';
+import { startChatLink, unlinkChat } from '../lib/chats';
 import { idParam, parseBody } from './util';
 
 export const groupRoutes = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
@@ -111,6 +113,7 @@ async function summarize(db: Db, user: User, list: Group[]): Promise<GroupSummar
       myPermissions,
       positionName: m?.positionName ?? null,
       brandColor: g.brandColor,
+      pattern: readPattern(g.pattern),
       logoUrl: groupLogoUrl(g),
     };
   });
@@ -174,6 +177,9 @@ groupRoutes.get('/:id', async (c) => {
     ...summary!,
     canManage: perms.size > 0,
     chatUrl: group.chatUrl,
+    managedChat: group.tgChatId
+      ? { title: group.tgChatTitle, pending: group.chatLinkCode !== null }
+      : null,
     inviteLink: perms.has('people.manage')
       ? inviteLink(await botUsername(c.env), group.inviteCode)
       : null,
@@ -187,7 +193,14 @@ groupRoutes.patch('/:id', async (c) => {
   const group = await assertCan(db, user, idParam(c), 'settings');
   const input = await parseBody(c, updateGroupSchema);
   if (input.logoMediaId) await assertGroupMedia(db, group.id, input.logoMediaId);
-  await db.update(groups).set(input).where(eq(groups.id, group.id));
+  const { pattern, ...rest } = input;
+  await db
+    .update(groups)
+    .set({
+      ...rest,
+      ...(pattern !== undefined ? { pattern: pattern && JSON.stringify(pattern) } : {}),
+    })
+    .where(eq(groups.id, group.id));
   await audit(db, {
     actorUserId: user.id,
     action: 'group_updated',
@@ -446,4 +459,35 @@ groupRoutes.post('/:id/members/existing', async (c) => {
     data: { userId: person.id, positionId },
   });
   return c.json({ userId: person.id, membershipId: membership!.id }, 201);
+});
+
+/** Brings back a deleted (archived) ministry. Church admins only. */
+groupRoutes.post('/:id/restore', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  if (!user.isAdmin) throw new HTTPException(403, { message: 'forbidden' });
+  const group = await loadGroupOr404(db, idParam(c));
+  await db.update(groups).set({ archivedAt: null }).where(eq(groups.id, group.id));
+  await audit(db, {
+    actorUserId: user.id,
+    action: 'group_restored',
+    entity: 'group',
+    entityId: group.id,
+    groupId: group.id,
+  });
+  return c.json({ ok: true });
+});
+
+/** Link for adding the bot to a Telegram group, which then becomes members-only. */
+groupRoutes.post('/:id/chat/link', async (c) => {
+  const db = c.get('db');
+  const group = await assertCan(db, c.get('user'), idParam(c), 'settings');
+  return c.json({ url: await startChatLink(db, group, await botUsername(c.env)) });
+});
+
+groupRoutes.delete('/:id/chat', async (c) => {
+  const db = c.get('db');
+  const group = await assertCan(db, c.get('user'), idParam(c), 'settings');
+  await unlinkChat(botApi(c.env), db, group);
+  return c.json({ ok: true });
 });

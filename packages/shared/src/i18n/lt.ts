@@ -603,6 +603,38 @@ export const lt: Messages = {
     },
   },
   env: {
+    pattern: 'Fono raštas',
+    patternHint: 'Viena ikona kartojasi tarnystės kortelės fone.',
+    patternNone: 'Be rašto',
+    patternIcon: 'Ikona',
+    patternEmoji: 'Savas jaustukas',
+    patternLogo: 'Logotipas',
+    patternShapes: 'Figūros',
+    opacity: 'Skaidrumas',
+    density: 'Dydis',
+    tilt: 'Pasvirimas',
+    straight: 'Tiesiai',
+    preview: 'Peržiūra',
+    delete: 'Ištrinti tarnystę',
+    deleteHint:
+      'Tarnystė dings visiems. Istorija (kasa, lankomumas) išliks — administratorius gali ją grąžinti „Bažnyčios nustatymuose“.',
+    confirmDelete: (name: string) =>
+      `Ištrinti tarnystę „${name}“? Niekas jos nebematys, bet administratorius galės grąžinti.`,
+    deleted: 'Tarnystė ištrinta',
+    archived: 'Ištrintos tarnystės',
+    restore: 'Grąžinti',
+    restored: 'Tarnystė grąžinta',
+    chatSection: 'Telegram pokalbis',
+    chatManagedHint:
+      'Botas į pokalbį įleidžia tik tarnystės narius ir pašalina tuos, kurie iš tarnystės išeina.',
+    connectChat: 'Susieti Telegram pokalbį',
+    connectSteps:
+      '1. Sukurkite grupę Telegram (arba naudokite esamą).\n2. Paspauskite mygtuką žemiau ir pasirinkite tą grupę — botas taps jos administratoriumi.\n3. Baigta: nariai matys mygtuką „Grupės pokalbis“.',
+    chatConnected: (title: string) => `Susieta: ${title}`,
+    chatPending: 'Laukiama, kol botas bus paskirtas pokalbio administratoriumi…',
+    disconnectChat: 'Atsieti pokalbį',
+    confirmDisconnect: 'Atsieti pokalbį nuo tarnystės? Kvietimo nuoroda nebeveiks.',
+    manualLink: 'Arba tiesiog įklijuokite nuorodą į pokalbį',
     hubTitle: 'Tarnystės',
     hubSubtitle: (c: number) => n(c, 'tarnystė', 'tarnystės', 'tarnysčių'),
     new: 'Nauja tarnystė',
@@ -648,6 +680,15 @@ export const lt: Messages = {
     failed: 'Nepavyko išsiųsti skelbimo',
   },
   bot: {
+    chatLinked: (ministry: string) =>
+      `✅ Pokalbis susietas su tarnyste „${ministry}“.\nPrisijungti gali tik tarnystės nariai — mygtuku „Grupės pokalbis“ programėlėje. Botas patvirtins automatiškai.`,
+    chatNeedAdmin:
+      'Beveik baigta! Padarykite mane šio pokalbio administratoriumi su teisėmis „Kvietimo nuorodos“ ir „Narių blokavimas“. Susiejimas baigsis savaime.',
+    chatLinkInvalid:
+      'Nuoroda nebegalioja. Sukurkite naują programėlėje: Daugiau → Tarnystės nustatymai.',
+    chatLinkForbidden: 'Pokalbį susieti gali tik žmogus, turintis teisę „Tarnystės nustatymai“.',
+    chatJoinDenied: (ministry: string) =>
+      `Šis pokalbis skirtas tik tarnystės „${ministry}“ nariams. Paprašykite vadovo pridėti jus prie tarnystės.`,
     welcome: (name: string) =>
       `Sveiki, ${name}! 👋\n\nTai jaunimo tarnystės botas. Čia žymimas lankomumas, gaunami skelbimai ir priminimai.\n\nSpauskite „Atidaryti programėlę“, kad pradėtumėte.`,
     openApp: 'Atidaryti programėlę',

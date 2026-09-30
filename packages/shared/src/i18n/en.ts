@@ -589,6 +589,38 @@ export const en: Messages = {
     },
   },
   env: {
+    pattern: 'Background pattern',
+    patternHint: 'One icon repeated across the ministry’s card.',
+    patternNone: 'No pattern',
+    patternIcon: 'Icon',
+    patternEmoji: 'Your emoji',
+    patternLogo: 'Logo',
+    patternShapes: 'Shapes',
+    opacity: 'Opacity',
+    density: 'Size',
+    tilt: 'Tilt',
+    straight: 'Straight',
+    preview: 'Preview',
+    delete: 'Delete ministry',
+    deleteHint:
+      'The ministry disappears for everyone. Its history (money, attendance) is kept — an admin can bring it back in Church settings.',
+    confirmDelete: (name: string) =>
+      `Delete “${name}”? Nobody will see it any more, but an admin can restore it.`,
+    deleted: 'Ministry deleted',
+    archived: 'Deleted ministries',
+    restore: 'Restore',
+    restored: 'Ministry restored',
+    chatSection: 'Telegram chat',
+    chatManagedHint:
+      'The bot lets only members of the ministry into the chat and removes people who leave the ministry.',
+    connectChat: 'Link a Telegram chat',
+    connectSteps:
+      '1. Create a group in Telegram (or use an existing one).\n2. Tap the button below and pick that group — the bot becomes its admin.\n3. Done: members get a “Group chat” button.',
+    chatConnected: (title: string) => `Linked: ${title}`,
+    chatPending: 'Waiting for the bot to be made an admin of the chat…',
+    disconnectChat: 'Unlink chat',
+    confirmDisconnect: 'Unlink the chat from the ministry? The invite link will stop working.',
+    manualLink: 'Or just paste a link to the chat',
     hubTitle: 'Ministries',
     hubSubtitle: (c: number) => n(c, 'ministry', 'ministries'),
     new: 'New ministry',
@@ -632,6 +664,15 @@ export const en: Messages = {
     failed: 'Couldn’t send the announcement',
   },
   bot: {
+    chatLinked: (ministry: string) =>
+      `✅ This chat is now linked to “${ministry}”.\nOnly members of the ministry can join — with the “Group chat” button in the app. The bot approves them automatically.`,
+    chatNeedAdmin:
+      'Almost done! Make me an admin of this chat with the “Invite users via link” and “Ban users” rights. Linking finishes by itself.',
+    chatLinkInvalid:
+      'This link has expired. Create a new one in the app: More → Ministry settings.',
+    chatLinkForbidden: 'Only someone with the “Ministry settings” right can link a chat.',
+    chatJoinDenied: (ministry: string) =>
+      `This chat is only for members of “${ministry}”. Ask a leader to add you to the ministry.`,
     welcome: (name: string) =>
       `Hi, ${name}! 👋\n\nThis is the youth ministry bot. Attendance, announcements and reminders all happen here.\n\nTap “Open app” to get started.`,
     openApp: 'Open app',

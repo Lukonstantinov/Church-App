@@ -49,7 +49,7 @@ botRoutes.post('/setup', async (c) => {
     step = 'setWebhook';
     await bot.api.setWebhook(`${appUrl}/bot/webhook`, {
       secret_token: await deriveToken(c.env.WEBHOOK_SECRET, 'webhook'),
-      allowed_updates: ['message', 'callback_query', 'my_chat_member'],
+      allowed_updates: ['message', 'callback_query', 'my_chat_member', 'chat_join_request'],
       drop_pending_updates: false,
     });
     // Remember the public URL for cron jobs (they have no incoming request to read it from).

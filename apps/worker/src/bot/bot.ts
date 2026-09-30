@@ -16,6 +16,7 @@ import {
 } from '../lib/membership';
 import { can } from '../lib/access';
 import { claimProfile } from '../lib/claim';
+import { completeChatLink, handleJoinRequest, retryPendingLink } from '../lib/chats';
 
 export interface BotDeps {
   env: Env;
@@ -32,7 +33,51 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
   const churchLocale = await churchDefaultLocale(db);
   const openAppKeyboard = (t: Messages) => new InlineKeyboard().webApp(t.bot.openApp, appUrl);
 
-  // Only private chats are handled for now; group chats come later.
+  // Group chats: linking a ministry chat and gatekeeping who joins it.
+  const groupChat = bot.chatType(['group', 'supergroup']);
+
+  groupChat.command('start', async (ctx) => {
+    const payload = ctx.match.trim();
+    if (!payload.startsWith(DEEP_LINK.chat) || !ctx.from || ctx.from.is_bot) return;
+    const by = await upsertTelegramUser(db, ctx.from, admins);
+    const t = messages(localeOf(by, churchLocale));
+    const { result, group } = await completeChatLink(ctx.api, db, {
+      code: payload.slice(DEEP_LINK.chat.length),
+      chatId: ctx.chat.id,
+      chatTitle: ctx.chat.title,
+      by,
+    });
+    const text =
+      result === 'linked'
+        ? t.bot.chatLinked(group!.name)
+        : result === 'need_admin'
+          ? t.bot.chatNeedAdmin
+          : result === 'forbidden'
+            ? t.bot.chatLinkForbidden
+            : t.bot.chatLinkInvalid;
+    await ctx.reply(text);
+  });
+
+  // Promoted to admin in a chat waiting to be linked: finish linking.
+  bot.on('my_chat_member', async (ctx) => {
+    const chat = ctx.chat;
+    if (chat.type !== 'group' && chat.type !== 'supergroup') return;
+    if (ctx.myChatMember.new_chat_member.status !== 'administrator') return;
+    const group = await retryPendingLink(ctx.api, db, chat.id, chat.title);
+    if (group)
+      await ctx.api.sendMessage(chat.id, messages(churchLocale).bot.chatLinked(group.name));
+  });
+
+  bot.on('chat_join_request', async (ctx) => {
+    const req = ctx.chatJoinRequest;
+    await handleJoinRequest(ctx.api, db, {
+      chatId: req.chat.id,
+      telegramId: req.from.id,
+      userChatId: req.user_chat_id,
+    });
+  });
+
+  // Private chats with the bot.
   const pm = bot.chatType('private');
 
   // Load (and create on first contact) the user behind every private update.

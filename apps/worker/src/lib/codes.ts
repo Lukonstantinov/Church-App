@@ -16,4 +16,6 @@ export function randomCode(length = 10): string {
 export const DEEP_LINK = {
   join: 'g_',
   claim: 'c_',
+  /** ?startgroup=l_<code>: link a Telegram group chat to a ministry. */
+  chat: 'l_',
 } as const;

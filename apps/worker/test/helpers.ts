@@ -61,7 +61,10 @@ export interface TgCall {
 let messageSeq = 100;
 
 /** Stubs fetch to the Telegram Bot API and records every call. `failFor` chat ids get 403. */
-export function mockTelegram({ failFor = [] as number[] } = {}): TgCall[] {
+export function mockTelegram({
+  failFor = [] as number[],
+  failMethods = [] as string[],
+} = {}): TgCall[] {
   const calls: TgCall[] = [];
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
@@ -83,8 +86,19 @@ export function mockTelegram({ failFor = [] as number[] } = {}): TgCall[] {
         description: 'Forbidden: bot was blocked by the user',
       });
     }
+    if (failMethods.includes(method)) {
+      return json({ ok: false, error_code: 400, description: 'Bad Request: not enough rights' });
+    }
     let result: unknown = true;
-    if (method === 'getMe') {
+    if (method === 'createChatInviteLink') {
+      result = {
+        invite_link: `https://t.me/+inv${body.chat_id}`,
+        creator: { id: 999, is_bot: true, first_name: 'TestBot' },
+        creates_join_request: true,
+        is_primary: false,
+        is_revoked: false,
+      };
+    } else if (method === 'getMe') {
       result = {
         id: 999,
         is_bot: true,
@@ -176,4 +190,62 @@ export function callsTo(calls: TgCall[], method: string, chatId?: number) {
   return calls.filter(
     (c) => c.method === method && (chatId === undefined || c.body.chat_id === chatId),
   );
+}
+
+/** "/start <payload>" typed in a group chat (what Telegram sends after ?startgroup=). */
+export function sendGroupCommand(
+  user: FakeTgUser,
+  chat: { id: number; title: string },
+  text: string,
+) {
+  const command = text.split(' ')[0]!;
+  return postUpdate({
+    message: {
+      message_id: ++messageSeq,
+      date: Math.floor(Date.now() / 1000),
+      chat: { id: chat.id, type: 'supergroup', title: chat.title },
+      from: tgFrom(user),
+      text,
+      entities: [{ type: 'bot_command', offset: 0, length: command.length }],
+    },
+  });
+}
+
+export function sendJoinRequest(user: FakeTgUser, chat: { id: number; title: string }) {
+  return postUpdate({
+    chat_join_request: {
+      chat: { id: chat.id, type: 'supergroup', title: chat.title },
+      from: tgFrom(user),
+      user_chat_id: user.id,
+      date: Math.floor(Date.now() / 1000),
+    },
+  });
+}
+
+export function sendBotPromoted(chat: { id: number; title: string }, by: FakeTgUser) {
+  const bot = { id: 999, is_bot: true, first_name: 'TestBot', username: 'test_bot' };
+  return postUpdate({
+    my_chat_member: {
+      chat: { id: chat.id, type: 'supergroup', title: chat.title },
+      from: tgFrom(by),
+      date: Math.floor(Date.now() / 1000),
+      old_chat_member: { user: bot, status: 'member' },
+      new_chat_member: {
+        user: bot,
+        status: 'administrator',
+        can_be_edited: false,
+        is_anonymous: false,
+        can_manage_chat: true,
+        can_delete_messages: false,
+        can_manage_video_chats: false,
+        can_restrict_members: true,
+        can_promote_members: false,
+        can_change_info: false,
+        can_invite_users: true,
+        can_post_stories: false,
+        can_edit_stories: false,
+        can_delete_stories: false,
+      },
+    },
+  });
 }

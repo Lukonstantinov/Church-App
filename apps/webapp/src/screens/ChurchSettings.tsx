@@ -3,11 +3,19 @@ import { LOCALE_NAMES, LOCALES, type Locale } from '@church/shared';
 import { ChurchLogo } from '../components/BrandHeader';
 import { IconImage, IconTrash } from '../components/icons';
 import { useToast } from '../components/Toast';
-import { ActionRow, Button, Screen, Section, TextField, Title } from '../components/ui';
+import { ActionRow, Button, Row, Screen, Section, TextField, Title } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { prepareLogo } from '../lib/image';
 import { ThemePicker } from '../components/ThemePicker';
-import { useMe, useRemoveLogo, useUpdateChurch, useUploadLogo } from '../lib/queries';
+import { GroupDot } from '../components/GroupSwitcher';
+import {
+  useArchivedGroups,
+  useMe,
+  useRemoveLogo,
+  useRestoreGroup,
+  useUpdateChurch,
+  useUploadLogo,
+} from '../lib/queries';
 import { applyBrand } from '../lib/theme';
 import { confirmDialog, haptic } from '../lib/telegram';
 
@@ -174,6 +182,41 @@ export function ChurchSettings() {
           </select>
         </div>
       </Section>
+      <ArchivedMinistries />
     </Screen>
+  );
+}
+
+/** Deleted ministries, with a way back. */
+function ArchivedMinistries() {
+  const t = useT();
+  const toast = useToast();
+  const list = useArchivedGroups(true);
+  const restore = useRestoreGroup();
+  if (!list.data?.length) return null;
+  return (
+    <Section title={t.env.archived}>
+      {list.data.map((g) => (
+        <Row
+          key={g.id}
+          before={<GroupDot id={g.id} theme={g.brandColor} size={12} />}
+          title={g.name}
+          subtitle={t.common.members(g.activeCount)}
+          after={
+            <Button
+              small
+              variant="secondary"
+              disabled={restore.isPending}
+              onClick={async () => {
+                await restore.mutateAsync(g.id);
+                toast(t.env.restored);
+              }}
+            >
+              {t.env.restore}
+            </Button>
+          }
+        />
+      ))}
+    </Section>
   );
 }
