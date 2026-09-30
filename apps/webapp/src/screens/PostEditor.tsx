@@ -1,13 +1,29 @@
 import { useRef, useState } from 'react';
-import type { PosterLook } from '@church/shared';
+import type { AnnouncementRow, PosterLook } from '@church/shared';
 import { IconImage, IconSend, IconX } from '../components/icons';
 import { PosterMedia } from '../components/Poster';
 import { useToast } from '../components/Toast';
-import { Button, Screen, Section, TextArea, TextField, Title, Toggle } from '../components/ui';
+import {
+  Button,
+  Loading,
+  Screen,
+  Section,
+  TextArea,
+  TextField,
+  Title,
+  Toggle,
+} from '../components/ui';
 import { useT } from '../lib/i18n';
 import { preparePhoto } from '../lib/image';
 import { useNav } from '../lib/nav';
-import { useGroup, useSendAnnouncement, useTemplates, useUploadMedia } from '../lib/queries';
+import {
+  useEditPost,
+  useFeed,
+  useGroup,
+  useSendAnnouncement,
+  useTemplates,
+  useUploadMedia,
+} from '../lib/queries';
 import { haptic } from '../lib/telegram';
 
 const TINTS = [
@@ -21,8 +37,16 @@ const TINTS = [
   '#ffffff',
 ];
 
-/** Compose a post or a poster: headline, text, photos (collage), tint and background. */
-export function PostEditor({ groupId }: { groupId: number }) {
+/** Compose a post or a poster; with `postId`, edit that post. */
+export function PostEditor({ groupId, postId }: { groupId: number; postId?: number }) {
+  const feed = useFeed(groupId);
+  if (postId === undefined) return <PostForm groupId={groupId} />;
+  const post = feed.data?.pages.flat().find((p) => p.id === postId);
+  return post ? <PostForm groupId={groupId} post={post} /> : <Loading />;
+}
+
+/** Headline, text, photos (collage), tint and background. */
+function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }) {
   const t = useT();
   const toast = useToast();
   const { replace } = useNav();
@@ -30,13 +54,17 @@ export function PostEditor({ groupId }: { groupId: number }) {
   const templates = useTemplates();
   const upload = useUploadMedia(groupId, 'event');
   const publish = useSendAnnouncement(groupId);
+  const save = useEditPost(groupId);
   const fileInput = useRef<HTMLInputElement>(null);
-  const [title, setTitle] = useState('');
-  const [text, setText] = useState('');
-  const [photos, setPhotos] = useState<{ id: number; url: string }[]>([]);
-  const [tintColor, setTintColor] = useState<string | null>('#000000');
-  const [tintStrength, setTintStrength] = useState(0.35);
-  const [templateId, setTemplateId] = useState<number | null>(null);
+  const [title, setTitle] = useState(post?.title ?? '');
+  const [text, setText] = useState(post?.text ?? '');
+  const [photos, setPhotos] = useState<{ id: number; url: string }[]>(post?.photos ?? []);
+  const [tintColor, setTintColor] = useState<string | null>(
+    post ? (post.tint?.color ?? null) : '#000000',
+  );
+  const [tintStrength, setTintStrength] = useState(post?.tint?.strength ?? 0.35);
+  const [templateId, setTemplateId] = useState<number | null>(post?.templateId ?? null);
+  const pending = publish.isPending || save.isPending;
   const [notify, setNotify] = useState(true);
   const [uploading, setUploading] = useState<[number, number] | null>(null);
 
@@ -80,16 +108,23 @@ export function PostEditor({ groupId }: { groupId: number }) {
   }
 
   async function submit() {
+    const input = {
+      title: title.trim() || null,
+      text: text.trim(),
+      mediaIds: photos.map((p) => p.id),
+      tintColor: photos.length && tintColor ? tintColor : null,
+      tintStrength: photos.length && tintColor ? tintStrength : null,
+      templateId,
+    };
     try {
-      await publish.mutateAsync({
-        title: title.trim() || null,
-        text: text.trim(),
-        mediaIds: photos.map((p) => p.id),
-        tintColor: photos.length && tintColor ? tintColor : null,
-        tintStrength: photos.length && tintColor ? tintStrength : null,
-        templateId,
-        notify,
-      });
+      if (post) {
+        await save.mutateAsync({ postId: post.id, input });
+        haptic.success();
+        toast(t.common.saved);
+        replace({ name: 'post', groupId, postId: post.id });
+        return;
+      }
+      await publish.mutateAsync({ ...input, notify });
       haptic.success();
       toast(t.feed.published);
       replace({ name: 'announcements', groupId });
@@ -101,7 +136,7 @@ export function PostEditor({ groupId }: { groupId: number }) {
 
   return (
     <Screen>
-      <Title subtitle={g?.name}>{t.feed.newPost}</Title>
+      <Title subtitle={g?.name}>{post ? t.feed.editingPost : t.feed.newPost}</Title>
 
       {(photos.length > 0 || title.trim()) && (
         <section>
@@ -253,15 +288,27 @@ export function PostEditor({ groupId }: { groupId: number }) {
         </Section>
       )}
 
-      <Section>
-        <Toggle label={t.feed.notify} checked={notify} onChange={setNotify} />
-      </Section>
+      {!post && (
+        <Section>
+          <Toggle label={t.feed.notify} checked={notify} onChange={setNotify} />
+        </Section>
+      )}
 
       <Button
         onClick={() => void submit()}
-        disabled={!text.trim() || publish.isPending || uploading !== null}
+        disabled={!text.trim() || pending || uploading !== null}
       >
-        <IconSend size={18} /> {publish.isPending ? t.feed.publishing : t.feed.publish}
+        {post ? (
+          pending ? (
+            t.common.saving
+          ) : (
+            t.feed.saveChanges
+          )
+        ) : (
+          <>
+            <IconSend size={18} /> {pending ? t.feed.publishing : t.feed.publish}
+          </>
+        )}
       </Button>
     </Screen>
   );

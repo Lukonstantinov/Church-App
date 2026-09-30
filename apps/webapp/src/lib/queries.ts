@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  UpdateAnnouncementInput,
   AddOfflineMemberInput,
   AnnouncementResult,
   AnnouncementRow,
@@ -469,6 +470,15 @@ export function useDeletePost(groupId: number) {
   const changed = useFeedChanged(groupId);
   return useMutation({
     mutationFn: (id: number) => apiFetch(`/announcements/${id}`, send('DELETE')),
+    onSuccess: changed,
+  });
+}
+
+export function useEditPost(groupId: number) {
+  const changed = useFeedChanged(groupId);
+  return useMutation({
+    mutationFn: ({ postId, input }: { postId: number; input: UpdateAnnouncementInput }) =>
+      apiFetch(`/announcements/${postId}`, send('PATCH', input)),
     onSuccess: changed,
   });
 }

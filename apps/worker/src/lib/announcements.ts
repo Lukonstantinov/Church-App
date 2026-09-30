@@ -216,6 +216,7 @@ async function toRows(
         ),
         tint:
           a.tintColor !== null ? { color: a.tintColor, strength: a.tintStrength ?? 0.35 } : null,
+        templateId: a.templateId,
         look,
         reactions: reactions
           .filter((r) => r.announcementId === a.id)
@@ -223,7 +224,9 @@ async function toRows(
         commentCount: commentsBy.get(a.id) ?? 0,
         unreadComments: unread.get(a.id) ?? 0,
         pinned: a.pinnedAt !== null,
+        editedAt: a.editedAt,
         canPin: canModerate(a.groupId),
+        canEdit: author?.id === viewer.id || canModerate(a.groupId),
         canDelete: author?.id === viewer.id || canModerate(a.groupId),
       };
     }),

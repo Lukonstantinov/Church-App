@@ -158,11 +158,7 @@ function Form({ g }: { g: GroupDetail }) {
       </Section>
 
       <Section title={t.env.theme}>
-        <ThemePicker
-          value={g.brandColor}
-          onChange={(v) => void patchNow({ brandColor: v })}
-          inherit={{ label: me.data?.church.name ?? '', theme: churchTheme }}
-        />
+        <ThemePicker value={g.brandColor} onChange={(v) => v && void patchNow({ brandColor: v })} />
       </Section>
 
       <Section title={t.env.look} sticky>

@@ -68,6 +68,43 @@ async function joinAndApprove(user: FakeTgUser, group: { id: number; inviteCode:
   return row;
 }
 
+describe('ministry colours', () => {
+  it('each new ministry gets its own colour, not the church one', async () => {
+    const church = await apiJson<{ church: { brandColor: string } }>('/api/me', { user: ADMIN });
+    const ids: number[] = [];
+    for (const name of ['Цвет 1', 'Цвет 2', 'Цвет 3']) {
+      const { id } = await apiJson<{ id: number }>('/api/groups', {
+        method: 'POST',
+        user: ADMIN,
+        json: { name },
+      });
+      ids.push(id);
+    }
+    const list = await apiJson<GroupSummary[]>('/api/groups', { user: ADMIN });
+    const colours = ids.map((id) => list.find((g) => g.id === id)!.brandColor);
+    expect(new Set(colours).size).toBe(3);
+    expect(colours).not.toContain(church.church.brandColor);
+    expect(colours.every((c) => c !== null)).toBe(true);
+  });
+
+  it('a ministry without a colour gets a free one when listed', async () => {
+    const { id } = await apiJson<{ id: number }>('/api/groups', {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Без цвета' },
+    });
+    await apiJson(`/api/groups/${id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { brandColor: null },
+    });
+    const list = await apiJson<GroupSummary[]>('/api/groups', { user: ADMIN });
+    const mine = list.find((g) => g.id === id)!.brandColor;
+    expect(mine).not.toBeNull();
+    expect(list.filter((g) => g.brandColor === mine)).toHaveLength(1);
+  });
+});
+
 describe('groups', () => {
   it('only admins can create groups', async () => {
     const res = await api('/api/groups', {

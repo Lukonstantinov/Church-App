@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   ENTER_ANIMATIONS,
   PERMISSIONS,
+  MINISTRY_PALETTE,
   readBackdrop,
   readPattern,
   type EnterAnimation,
@@ -37,7 +38,7 @@ import { accessIn, assertCan, assertCanViewGroup, loadGroupOr404 } from '../lib/
 import { audit } from '../lib/audit';
 import { randomCode } from '../lib/codes';
 import { churchDefaultLocale } from '../lib/church';
-import { groupLogoUrl } from '../lib/groups';
+import { assignMissingColors, freeMinistryColor, groupLogoUrl } from '../lib/groups';
 import { markFeedRead, unreadCounts } from '../lib/feed';
 import { assertGroupMedia, signedMediaUrl } from '../lib/media';
 import { createDefaultPositions, defaultPositionId, permsOf, roleFor } from '../lib/positions';
@@ -124,7 +125,7 @@ async function summarize(
         myRole,
         myPermissions,
         positionName: m?.positionName ?? null,
-        brandColor: g.brandColor,
+        brandColor: g.brandColor ?? MINISTRY_PALETTE[g.id % MINISTRY_PALETTE.length]!,
         pattern: readPattern(g.pattern),
         textColor: g.textColor,
         badgeColor: g.badgeColor,
@@ -167,6 +168,7 @@ groupRoutes.get('/', async (c) => {
       .orderBy(groups.sort, groups.name);
     list = rows.map((r) => r.group);
   }
+  await assignMissingColors(db, list);
   return c.json(await summarize(db, user, list, c.env.WEBHOOK_SECRET));
 });
 
@@ -175,9 +177,16 @@ groupRoutes.post('/', async (c) => {
   const user = c.get('user');
   if (!user.isAdmin) throw new HTTPException(403, { message: 'forbidden' });
   const input = await parseBody(c, createGroupSchema);
+  // Each ministry starts in its own colour, different from the others and the church's.
+  const brandColor = await freeMinistryColor(db);
   const [group] = await db
     .insert(groups)
-    .values({ name: input.name, description: input.description, inviteCode: randomCode(10) })
+    .values({
+      name: input.name,
+      description: input.description,
+      inviteCode: randomCode(10),
+      brandColor,
+    })
     .returning();
   await createDefaultPositions(db, group!.id, await churchDefaultLocale(db));
   await audit(db, {
@@ -194,6 +203,7 @@ groupRoutes.get('/:id', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
   const group = await assertCanViewGroup(db, user, idParam(c));
+  await assignMissingColors(db, [group]);
   const [summary] = await summarize(db, user, [group], c.env.WEBHOOK_SECRET);
   const perms = (await accessIn(db, user, group.id)).perms;
   const detail: GroupDetail = {

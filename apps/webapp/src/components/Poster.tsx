@@ -8,9 +8,12 @@ import {
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
-import { useMe, useReact } from '../lib/queries';
-import { haptic } from '../lib/telegram';
-import { IconMegaphone } from './icons';
+import { useNav } from '../lib/nav';
+import { useDeletePost, useMe, usePinPost, useReact } from '../lib/queries';
+import { confirmDialog, haptic } from '../lib/telegram';
+import { IconEdit, IconMegaphone, IconMore, IconTrash } from './icons';
+import { Sheet, SheetOption } from './Sheet';
+import { useToast } from './Toast';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 
 /**
@@ -186,6 +189,76 @@ export function Reactions({ post }: { post: AnnouncementRow }) {
   );
 }
 
+/** "⋯" on a post: pin or unpin, edit, delete — whichever the viewer may do. */
+export function PostMenu({ post, onDeleted }: { post: AnnouncementRow; onDeleted?: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  const { push } = useNav();
+  const pin = usePinPost(post.groupId);
+  const del = useDeletePost(post.groupId);
+  const [open, setOpen] = useState(false);
+  if (!post.canPin && !post.canEdit && !post.canDelete) return null;
+  const run = async (action: () => Promise<unknown>) => {
+    setOpen(false);
+    try {
+      await action();
+      haptic.success();
+    } catch {
+      haptic.error();
+      toast(t.common.actionFailed, 'error');
+    }
+  };
+  return (
+    <span onClick={(e) => e.stopPropagation()} className="-my-1.5 -mr-2 shrink-0">
+      <button
+        type="button"
+        aria-label={t.feed.postActions}
+        onClick={() => {
+          haptic.tap();
+          setOpen(true);
+        }}
+        className="flex h-9 w-9 items-center justify-center rounded-full text-hint active:bg-hairline"
+      >
+        <IconMore size={22} />
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={t.feed.postActions}>
+        {post.canPin && (
+          <SheetOption
+            icon={<span className="text-[18px]">📌</span>}
+            label={post.pinned ? t.feed.unpinPost : t.feed.pinPost}
+            onClick={() =>
+              void run(() => pin.mutateAsync({ postId: post.id, pinned: !post.pinned }))
+            }
+          />
+        )}
+        {post.canEdit && (
+          <SheetOption
+            icon={<IconEdit size={20} />}
+            label={t.feed.editPost}
+            onClick={() => {
+              setOpen(false);
+              push({ name: 'editPost', groupId: post.groupId, postId: post.id });
+            }}
+          />
+        )}
+        {post.canDelete && (
+          <SheetOption
+            icon={<IconTrash size={20} />}
+            label={t.feed.deletePost}
+            tone="destructive"
+            onClick={async () => {
+              setOpen(false);
+              if (!(await confirmDialog(t.feed.confirmDeletePost))) return;
+              await run(() => del.mutateAsync(post.id));
+              onDeleted?.();
+            }}
+          />
+        )}
+      </Sheet>
+    </span>
+  );
+}
+
 /** A post in the feed: poster on top, text (collapsed to a few lines), reactions, comments. */
 export function PosterCard({
   post,
@@ -227,11 +300,13 @@ export function PosterCard({
               📌 {t.feed.pinnedPost}
             </span>
           )}
-          <span className="truncate">
+          <span className="min-w-0 flex-1 truncate">
             {showGroup ? `${post.groupName} · ` : ''}
             {post.author ? `${displayName(post.author)} · ` : ''}
             {f.shortDate(post.createdAt)} · {f.time(post.createdAt)}
           </span>
+          {post.editedAt && <span className="shrink-0 italic">{t.feed.edited}</span>}
+          <PostMenu post={post} />
         </div>
         <p className="line-clamp-4 whitespace-pre-line text-[16px] leading-relaxed">{post.text}</p>
         <div className="flex items-center justify-between gap-2">

@@ -88,6 +88,39 @@ export function resolveBrand(value: string | null | undefined): BrandSwatch {
 }
 
 /** Stable per-group accent (for the dot next to a group name). */
+/** Distinct themes handed to new ministries in turn, so each has its own colour. */
+export const MINISTRY_PALETTE: BrandColor[] = [
+  'ocean',
+  'sunset',
+  'forest',
+  'lavender',
+  'gold',
+  'berry',
+  'teal',
+  'fire',
+  'sky',
+  'mint',
+  'coffee',
+  'aurora',
+  'indigo',
+  'rose',
+  'orange',
+  'green',
+  'violet',
+  'red',
+  'blue',
+  'night',
+];
+
+/** The first palette theme no other ministry (nor the church) uses yet. */
+export function pickMinistryColor(taken: (string | null)[], avoid?: string | null): BrandColor {
+  const used = new Set<string | null | undefined>([...taken, avoid]);
+  return (
+    MINISTRY_PALETTE.find((k) => !used.has(k)) ??
+    MINISTRY_PALETTE[taken.length % MINISTRY_PALETTE.length]!
+  );
+}
+
 export function groupColor(groupId: number, theme?: string | null): string {
   if (theme) return resolveBrand(theme).light;
   const keys = BRAND_COLOR_KEYS.filter((k) => k !== 'slate');

@@ -402,6 +402,10 @@ export const createAnnouncementSchema = z.object({
 });
 export type CreateAnnouncementInput = z.input<typeof createAnnouncementSchema>;
 
+/** Editing a post changes its content only; nobody is notified again. */
+export const updateAnnouncementSchema = createAnnouncementSchema.omit({ notify: true });
+export type UpdateAnnouncementInput = z.input<typeof updateAnnouncementSchema>;
+
 export const REACTIONS = ['👍', '❤️', '🙏', '🔥', '😂', '🎉'] as const;
 export const reactionSchema = z.object({ emoji: z.enum(REACTIONS) });
 export const pinSchema = z.object({ pinned: z.boolean() });
@@ -428,6 +432,7 @@ export interface AnnouncementRow {
   recipients: number;
   photos: { id: number; url: string }[];
   tint: { color: string; strength: number } | null;
+  templateId: number | null;
   /** Background for posters without photos (a template or the ministry's own look). */
   look: PosterLook | null;
   reactions: { emoji: string; count: number; mine: boolean }[];
@@ -435,7 +440,10 @@ export interface AnnouncementRow {
   /** Comments by others the viewer hasn't seen yet under this post. */
   unreadComments: number;
   pinned: boolean;
+  /** Set when the post was changed after publishing. */
+  editedAt: string | null;
   canPin: boolean;
+  canEdit: boolean;
   canDelete: boolean;
 }
 

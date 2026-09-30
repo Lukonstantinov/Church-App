@@ -295,6 +295,7 @@ export const announcements = sqliteTable(
     recipients: integer('recipients').notNull().default(0),
     /** Pinned posts come first in the ministry's feed. */
     pinnedAt: text('pinned_at'),
+    editedAt: text('edited_at'),
     deletedAt: text('deleted_at'),
     createdAt: createdAt(),
   },

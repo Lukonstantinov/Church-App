@@ -26,6 +26,7 @@ export type Route =
   | { name: 'announcements'; groupId: number }
   | { name: 'post'; groupId: number; postId: number }
   | { name: 'newPost'; groupId: number }
+  | { name: 'editPost'; groupId: number; postId: number }
   | { name: 'telemetry' }
   | { name: 'newTransaction'; groupId: number; kind: 'income' | 'expense' | 'donation' }
   | { name: 'event'; eventId: number }

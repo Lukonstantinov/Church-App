@@ -115,6 +115,8 @@ function Router({ me }: { me: MeResponse }) {
       return me.user.isDeveloper ? <Telemetry /> : null;
     case 'newPost':
       return <PostEditor key={route.groupId} groupId={route.groupId} />;
+    case 'editPost':
+      return <PostEditor key={route.postId} groupId={route.groupId} postId={route.postId} />;
   }
 }
 

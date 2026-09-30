@@ -4,6 +4,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import {
   commentSchema,
   pinSchema,
+  updateAnnouncementSchema,
   createAnnouncementSchema,
   reactionSchema,
   templateInputSchema,
@@ -146,6 +147,43 @@ announcementRoutes.post('/:id/pin', async (c) => {
   await audit(db, {
     actorUserId: user.id,
     action: pinned ? 'announcement_pinned' : 'announcement_unpinned',
+    entity: 'group',
+    entityId: post.groupId,
+    groupId: post.groupId,
+    data: { announcementId: post.id },
+  });
+  return c.json({ ok: true });
+});
+
+/** Edit a post (author or moderators). Members are not notified again. */
+announcementRoutes.patch('/:id', async (c) => {
+  const { db, user, post, moderate } = await loadPost(c, idParam(c));
+  if (post.authorId !== user.id && !moderate)
+    throw new HTTPException(403, { message: 'forbidden' });
+  const input = await parseBody(c, updateAnnouncementSchema);
+  for (const id of input.mediaIds) await assertGroupMedia(db, post.groupId, id);
+  if (input.templateId) {
+    const tpl = await db.query.designTemplates.findFirst({
+      columns: { id: true },
+      where: eq(designTemplates.id, input.templateId),
+    });
+    if (!tpl) throw new HTTPException(400, { message: 'invalid_template' });
+  }
+  await db
+    .update(announcements)
+    .set({
+      title: input.title ?? null,
+      text: input.text,
+      mediaIds: input.mediaIds.length ? input.mediaIds : null,
+      tintColor: input.tintColor ?? null,
+      tintStrength: input.tintStrength ?? null,
+      templateId: input.templateId ?? null,
+      editedAt: new Date().toISOString(),
+    })
+    .where(eq(announcements.id, post.id));
+  await audit(db, {
+    actorUserId: user.id,
+    action: 'announcement_edited',
     entity: 'group',
     entityId: post.groupId,
     groupId: post.groupId,

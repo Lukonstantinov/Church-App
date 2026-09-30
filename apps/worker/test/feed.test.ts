@@ -208,6 +208,38 @@ describe('ministry feed', () => {
     expect((await summaryFor(ADMIN, g.id)).unreadComments).toBe(0); // admin isn't a member
   });
 
+  it('posts can be edited by the author or moderators and show as edited', async () => {
+    const g = await createEnv('Правки');
+    const m = fakeUser('Редактор');
+    await join(m, g);
+    const res = await apiJson<AnnouncementResult>(`/api/groups/${g.id}/announcements`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'Было', text: 'Старый текст', notify: false },
+    });
+    const id = res.announcement.id;
+    expect(res.announcement).toMatchObject({ editedAt: null, canEdit: true });
+    const sent = calls.length;
+    expect(
+      (
+        await api(`/api/announcements/${id}`, {
+          method: 'PATCH',
+          user: m,
+          json: { text: 'Взлом' },
+        })
+      ).status,
+    ).toBe(403);
+    await apiJson(`/api/announcements/${id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { title: 'Стало', text: 'Новый текст' },
+    });
+    const feed = await apiJson<AnnouncementRow[]>(`/api/groups/${g.id}/announcements`, { user: m });
+    expect(feed[0]).toMatchObject({ title: 'Стало', text: 'Новый текст', canEdit: false });
+    expect(feed[0]!.editedAt).not.toBeNull();
+    expect(calls.length).toBe(sent); // nobody is notified again
+  });
+
   it('pinned posts lead the feed; only moderators pin', async () => {
     const g = await createEnv('Закрепы');
     const m = fakeUser('Смотрящий');

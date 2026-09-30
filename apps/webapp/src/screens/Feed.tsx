@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { displayName } from '@church/shared';
 import { Avatar } from '../components/Avatar';
-import { IconMegaphone, IconPlus, IconSend, IconTrash } from '../components/icons';
-import { PosterCard, PosterMedia, Reactions } from '../components/Poster';
+import { IconMegaphone, IconPlus, IconSend } from '../components/icons';
+import { PostMenu, PosterCard, PosterMedia, Reactions } from '../components/Poster';
 import { useToast } from '../components/Toast';
 import { PhotoViewer } from '../components/TreasurySheets';
 import { Button, Card, EmptyState, Loading, Screen, Skeleton, Title } from '../components/ui';
@@ -14,14 +14,12 @@ import {
   useAddComment,
   useComments,
   useDeleteComment,
-  useDeletePost,
   useFeed,
   useGroup,
   useMarkFeedRead,
   useMarkPostRead,
-  usePinPost,
 } from '../lib/queries';
-import { confirmDialog, haptic } from '../lib/telegram';
+import { haptic } from '../lib/telegram';
 
 /** The ministry's news feed: posters and announcements, newest first. */
 export function Feed({ groupId }: { groupId: number }) {
@@ -88,8 +86,6 @@ export function PostScreen({ groupId, postId }: { groupId: number; postId: numbe
   const comments = useComments(postId);
   const add = useAddComment(groupId, postId);
   const delComment = useDeleteComment(groupId, postId);
-  const delPost = useDeletePost(groupId);
-  const pin = usePinPost(groupId);
   const { mutate: markRead } = useMarkPostRead();
   const [text, setText] = useState('');
   const [viewing, setViewing] = useState<string | null>(null);
@@ -146,38 +142,17 @@ export function PostScreen({ groupId, postId }: { groupId: number; postId: numbe
           </div>
         )}
         <div className="flex flex-col gap-3 p-4">
-          <div className="text-[13px] text-hint">
-            {post.author ? `${displayName(post.author)} · ` : ''}
-            {f.weekdayDayMonth(post.createdAt)} · {f.time(post.createdAt)}
+          <div className="flex items-center gap-2 text-[13px] text-hint">
+            {post.pinned && <span className="shrink-0">📌</span>}
+            <span className="min-w-0 flex-1">
+              {post.author ? `${displayName(post.author)} · ` : ''}
+              {f.weekdayDayMonth(post.createdAt)} · {f.time(post.createdAt)}
+              {post.editedAt ? ` · ${t.feed.edited} ${f.time(post.editedAt)}` : ''}
+            </span>
+            <PostMenu post={post} onDeleted={back} />
           </div>
           <p className="whitespace-pre-line text-[17px] leading-relaxed">{post.text}</p>
           <Reactions post={post} />
-          {post.canPin && (
-            <button
-              type="button"
-              disabled={pin.isPending}
-              onClick={() => {
-                haptic.tap();
-                pin.mutate({ postId: post.id, pinned: !post.pinned });
-              }}
-              className="flex items-center gap-1.5 self-start text-[14px] font-semibold text-link"
-            >
-              📌 {post.pinned ? t.feed.unpinPost : t.feed.pinPost}
-            </button>
-          )}
-          {post.canDelete && (
-            <button
-              type="button"
-              onClick={async () => {
-                if (!(await confirmDialog(t.feed.confirmDeletePost))) return;
-                await delPost.mutateAsync(post.id);
-                back();
-              }}
-              className="flex items-center gap-1.5 self-start text-[14px] font-semibold text-destructive"
-            >
-              <IconTrash size={16} /> {t.feed.deletePost}
-            </button>
-          )}
         </div>
       </article>
 
