@@ -3,6 +3,7 @@ import type { Env } from '../env';
 import { requireTelegramAuth, type AuthVariables } from '../auth/middleware';
 import { loadMe } from '../lib/users';
 import { groupRoutes } from './groups';
+import { groupMeetingRoutes, meetingRoutes, myAttendanceRoutes, scheduleRoutes } from './meetings';
 import { membershipRoutes, userRoutes } from './members';
 
 export const apiRoutes = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
@@ -14,5 +15,9 @@ apiRoutes.get('/me', async (c) => {
 });
 
 apiRoutes.route('/groups', groupRoutes);
+apiRoutes.route('/groups', groupMeetingRoutes);
+apiRoutes.route('/schedules', scheduleRoutes);
+apiRoutes.route('/meetings', meetingRoutes);
+apiRoutes.route('/me/attendance', myAttendanceRoutes);
 apiRoutes.route('/memberships', membershipRoutes);
 apiRoutes.route('/users', userRoutes);

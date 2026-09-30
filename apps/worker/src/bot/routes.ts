@@ -1,9 +1,12 @@
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { GrammyError, webhookCallback } from 'grammy';
 import type { Env } from '../env';
 import { createBot, defaultCommands } from './bot';
 import { deriveToken, timingSafeEqualStr } from '../lib/crypto';
 import { appUrlFor } from '../lib/telegram';
+import { getDb } from '../db/client';
+import { churchSettings } from '../db/schema';
 
 export const botRoutes = new Hono<{ Bindings: Env }>();
 
@@ -47,6 +50,9 @@ botRoutes.post('/setup', async (c) => {
       allowed_updates: ['message', 'callback_query', 'my_chat_member'],
       drop_pending_updates: false,
     });
+    // Remember the public URL for cron jobs (they have no incoming request to read it from).
+    step = 'saveAppUrl';
+    await getDb(c.env.DB).update(churchSettings).set({ appUrl }).where(eq(churchSettings.id, 1));
     step = 'setMyCommands';
     await bot.api.setMyCommands(defaultCommands);
     step = 'setChatMenuButton';

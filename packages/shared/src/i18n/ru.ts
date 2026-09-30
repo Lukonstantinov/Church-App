@@ -39,6 +39,9 @@ export const ru = {
       `❌ Заявка ${nameHtml} в «${group}» отклонена — ${byHtml}`,
     approve: '✅ Принять',
     reject: '❌ Отклонить',
+    rollReminder: (titleHtml: string, groupHtml: string, date: string) =>
+      `📋 <b>Отметьте посещаемость</b>\n«${titleHtml}» · ${groupHtml}\n${date}`,
+    rollReminderButton: 'Открыть перекличку',
     notAllowed: 'Недостаточно прав.',
     alreadyHandled: 'Заявка уже обработана.',
     claimInvalid: 'Код привязки недействителен или истёк. Попросите у лидера новый.',

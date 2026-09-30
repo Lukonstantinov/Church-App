@@ -2,6 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { memberships, groups, users, type User } from '../db/schema';
 import type { MeResponse } from '@church/shared';
+import { getChurch } from './church';
 
 export interface TelegramProfile {
   id: number;
@@ -76,6 +77,7 @@ export async function loadMe(db: Db, user: User): Promise<MeResponse> {
     .orderBy(groups.name);
 
   return {
+    church: await getChurch(db),
     user: {
       id: user.id,
       telegramId: user.telegramId,

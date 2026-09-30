@@ -57,8 +57,8 @@ export async function requestJoin(db: Db, user: User, inviteCode: string): Promi
   return { kind: 'requested', group, membership };
 }
 
-/** Telegram chat ids that should receive a group's join requests: its leaders, else admins. */
-async function joinRequestRecipients(
+/** Telegram chats to notify for a group: its reachable leaders, else the church admins. */
+export async function leaderRecipients(
   db: Db,
   groupId: number,
 ): Promise<{ userId: number; chatId: number }[]> {
@@ -111,7 +111,7 @@ export async function notifyJoinRequest(api: Api, db: Db, membershipId: number):
     .text(ru.bot.reject, `jr:r:${membershipId}`);
 
   let sent = 0;
-  for (const r of await joinRequestRecipients(db, row.group.id)) {
+  for (const r of await leaderRecipients(db, row.group.id)) {
     try {
       const msg = await api.sendMessage(r.chatId, text, {
         parse_mode: 'HTML',
