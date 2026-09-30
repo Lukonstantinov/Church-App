@@ -1,11 +1,12 @@
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { InlineKeyboard, type Api } from 'grammy';
-import { displayName, messages, type Locale } from '@church/shared';
+import { displayName, messages, type Locale, type Permission } from '@church/shared';
 import type { Db } from '../db/client';
 import {
   botCards,
   groups,
   memberships,
+  positions,
   users,
   type Group,
   type Membership,
@@ -14,6 +15,7 @@ import {
 import { audit } from './audit';
 import { churchDefaultLocale, localeOf } from './church';
 import { escapeHtml } from './html';
+import { defaultPositionId, effectivePermissions } from './positions';
 import { isUnreachableError } from './telegram';
 
 const nowIso = () => new Date().toISOString();
@@ -38,13 +40,25 @@ export async function requestJoin(db: Db, user: User, inviteCode: string): Promi
   if (existing) {
     [membership] = await db
       .update(memberships)
-      .set({ status: 'pending', role: 'member', leftAt: null, createdAt: nowIso() })
+      .set({
+        status: 'pending',
+        role: 'member',
+        leftAt: null,
+        createdAt: nowIso(),
+        positionId: await defaultPositionId(db, group.id),
+      })
       .where(eq(memberships.id, existing.id))
       .returning();
   } else {
     [membership] = await db
       .insert(memberships)
-      .values({ userId: user.id, groupId: group.id, status: 'pending', role: 'member' })
+      .values({
+        userId: user.id,
+        groupId: group.id,
+        status: 'pending',
+        role: 'member',
+        positionId: await defaultPositionId(db, group.id),
+      })
       .returning();
   }
   if (!membership) throw new Error('membership write failed');
@@ -64,22 +78,36 @@ export interface Recipient {
   locale: Locale;
 }
 
-/** Telegram chats to notify for a group: its reachable leaders, else the church admins. */
-export async function leaderRecipients(db: Db, groupId: number): Promise<Recipient[]> {
+/**
+ * Telegram chats to notify for an environment: reachable members whose position has
+ * the given right (managing people by default), else the church admins.
+ */
+export async function leaderRecipients(
+  db: Db,
+  groupId: number,
+  perm: Permission = 'people.manage',
+): Promise<Recipient[]> {
   const fallback = await churchDefaultLocale(db);
-  const leaders = await db
-    .select({ userId: users.id, chatId: users.telegramId, locale: users.locale })
+  const candidates = await db
+    .select({
+      userId: users.id,
+      chatId: users.telegramId,
+      locale: users.locale,
+      role: memberships.role,
+      permissions: positions.permissions,
+    })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
+    .leftJoin(positions, eq(positions.id, memberships.positionId))
     .where(
       and(
         eq(memberships.groupId, groupId),
-        eq(memberships.role, 'leader'),
         eq(memberships.status, 'active'),
         isNotNull(users.telegramId),
         eq(users.isReachable, true),
       ),
     );
+  const leaders = candidates.filter((c) => effectivePermissions(false, c).includes(perm));
   const rows = leaders.length
     ? leaders
     : await db

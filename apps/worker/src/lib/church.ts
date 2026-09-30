@@ -1,9 +1,8 @@
 import {
-  BRAND_COLORS,
   DEFAULT_BRAND,
+  isBrandValue,
   DEFAULT_LOCALE,
   isLocale,
-  type BrandColor,
   type ChurchInfo,
   type Locale,
 } from '@church/shared';
@@ -28,7 +27,7 @@ export async function getChurch(db: Db): Promise<ChurchInfo> {
     timezone: row?.timezone ?? 'Europe/Riga',
     currency: row?.currency ?? 'EUR',
     defaultLocale: isLocale(row?.defaultLocale) ? row.defaultLocale : DEFAULT_LOCALE,
-    brandColor: (brand in BRAND_COLORS ? brand : DEFAULT_BRAND) as BrandColor,
+    brandColor: isBrandValue(brand) ? brand : DEFAULT_BRAND,
     logoUrl: row?.logoUpdatedAt ? `/media/logo?v=${encodeURIComponent(row.logoUpdatedAt)}` : null,
   };
 }

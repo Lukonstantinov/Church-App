@@ -5,7 +5,7 @@ import { LOGO_MAX_BYTES, updateChurchSchema, updateMeSchema } from '@church/shar
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db/client';
-import { churchSettings, media, users } from '../db/schema';
+import { churchSettings, groups, media, users } from '../db/schema';
 import { audit } from '../lib/audit';
 import { getChurch, isValidTimezone } from '../lib/church';
 import { fromBase64, readImageUpload, toBase64, verifyMediaSignature } from '../lib/media';
@@ -113,6 +113,30 @@ mediaRoutes.get('/m/:id', async (c) => {
   return c.body(fromBase64(row.data), 200, {
     'Content-Type': row.mime,
     'Cache-Control': 'private, max-age=86400, immutable',
+    'X-Content-Type-Options': 'nosniff',
+  });
+});
+
+/** GET /media/g/:id/logo — an environment's logo (public like the church logo). */
+mediaRoutes.get('/g/:id/logo', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isSafeInteger(id) || id <= 0) return c.body(null, 404);
+  const db = getDb(c.env.DB);
+  const group = await db.query.groups.findFirst({
+    columns: { logoMediaId: true },
+    where: eq(groups.id, id),
+  });
+  if (!group?.logoMediaId) return c.body(null, 404);
+  const row = await db.query.media.findFirst({
+    columns: { data: true, mime: true },
+    where: eq(media.id, group.logoMediaId),
+  });
+  if (!row) return c.body(null, 404);
+  return c.body(fromBase64(row.data), 200, {
+    'Content-Type': row.mime,
+    'Cache-Control': c.req.query('v')
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=300',
     'X-Content-Type-Options': 'nosniff',
   });
 });

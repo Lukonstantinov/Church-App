@@ -6,7 +6,7 @@ import { useCreateGroup } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 
 export function CreateGroup() {
-  const { back, setActiveGroupId, setTab } = useNav();
+  const { replace } = useNav();
   const t = useT();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -17,9 +17,8 @@ export function CreateGroup() {
     if (!name.trim()) return;
     const { id } = await create.mutateAsync({ name, description });
     haptic.success();
-    setActiveGroupId(id);
-    setTab('overview');
-    back();
+    // Straight into the new ministry, where its settings (theme, logo) are one tap away.
+    replace({ name: 'env', groupId: id });
   }
 
   return (

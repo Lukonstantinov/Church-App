@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { displayName, type ClaimCodeResponse } from '@church/shared';
+import {
+  PERMISSIONS,
+  displayName,
+  type ClaimCodeResponse,
+  type MemberDetail,
+  type Permission,
+} from '@church/shared';
+import { Sheet, SheetOption } from '../components/Sheet';
+import { useToast } from '../components/Toast';
 import { AttendanceSummary } from '../components/AttendanceSummary';
 import { Avatar } from '../components/Avatar';
 import { GroupDot } from '../components/GroupSwitcher';
@@ -19,8 +27,10 @@ import {
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import {
+  useGroups,
   useIssueClaimCode,
   useMe,
+  usePositions,
   useMemberDetail,
   useSetAdmin,
   useUpdateMembership,
@@ -31,6 +41,7 @@ import { confirmDialog, haptic } from '../lib/telegram';
 export function MemberScreen({ userId }: { userId: number }) {
   const { back } = useNav();
   const t = useT();
+  const toast = useToast();
   const me = useMe();
   const detail = useMemberDetail(userId);
   const updateUser = useUpdateUser(userId);
@@ -41,6 +52,10 @@ export function MemberScreen({ userId }: { userId: number }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [claim, setClaim] = useState<ClaimCodeResponse | null>(null);
+  const [positionFor, setPositionFor] = useState<MemberDetail['memberships'][number] | null>(null);
+  const groups = useGroups();
+  const canIn = (groupId: number, p: Permission) =>
+    groups.data?.find((g) => g.id === groupId)?.myPermissions.includes(p) ?? false;
 
   if (detail.isPending) return <Loading />;
   if (detail.isError) return <ErrorState onRetry={() => void detail.refetch()} />;
@@ -125,27 +140,17 @@ export function MemberScreen({ userId }: { userId: number }) {
           {memberships.map((m) => (
             <div key={m.membershipId}>
               <Row
-                before={<GroupDot id={m.groupId} />}
+                before={<GroupDot id={m.groupId} theme={m.brandColor} />}
                 title={m.groupName}
                 subtitle={m.status === 'pending' ? t.member.statusPending : undefined}
-                after={m.role === 'leader' ? <Badge>{t.roles.leader}</Badge> : t.roles.member}
+                after={m.positionName ? <Badge>{m.positionName}</Badge> : undefined}
               />
-              {actorIsAdmin && m.status === 'active' && (
-                <ActionRow
-                  disabled={updateMembership.isPending}
-                  onClick={() =>
-                    void updateMembership.mutateAsync({
-                      membershipId: m.membershipId,
-                      role: m.role === 'leader' ? 'member' : 'leader',
-                    })
-                  }
-                >
-                  {m.role === 'leader' ? t.member.makeMember : t.member.makeLeader}
-                </ActionRow>
+              {m.status === 'active' && canIn(m.groupId, 'positions') && !isSelf && (
+                <ActionRow onClick={() => setPositionFor(m)}>{t.positions.choose}</ActionRow>
               )}
               {permissions.canEditProfile &&
                 m.status === 'active' &&
-                (actorIsAdmin || m.role !== 'leader') && (
+                (actorIsAdmin || m.permissions.length === 0) && (
                   <ActionRow
                     destructive
                     disabled={updateMembership.isPending}
@@ -193,6 +198,55 @@ export function MemberScreen({ userId }: { userId: number }) {
           </ActionRow>
         </Section>
       )}
+      <PositionSheet
+        membership={positionFor}
+        onClose={() => setPositionFor(null)}
+        onPick={async (positionId) => {
+          if (!positionFor) return;
+          try {
+            await updateMembership.mutateAsync({
+              membershipId: positionFor.membershipId,
+              positionId,
+            });
+            haptic.success();
+          } catch {
+            haptic.error();
+            toast(t.positions.escalation, 'error');
+          }
+          setPositionFor(null);
+        }}
+      />
     </Screen>
+  );
+}
+
+/** Choose a member's position in one ministry. */
+function PositionSheet({
+  membership,
+  onClose,
+  onPick,
+}: {
+  membership: MemberDetail['memberships'][number] | null;
+  onClose: () => void;
+  onPick: (positionId: number) => void;
+}) {
+  const t = useT();
+  const positions = usePositions(membership?.groupId ?? 0, membership !== null);
+  return (
+    <Sheet open={membership !== null} onClose={onClose} title={t.positions.choose}>
+      {(positions.data ?? []).map((p) => (
+        <SheetOption
+          key={p.id}
+          label={p.name}
+          hint={
+            p.permissions.length
+              ? t.positions.rightsCount(p.permissions.length, PERMISSIONS.length)
+              : t.positions.noRights
+          }
+          selected={p.name === membership?.positionName}
+          onClick={() => onPick(p.id)}
+        />
+      ))}
+    </Sheet>
   );
 }

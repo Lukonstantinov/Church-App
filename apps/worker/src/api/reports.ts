@@ -11,7 +11,7 @@ import {
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { attendance, meetings, memberships, transactions, users } from '../db/schema';
-import { assertCanManageGroup } from '../lib/access';
+import { assertCan } from '../lib/access';
 import { getChurch } from '../lib/church';
 import { botApi, isUnreachableError } from '../lib/telegram';
 import { toTransactionRows } from '../lib/treasury';
@@ -32,7 +32,7 @@ export const groupReportRoutes = new Hono<App>();
 
 groupReportRoutes.get('/:id/treasury/export', async (c) => {
   const db = c.get('db');
-  const group = await assertCanManageGroup(db, c.get('user'), idParam(c));
+  const group = await assertCan(db, c.get('user'), idParam(c), 'reports');
   const year = yearParam(c.req.query('year'));
   const church = await getChurch(db);
   const live = and(eq(transactions.groupId, group.id), isNull(transactions.voidedAt));
@@ -65,7 +65,7 @@ groupReportRoutes.get('/:id/treasury/export', async (c) => {
 
 groupReportRoutes.get('/:id/attendance/export', async (c) => {
   const db = c.get('db');
-  const group = await assertCanManageGroup(db, c.get('user'), idParam(c));
+  const group = await assertCan(db, c.get('user'), idParam(c), 'reports');
   const year = yearParam(c.req.query('year'));
   const { timezone } = await getChurch(db);
   const from = zonedToUtc(`${year}-01-01`, '00:00', timezone).toISOString();

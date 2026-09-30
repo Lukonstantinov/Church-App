@@ -25,13 +25,18 @@ import { openTelegramLink } from '../lib/telegram';
 import { EventCard } from '../components/EventCard';
 
 /** Regular members: their next meeting, own attendance and announcements. */
-export function MemberHome({ me }: { me: MeResponse }) {
+export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }) {
   const { push } = useNav();
   const t = useT();
   const f = useFmt();
-  const { user, memberships } = me;
+  const { user } = me;
+  // Inside one ministry: only its data.
+  const memberships =
+    groupId === undefined ? me.memberships : me.memberships.filter((m) => m.groupId === groupId);
   const active = memberships.filter((m) => m.status === 'active');
   const pending = memberships.filter((m) => m.status === 'pending');
+  const inScope = <T extends { groupId: number }>(list: T[] | undefined) =>
+    groupId === undefined ? list : list?.filter((x) => x.groupId === groupId);
   const att = useMyAttendance(active.length > 0);
   const news = useMyAnnouncements(active.length > 0);
   const finance = useMyFinance(active.length > 0);
@@ -40,7 +45,14 @@ export function MemberHome({ me }: { me: MeResponse }) {
 
   return (
     <Screen>
-      <BrandHeader title={t.home.hello(user.firstName)} />
+      <BrandHeader
+        title={t.home.hello(user.firstName)}
+        subtitle={
+          active[0] && groupId !== undefined
+            ? [active[0].groupName, active[0].positionName].filter(Boolean).join(' · ')
+            : undefined
+        }
+      />
 
       {pending.length > 0 && (
         <Section>
@@ -71,7 +83,7 @@ export function MemberHome({ me }: { me: MeResponse }) {
         </>
       )}
 
-      {att.data?.groups.map((g) => (
+      {inScope(att.data?.groups)?.map((g) => (
         <div key={g.groupId} className="flex flex-col gap-4">
           {g.nextMeeting ? (
             <HeroCard>
@@ -101,12 +113,12 @@ export function MemberHome({ me }: { me: MeResponse }) {
         </div>
       ))}
 
-      {(events.data ?? []).length > 0 && (
+      {(inScope(events.data) ?? []).length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
             {t.events.upcomingOnHome}
           </h2>
-          {events.data!.map((e) => (
+          {inScope(events.data)!.map((e) => (
             <EventCard
               key={e.id}
               e={e}
@@ -135,16 +147,16 @@ export function MemberHome({ me }: { me: MeResponse }) {
         </Section>
       )}
 
-      {finance.data?.map((g) => (
+      {inScope(finance.data)?.map((g) => (
         <MyDuesCard key={g.groupId} g={g} showGroup={active.length > 1} />
       ))}
 
-      {(news.data ?? []).length > 0 && (
+      {(inScope(news.data) ?? []).length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
             {t.home.announcements}
           </h2>
-          {news.data!.map((a) => (
+          {inScope(news.data)!.map((a) => (
             <AnnouncementCard key={a.id} a={a} showGroup={active.length > 1} />
           ))}
         </section>

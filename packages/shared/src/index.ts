@@ -8,3 +8,4 @@ export * from './brand';
 export * from './i18n/locales';
 export * from './finance';
 export * from './events';
+export * from './permissions';

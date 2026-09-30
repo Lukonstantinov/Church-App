@@ -67,7 +67,7 @@ export async function remindMissingRollCalls(db: Db, env: Env, timezone: string,
 
   for (const { meeting, groupName } of rows) {
     if (!(await claim(db, 'roll_reminder', String(meeting.id), '1'))) continue;
-    for (const r of await leaderRecipients(db, meeting.groupId)) {
+    for (const r of await leaderRecipients(db, meeting.groupId, 'attendance.take')) {
       const t = messages(r.locale);
       const text = t.bot.rollReminder(
         escapeHtml(meeting.title),

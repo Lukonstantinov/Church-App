@@ -40,6 +40,7 @@ import {
 } from '../components/ui';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
+import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
 import { storage } from '../lib/storage';
 import { useDues, useTransactions, useTreasury, useTreasurySettings } from '../lib/queries';
@@ -51,6 +52,7 @@ const SEG_KEY = 'church.treasurySeg';
 /** Group treasury: balance, monthly dues sheet, cash book and statistics. */
 export function Treasury({ groups, active }: { groups: GroupSummary[]; active: GroupSummary }) {
   const t = useT();
+  const { can } = useEnv();
   const { push } = useNav();
   const summary = useTreasury(active.id);
   const [seg, setSegState] = useState<Seg>(() => {
@@ -68,28 +70,35 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
       <GroupSwitcher groups={groups} active={active} subtitle={t.treasury.subtitle} />
 
       {s ? (
-        <BalanceHero s={s} onReports={() => push({ name: 'reports', groupId: active.id })} />
+        <BalanceHero
+          s={s}
+          onReports={
+            can('reports') ? () => push({ name: 'reports', groupId: active.id }) : undefined
+          }
+        />
       ) : (
         <Skeleton className="h-40 w-full" />
       )}
 
-      <div className="grid grid-cols-3 gap-3">
-        <QuickAction
-          icon={<IconArrowDown size={22} />}
-          label={t.treasury.income}
-          onClick={() => push({ name: 'newTransaction', groupId: active.id, kind: 'income' })}
-        />
-        <QuickAction
-          icon={<IconArrowUp size={22} />}
-          label={t.treasury.expense}
-          onClick={() => push({ name: 'newTransaction', groupId: active.id, kind: 'expense' })}
-        />
-        <QuickAction
-          icon={<IconHeart size={22} />}
-          label={t.treasury.quickDonation}
-          onClick={() => push({ name: 'newTransaction', groupId: active.id, kind: 'donation' })}
-        />
-      </div>
+      {can('money.manage') && (
+        <div className="grid grid-cols-3 gap-3">
+          <QuickAction
+            icon={<IconArrowDown size={22} />}
+            label={t.treasury.income}
+            onClick={() => push({ name: 'newTransaction', groupId: active.id, kind: 'income' })}
+          />
+          <QuickAction
+            icon={<IconArrowUp size={22} />}
+            label={t.treasury.expense}
+            onClick={() => push({ name: 'newTransaction', groupId: active.id, kind: 'expense' })}
+          />
+          <QuickAction
+            icon={<IconHeart size={22} />}
+            label={t.treasury.quickDonation}
+            onClick={() => push({ name: 'newTransaction', groupId: active.id, kind: 'donation' })}
+          />
+        </div>
+      )}
 
       <Segmented
         options={[
@@ -108,7 +117,7 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
   );
 }
 
-function BalanceHero({ s, onReports }: { s: TreasurySummary; onReports: () => void }) {
+function BalanceHero({ s, onReports }: { s: TreasurySummary; onReports?: () => void }) {
   const t = useT();
   const f = useFmt();
   const money = useMoney();
@@ -118,13 +127,15 @@ function BalanceHero({ s, onReports }: { s: TreasurySummary; onReports: () => vo
         <span className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">
           <IconWallet size={16} /> {t.treasury.balance}
         </span>
-        <button
-          type="button"
-          onClick={onReports}
-          className="flex h-8 items-center gap-1.5 rounded-full bg-white/18 px-3 text-[13px] font-semibold active:scale-95"
-        >
-          <IconChart size={15} /> {t.reports.title}
-        </button>
+        {onReports && (
+          <button
+            type="button"
+            onClick={onReports}
+            className="flex h-8 items-center gap-1.5 rounded-full bg-white/18 px-3 text-[13px] font-semibold active:scale-95"
+          >
+            <IconChart size={15} /> {t.reports.title}
+          </button>
+        )}
       </div>
       <div className="mt-2 text-[40px] font-bold leading-none tracking-tight tabular-nums">
         {money(s.balanceCents)}
@@ -146,6 +157,7 @@ function BalanceHero({ s, onReports }: { s: TreasurySummary; onReports: () => vo
 
 function DuesPanel({ groupId, summary }: { groupId: number; summary?: TreasurySummary }) {
   const t = useT();
+  const { can } = useEnv();
   const f = useFmt();
   const money = useMoney();
   const toast = useToast();
@@ -194,19 +206,21 @@ function DuesPanel({ groupId, summary }: { groupId: number; summary?: TreasurySu
         </Card>
       )}
 
-      <Section>
-        <Row
-          title={t.treasury.feePerMonth}
-          after={summary ? (fee > 0 ? money(fee) : t.treasury.feeOff) : '…'}
-          onClick={() => setFeeOpen(true)}
-        />
-        <Toggle
-          label={t.treasury.membersSee}
-          checked={summary?.membersSeeTreasury ?? false}
-          disabled={!summary || settings.isPending}
-          onChange={(v) => settings.mutate({ membersSeeTreasury: v })}
-        />
-      </Section>
+      {can('money.manage') && (
+        <Section>
+          <Row
+            title={t.treasury.feePerMonth}
+            after={summary ? (fee > 0 ? money(fee) : t.treasury.feeOff) : '…'}
+            onClick={() => setFeeOpen(true)}
+          />
+          <Toggle
+            label={t.treasury.membersSee}
+            checked={summary?.membersSeeTreasury ?? false}
+            disabled={!summary || settings.isPending}
+            onChange={(v) => settings.mutate({ membersSeeTreasury: v })}
+          />
+        </Section>
+      )}
 
       <section>
         <div className="mb-2 flex items-center justify-between px-1">
@@ -242,7 +256,7 @@ function DuesPanel({ groupId, summary }: { groupId: number; summary?: TreasurySu
                 <button
                   key={r.member.id}
                   type="button"
-                  onClick={() => setOpenUser(r.member.id)}
+                  onClick={() => can('money.manage') && setOpenUser(r.member.id)}
                   className="flex min-h-[64px] w-full items-center gap-3 border-b border-hairline px-4 py-2.5 text-left last:border-b-0 active:bg-hairline"
                 >
                   <Avatar
@@ -312,6 +326,7 @@ type Filter = keyof typeof FILTERS;
 
 function LedgerPanel({ groupId }: { groupId: number }) {
   const t = useT();
+  const { can } = useEnv();
   const f = useFmt();
   const [filter, setFilter] = useState<Filter>('all');
   const q = useTransactions(groupId, FILTERS[filter]);
@@ -350,7 +365,7 @@ function LedgerPanel({ groupId }: { groupId: number }) {
         byMonth.map(([month, txs]) => (
           <Section key={month} title={f.periodLong(month)}>
             {txs.map((tx) => (
-              <TxRow key={tx.id} tx={tx} onClick={() => setOpen(tx)} />
+              <TxRow key={tx.id} tx={tx} onClick={() => can('money.manage') && setOpen(tx)} />
             ))}
           </Section>
         ))

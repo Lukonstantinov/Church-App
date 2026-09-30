@@ -1,8 +1,10 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { memberships, groups, users, type User } from '../db/schema';
+import { memberships, groups, positions, users, type User } from '../db/schema';
 import type { MeResponse } from '@church/shared';
 import { getChurch, localeOf } from './church';
+import { groupLogoUrl } from './groups';
+import { effectivePermissions } from './positions';
 
 export interface TelegramProfile {
   id: number;
@@ -71,9 +73,14 @@ export async function loadMe(db: Db, user: User): Promise<MeResponse> {
       role: memberships.role,
       status: memberships.status,
       chatUrl: groups.chatUrl,
+      brandColor: groups.brandColor,
+      logoMediaId: groups.logoMediaId,
+      positionName: positions.name,
+      permissions: positions.permissions,
     })
     .from(memberships)
     .innerJoin(groups, eq(groups.id, memberships.groupId))
+    .leftJoin(positions, eq(positions.id, memberships.positionId))
     .where(and(eq(memberships.userId, user.id), isNull(groups.archivedAt)))
     .orderBy(groups.name);
 
@@ -92,7 +99,17 @@ export async function loadMe(db: Db, user: User): Promise<MeResponse> {
     },
     memberships: rows
       .filter((r) => r.status === 'active' || r.status === 'pending')
-      .map((r) => ({ ...r, chatUrl: r.status === 'active' ? r.chatUrl : null })),
+      .map((r) => ({
+        groupId: r.groupId,
+        groupName: r.groupName,
+        role: r.role,
+        status: r.status,
+        chatUrl: r.status === 'active' ? r.chatUrl : null,
+        brandColor: r.brandColor,
+        logoUrl: groupLogoUrl({ id: r.groupId, logoMediaId: r.logoMediaId }),
+        positionName: r.status === 'active' ? r.positionName : null,
+        permissions: r.status === 'active' ? effectivePermissions(user.isAdmin, r) : [],
+      })),
   };
 }
 

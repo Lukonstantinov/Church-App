@@ -1,18 +1,12 @@
 import { useRef, useState } from 'react';
-import {
-  BRAND_COLOR_KEYS,
-  BRAND_COLORS,
-  LOCALE_NAMES,
-  LOCALES,
-  type BrandColor,
-  type Locale,
-} from '@church/shared';
+import { LOCALE_NAMES, LOCALES, type Locale } from '@church/shared';
 import { ChurchLogo } from '../components/BrandHeader';
 import { IconImage, IconTrash } from '../components/icons';
 import { useToast } from '../components/Toast';
 import { ActionRow, Button, Screen, Section, TextField, Title } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { prepareLogo } from '../lib/image';
+import { ThemePicker } from '../components/ThemePicker';
 import { useMe, useRemoveLogo, useUpdateChurch, useUploadLogo } from '../lib/queries';
 import { applyBrand } from '../lib/theme';
 import { confirmDialog, haptic } from '../lib/telegram';
@@ -57,7 +51,7 @@ export function ChurchSettings() {
     }
   }
 
-  async function pickColor(key: BrandColor) {
+  async function pickColor(key: string) {
     applyBrand(key); // preview instantly
     haptic.tap();
     await patch({ brandColor: key });
@@ -146,25 +140,7 @@ export function ChurchSettings() {
       </Section>
 
       <Section title={t.settings.color} footer={t.settings.colorHint}>
-        <div className="grid grid-cols-5 gap-3 p-4">
-          {BRAND_COLOR_KEYS.map((key) => {
-            const c = BRAND_COLORS[key];
-            const on = key === church.brandColor;
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-label={key}
-                aria-pressed={on}
-                onClick={() => void pickColor(key)}
-                className={`aspect-square rounded-2xl transition active:scale-90 ${on ? 'ring-[3px] ring-text/80 ring-offset-2 ring-offset-[var(--color-section)]' : ''}`}
-                style={{ background: `linear-gradient(135deg, ${c.light}, ${c.partner})` }}
-              >
-                {on && <span className="text-[18px] font-bold text-white">✓</span>}
-              </button>
-            );
-          })}
-        </div>
+        <ThemePicker value={church.brandColor} onChange={(v) => v && void pickColor(v)} />
       </Section>
 
       <Section title={t.settings.defaultLanguage} footer={t.settings.defaultLanguageHint}>

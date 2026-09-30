@@ -2,16 +2,20 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
+  PERMISSIONS,
   setAdminSchema,
   updateMembershipSchema,
   updateUserSchema,
   type ClaimCodeResponse,
   type MemberDetail,
+  type Permission,
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
-import { groups, memberships, users } from '../db/schema';
-import { canManageGroup, canManageUser, ledGroupIds } from '../lib/access';
+import { groups, memberships, positions, users } from '../db/schema';
+import { accessIn, canManageUser, visibleGroupIds } from '../lib/access';
+import { defaultPositionId, effectivePermissions, permsOf, roleFor } from '../lib/positions';
+import { groupLogoUrl } from '../lib/groups';
 import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
 import { memberAttendance } from '../lib/meetings';
@@ -28,7 +32,8 @@ export const membershipRoutes = new Hono<App>();
 
 /**
  * Approve/reject a pending request, remove a member (status "left"), re-add a former
- * member, or change role (admins only). Leaders can't remove other leaders.
+ * member, or change their position. Nobody can remove or re-position someone who holds
+ * rights they don't have themselves, or hand out rights they don't hold.
  */
 membershipRoutes.patch('/:id', async (c) => {
   const db = c.get('db');
@@ -37,24 +42,58 @@ membershipRoutes.patch('/:id', async (c) => {
   const membership = await db.query.memberships.findFirst({
     where: eq(memberships.id, idParam(c)),
   });
-  if (!membership || !(await canManageGroup(db, actor, membership.groupId))) {
-    throw new HTTPException(404, { message: 'not_found' });
-  }
+  if (!membership) throw new HTTPException(404, { message: 'not_found' });
+  const access = await accessIn(db, actor, membership.groupId);
+  // Like before rights existed: someone without the right doesn't learn the request exists.
+  const need = (p: Permission) => {
+    if (!access.member || !access.perms.has(p))
+      throw new HTTPException(404, { message: 'not_found' });
+  };
+  // Rights of the person being changed: only someone holding all of them may touch them.
+  const current = membership.positionId
+    ? await db.query.positions.findFirst({ where: eq(positions.id, membership.positionId) })
+    : undefined;
+  const targetPerms = current
+    ? permsOf(current)
+    : membership.role === 'leader'
+      ? [...PERMISSIONS]
+      : [];
+  // Strictly more rights (or the target has none): equal leaders can't remove each other.
+  const outranks =
+    actor.isAdmin ||
+    targetPerms.length === 0 ||
+    (targetPerms.every((p) => access.perms.has(p)) && targetPerms.length < access.perms.size);
 
-  if (input.role !== undefined && input.role !== membership.role) {
-    if (!actor.isAdmin) throw new HTTPException(403, { message: 'admin_only' });
-    await db.update(memberships).set({ role: input.role }).where(eq(memberships.id, membership.id));
+  if (input.positionId !== undefined && input.positionId !== membership.positionId) {
+    need('positions');
+    const next = await db.query.positions.findFirst({ where: eq(positions.id, input.positionId) });
+    if (!next || next.groupId !== membership.groupId) {
+      throw new HTTPException(400, { message: 'invalid_position' });
+    }
+    const nextPerms = permsOf(next);
+    if (!actor.isAdmin) {
+      if (membership.userId === actor.id) throw new HTTPException(403, { message: 'own_position' });
+      if (!outranks || nextPerms.some((p) => !access.perms.has(p))) {
+        throw new HTTPException(403, { message: 'escalation' });
+      }
+    }
+    await db
+      .update(memberships)
+      .set({ positionId: next.id, role: roleFor(nextPerms) })
+      .where(eq(memberships.id, membership.id));
     await audit(db, {
       actorUserId: actor.id,
-      action: 'role_changed',
+      action: 'position_assigned',
       entity: 'membership',
       entityId: membership.id,
       groupId: membership.groupId,
-      data: { from: membership.role, to: input.role },
+      data: { from: membership.positionId, to: next.id },
     });
   }
 
   if (input.status !== undefined && input.status !== membership.status) {
+    const isSelf = membership.userId === actor.id;
+    if (!(isSelf && input.status === 'left')) need('people.manage');
     const now = new Date().toISOString();
     if (
       membership.status === 'pending' &&
@@ -67,13 +106,15 @@ membershipRoutes.patch('/:id', async (c) => {
         );
       }
     } else if (input.status === 'left' && membership.status === 'active') {
-      const isSelf = membership.userId === actor.id;
-      if (membership.role === 'leader' && !actor.isAdmin && !isSelf) {
-        throw new HTTPException(403, { message: 'cannot_remove_leader' });
-      }
+      if (!outranks && !isSelf) throw new HTTPException(403, { message: 'cannot_remove_leader' });
       await db
         .update(memberships)
-        .set({ status: 'left', leftAt: now, role: 'member' })
+        .set({
+          status: 'left',
+          leftAt: now,
+          role: 'member',
+          positionId: await defaultPositionId(db, membership.groupId),
+        })
         .where(eq(memberships.id, membership.id));
       await audit(db, {
         actorUserId: actor.id,
@@ -118,11 +159,19 @@ userRoutes.get('/:id', async (c) => {
 
   const target = (await db.query.users.findFirst({ where: eq(users.id, id) }))!;
   // Leaders only see memberships in groups they lead; admins and the user see all.
-  const visibleGroups = actor.isAdmin || isSelf ? null : await ledGroupIds(db, actor.id);
+  const visibleGroups = actor.isAdmin || isSelf ? null : await visibleGroupIds(db, actor.id);
   const rows = await db
-    .select({ m: memberships, groupName: groups.name })
+    .select({
+      m: memberships,
+      groupName: groups.name,
+      brandColor: groups.brandColor,
+      logoMediaId: groups.logoMediaId,
+      positionName: positions.name,
+      permissions: positions.permissions,
+    })
     .from(memberships)
     .innerJoin(groups, eq(groups.id, memberships.groupId))
+    .leftJoin(positions, eq(positions.id, memberships.positionId))
     .where(
       and(
         eq(memberships.userId, id),
@@ -160,14 +209,20 @@ userRoutes.get('/:id', async (c) => {
       guardianConsentAt: target.guardianConsentAt,
       hasActiveClaimCode: target.claimCode !== null && (target.claimExpiresAt ?? '') > now,
     },
-    memberships: rows.map(({ m, groupName }) => ({
-      membershipId: m.id,
-      groupId: m.groupId,
-      groupName,
-      role: m.role,
-      status: m.status,
-      joinedAt: m.joinedAt,
-    })),
+    memberships: rows.map(
+      ({ m, groupName, brandColor, logoMediaId, positionName, permissions }) => ({
+        membershipId: m.id,
+        groupId: m.groupId,
+        groupName,
+        brandColor,
+        logoUrl: groupLogoUrl({ id: m.groupId, logoMediaId }),
+        positionName,
+        permissions: effectivePermissions(false, { role: m.role, permissions }),
+        role: m.role,
+        status: m.status,
+        joinedAt: m.joinedAt,
+      }),
+    ),
     permissions: {
       canEditProfile: canManage,
       canIssueClaimCode: canManage && target.telegramId === null,

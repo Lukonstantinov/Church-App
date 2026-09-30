@@ -21,19 +21,20 @@ describe('dictionaries', () => {
   });
 
   it('every language defines the same keys, all non-empty', () => {
-    const keys = (o: object, prefix = ''): string[] =>
-      Object.entries(o).flatMap(([k, v]) =>
+    // Walks leaves as [path, value]; keys may themselves contain dots ("people.view").
+    const leaves = (o: object, prefix = ''): [string, unknown][] =>
+      Object.entries(o).flatMap(([k, v]): [string, unknown][] =>
         v && typeof v === 'object' && !Array.isArray(v)
-          ? keys(v, `${prefix}${k}.`)
-          : [`${prefix}${k}`],
+          ? leaves(v, `${prefix}${k}/`)
+          : [[`${prefix}${k}`, v]],
       );
-    const ruKeys = keys(MESSAGES.ru).sort();
+    const ruKeys = leaves(MESSAGES.ru)
+      .map(([k]) => k)
+      .sort();
     for (const l of LOCALES) {
-      expect(keys(MESSAGES[l]).sort()).toEqual(ruKeys);
-      for (const k of keys(MESSAGES[l])) {
-        const v = k
-          .split('.')
-          .reduce<unknown>((o, p) => (o as Record<string, unknown>)[p], MESSAGES[l]);
+      const mine = leaves(MESSAGES[l]);
+      expect(mine.map(([k]) => k).sort()).toEqual(ruKeys);
+      for (const [k, v] of mine) {
         if (typeof v === 'string') expect(v.trim(), `${l}.${k}`).not.toBe('');
       }
       expect(MESSAGES[l].time.every).toHaveLength(7);

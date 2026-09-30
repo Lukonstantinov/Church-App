@@ -22,6 +22,7 @@ import { useEvents, usePast, useUpcoming, useUpdateMeeting } from '../lib/querie
 import { confirmDialog, haptic } from '../lib/telegram';
 import { canRollNow } from './Overview';
 import { storage } from '../lib/storage';
+import { useEnv } from '../lib/env';
 import { EventCard } from '../components/EventCard';
 
 type View = 'upcoming' | 'past';
@@ -30,6 +31,7 @@ const KIND_KEY = 'church.calendarKind';
 
 export function Meetings({ groups, active }: { groups: GroupSummary[]; active: GroupSummary }) {
   const { push } = useNav();
+  const { can } = useEnv();
   const t = useT();
   const [view, setView] = useState<View>('upcoming');
   const [kind, setKindState] = useState<Kind>(() =>
@@ -54,22 +56,24 @@ export function Meetings({ groups, active }: { groups: GroupSummary[]; active: G
 
       {kind === 'meetings' ? (
         <>
-          <div className="flex gap-2">
-            <Button
-              small
-              variant="glass"
-              onClick={() => push({ name: 'schedule', groupId: active.id })}
-            >
-              <IconRepeat size={16} /> {t.meetings.schedule}
-            </Button>
-            <Button
-              small
-              variant="glass"
-              onClick={() => push({ name: 'newMeeting', groupId: active.id })}
-            >
-              <IconPlus size={16} /> {t.meetings.newShort}
-            </Button>
-          </div>
+          {can('meetings.manage') && (
+            <div className="flex gap-2">
+              <Button
+                small
+                variant="glass"
+                onClick={() => push({ name: 'schedule', groupId: active.id })}
+              >
+                <IconRepeat size={16} /> {t.meetings.schedule}
+              </Button>
+              <Button
+                small
+                variant="glass"
+                onClick={() => push({ name: 'newMeeting', groupId: active.id })}
+              >
+                <IconPlus size={16} /> {t.meetings.newShort}
+              </Button>
+            </div>
+          )}
 
           <Segmented
             value={view}
@@ -108,8 +112,8 @@ export function Meetings({ groups, active }: { groups: GroupSummary[]; active: G
               past={view === 'past'}
               onOpen={(m) =>
                 view === 'past' && m.status !== 'cancelled'
-                  ? push({ name: 'roll', meetingId: m.id })
-                  : setSheetFor(m)
+                  ? can('attendance.take') && push({ name: 'roll', meetingId: m.id })
+                  : (can('attendance.take') || can('meetings.manage')) && setSheetFor(m)
               }
             />
           )}
@@ -122,9 +126,11 @@ export function Meetings({ groups, active }: { groups: GroupSummary[]; active: G
         </>
       ) : (
         <>
-          <Button onClick={() => push({ name: 'eventForm', groupId: active.id })}>
-            <IconPlus size={18} /> {t.events.new}
-          </Button>
+          {can('events.manage') && (
+            <Button onClick={() => push({ name: 'eventForm', groupId: active.id })}>
+              <IconPlus size={18} /> {t.events.new}
+            </Button>
+          )}
           <Segmented
             value={view}
             onChange={setView}

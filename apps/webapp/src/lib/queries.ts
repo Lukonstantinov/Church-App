@@ -27,6 +27,10 @@ import type {
   UpdateUserInput,
 } from '@church/shared';
 import type {
+  AddExistingMemberInput,
+  PersonSearchRow,
+  PositionInput,
+  PositionRow,
   AttendanceExport,
   TreasuryExport,
   CreateEventInput,
@@ -70,6 +74,8 @@ export const keys = {
   events: (groupId: number, scope: string) => ['groups', groupId, 'events', scope] as const,
   event: (id: number) => ['events', id] as const,
   myEvents: ['me', 'events'] as const,
+  positions: (groupId: number) => ['groups', groupId, 'positions'] as const,
+  peopleSearch: (groupId: number, q: string) => ['groups', groupId, 'people-search', q] as const,
 };
 
 export function useMe() {
@@ -632,3 +638,63 @@ export const sendDocumentToChat = (file: Blob, name: string) =>
     body: file,
     headers: { 'content-type': 'application/octet-stream' },
   });
+
+// ---------- positions & people ----------
+
+export function usePositions(groupId: number, enabled = true) {
+  return useQuery({
+    queryKey: keys.positions(groupId),
+    queryFn: () => apiFetch<PositionRow[]>(`/groups/${groupId}/positions`),
+    enabled,
+  });
+}
+
+function usePositionsSaved(groupId: number) {
+  const qc = useQueryClient();
+  return (list: PositionRow[]) => {
+    qc.setQueryData(keys.positions(groupId), list);
+    void qc.invalidateQueries({ queryKey: keys.members(groupId) });
+    void qc.invalidateQueries({ queryKey: keys.groups });
+    void qc.invalidateQueries({ queryKey: keys.me });
+  };
+}
+
+export function useSavePosition(groupId: number) {
+  const saved = usePositionsSaved(groupId);
+  return useMutation({
+    mutationFn: ({ id, ...input }: PositionInput & { id?: number }) =>
+      id
+        ? apiFetch<PositionRow[]>(`/positions/${id}`, send('PATCH', input))
+        : apiFetch<PositionRow[]>(`/groups/${groupId}/positions`, send('POST', input)),
+    onSuccess: saved,
+  });
+}
+
+export function useDeletePosition(groupId: number) {
+  const saved = usePositionsSaved(groupId);
+  return useMutation({
+    mutationFn: (id: number) => apiFetch<PositionRow[]>(`/positions/${id}`, send('DELETE')),
+    onSuccess: saved,
+  });
+}
+
+export function usePeopleSearch(groupId: number, q: string) {
+  return useQuery({
+    queryKey: keys.peopleSearch(groupId, q),
+    queryFn: () =>
+      apiFetch<PersonSearchRow[]>(`/groups/${groupId}/people-search?q=${encodeURIComponent(q)}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useAddExisting(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddExistingMemberInput) =>
+      apiFetch<{ userId: number }>(`/groups/${groupId}/members/existing`, send('POST', input)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['groups', groupId] });
+      void qc.invalidateQueries({ queryKey: keys.groups });
+    },
+  });
+}

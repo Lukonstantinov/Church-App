@@ -1,24 +1,26 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { displayName, LOCALE_NAMES, type GroupSummary } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { BrandHeader, LanguageSheet } from '../components/BrandHeader';
-import { GroupDot } from '../components/GroupSwitcher';
-import { IconChart, IconGlobe, IconPlus, IconSettings } from '../components/icons';
-import { ActionRow, Badge, Row, Screen, Section } from '../components/ui';
+import { IconChart, IconGlobe, IconHome, IconSettings, IconUsers } from '../components/icons';
+import { Badge, Row, Screen, Section } from '../components/ui';
+import { useEnv } from '../lib/env';
 import { useI18n } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import { useMe } from '../lib/queries';
 
-/** Profile, language, and for admins: church settings and all groups. */
+/** Profile, language, the ministry's settings (by rights) and church settings for admins. */
 export function More({ groups }: { groups: GroupSummary[] }) {
-  const { push, setTab, setActiveGroupId, activeGroupId } = useNav();
+  const { push, back, envId } = useNav();
   const { t, locale } = useI18n();
+  const { can } = useEnv();
   const me = useMe();
   const [langOpen, setLangOpen] = useState(false);
   const user = me.data?.user;
+  const env = groups[0];
   if (!user) return null;
 
-  const iconTile = (icon: React.ReactNode) => (
+  const iconTile = (icon: ReactNode) => (
     <span className="brand-gradient flex h-9 w-9 items-center justify-center rounded-xl text-white">
       {icon}
     </span>
@@ -26,7 +28,7 @@ export function More({ groups }: { groups: GroupSummary[] }) {
 
   return (
     <Screen tabs>
-      <BrandHeader title={t.nav.more} />
+      <BrandHeader title={t.nav.more} subtitle={env?.name} />
 
       <Section title={t.member.profile}>
         <Row
@@ -38,6 +40,7 @@ export function More({ groups }: { groups: GroupSummary[] }) {
             <span className="flex items-center gap-1.5">
               {user.username && <span>@{user.username}</span>}
               {user.isAdmin && <Badge>{t.roles.admin}</Badge>}
+              {env?.positionName && <Badge tone="hint">{env.positionName}</Badge>}
             </span>
           }
           onClick={() => push({ name: 'member', userId: user.id })}
@@ -50,64 +53,48 @@ export function More({ groups }: { groups: GroupSummary[] }) {
         />
       </Section>
 
-      {user.isAdmin && (
-        <Section>
-          <Row
-            before={iconTile(<IconSettings size={19} />)}
-            title={t.settings.title}
-            subtitle={t.settings.entry}
-            onClick={() => push({ name: 'settings' })}
-          />
-        </Section>
-      )}
-
-      {groups.length > 0 && (
-        <Section>
-          <Row
-            before={iconTile(<IconChart size={19} />)}
-            title={t.reports.title}
-            subtitle={t.reports.entry}
-            onClick={() =>
-              push({
-                name: 'reports',
-                groupId: groups.find((g) => g.id === activeGroupId)?.id ?? groups[0]!.id,
-              })
-            }
-          />
-        </Section>
-      )}
-
-      {groups.length > 0 && (
-        <Section title={t.groups.groupSettings}>
-          {groups.map((g) => (
+      {env && (can('settings') || can('positions') || can('reports')) && (
+        <Section title={env.name}>
+          {can('settings') && (
             <Row
-              key={g.id}
-              before={<GroupDot id={g.id} size={12} />}
-              title={g.name}
-              onClick={() => push({ name: 'groupSettings', groupId: g.id })}
+              before={iconTile(<IconSettings size={19} />)}
+              title={t.env.settings}
+              subtitle={`${t.env.theme} · ${t.env.logo} · ${t.groups.chatTitle}`}
+              onClick={() => push({ name: 'groupSettings', groupId: env.id })}
             />
-          ))}
+          )}
+          {can('positions') && (
+            <Row
+              before={iconTile(<IconUsers size={19} />)}
+              title={t.positions.title}
+              subtitle={t.positions.entry}
+              onClick={() => push({ name: 'positions', groupId: env.id })}
+            />
+          )}
+          {can('reports') && (
+            <Row
+              before={iconTile(<IconChart size={19} />)}
+              title={t.reports.title}
+              subtitle={t.reports.entry}
+              onClick={() => push({ name: 'reports', groupId: env.id })}
+            />
+          )}
         </Section>
       )}
 
-      {user.isAdmin && (
-        <Section title={t.groups.churchGroups}>
-          {groups.map((g) => (
+      {(envId !== null || user.isAdmin) && (
+        <Section>
+          {envId !== null && (
+            <Row before={iconTile(<IconHome size={19} />)} title={t.env.all} onClick={back} />
+          )}
+          {user.isAdmin && (
             <Row
-              key={g.id}
-              before={<GroupDot id={g.id} size={12} />}
-              title={g.name}
-              subtitle={`${t.common.members(g.activeCount)}${g.leaderNames.length ? ` · ${g.leaderNames.join(', ')}` : ''}`}
-              after={g.pendingCount > 0 ? <Badge tone="danger">{g.pendingCount}</Badge> : undefined}
-              onClick={() => {
-                setActiveGroupId(g.id);
-                setTab('overview');
-              }}
+              before={iconTile(<IconSettings size={19} />)}
+              title={t.settings.title}
+              subtitle={t.settings.entry}
+              onClick={() => push({ name: 'settings' })}
             />
-          ))}
-          <ActionRow icon={<IconPlus size={20} />} onClick={() => push({ name: 'createGroup' })}>
-            {t.groups.create}
-          </ActionRow>
+          )}
         </Section>
       )}
 

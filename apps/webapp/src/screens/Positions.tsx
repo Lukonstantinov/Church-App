@@ -1,0 +1,248 @@
+import { useState } from 'react';
+import {
+  PERMISSIONS,
+  PERMISSION_GROUPS,
+  normalizePermissions,
+  type Permission,
+  type PositionRow,
+} from '@church/shared';
+import { IconCheck, IconPlus, IconTrash } from '../components/icons';
+import { useToast } from '../components/Toast';
+import {
+  Badge,
+  Button,
+  Card,
+  ErrorState,
+  Loading,
+  Screen,
+  Section,
+  TextArea,
+  TextField,
+  Title,
+  Toggle,
+} from '../components/ui';
+import { ApiError } from '../lib/api';
+import { useEnv } from '../lib/env';
+import { useT } from '../lib/i18n';
+import { useNav } from '../lib/nav';
+import { useDeletePosition, useGroup, usePositions, useSavePosition } from '../lib/queries';
+import { confirmDialog, haptic } from '../lib/telegram';
+
+/** List of the ministry's positions: who they are for, how many people, how many rights. */
+export function Positions({ groupId }: { groupId: number }) {
+  const t = useT();
+  const { push } = useNav();
+  const group = useGroup(groupId);
+  const q = usePositions(groupId);
+  if (q.isPending) return <Loading />;
+  if (q.isError) return <ErrorState onRetry={() => void q.refetch()} />;
+
+  return (
+    <Screen>
+      <Title subtitle={group.data?.name}>{t.positions.title}</Title>
+      <div className="flex flex-col gap-3">
+        {q.data.map((p) => (
+          <Card
+            key={p.id}
+            onClick={() => push({ name: 'position', groupId, positionId: p.id })}
+            className="p-4"
+          >
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-[17px] font-semibold">{p.name}</span>
+              {p.isDefault && <Badge tone="hint">{t.positions.defaultBadge}</Badge>}
+              <span className="text-[13px] text-hint">{t.positions.people(p.memberCount)}</span>
+            </div>
+            {p.description && (
+              <p className="mt-1 line-clamp-2 text-[14px] text-hint">{p.description}</p>
+            )}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {p.permissions.length === 0 ? (
+                <Badge tone="hint">{t.positions.noRights}</Badge>
+              ) : p.permissions.length === PERMISSIONS.length ? (
+                <Badge>{t.positions.rightsCount(p.permissions.length, PERMISSIONS.length)}</Badge>
+              ) : (
+                p.permissions.map((perm) => (
+                  <Badge key={perm} tone="accent">
+                    {t.positions.perm[perm]}
+                  </Badge>
+                ))
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+      <Button onClick={() => push({ name: 'position', groupId })}>
+        <IconPlus size={18} /> {t.positions.new}
+      </Button>
+    </Screen>
+  );
+}
+
+const TEMPLATES: {
+  key: 'tplHelper' | 'tplTreasurer' | 'tplMedia' | 'tplHost';
+  perms: Permission[];
+}[] = [
+  { key: 'tplHelper', perms: ['attendance.take'] },
+  { key: 'tplTreasurer', perms: ['money.manage', 'reports'] },
+  { key: 'tplMedia', perms: ['events.manage', 'announce'] },
+  { key: 'tplHost', perms: ['attendance.take', 'meetings.manage', 'announce'] },
+];
+
+/** Create or edit one position: name, description, default flag and rights. */
+export function PositionEditor({ groupId, positionId }: { groupId: number; positionId?: number }) {
+  const q = usePositions(groupId);
+  if (q.isPending) return <Loading />;
+  if (q.isError) return <ErrorState onRetry={() => void q.refetch()} />;
+  const existing = positionId ? q.data.find((p) => p.id === positionId) : undefined;
+  return <EditorBody groupId={groupId} existing={existing} />;
+}
+
+function EditorBody({ groupId, existing }: { groupId: number; existing?: PositionRow }) {
+  const t = useT();
+  const toast = useToast();
+  const { back } = useNav();
+  const { can } = useEnv();
+  const save = useSavePosition(groupId);
+  const del = useDeletePosition(groupId);
+  const [name, setName] = useState(existing?.name ?? '');
+  const [description, setDescription] = useState(existing?.description ?? '');
+  const [isDefault, setIsDefault] = useState(existing?.isDefault ?? false);
+  const [perms, setPerms] = useState<Permission[]>(existing?.permissions ?? []);
+  // Rights the editor doesn't hold can be neither given nor taken away.
+  const locked = (p: Permission) => !can(p);
+  const editable = !existing || existing.permissions.every((p) => can(p));
+
+  const toggle = (p: Permission) => {
+    haptic.tap();
+    setPerms((cur) =>
+      cur.includes(p)
+        ? cur.filter((x) => x !== p)
+        : normalizePermissions([...cur, p]).filter((x) => !locked(x) || cur.includes(x)),
+    );
+  };
+
+  const errorText = (err: unknown) =>
+    err instanceof ApiError && err.code === 'escalation'
+      ? t.positions.escalation
+      : err instanceof ApiError && err.code === 'position_in_use'
+        ? t.positions.inUse
+        : t.common.saveFailed;
+
+  async function submit() {
+    try {
+      await save.mutateAsync({
+        id: existing?.id,
+        name: name.trim(),
+        description,
+        permissions: normalizePermissions(perms),
+        isDefault,
+      });
+      haptic.success();
+      toast(t.common.saved);
+      back();
+    } catch (err) {
+      haptic.error();
+      toast(errorText(err), 'error');
+    }
+  }
+
+  async function remove() {
+    if (!existing || !(await confirmDialog(t.positions.confirmDelete))) return;
+    try {
+      await del.mutateAsync(existing.id);
+      back();
+    } catch (err) {
+      toast(errorText(err), 'error');
+    }
+  }
+
+  return (
+    <Screen>
+      <Title>{existing ? existing.name : t.positions.new}</Title>
+
+      {!existing && (
+        <section>
+          <h2 className="mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+            {t.positions.templates}
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {TEMPLATES.filter((tpl) => tpl.perms.every((p) => can(p))).map((tpl) => (
+              <button
+                key={tpl.key}
+                type="button"
+                onClick={() => {
+                  setName(t.positions[tpl.key]);
+                  setPerms(normalizePermissions(tpl.perms));
+                }}
+                className="glass min-h-[40px] rounded-full px-4 text-[15px] font-semibold active:scale-95"
+              >
+                {t.positions[tpl.key]}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <Section>
+        <TextField label={t.positions.name} value={name} onChange={setName} maxLength={40} />
+      </Section>
+      <Section title={t.positions.description}>
+        <TextArea
+          value={description}
+          onChange={setDescription}
+          placeholder={t.positions.descriptionPlaceholder}
+          maxLength={300}
+          rows={3}
+        />
+      </Section>
+      <Section>
+        <Toggle
+          label={t.positions.isDefault}
+          checked={isDefault}
+          disabled={existing?.isDefault}
+          onChange={setIsDefault}
+        />
+      </Section>
+
+      <h2 className="-mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+        {t.positions.rights}
+      </h2>
+      {PERMISSION_GROUPS.map((g) => (
+        <Section key={g.key} title={t.positions.groups[g.key as keyof typeof t.positions.groups]}>
+          {g.items.map((p) => {
+            const on = perms.includes(p);
+            return (
+              <button
+                key={p}
+                type="button"
+                role="switch"
+                aria-checked={on}
+                disabled={locked(p) || !editable}
+                onClick={() => toggle(p)}
+                className="flex min-h-[54px] w-full items-center gap-3 border-b border-hairline px-4 py-2 text-left last:border-b-0 disabled:opacity-45"
+              >
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${
+                    on ? 'brand-gradient text-white' : 'border-2 border-hint/40'
+                  }`}
+                >
+                  {on && <IconCheck size={15} />}
+                </span>
+                <span className="flex-1 text-[16px]">{t.positions.perm[p]}</span>
+              </button>
+            );
+          })}
+        </Section>
+      ))}
+
+      <Button onClick={() => void submit()} disabled={!name.trim() || !editable || save.isPending}>
+        {save.isPending ? t.common.saving : t.common.save}
+      </Button>
+      {existing && !existing.isDefault && editable && (
+        <Button variant="destructive" onClick={() => void remove()} disabled={del.isPending}>
+          <IconTrash size={18} /> {t.positions.delete}
+        </Button>
+      )}
+    </Screen>
+  );
+}

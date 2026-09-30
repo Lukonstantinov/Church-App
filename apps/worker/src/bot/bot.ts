@@ -14,7 +14,7 @@ import {
   notifyJoinRequest,
   requestJoin,
 } from '../lib/membership';
-import { canManageGroup } from '../lib/access';
+import { can } from '../lib/access';
 import { claimProfile } from '../lib/claim';
 
 export interface BotDeps {
@@ -103,7 +103,7 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     const membership = await db.query.memberships.findFirst({
       where: eq(memberships.id, membershipId),
     });
-    if (!membership || !(await canManageGroup(db, ctx.dbUser, membership.groupId))) {
+    if (!membership || !(await can(db, ctx.dbUser, membership.groupId, 'people.manage'))) {
       return void (await ctx.answerCallbackQuery({ text: ctx.t.bot.notAllowed, show_alert: true }));
     }
     const result = await decideJoin(db, ctx.dbUser, membershipId, approve);

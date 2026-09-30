@@ -1,4 +1,4 @@
-import { BRAND_COLORS, DEFAULT_BRAND, type BrandColor } from '@church/shared';
+import { resolveBrand } from '@church/shared';
 import { webApp } from './telegram';
 
 function parseHex(hex: string): [number, number, number] | null {
@@ -22,9 +22,9 @@ export function mixHex(a: string, b: string, t: number): string {
     .join('')}`;
 }
 
-/** Applies the church brand color to CSS variables and Telegram's own header. */
-export function applyBrand(key: BrandColor | undefined): void {
-  const brand = BRAND_COLORS[key ?? DEFAULT_BRAND] ?? BRAND_COLORS[DEFAULT_BRAND];
+/** Applies a theme (church or environment) to CSS variables and Telegram's own header. */
+export function applyBrand(value: string | null | undefined): void {
+  const brand = resolveBrand(value);
   const root = document.documentElement.style;
   root.setProperty('--brand', brand.light);
   root.setProperty('--brand-dark', brand.dark);

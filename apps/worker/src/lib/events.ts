@@ -24,7 +24,7 @@ import {
   type EventRow,
   type User,
 } from '../db/schema';
-import { canManageGroup, groupRoleOf } from './access';
+import { accessIn, can } from './access';
 import { signedMediaUrl } from './media';
 import { toTransactionRows } from './treasury';
 
@@ -54,9 +54,9 @@ export async function loadEventOr404(db: Db, id: number): Promise<EventRow> {
 
 /** Members of the event's group (and admins) may view; leaders/admins manage. */
 export async function eventAccess(db: Db, user: User, event: EventRow) {
-  const role = await groupRoleOf(db, user.id, event.groupId);
-  if (!role && !user.isAdmin) throw new HTTPException(404, { message: 'event_not_found' });
-  return { canManage: user.isAdmin || role === 'leader' };
+  const a = await accessIn(db, user, event.groupId);
+  if (!a.member) throw new HTTPException(404, { message: 'event_not_found' });
+  return { canManage: a.perms.has('events.manage') };
 }
 
 async function peopleIn(db: Db, groupId: number, userIds: number[]): Promise<Set<number>> {
@@ -246,7 +246,7 @@ export async function eventDetail(
   event: EventRow,
   user: User,
 ): Promise<EventDetail> {
-  const canManage = await canManageGroup(db, user, event.groupId);
+  const canManage = await can(db, user, event.groupId, 'events.manage');
   const group = await db.query.groups.findFirst({
     columns: { name: true },
     where: eq(groups.id, event.groupId),

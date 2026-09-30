@@ -14,7 +14,7 @@ import {
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { groups, memberships, transactions } from '../db/schema';
-import { assertCanManageGroup } from '../lib/access';
+import { assertCan } from '../lib/access';
 import { audit } from '../lib/audit';
 import { assertGroupMedia, readImageUpload, signedMediaUrl, storeMedia } from '../lib/media';
 import {
@@ -34,13 +34,13 @@ export const groupTreasuryRoutes = new Hono<App>();
 
 groupTreasuryRoutes.get('/:id/treasury', async (c) => {
   const db = c.get('db');
-  const group = await assertCanManageGroup(db, c.get('user'), idParam(c));
+  const group = await assertCan(db, c.get('user'), idParam(c), 'money.view');
   return c.json(await treasurySummary(db, group));
 });
 
 groupTreasuryRoutes.patch('/:id/treasury', async (c) => {
   const db = c.get('db');
-  const group = await assertCanManageGroup(db, c.get('user'), idParam(c));
+  const group = await assertCan(db, c.get('user'), idParam(c), 'money.manage');
   const input = await parseBody(c, treasurySettingsSchema);
   if (Object.keys(input).length > 0) {
     await db.update(groups).set(input).where(eq(groups.id, group.id));
@@ -58,7 +58,7 @@ groupTreasuryRoutes.patch('/:id/treasury', async (c) => {
 
 groupTreasuryRoutes.get('/:id/transactions', async (c) => {
   const db = c.get('db');
-  const group = await assertCanManageGroup(db, c.get('user'), idParam(c));
+  const group = await assertCan(db, c.get('user'), idParam(c), 'money.view');
   const kinds = (c.req.query('kind') ?? '')
     .split(',')
     .filter((k): k is TransactionKind => (TRANSACTION_KINDS as readonly string[]).includes(k));
@@ -82,7 +82,7 @@ async function assertMemberOf(db: AuthVariables['db'], groupId: number, userId: 
 groupTreasuryRoutes.post('/:id/transactions', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'money.manage');
   const input = await parseBody(c, createTransactionSchema);
   if (input.memberUserId) await assertMemberOf(db, group.id, input.memberUserId);
   if (input.receiptMediaId) await assertGroupMedia(db, group.id, input.receiptMediaId);
@@ -108,7 +108,11 @@ groupTreasuryRoutes.post('/:id/transactions', async (c) => {
 groupTreasuryRoutes.post('/:id/media', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), [
+    'money.manage',
+    'events.manage',
+    'settings',
+  ]);
   const { bytes, mime } = await readImageUpload(c.req, MEDIA_MAX_BYTES);
   const kind = c.req.query('kind') === 'event' ? 'event' : 'receipt';
   const id = await storeMedia(db, { groupId: group.id, kind, bytes, mime, createdBy: user.id });
@@ -117,7 +121,7 @@ groupTreasuryRoutes.post('/:id/media', async (c) => {
 
 groupTreasuryRoutes.get('/:id/dues', async (c) => {
   const db = c.get('db');
-  const group = await assertCanManageGroup(db, c.get('user'), idParam(c));
+  const group = await assertCan(db, c.get('user'), idParam(c), 'money.view');
   const raw = Number(c.req.query('year'));
   const year =
     Number.isInteger(raw) && raw >= 2000 && raw <= 2100 ? raw : new Date().getUTCFullYear();
@@ -127,7 +131,7 @@ groupTreasuryRoutes.get('/:id/dues', async (c) => {
 groupTreasuryRoutes.post('/:id/dues', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'money.manage');
   const input = await parseBody(c, payDuesSchema);
   const result = await payDues(db, group, user.id, input);
   return c.json(result, 201);
@@ -136,7 +140,7 @@ groupTreasuryRoutes.post('/:id/dues', async (c) => {
 groupTreasuryRoutes.put('/:id/dues/exempt', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'money.manage');
   const { userId, exempt } = await parseBody(c, duesExemptSchema);
   const res = await db
     .update(memberships)
@@ -155,7 +159,12 @@ transactionRoutes.patch('/:id', async (c) => {
   const user = c.get('user');
   const tx = await db.query.transactions.findFirst({ where: eq(transactions.id, idParam(c)) });
   if (!tx) throw new HTTPException(404, { message: 'not_found' });
-  await assertCanManageGroup(db, user, tx.groupId);
+  await assertCan(
+    db,
+    user,
+    tx.groupId,
+    tx.eventId ? ['money.manage', 'events.manage'] : 'money.manage',
+  );
   const input = await parseBody(c, updateTransactionSchema);
   if (tx.voidedAt) throw new HTTPException(409, { message: 'voided' });
   if (input.receiptMediaId) await assertGroupMedia(db, tx.groupId, input.receiptMediaId);

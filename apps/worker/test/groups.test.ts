@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { env } from 'cloudflare:workers';
-import type {
-  GroupDetail,
-  GroupSummary,
-  MeResponse,
-  MemberDetail,
-  MemberRow,
+import {
+  PERMISSIONS,
+  type GroupDetail,
+  type GroupSummary,
+  type MeResponse,
+  type MemberDetail,
+  type MemberRow,
+  type PositionRow,
 } from '@church/shared';
 import {
   ADMIN,
@@ -45,6 +47,12 @@ async function requestJoin(user: FakeTgUser, inviteCode: string) {
 
 async function membersOf(groupId: number, as: FakeTgUser = ADMIN) {
   return apiJson<MemberRow[]>(`/api/groups/${groupId}/members`, { user: as });
+}
+
+/** Id of the environment's "Leader" position (all rights). */
+async function leaderPositionId(groupId: number) {
+  const list = await apiJson<PositionRow[]>(`/api/groups/${groupId}/positions`, { user: ADMIN });
+  return list.find((p) => !p.isDefault && p.permissions.length === PERMISSIONS.length)!.id;
 }
 
 async function joinAndApprove(user: FakeTgUser, group: { id: number; inviteCode: string }) {
@@ -187,7 +195,7 @@ describe('join flow', () => {
     await apiJson(`/api/memberships/${row.membershipId}`, {
       method: 'PATCH',
       user: ADMIN,
-      json: { role: 'leader' },
+      json: { positionId: await leaderPositionId(group.id) },
     });
 
     vi.unstubAllGlobals();
@@ -199,44 +207,42 @@ describe('join flow', () => {
 });
 
 describe('roles and removal', () => {
-  it('only admins change roles; leaders manage their group but not other leaders', async () => {
+  it('leaders promote within their rights but cannot touch equal leaders or themselves', async () => {
     const group = await createGroup('Роли');
     const l1 = fakeUser('Лидер1', { username: 'l1' });
     const l2 = fakeUser('Лидер2', { username: 'l2' });
     const m = fakeUser('Участник3', { username: 'm3' });
+    const m4 = fakeUser('Участник4', { username: 'm4' });
     const r1 = await joinAndApprove(l1, group);
     const r2 = await joinAndApprove(l2, group);
     const r3 = await joinAndApprove(m, group);
+    const r4 = await joinAndApprove(m4, group);
+    const leader = await leaderPositionId(group.id);
 
     for (const r of [r1, r2]) {
       await apiJson(`/api/memberships/${r.membershipId}`, {
         method: 'PATCH',
         user: ADMIN,
-        json: { role: 'leader' },
+        json: { positionId: leader },
       });
     }
-    const promote = await api(`/api/memberships/${r3.membershipId}`, {
-      method: 'PATCH',
-      user: l1,
-      json: { role: 'leader' },
-    });
-    expect(promote.status).toBe(403);
+    const patch = (who: FakeTgUser, membershipId: number, json: unknown) =>
+      api(`/api/memberships/${membershipId}`, { method: 'PATCH', user: who, json });
 
-    const removeLeader = await api(`/api/memberships/${r2.membershipId}`, {
-      method: 'PATCH',
-      user: l1,
-      json: { status: 'left' },
-    });
-    expect(removeLeader.status).toBe(403);
+    expect((await patch(l1, r2.membershipId, { status: 'left' })).status).toBe(403);
+    expect((await patch(l1, r1.membershipId, { positionId: leader })).status).toBe(200); // no-op
+    const defaultId = (
+      await apiJson<PositionRow[]>(`/api/groups/${group.id}/positions`, { user: ADMIN })
+    ).find((p) => p.isDefault)!.id;
+    expect((await patch(l1, r1.membershipId, { positionId: defaultId })).status).toBe(403);
+    expect((await patch(l1, r2.membershipId, { positionId: defaultId })).status).toBe(403);
 
-    const removeMember = await api(`/api/memberships/${r3.membershipId}`, {
-      method: 'PATCH',
-      user: l1,
-      json: { status: 'left' },
-    });
-    expect(removeMember.status).toBe(200);
+    expect((await patch(l1, r4.membershipId, { positionId: leader })).status).toBe(200);
     const list = await membersOf(group.id, l1);
-    expect(list.map((x) => x.userId)).not.toContain(r3.userId);
+    expect(list.find((x) => x.userId === r4.userId)!.positionName).toBe('Лидер');
+
+    expect((await patch(l1, r3.membershipId, { status: 'left' })).status).toBe(200);
+    expect((await membersOf(group.id, l1)).map((x) => x.userId)).not.toContain(r3.userId);
     const me = await apiJson<MeResponse>('/api/me', { user: m });
     expect(me.memberships).toEqual([]);
   });

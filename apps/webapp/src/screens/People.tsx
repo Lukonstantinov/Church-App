@@ -17,8 +17,15 @@ import {
   Skeleton,
 } from '../components/ui';
 import { useT } from '../lib/i18n';
+import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
-import { useGroup, useMembers, useRotateInvite, useUpdateMembership } from '../lib/queries';
+import {
+  useGroup,
+  useMembers,
+  usePositions,
+  useRotateInvite,
+  useUpdateMembership,
+} from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
 
 export function People({ groups, active }: { groups: GroupSummary[]; active: GroupSummary }) {
@@ -31,10 +38,21 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
   const rotate = useRotateInvite();
   const [query, setQuery] = useState('');
 
+  const { can } = useEnv();
+  const positions = usePositions(active.id);
   const list = members.data ?? [];
-  const pending = list.filter((m) => m.status === 'pending');
-  const leaders = list.filter((m) => m.status === 'active' && m.role === 'leader');
-  const regular = list.filter((m) => m.status === 'active' && m.role === 'member');
+  const pending = can('people.manage') ? list.filter((m) => m.status === 'pending') : [];
+  const activeList = list.filter((m) => m.status === 'active');
+  // Sections per position (in the ministry's order); the default one is the main list.
+  const defaultId = positions.data?.find((p) => p.isDefault)?.id ?? null;
+  const special = (positions.data ?? [])
+    .filter((p) => !p.isDefault)
+    .map((p) => ({ p, people: activeList.filter((m) => m.positionId === p.id) }))
+    .filter((x) => x.people.length > 0);
+  const specialIds = new Set(special.map((x) => x.p.id));
+  const regular = activeList.filter(
+    (m) => m.positionId === defaultId || m.positionId === null || !specialIds.has(m.positionId),
+  );
   const q = query.trim().toLocaleLowerCase();
   const filtered = q
     ? regular.filter((m) => displayName(m).toLocaleLowerCase().includes(q))
@@ -68,7 +86,7 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
           {!m.offline && !m.isReachable && <Badge tone="danger">{t.common.unreachable}</Badge>}
         </div>
       </div>
-      {m.role === 'member' && <PercentChip percent={m.recentPercent} />}
+      <PercentChip percent={m.recentPercent} />
       <Chevron />
     </button>
   );
@@ -120,7 +138,11 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
         </Section>
       )}
 
-      {leaders.length > 0 && <Section title={t.people.leaders}>{leaders.map(row)}</Section>}
+      {special.map(({ p, people }) => (
+        <Section key={p.id} title={`${p.name} · ${people.length}`}>
+          {people.map(row)}
+        </Section>
+      ))}
 
       <div className="flex flex-col gap-3">
         {regular.length > 8 && (
@@ -134,7 +156,7 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
             />
           </label>
         )}
-        <Section title={t.people.members}>
+        <Section title={positions.data?.find((p) => p.isDefault)?.name ?? t.people.members}>
           {members.isPending ? null : regular.length === 0 ? (
             <EmptyState icon={<IconUsers size={26} />} title={t.people.emptyTitle}>
               {t.people.emptyText}
@@ -144,12 +166,14 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
           ) : (
             filtered.map(row)
           )}
-          <ActionRow
-            icon={<IconUserPlus size={20} />}
-            onClick={() => push({ name: 'addOffline', groupId: active.id })}
-          >
-            {t.people.addOffline}
-          </ActionRow>
+          {can('people.manage') && (
+            <ActionRow
+              icon={<IconUserPlus size={20} />}
+              onClick={() => push({ name: 'addPerson', groupId: active.id })}
+            >
+              {t.env.addPerson}
+            </ActionRow>
+          )}
         </Section>
       </div>
 

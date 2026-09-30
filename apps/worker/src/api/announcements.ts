@@ -4,7 +4,7 @@ import { createAnnouncementSchema } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { groups, memberships } from '../db/schema';
-import { assertCanManageGroup, assertCanViewGroup } from '../lib/access';
+import { assertCan, assertCanViewGroup } from '../lib/access';
 import { createAnnouncement, listAnnouncements } from '../lib/announcements';
 import { getAppUrl } from '../lib/church';
 import { drainOutbox } from '../lib/outbox';
@@ -25,7 +25,7 @@ groupAnnouncementRoutes.get('/:id/announcements', async (c) => {
 groupAnnouncementRoutes.post('/:id/announcements', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'announce');
   const { text } = await parseBody(c, createAnnouncementSchema);
   const appUrl = (await getAppUrl(db, c.env.APP_URL)) ?? appUrlFor(c.env, c.req.url);
   const result = await createAnnouncement(db, { group, author: user, text, appUrl });

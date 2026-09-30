@@ -14,7 +14,7 @@ import {
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { eventPhotos, events, groups, memberships, transactions } from '../db/schema';
-import { assertCanManageGroup, assertCanViewGroup } from '../lib/access';
+import { assertCan, assertCanViewGroup } from '../lib/access';
 import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
 import {
@@ -45,7 +45,7 @@ groupEventRoutes.get('/:id/events', async (c) => {
 groupEventRoutes.post('/:id/events', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'events.manage');
   const input = await parseBody(c, createEventSchema);
   const { timezone } = await getChurch(db);
   const times = eventTimes(input, timezone);

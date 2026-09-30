@@ -15,6 +15,8 @@ export type Tab = 'overview' | 'meetings' | 'treasury' | 'people' | 'more';
 
 export type Route =
   | { name: 'root' }
+  /** Inside one environment (its tabs, theme and data). */
+  | { name: 'env'; groupId: number }
   | { name: 'roll'; meetingId: number }
   | { name: 'schedule'; groupId: number }
   | { name: 'newMeeting'; groupId: number }
@@ -27,6 +29,9 @@ export type Route =
   | { name: 'eventForm'; groupId: number; eventId?: number }
   | { name: 'groupSettings'; groupId: number }
   | { name: 'reports'; groupId: number }
+  | { name: 'positions'; groupId: number }
+  | { name: 'position'; groupId: number; positionId?: number }
+  | { name: 'addPerson'; groupId: number }
   | { name: 'addOffline'; groupId: number };
 
 /** Return false to cancel the navigation (e.g. the user chose to keep editing). */
@@ -34,6 +39,8 @@ type BackGuard = () => boolean | Promise<boolean>;
 
 interface Nav {
   route: Route;
+  /** The environment currently open (nearest 'env' screen below the top), if any. */
+  envId: number | null;
   push: (r: Route) => void;
   /** Swap the current screen for another (e.g. form → the thing it created). */
   replace: (r: Route) => void;
@@ -66,12 +73,23 @@ export function NavProvider({ children, initial }: { children: ReactNode; initia
 
   const push = useCallback((r: Route) => {
     setStack((s) => [...s, r]);
+    if (r.name === 'env') {
+      // Entering an environment starts on its overview and makes it the active group.
+      setTab('overview');
+      setActive(r.groupId);
+      storage.set(GROUP_KEY, String(r.groupId));
+    }
     window.scrollTo(0, 0);
   }, []);
 
   const replace = useCallback((r: Route) => {
     guard.current = null;
     setStack((s) => [...s.slice(0, -1), r]);
+    if (r.name === 'env') {
+      setTab('overview');
+      setActive(r.groupId);
+      storage.set(GROUP_KEY, String(r.groupId));
+    }
     window.scrollTo(0, 0);
   }, []);
 
@@ -103,9 +121,18 @@ export function NavProvider({ children, initial }: { children: ReactNode; initia
     };
   }, [stack.length, back]);
 
+  const envId = useMemo(() => {
+    for (let i = stack.length - 1; i >= 0; i--) {
+      const r = stack[i]!;
+      if (r.name === 'env') return r.groupId;
+    }
+    return null;
+  }, [stack]);
+
   const value = useMemo<Nav>(
     () => ({
       route: stack[stack.length - 1]!,
+      envId,
       push,
       replace,
       back,
@@ -115,7 +142,7 @@ export function NavProvider({ children, initial }: { children: ReactNode; initia
       setActiveGroupId,
       setBackGuard,
     }),
-    [stack, push, replace, back, tab, activeGroupId, setActiveGroupId, setBackGuard],
+    [stack, envId, push, replace, back, tab, activeGroupId, setActiveGroupId, setBackGuard],
   );
   return <NavContext.Provider value={value}>{children}</NavContext.Provider>;
 }

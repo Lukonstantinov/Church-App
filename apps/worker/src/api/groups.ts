@@ -2,7 +2,12 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
+  PERMISSIONS,
+  addExistingMemberSchema,
   addOfflineMemberSchema,
+  normalizePermissions,
+  type Permission,
+  type PersonSearchRow,
   createGroupSchema,
   displayName,
   updateGroupSchema,
@@ -19,13 +24,18 @@ import {
   groups,
   meetings,
   memberships,
+  positions,
   users,
   type Group,
   type User,
 } from '../db/schema';
-import { assertCanManageGroup, assertCanViewGroup, canManageGroup } from '../lib/access';
+import { accessIn, assertCan, assertCanViewGroup } from '../lib/access';
 import { audit } from '../lib/audit';
 import { randomCode } from '../lib/codes';
+import { churchDefaultLocale } from '../lib/church';
+import { groupLogoUrl } from '../lib/groups';
+import { assertGroupMedia } from '../lib/media';
+import { createDefaultPositions, defaultPositionId, permsOf, roleFor } from '../lib/positions';
 import { botUsername, inviteLink } from '../lib/telegram';
 import { idParam, parseBody } from './util';
 
@@ -60,8 +70,14 @@ async function summarize(db: Db, user: User, list: Group[]): Promise<GroupSummar
         ),
       ),
     db
-      .select({ groupId: memberships.groupId, role: memberships.role })
+      .select({
+        groupId: memberships.groupId,
+        role: memberships.role,
+        positionName: positions.name,
+        permissions: positions.permissions,
+      })
       .from(memberships)
+      .leftJoin(positions, eq(positions.id, memberships.positionId))
       .where(
         and(
           eq(memberships.userId, user.id),
@@ -71,10 +87,18 @@ async function summarize(db: Db, user: User, list: Group[]): Promise<GroupSummar
       ),
   ]);
   const countBy = new Map(counts.map((c) => [c.groupId, c]));
-  const roleBy = new Map<number, GroupRole>(mine.map((m) => [m.groupId, m.role]));
+  const mineBy = new Map(mine.map((m) => [m.groupId, m]));
   return list.map((g) => {
-    const myRole = roleBy.get(g.id) ?? null;
-    const manages = user.isAdmin || myRole === 'leader';
+    const m = mineBy.get(g.id);
+    const myRole: GroupRole | null = m?.role ?? null;
+    const myPermissions: Permission[] = user.isAdmin
+      ? [...PERMISSIONS]
+      : m?.permissions
+        ? normalizePermissions(m.permissions)
+        : m?.role === 'leader'
+          ? [...PERMISSIONS]
+          : [];
+    const manages = myPermissions.includes('people.manage');
     return {
       id: g.id,
       name: g.name,
@@ -84,6 +108,10 @@ async function summarize(db: Db, user: User, list: Group[]): Promise<GroupSummar
       pendingCount: manages ? Number(countBy.get(g.id)?.pending ?? 0) : 0,
       leaderNames: leaders.filter((l) => l.groupId === g.id).map(displayName),
       myRole,
+      myPermissions,
+      positionName: m?.positionName ?? null,
+      brandColor: g.brandColor,
+      logoUrl: groupLogoUrl(g),
     };
   });
 }
@@ -96,7 +124,7 @@ groupRoutes.get('/', async (c) => {
   if (user.isAdmin) {
     list = await db.query.groups.findMany({
       where: c.req.query('archived') === '1' ? undefined : isNull(groups.archivedAt),
-      orderBy: groups.name,
+      orderBy: [groups.sort, groups.name],
     });
   } else {
     const rows = await db
@@ -110,7 +138,7 @@ groupRoutes.get('/', async (c) => {
           isNull(groups.archivedAt),
         ),
       )
-      .orderBy(groups.name);
+      .orderBy(groups.sort, groups.name);
     list = rows.map((r) => r.group);
   }
   return c.json(await summarize(db, user, list));
@@ -125,6 +153,7 @@ groupRoutes.post('/', async (c) => {
     .insert(groups)
     .values({ name: input.name, description: input.description, inviteCode: randomCode(10) })
     .returning();
+  await createDefaultPositions(db, group!.id, await churchDefaultLocale(db));
   await audit(db, {
     actorUserId: user.id,
     action: 'group_created',
@@ -140,12 +169,14 @@ groupRoutes.get('/:id', async (c) => {
   const user = c.get('user');
   const group = await assertCanViewGroup(db, user, idParam(c));
   const [summary] = await summarize(db, user, [group]);
-  const canManage = await canManageGroup(db, user, group.id);
+  const perms = (await accessIn(db, user, group.id)).perms;
   const detail: GroupDetail = {
     ...summary!,
-    canManage,
+    canManage: perms.size > 0,
     chatUrl: group.chatUrl,
-    inviteLink: canManage ? inviteLink(await botUsername(c.env), group.inviteCode) : null,
+    inviteLink: perms.has('people.manage')
+      ? inviteLink(await botUsername(c.env), group.inviteCode)
+      : null,
   };
   return c.json(detail);
 });
@@ -153,8 +184,9 @@ groupRoutes.get('/:id', async (c) => {
 groupRoutes.patch('/:id', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'settings');
   const input = await parseBody(c, updateGroupSchema);
+  if (input.logoMediaId) await assertGroupMedia(db, group.id, input.logoMediaId);
   await db.update(groups).set(input).where(eq(groups.id, group.id));
   await audit(db, {
     actorUserId: user.id,
@@ -171,7 +203,7 @@ groupRoutes.post('/:id/archive', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
   if (!user.isAdmin) throw new HTTPException(403, { message: 'forbidden' });
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'settings');
   await db
     .update(groups)
     .set({ archivedAt: new Date().toISOString() })
@@ -189,7 +221,7 @@ groupRoutes.post('/:id/archive', async (c) => {
 groupRoutes.post('/:id/invite/rotate', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'people.manage');
   const code = randomCode(10);
   await db.update(groups).set({ inviteCode: code }).where(eq(groups.id, group.id));
   await audit(db, {
@@ -206,15 +238,16 @@ groupRoutes.post('/:id/invite/rotate', async (c) => {
 groupRoutes.get('/:id/members', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'people.view');
   const statuses =
     c.req.query('status') === 'all'
       ? (['pending', 'active', 'left', 'rejected'] as const)
       : (['pending', 'active'] as const);
   const rows = await db
-    .select({ m: memberships, u: users })
+    .select({ m: memberships, u: users, positionName: positions.name })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
+    .leftJoin(positions, eq(positions.id, memberships.positionId))
     .where(and(eq(memberships.groupId, group.id), inArray(memberships.status, [...statuses])))
     .orderBy(users.firstName, users.lastName);
   // Recent attendance per member: last 8 roll calls of the group (excused don't count).
@@ -243,8 +276,10 @@ groupRoutes.get('/:id/members', async (c) => {
       rates.set(mark.userId, r);
     }
   }
-  const result: MemberRow[] = rows.map(({ m, u }) => ({
+  const result: MemberRow[] = rows.map(({ m, u, positionName }) => ({
     membershipId: m.id,
+    positionId: m.positionId,
+    positionName,
     userId: u.id,
     firstName: u.firstName,
     lastName: u.lastName,
@@ -267,7 +302,7 @@ groupRoutes.get('/:id/members', async (c) => {
 groupRoutes.post('/:id/members', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'people.manage');
   const input = await parseBody(c, addOfflineMemberSchema);
   const now = new Date().toISOString();
   const [created] = await db
@@ -287,6 +322,7 @@ groupRoutes.post('/:id/members', async (c) => {
       role: 'member',
       status: 'active',
       joinedAt: now,
+      positionId: await defaultPositionId(db, group.id),
     })
     .returning();
   await audit(db, {
@@ -298,4 +334,116 @@ groupRoutes.post('/:id/members', async (c) => {
     data: { userId: created!.id },
   });
   return c.json({ userId: created!.id, membershipId: membership!.id }, 201);
+});
+
+/**
+ * People from the whole church (anyone who has used the bot, plus members added
+ * without Telegram) that could be added here. Needs the right to manage people.
+ */
+groupRoutes.get('/:id/people-search', async (c) => {
+  const db = c.get('db');
+  const group = await assertCan(db, c.get('user'), idParam(c), 'people.manage');
+  const q = (c.req.query('q') ?? '').trim().replace(/^@/, '').toLowerCase();
+  const like = `%${q.replace(/[%_]/g, '')}%`;
+  const rows = await db
+    .select({
+      userId: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      username: users.username,
+      telegramId: users.telegramId,
+    })
+    .from(users)
+    .where(
+      and(
+        isNull(users.anonymizedAt),
+        q
+          ? sql`(lower(${users.firstName}) like ${like} or lower(coalesce(${users.lastName}, '')) like ${like} or lower(coalesce(${users.username}, '')) like ${like})`
+          : undefined,
+      ),
+    )
+    .orderBy(users.firstName, users.lastName)
+    .limit(40);
+  const here = rows.length
+    ? await db
+        .select({ userId: memberships.userId })
+        .from(memberships)
+        .where(
+          and(
+            eq(memberships.groupId, group.id),
+            inArray(memberships.status, ['active', 'pending']),
+            inArray(
+              memberships.userId,
+              rows.map((r) => r.userId),
+            ),
+          ),
+        )
+    : [];
+  const inGroup = new Set(here.map((h) => h.userId));
+  const result: PersonSearchRow[] = rows.map((r) => ({
+    userId: r.userId,
+    firstName: r.firstName,
+    lastName: r.lastName,
+    username: r.username,
+    offline: r.telegramId === null,
+    inGroup: inGroup.has(r.userId),
+  }));
+  return c.json(result);
+});
+
+/** Adds someone from the church directly (active at once), optionally with a position. */
+groupRoutes.post('/:id/members/existing', async (c) => {
+  const db = c.get('db');
+  const actor = c.get('user');
+  const group = await assertCan(db, actor, idParam(c), 'people.manage');
+  const input = await parseBody(c, addExistingMemberSchema);
+  const person = await db.query.users.findFirst({ where: eq(users.id, input.userId) });
+  if (!person || person.anonymizedAt) throw new HTTPException(404, { message: 'not_found' });
+
+  let positionId = await defaultPositionId(db, group.id);
+  let role: 'leader' | 'member' = 'member';
+  if (input.positionId && input.positionId !== positionId) {
+    const pos = await db.query.positions.findFirst({ where: eq(positions.id, input.positionId) });
+    if (!pos || pos.groupId !== group.id)
+      throw new HTTPException(400, { message: 'invalid_position' });
+    const mine = (await accessIn(db, actor, group.id)).perms;
+    const wanted = permsOf(pos);
+    if (!mine.has('positions') || wanted.some((p) => !mine.has(p))) {
+      throw new HTTPException(403, { message: 'escalation' });
+    }
+    positionId = pos.id;
+    role = roleFor(wanted);
+  }
+
+  const now = new Date().toISOString();
+  const existing = await db.query.memberships.findFirst({
+    where: and(eq(memberships.groupId, group.id), eq(memberships.userId, person.id)),
+  });
+  if (existing?.status === 'active') throw new HTTPException(409, { message: 'already_member' });
+  const [membership] = existing
+    ? await db
+        .update(memberships)
+        .set({ status: 'active', joinedAt: now, leftAt: null, positionId, role })
+        .where(eq(memberships.id, existing.id))
+        .returning()
+    : await db
+        .insert(memberships)
+        .values({
+          userId: person.id,
+          groupId: group.id,
+          status: 'active',
+          joinedAt: now,
+          positionId,
+          role,
+        })
+        .returning();
+  await audit(db, {
+    actorUserId: actor.id,
+    action: 'member_added',
+    entity: 'membership',
+    entityId: membership!.id,
+    groupId: group.id,
+    data: { userId: person.id, positionId },
+  });
+  return c.json({ userId: person.id, membershipId: membership!.id }, 201);
 });

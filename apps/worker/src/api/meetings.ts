@@ -23,7 +23,7 @@ import {
   groups,
   type MeetingSchedule,
 } from '../db/schema';
-import { assertCanManageGroup, canManageGroup } from '../lib/access';
+import { assertCan, can } from '../lib/access';
 import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
 import {
@@ -54,7 +54,7 @@ export const groupMeetingRoutes = new Hono<App>();
 
 groupMeetingRoutes.get('/:id/schedules', async (c) => {
   const db = c.get('db');
-  const group = await assertCanManageGroup(db, c.get('user'), idParam(c));
+  const group = await assertCan(db, c.get('user'), idParam(c), 'meetings.manage');
   const rows = await db
     .select()
     .from(meetingSchedules)
@@ -66,7 +66,7 @@ groupMeetingRoutes.get('/:id/schedules', async (c) => {
 groupMeetingRoutes.post('/:id/schedules', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'meetings.manage');
   const input = await parseBody(c, createScheduleSchema);
   const [row] = await db
     .insert(meetingSchedules)
@@ -87,7 +87,7 @@ groupMeetingRoutes.post('/:id/schedules', async (c) => {
 
 groupMeetingRoutes.get('/:id/stats', async (c) => {
   const db = c.get('db');
-  const group = await assertCanManageGroup(db, c.get('user'), idParam(c));
+  const group = await assertCan(db, c.get('user'), idParam(c), 'any');
   return c.json(await groupStats(db, group.id));
 });
 
@@ -97,7 +97,7 @@ groupMeetingRoutes.get('/:id/stats', async (c) => {
  */
 groupMeetingRoutes.get('/:id/meetings', async (c) => {
   const db = c.get('db');
-  const group = await assertCanManageGroup(db, c.get('user'), idParam(c));
+  const group = await assertCan(db, c.get('user'), idParam(c), 'any');
   const now = new Date().toISOString();
   const limit = Math.min(Math.max(Number(c.req.query('limit')) || 30, 1), 100);
   const list =
@@ -127,7 +127,7 @@ groupMeetingRoutes.get('/:id/meetings', async (c) => {
 groupMeetingRoutes.post('/:id/meetings', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
-  const group = await assertCanManageGroup(db, user, idParam(c));
+  const group = await assertCan(db, user, idParam(c), 'meetings.manage');
   const input = await parseBody(c, createMeetingSchema);
   const { timezone } = await getChurch(db);
   const startsAt = zonedToUtc(input.date, input.startTime, timezone);
@@ -169,7 +169,7 @@ scheduleRoutes.patch('/:id', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
   const schedule = await loadSchedule(c, idParam(c));
-  await assertCanManageGroup(db, user, schedule.groupId);
+  await assertCan(db, user, schedule.groupId, 'meetings.manage');
   const input = await parseBody(c, updateScheduleSchema);
   const [row] = await db
     .update(meetingSchedules)
@@ -209,7 +209,7 @@ scheduleRoutes.delete('/:id', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
   const schedule = await loadSchedule(c, idParam(c));
-  await assertCanManageGroup(db, user, schedule.groupId);
+  await assertCan(db, user, schedule.groupId, 'meetings.manage');
   await db
     .delete(meetings)
     .where(
@@ -243,7 +243,7 @@ meetingRoutes.patch('/:id', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
   const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, idParam(c)) });
-  if (!meeting || !(await canManageGroup(db, user, meeting.groupId))) {
+  if (!meeting || !(await can(db, user, meeting.groupId, 'meetings.manage'))) {
     throw new HTTPException(404, { message: 'not_found' });
   }
   const input = await parseBody(c, updateMeetingSchema);
@@ -273,7 +273,7 @@ async function loadRollMeeting(c: { get: (k: 'db' | 'user') => unknown }, id: nu
   const db = c.get('db') as AuthVariables['db'];
   const user = c.get('user') as AuthVariables['user'];
   const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, id) });
-  if (!meeting || !(await canManageGroup(db, user, meeting.groupId))) {
+  if (!meeting || !(await can(db, user, meeting.groupId, 'attendance.take'))) {
     throw new HTTPException(404, { message: 'not_found' });
   }
   return { db, user, meeting };

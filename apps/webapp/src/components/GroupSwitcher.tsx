@@ -5,12 +5,20 @@ import { useNav } from '../lib/nav';
 import { BrandHeader } from './BrandHeader';
 import { Sheet, SheetOption } from './Sheet';
 
-export function GroupDot({ id, size = 10 }: { id: number; size?: number }) {
+export function GroupDot({
+  id,
+  size = 10,
+  theme,
+}: {
+  id: number;
+  size?: number;
+  theme?: string | null;
+}) {
   return (
     <span
       aria-hidden="true"
       className="inline-block shrink-0 rounded-full"
-      style={{ width: size, height: size, background: groupColor(id) }}
+      style={{ width: size, height: size, background: groupColor(id, theme) }}
     />
   );
 }

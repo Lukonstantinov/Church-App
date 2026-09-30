@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { BRAND_COLOR_KEYS, type BrandColor } from './brand';
+import { isBrandValue, type BrandValue } from './brand';
+import type { Permission } from './permissions';
 import { chatUrlSchema } from './events';
 import { LOCALES, type Locale } from './i18n/locales';
 
@@ -13,6 +14,12 @@ export type MembershipStatus = z.infer<typeof membershipStatusSchema>;
 export interface MeMembership {
   groupId: number;
   groupName: string;
+  /** Rights from the member's position (empty for plain members). */
+  permissions: Permission[];
+  positionName: string | null;
+  /** Environment theme and logo. */
+  brandColor: string | null;
+  logoUrl: string | null;
   /** Group's Telegram chat (active members only). */
   chatUrl?: string | null;
   role: GroupRole;
@@ -26,7 +33,7 @@ export interface ChurchInfo {
   currency: string;
   /** Language for people who haven't picked one. */
   defaultLocale: Locale;
-  brandColor: BrandColor;
+  brandColor: BrandValue;
   /** Relative URL of the uploaded logo (cache-busted), or null. */
   logoUrl: string | null;
 }
@@ -42,7 +49,7 @@ export const updateChurchSchema = z.object({
     .regex(/^[A-Z]{3}$/)
     .optional(),
   defaultLocale: z.enum(LOCALES).optional(),
-  brandColor: z.enum(BRAND_COLOR_KEYS as [BrandColor, ...BrandColor[]]).optional(),
+  brandColor: z.string().refine(isBrandValue, 'theme').optional(),
 });
 export type UpdateChurchInput = z.input<typeof updateChurchSchema>;
 
@@ -81,6 +88,11 @@ export interface GroupSummary {
   leaderNames: string[];
   /** Requester's role in this group; null for admins who aren't members. */
   myRole: GroupRole | null;
+  /** Requester's rights here (all of them for church admins). */
+  myPermissions: Permission[];
+  positionName: string | null;
+  brandColor: string | null;
+  logoUrl: string | null;
 }
 
 export interface GroupDetail extends GroupSummary {
@@ -107,6 +119,8 @@ export const createGroupSchema = z.object({
 export type CreateGroupInput = z.input<typeof createGroupSchema>;
 
 export const updateGroupSchema = z.object({
+  brandColor: z.string().refine(isBrandValue, 'theme').nullable().optional(),
+  logoMediaId: z.number().int().positive().nullable().optional(),
   name: name.optional(),
   description: optionalText(300).optional(),
   chatUrl: chatUrlSchema.optional(),
@@ -117,6 +131,8 @@ export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 
 export interface MemberRow {
   membershipId: number;
+  positionId: number | null;
+  positionName: string | null;
   userId: number;
   firstName: string;
   lastName: string | null;
@@ -166,9 +182,10 @@ export type AddOfflineMemberInput = z.input<typeof addOfflineMemberSchema>;
 export const updateMembershipSchema = z
   .object({
     status: z.enum(['active', 'rejected', 'left']).optional(),
-    role: groupRoleSchema.optional(),
+    /** Position inside the environment (needs the "positions" right). */
+    positionId: z.number().int().positive().optional(),
   })
-  .refine((v) => v.status !== undefined || v.role !== undefined, 'nothing to update');
+  .refine((v) => v.status !== undefined || v.positionId !== undefined, 'nothing to update');
 export type UpdateMembershipInput = z.input<typeof updateMembershipSchema>;
 
 export const updateUserSchema = z.object({
@@ -363,3 +380,20 @@ export interface AttendanceExport {
     statuses: (AttendanceStatus | null)[];
   }[];
 }
+
+/** Someone from the church directory who could be added to an environment. */
+export interface PersonSearchRow {
+  userId: number;
+  firstName: string;
+  lastName: string | null;
+  username: string | null;
+  offline: boolean;
+  /** Already an active or pending member of this environment. */
+  inGroup: boolean;
+}
+
+export const addExistingMemberSchema = z.object({
+  userId: z.number().int().positive(),
+  positionId: z.number().int().positive().optional(),
+});
+export type AddExistingMemberInput = z.input<typeof addExistingMemberSchema>;

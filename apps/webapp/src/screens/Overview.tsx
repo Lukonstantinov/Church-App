@@ -22,6 +22,7 @@ import {
 } from '../components/ui';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
+import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
 import { useGroupStats } from '../lib/queries';
 
@@ -33,10 +34,13 @@ export const canRollNow = (m: Pick<MeetingRow, 'startsAt' | 'status'>, now = Dat
 
 export function Overview({ groups, active }: { groups: GroupSummary[]; active: GroupSummary }) {
   const { push, setTab } = useNav();
+  const { can } = useEnv();
   const t = useT();
   const f = useFmt();
   const stats = useGroupStats(active.id);
   const s = stats.data;
+  // Requests only matter to people who can approve them.
+  const pending = s && can('people.manage') ? s.pendingCount : 0;
 
   return (
     <Screen tabs>
@@ -58,7 +62,7 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
         </>
       ) : (
         <>
-          {s.awaitingRoll.length > 0 && (
+          {can('attendance.take') && s.awaitingRoll.length > 0 && (
             <Card className="overflow-hidden">
               <div className="flex flex-col gap-3 p-4">
                 <div className="flex items-center gap-2 text-[15px] font-semibold text-late">
@@ -96,7 +100,11 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
           {s.nextMeeting ? (
             <NextMeetingHero
               meeting={s.nextMeeting}
-              onRoll={() => push({ name: 'roll', meetingId: s.nextMeeting!.id })}
+              onRoll={
+                can('attendance.take')
+                  ? () => push({ name: 'roll', meetingId: s.nextMeeting!.id })
+                  : undefined
+              }
             />
           ) : (
             <Card>
@@ -104,9 +112,11 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
                 icon={<IconCalendar size={26} />}
                 title={t.overview.noMeetingsTitle}
                 action={
-                  <Button onClick={() => push({ name: 'schedule', groupId: active.id })}>
-                    {t.overview.setupSchedule}
-                  </Button>
+                  can('meetings.manage') ? (
+                    <Button onClick={() => push({ name: 'schedule', groupId: active.id })}>
+                      {t.overview.setupSchedule}
+                    </Button>
+                  ) : undefined
                 }
               >
                 {t.overview.noMeetingsText}
@@ -114,23 +124,31 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
             </Card>
           )}
 
-          <div className="grid grid-cols-3 gap-3">
-            <QuickAction
-              icon={<IconMegaphone size={22} />}
-              label={t.overview.quickAnnounce}
-              onClick={() => push({ name: 'announcements', groupId: active.id })}
-            />
-            <QuickAction
-              icon={<IconPlus size={22} />}
-              label={t.overview.quickMeeting}
-              onClick={() => push({ name: 'newMeeting', groupId: active.id })}
-            />
-            <QuickAction
-              icon={<IconUserPlus size={22} />}
-              label={t.overview.quickInvite}
-              onClick={() => setTab('people')}
-            />
-          </div>
+          {(can('announce') || can('meetings.manage') || can('people.manage')) && (
+            <div className="grid grid-cols-3 gap-3">
+              {can('announce') && (
+                <QuickAction
+                  icon={<IconMegaphone size={22} />}
+                  label={t.overview.quickAnnounce}
+                  onClick={() => push({ name: 'announcements', groupId: active.id })}
+                />
+              )}
+              {can('meetings.manage') && (
+                <QuickAction
+                  icon={<IconPlus size={22} />}
+                  label={t.overview.quickMeeting}
+                  onClick={() => push({ name: 'newMeeting', groupId: active.id })}
+                />
+              )}
+              {can('people.manage') && (
+                <QuickAction
+                  icon={<IconUserPlus size={22} />}
+                  label={t.overview.quickInvite}
+                  onClick={() => push({ name: 'addPerson', groupId: active.id })}
+                />
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3">
             <StatTile
@@ -145,11 +163,9 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
               icon={<IconUsers size={17} />}
               label={t.overview.members}
               value={s.activeMembers}
-              badge={
-                s.pendingCount > 0 ? <Badge tone="danger">+{s.pendingCount}</Badge> : undefined
-              }
-              hint={s.pendingCount > 0 ? t.common.requests(s.pendingCount) : t.overview.inGroup}
-              onClick={() => setTab('people')}
+              badge={pending > 0 ? <Badge tone="danger">+{pending}</Badge> : undefined}
+              hint={pending > 0 ? t.common.requests(pending) : t.overview.inGroup}
+              onClick={can('people.view') ? () => setTab('people') : undefined}
             />
           </div>
 
@@ -198,7 +214,7 @@ export function QuickAction({
   );
 }
 
-function NextMeetingHero({ meeting, onRoll }: { meeting: MeetingRow; onRoll: () => void }) {
+function NextMeetingHero({ meeting, onRoll }: { meeting: MeetingRow; onRoll?: () => void }) {
   const t = useT();
   const f = useFmt();
   const open = canRollNow(meeting);
@@ -216,18 +232,20 @@ function NextMeetingHero({ meeting, onRoll }: { meeting: MeetingRow; onRoll: () 
           </div>
         </div>
       </div>
-      <div className="mt-4">
-        {open ? (
-          <Button variant="white" onClick={onRoll}>
-            {t.overview.startRoll}
-          </Button>
-        ) : (
-          <p className="flex items-center gap-2 rounded-2xl bg-white/15 px-3 py-2.5 text-[14px] text-white/90">
-            <IconClock size={16} className="shrink-0" />
-            {t.overview.rollOpensSoon}
-          </p>
-        )}
-      </div>
+      {onRoll && (
+        <div className="mt-4">
+          {open ? (
+            <Button variant="white" onClick={onRoll}>
+              {t.overview.startRoll}
+            </Button>
+          ) : (
+            <p className="flex items-center gap-2 rounded-2xl bg-white/15 px-3 py-2.5 text-[14px] text-white/90">
+              <IconClock size={16} className="shrink-0" />
+              {t.overview.rollOpensSoon}
+            </p>
+          )}
+        </div>
+      )}
     </HeroCard>
   );
 }

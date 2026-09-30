@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { BRAND_COLORS } from '@church/shared';
+import { resolveBrand } from '@church/shared';
 import { IconCalendar, IconChevronRight, IconSend, IconWallet } from '../components/icons';
 import { useToast } from '../components/Toast';
 import { Card, Screen, Title } from '../components/ui';
 import { ApiError } from '../lib/api';
+import { useEnv } from '../lib/env';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import {
@@ -25,6 +26,7 @@ export function Reports({ groupId }: { groupId: number }) {
   const f = useFmt();
   const toast = useToast();
   const me = useMe();
+  const { env } = useEnv();
   const group = useGroup(groupId);
   const thisYear = Number(f.todayInput().slice(0, 4));
   const [year, setYear] = useState(thisYear);
@@ -43,7 +45,7 @@ export function Reports({ groupId }: { groupId: number }) {
         t,
         f,
         currency: church.currency,
-        brandHex: BRAND_COLORS[church.brandColor].light,
+        brandHex: resolveBrand(env?.brandColor ?? church.brandColor).light,
       };
       let blob: Blob;
       let name: string;

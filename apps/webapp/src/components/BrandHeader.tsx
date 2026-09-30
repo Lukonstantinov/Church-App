@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { LOCALE_NAMES, LOCALES, type Locale } from '@church/shared';
+import { useEnv } from '../lib/env';
 import { useI18n } from '../lib/i18n';
 import { useMe, useSetLocale } from '../lib/queries';
 import { haptic } from '../lib/telegram';
@@ -20,13 +21,16 @@ function initialsOf(name: string): string {
 /** Church logo, or a monogram in the brand gradient when none is uploaded. */
 export function ChurchLogo({ size = 48 }: { size?: number }) {
   const me = useMe();
+  const { env } = useEnv();
   const church = me.data?.church;
   const radius = Math.round(size * 0.3);
-  if (church?.logoUrl) {
+  // Inside a ministry its own logo wins; otherwise the church logo.
+  const logoUrl = env?.logoUrl ?? church?.logoUrl;
+  if (logoUrl) {
     return (
       <img
-        src={church.logoUrl}
-        alt={church.name}
+        src={logoUrl}
+        alt={env?.name ?? church?.name}
         width={size}
         height={size}
         className="shrink-0 bg-white object-contain shadow-card"
@@ -40,7 +44,7 @@ export function ChurchLogo({ size = 48 }: { size?: number }) {
       className="brand-gradient inline-flex shrink-0 items-center justify-center font-bold text-white shadow-cta"
       style={{ width: size, height: size, borderRadius: radius, fontSize: size * 0.36 }}
     >
-      {initialsOf(church?.name ?? '✝')}
+      {initialsOf(env?.name ?? church?.name ?? '✝')}
     </span>
   );
 }

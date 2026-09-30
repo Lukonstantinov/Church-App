@@ -69,6 +69,10 @@ export const groups = sqliteTable('groups', {
   monthlyFeeCents: integer('monthly_fee_cents').notNull().default(500),
   /** Link to the group's Telegram chat (t.me/…), shown to members. */
   chatUrl: text('chat_url'),
+  /** Environment theme: a BRAND_COLORS key; NULL = the church colour. */
+  brandColor: text('brand_color'),
+  logoMediaId: integer('logo_media_id'),
+  sort: integer('sort').notNull().default(0),
   archivedAt: text('archived_at'),
   createdAt: createdAt(),
 });
@@ -93,6 +97,8 @@ export const memberships = sqliteTable(
     leftAt: text('left_at'),
     /** Doesn't pay monthly dues (not shown as owing on the dues sheet). */
     duesExempt: integer('dues_exempt', { mode: 'boolean' }).notNull().default(false),
+    /** Position (and so the rights) inside the environment. */
+    positionId: integer('position_id'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -437,3 +443,24 @@ export const eventRoleAssignees = sqliteTable(
 );
 
 export type EventRow = typeof events.$inferSelect;
+
+/** Positions inside an environment ("Лидер", "Казначей"…), each with a set of rights. */
+export const positions = sqliteTable(
+  'positions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    name: text('name').notNull(),
+    description: text('description'),
+    /** JSON array of Permission keys. */
+    permissions: text('permissions', { mode: 'json' }).$type<string[]>().notNull(),
+    isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+    sort: integer('sort').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index('positions_group').on(t.groupId)],
+);
+
+export type Position = typeof positions.$inferSelect;
