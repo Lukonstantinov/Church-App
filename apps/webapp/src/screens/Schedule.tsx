@@ -4,8 +4,18 @@ import { MeetingFields, WeekdayPicker, type MeetingFormValue } from '../componen
 import { IconRepeat, IconTrash } from '../components/icons';
 import { Sheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
-import { Button, Card, EmptyState, ErrorState, Loading, Screen, Title } from '../components/ui';
-import { WEEKDAYS_EVERY, durationLabel } from '../lib/format';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  Loading,
+  Screen,
+  Switch,
+  Title,
+} from '../components/ui';
+import { useFmt } from '../lib/format';
+import { useT } from '../lib/i18n';
 import {
   useCreateSchedule,
   useDeleteSchedule,
@@ -14,13 +24,6 @@ import {
 } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
 
-const DEFAULT: MeetingFormValue & { weekday: number } = {
-  title: 'Молодёжная встреча',
-  weekday: 4,
-  startTime: '19:00',
-  durationMin: 120,
-};
-
 function endTime(start: string, min: number): string {
   const [h, m] = start.split(':').map(Number) as [number, number];
   const t = (h * 60 + m + min) % 1440;
@@ -28,13 +31,21 @@ function endTime(start: string, min: number): string {
 }
 
 export function Schedule({ groupId }: { groupId: number }) {
+  const t = useT();
+  const f = useFmt();
   const schedules = useSchedules(groupId);
   const create = useCreateSchedule(groupId);
   const update = useUpdateSchedule();
   const remove = useDeleteSchedule();
   const toast = useToast();
+  const defaults = {
+    title: t.schedule.defaultTitle,
+    weekday: 4,
+    startTime: '19:00',
+    durationMin: 120,
+  };
   const [editing, setEditing] = useState<ScheduleRow | 'new' | null>(null);
-  const [form, setForm] = useState(DEFAULT);
+  const [form, setForm] = useState<MeetingFormValue & { weekday: number }>(defaults);
 
   if (schedules.isPending) return <Loading />;
   if (schedules.isError) return <ErrorState onRetry={() => void schedules.refetch()} />;
@@ -42,7 +53,7 @@ export function Schedule({ groupId }: { groupId: number }) {
   function open(target: ScheduleRow | 'new') {
     setForm(
       target === 'new'
-        ? DEFAULT
+        ? defaults
         : {
             title: target.title,
             weekday: target.weekday,
@@ -59,23 +70,18 @@ export function Schedule({ groupId }: { groupId: number }) {
       if (editing === 'new') await create.mutateAsync(form);
       else if (editing) await update.mutateAsync({ id: editing.id, ...form });
       haptic.success();
-      toast(editing === 'new' ? 'Расписание добавлено' : 'Сохранено');
+      toast(editing === 'new' ? t.schedule.added : t.common.saved);
       setEditing(null);
     } catch {
-      toast('Не удалось сохранить', 'error');
+      toast(t.common.saveFailed, 'error');
     }
   }
 
   async function del() {
     if (!editing || editing === 'new') return;
-    if (
-      !(await confirmDialog(
-        'Удалить это расписание? Будущие встречи по нему исчезнут, история сохранится.',
-      ))
-    )
-      return;
+    if (!(await confirmDialog(t.schedule.deleteConfirm))) return;
     await remove.mutateAsync(editing.id);
-    toast('Расписание удалено');
+    toast(t.schedule.deleted);
     setEditing(null);
   }
 
@@ -83,21 +89,21 @@ export function Schedule({ groupId }: { groupId: number }) {
 
   return (
     <Screen>
-      <Title subtitle="Встречи создаются на 4 недели вперёд">Расписание</Title>
+      <Title subtitle={t.schedule.subtitle}>{t.schedule.title}</Title>
 
       {list.length === 0 ? (
         <Card>
           <EmptyState
             icon={<IconRepeat size={26} />}
-            title="Расписания нет"
-            action={<Button onClick={() => open('new')}>Добавить</Button>}
+            title={t.schedule.emptyTitle}
+            action={<Button onClick={() => open('new')}>{t.common.add}</Button>}
           >
-            Например: «Молодёжная встреча — каждую пятницу в 19:00».
+            {t.schedule.emptyText}
           </EmptyState>
         </Card>
       ) : (
         <>
-          <div className="overflow-hidden rounded-2xl bg-section shadow-card">
+          <div className="glass overflow-hidden rounded-[var(--radius-card)] shadow-card">
             {list.map((s) => (
               <div
                 key={s.id}
@@ -106,36 +112,44 @@ export function Schedule({ groupId }: { groupId: number }) {
                 <button
                   type="button"
                   onClick={() => open(s)}
-                  className="min-w-0 flex-1 px-4 py-3 text-left active:bg-bg-secondary"
+                  className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left active:bg-hairline"
                 >
-                  <div className="truncate text-[17px] font-medium">{s.title}</div>
-                  <div className="text-[14px] text-hint">
-                    {WEEKDAYS_EVERY[s.weekday]} · {s.startTime}–
-                    {endTime(s.startTime, s.durationMin)} ({durationLabel(s.durationMin)})
-                  </div>
+                  <span className="brand-gradient flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-2xl text-white shadow-cta">
+                    <span className="text-[11px] font-bold uppercase leading-none">
+                      {f.weekdaysShort[s.weekday]}
+                    </span>
+                    <span className="text-[12px] font-semibold tabular-nums leading-tight">
+                      {s.startTime}
+                    </span>
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[17px] font-semibold">{s.title}</span>
+                    <span className="block text-[14px] text-hint">
+                      {f.every(s.weekday)} · {s.startTime}–{endTime(s.startTime, s.durationMin)}
+                    </span>
+                  </span>
                 </button>
-                <label className="flex h-[60px] w-[64px] shrink-0 items-center justify-center">
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5 accent-[var(--color-button)]"
-                    checked={s.active}
-                    aria-label={`Расписание «${s.title}» включено`}
-                    onChange={(e) =>
-                      void update.mutateAsync({ id: s.id, active: e.target.checked })
-                    }
-                  />
-                </label>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={s.active}
+                  aria-label={t.schedule.enabled(s.title)}
+                  onClick={() => void update.mutateAsync({ id: s.id, active: !s.active })}
+                  className="flex h-[64px] w-[74px] shrink-0 items-center justify-center"
+                >
+                  <Switch on={s.active} />
+                </button>
               </div>
             ))}
           </div>
-          <Button onClick={() => open('new')}>+ Добавить расписание</Button>
+          <Button onClick={() => open('new')}>{t.schedule.addFull}</Button>
         </>
       )}
 
       <Sheet
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={editing === 'new' ? 'Новое расписание' : 'Расписание'}
+        title={editing === 'new' ? t.schedule.newTitle : t.schedule.title}
       >
         <div className="flex flex-col gap-4 px-4 pb-2 pt-1">
           <WeekdayPicker
@@ -147,15 +161,15 @@ export function Schedule({ groupId }: { groupId: number }) {
             onClick={() => void save()}
             disabled={!form.title.trim() || create.isPending || update.isPending}
           >
-            Сохранить
+            {t.common.save}
           </Button>
           {editing && editing !== 'new' && (
             <button
               type="button"
               onClick={() => void del()}
-              className="flex min-h-[44px] items-center justify-center gap-2 text-[16px] text-destructive"
+              className="flex min-h-[44px] items-center justify-center gap-2 text-[16px] font-semibold text-destructive"
             >
-              <IconTrash size={18} /> Удалить расписание
+              <IconTrash size={18} /> {t.schedule.deleteSchedule}
             </button>
           )}
         </div>

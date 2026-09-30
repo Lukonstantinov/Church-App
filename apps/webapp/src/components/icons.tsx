@@ -94,3 +94,44 @@ export const IconEdit = make(<path d="M5 19l1-4L16.5 4.5a2 2 0 013 3L9 18l-4 1z"
 export const IconSwap = make(
   <path d="M7 4L3.5 7.5 7 11M3.5 7.5H16M17 13l3.5 3.5L17 20M20.5 16.5H8" />,
 );
+export const IconGlobe = make(
+  <>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12h17M12 3.5c2.3 2.4 3.5 5.2 3.5 8.5s-1.2 6.1-3.5 8.5c-2.3-2.4-3.5-5.2-3.5-8.5S9.7 5.9 12 3.5z" />
+  </>,
+);
+export const IconMegaphone = make(
+  <>
+    <path d="M4 10.5v3a1.5 1.5 0 001.5 1.5H7l9 4.5v-15L7 9H5.5A1.5 1.5 0 004 10.5z" />
+    <path d="M19 9.5a3.5 3.5 0 010 5M8 15l1.2 4.5h2.3L10.5 15" />
+  </>,
+);
+export const IconSettings = make(
+  <>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 00-2 1.2l-2.3-.9-2 3.4 2 1.5a7 7 0 000 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 002 1.2l.4 2.6h4l.4-2.6a7 7 0 002-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z" />
+  </>,
+);
+export const IconUserPlus = make(
+  <>
+    <circle cx="10" cy="8.5" r="3.5" />
+    <path d="M3.5 19.5c.5-3.3 3-5.2 6.5-5.2 1.3 0 2.5.3 3.5.8M18.5 13v6M15.5 16h6" />
+  </>,
+);
+export const IconImage = make(
+  <>
+    <rect x="3.5" y="4.5" width="17" height="15" rx="3" />
+    <circle cx="9" cy="10" r="1.8" />
+    <path d="M20.5 16l-5-5-8 8.5" />
+  </>,
+);
+export const IconSend = make(<path d="M4 12l16-8-6 16-2.5-6.5L4 12zM11.5 13.5L20 4" />);
+export const IconWhatsApp = make(
+  <>
+    <path d="M4.5 19.5l1.2-3.6A8 8 0 1112 20a8 8 0 01-3.9-1l-3.6.5z" />
+    <path d="M9.2 8.6c.3-.6.6-.6.9-.6h.5c.2 0 .4.1.5.4l.7 1.7c.1.2 0 .4-.1.6l-.5.6c.6 1.2 1.6 2.2 2.8 2.8l.6-.5c.2-.1.4-.2.6-.1l1.7.7c.3.1.4.3.4.5v.5c0 .3 0 .6-.6.9-.7.4-2.2.5-4.2-1s-3.1-3.3-3-4.4c0-.5.3-.9.7-1.1z" />
+  </>,
+);
+export const IconTelegram = make(
+  <path d="M20.5 4.5L3.5 11.2l5.4 2 2 6.3 3-3.7 4.6 3.6 2-14.9zM8.9 13.2l9-6.2-6.9 7.9" />,
+);

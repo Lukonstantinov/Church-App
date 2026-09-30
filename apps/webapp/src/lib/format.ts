@@ -1,111 +1,103 @@
-/** Russian date/time formatting in the church time zone. */
+import { useMemo } from 'react';
+import type { Locale, Messages } from '@church/shared';
+import { INTL_LOCALE, messages } from '@church/shared';
+import { useI18n } from './i18n';
+import { useMe } from './queries';
 
-const cache = new Map<string, Intl.DateTimeFormat>();
-function fmt(timeZone: string, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
-  const key = timeZone + JSON.stringify(opts);
-  let f = cache.get(key);
-  if (!f) {
-    f = new Intl.DateTimeFormat('ru-RU', { timeZone, ...opts });
-    cache.set(key, f);
-  }
-  return f;
-}
+/** Date/time formatting in the church time zone and the user's language. */
+export function makeFormatters(locale: Locale, tz: string, t: Messages = messages(locale)) {
+  const intl = INTL_LOCALE[locale];
+  const cache = new Map<string, Intl.DateTimeFormat>();
+  const fmt = (opts: Intl.DateTimeFormatOptions) => {
+    const key = JSON.stringify(opts);
+    let f = cache.get(key);
+    if (!f) {
+      f = new Intl.DateTimeFormat(intl, { timeZone: tz, ...opts });
+      cache.set(key, f);
+    }
+    return f;
+  };
+  const cap = (s: string) => s.charAt(0).toLocaleUpperCase(intl) + s.slice(1);
+  const noDot = (s: string) => s.replace(/\.$/, '');
+  const ymd = (d: Date) => {
+    const p = Object.fromEntries(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      })
+        .formatToParts(d)
+        .map((x) => [x.type, x.value]),
+    );
+    return `${p.year}-${p.month}-${p.day}`;
+  };
+  const rtf = new Intl.RelativeTimeFormat(intl, { numeric: 'auto' });
 
-/** "26 сентября" */
-export const dayMonth = (iso: string, tz: string) =>
-  fmt(tz, { day: 'numeric', month: 'long' }).format(new Date(iso));
+  const daysFromToday = (iso: string, now = new Date()) =>
+    Math.round((Date.parse(ymd(new Date(iso))) - Date.parse(ymd(now))) / 86_400_000);
 
-/** "пт, 26 сентября" */
-export const weekdayDayMonth = (iso: string, tz: string) =>
-  fmt(tz, { weekday: 'short', day: 'numeric', month: 'long' }).format(new Date(iso));
+  const weekdayNames = (style: 'short' | 'long') => {
+    // 2024-01-01 was a Monday; format seven consecutive noons in UTC.
+    const f = new Intl.DateTimeFormat(intl, { weekday: style, timeZone: 'UTC' });
+    return Array.from({ length: 7 }, (_, i) =>
+      cap(noDot(f.format(new Date(Date.UTC(2024, 0, 1 + i, 12))))),
+    );
+  };
 
-/** "пт, 26 сент." */
-export const shortDate = (iso: string, tz: string) =>
-  fmt(tz, { weekday: 'short', day: 'numeric', month: 'short' })
-    .format(new Date(iso))
-    .replace(/\.$/, '');
-
-export const timeOfDay = (iso: string, tz: string) =>
-  fmt(tz, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
-
-/** "19:00–21:00" */
-export const timeRange = (startIso: string, endIso: string, tz: string) =>
-  `${timeOfDay(startIso, tz)}–${timeOfDay(endIso, tz)}`;
-
-/** { day: "26", month: "сент" } for calendar-style badges. */
-export function dateBadge(iso: string, tz: string) {
-  const d = new Date(iso);
   return {
-    day: fmt(tz, { day: 'numeric' }).format(d),
-    month: fmt(tz, { month: 'short' }).format(d).replace(/\.$/, ''),
-    weekday: fmt(tz, { weekday: 'short' }).format(d),
+    /** "26 сентября" / "26 September" / "rugsėjo 26 d." */
+    dayMonth: (iso: string) => fmt({ day: 'numeric', month: 'long' }).format(new Date(iso)),
+    /** "пт, 26 сентября" */
+    weekdayDayMonth: (iso: string) =>
+      fmt({ weekday: 'short', day: 'numeric', month: 'long' }).format(new Date(iso)),
+    /** "пт, 26 сент." */
+    shortDate: (iso: string) =>
+      noDot(fmt({ weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(iso))),
+    /** "26.09" */
+    ddmm: (iso: string) => fmt({ day: '2-digit', month: '2-digit' }).format(new Date(iso)),
+    time: (iso: string) =>
+      fmt({ hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso)),
+    timeRange(startIso: string, endIso: string) {
+      return `${this.time(startIso)}–${this.time(endIso)}`;
+    },
+    dateBadge: (iso: string) => {
+      const d = new Date(iso);
+      return {
+        day: fmt({ day: 'numeric' }).format(d),
+        month: noDot(fmt({ month: 'short' }).format(d)),
+        weekday: noDot(fmt({ weekday: 'short' }).format(d)),
+      };
+    },
+    /** "Сентябрь 2026" — standalone month name + year, for list headers. */
+    monthYear: (iso: string) => {
+      const d = new Date(iso);
+      return `${cap(fmt({ month: 'long' }).format(d))} ${fmt({ year: 'numeric' }).format(d).replace(/\D/g, '')}`;
+    },
+    daysFromToday,
+    /** "Сегодня", "Завтра", "Через 3 дня", "3 дня назад" (Intl.RelativeTimeFormat). */
+    relativeDay: (iso: string, now = new Date()) => cap(rtf.format(daysFromToday(iso, now), 'day')),
+    /** "Пн".."Вс" indexed 0 = Monday. */
+    weekdaysShort: weekdayNames('short'),
+    weekdaysLong: weekdayNames('long'),
+    /** "каждую пятницу" */
+    every: (weekday: number) => t.time.every[weekday] ?? '',
+    /** "45 мин", "1,5 ч" */
+    duration: (min: number) => {
+      if (min < 60) return t.time.minutes(min);
+      const h = min / 60;
+      return t.time.hours(new Intl.NumberFormat(intl, { maximumFractionDigits: 1 }).format(h));
+    },
+    /** Local "YYYY-MM-DD" for date inputs. */
+    todayInput: (now = new Date()) => ymd(now),
   };
 }
 
-/** "Сентябрь 2026" — used for grouping lists. */
-export const monthYear = (iso: string, tz: string) => {
-  const s = fmt(tz, { month: 'long', year: 'numeric' })
-    .format(new Date(iso))
-    .replace(/\s*г\.$/, '');
-  return s.charAt(0).toUpperCase() + s.slice(1);
-};
+export type Formatters = ReturnType<typeof makeFormatters>;
 
-const ymd = (d: Date, tz: string) =>
-  fmt(tz, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-
-/** Whole calendar days from `now` to `iso` in the church zone (0 = today, -1 = yesterday). */
-export function daysFromToday(iso: string, tz: string, now = new Date()): number {
-  const a = ymd(new Date(iso), tz).split('.').reverse().join('-');
-  const b = ymd(now, tz).split('.').reverse().join('-');
-  return Math.round((Date.parse(a) - Date.parse(b)) / 86_400_000);
-}
-
-/** "Сегодня", "Завтра", "Вчера", "через 3 дня", "3 дня назад". */
-export function relativeDay(iso: string, tz: string, now = new Date()): string {
-  const n = daysFromToday(iso, tz, now);
-  if (n === 0) return 'Сегодня';
-  if (n === 1) return 'Завтра';
-  if (n === -1) return 'Вчера';
-  const abs = Math.abs(n);
-  const word = pluralDays(abs);
-  return n > 0 ? `через ${abs} ${word}` : `${abs} ${word} назад`;
-}
-
-function pluralDays(n: number): string {
-  const r = new Intl.PluralRules('ru-RU').select(n);
-  return r === 'one' ? 'день' : r === 'few' ? 'дня' : 'дней';
-}
-
-/** "Пн", "Вт"… indexed 0 = Monday, matching the API's weekday numbers. */
-export const WEEKDAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-export const WEEKDAYS_LONG = [
-  'Понедельник',
-  'Вторник',
-  'Среда',
-  'Четверг',
-  'Пятница',
-  'Суббота',
-  'Воскресенье',
-];
-/** Accusative after "каждую/каждый": "каждую пятницу". */
-export const WEEKDAYS_EVERY = [
-  'каждый понедельник',
-  'каждый вторник',
-  'каждую среду',
-  'каждый четверг',
-  'каждую пятницу',
-  'каждую субботу',
-  'каждое воскресенье',
-];
-
-/** "1 ч", "1,5 ч", "2 ч", "45 мин" */
-export function durationLabel(min: number): string {
-  if (min < 60) return `${min} мин`;
-  const h = min / 60;
-  return `${Number.isInteger(h) ? h : h.toFixed(1).replace('.', ',')} ч`;
-}
-
-/** Local "YYYY-MM-DD" for <input type="date"> defaults. */
-export function todayInput(tz: string, now = new Date()): string {
-  return ymd(now, tz).split('.').reverse().join('-');
+export function useFmt(): Formatters {
+  const { locale, t } = useI18n();
+  const me = useMe();
+  const tz = me.data?.church.timezone ?? 'Europe/Riga';
+  return useMemo(() => makeFormatters(locale, tz, t), [locale, tz, t]);
 }

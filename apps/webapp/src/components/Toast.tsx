@@ -38,7 +38,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((t) => (
           <div
             key={t.id}
-            className="pointer-events-auto flex max-w-sm animate-toast-in items-center gap-2 rounded-full bg-text px-4 py-2.5 text-[15px] text-bg shadow-sheet"
+            className="glass-strong pointer-events-auto flex max-w-sm animate-toast-in items-center gap-2 rounded-full px-4 py-2.5 text-[15px] font-medium shadow-float"
           >
             <span className={t.kind === 'success' ? 'text-present' : 'text-absent'}>
               {t.kind === 'success' ? <IconCheck size={18} /> : <IconX size={18} />}

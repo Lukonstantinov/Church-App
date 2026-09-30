@@ -1,4 +1,5 @@
-import { WEEKDAYS_SHORT, durationLabel } from '../lib/format';
+import { useFmt } from '../lib/format';
+import { useT } from '../lib/i18n';
 import { Pill, TextField, TimeField } from './ui';
 
 export const DURATIONS = [60, 90, 120, 180];
@@ -17,18 +18,26 @@ export function MeetingFields({
   value: MeetingFormValue;
   onChange: (patch: Partial<MeetingFormValue>) => void;
 }) {
+  const t = useT();
+  const f = useFmt();
   return (
     <>
-      <div className="overflow-hidden rounded-xl bg-section shadow-card">
-        <TextField label="Название" value={value.title} onChange={(title) => onChange({ title })} />
+      <div className="glass overflow-hidden rounded-[var(--radius-card)] shadow-card">
+        <TextField
+          label={t.meetingForm.title}
+          value={value.title}
+          onChange={(title) => onChange({ title })}
+        />
         <TimeField
-          label="Начало"
+          label={t.meetingForm.start}
           value={value.startTime}
           onChange={(startTime) => onChange({ startTime })}
         />
       </div>
       <div>
-        <div className="mb-1.5 px-2 text-[13px] text-hint">Длительность</div>
+        <div className="mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+          {t.meetingForm.duration}
+        </div>
         <div className="flex flex-wrap gap-2">
           {DURATIONS.map((d) => (
             <Pill
@@ -36,7 +45,7 @@ export function MeetingFields({
               selected={value.durationMin === d}
               onClick={() => onChange({ durationMin: d })}
             >
-              {durationLabel(d)}
+              {f.duration(d)}
             </Pill>
           ))}
         </div>
@@ -52,18 +61,23 @@ export function WeekdayPicker({
   value: number;
   onChange: (d: number) => void;
 }) {
+  const t = useT();
+  const f = useFmt();
   return (
     <div>
-      <div className="mb-1.5 px-2 text-[13px] text-hint">День недели</div>
+      <div className="mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+        {t.meetingForm.weekday}
+      </div>
       <div className="grid grid-cols-7 gap-1.5">
-        {WEEKDAYS_SHORT.map((label, i) => (
+        {f.weekdaysShort.map((label, i) => (
           <button
             key={label}
             type="button"
             aria-pressed={value === i}
+            aria-label={f.weekdaysLong[i]}
             onClick={() => onChange(i)}
-            className={`min-h-[44px] rounded-xl text-[15px] font-medium active:opacity-80 ${
-              value === i ? 'bg-button text-button-text' : 'bg-hairline'
+            className={`min-h-[46px] rounded-2xl text-[14px] font-semibold transition active:scale-95 ${
+              value === i ? 'brand-gradient text-white shadow-cta' : 'glass'
             }`}
           >
             {label}

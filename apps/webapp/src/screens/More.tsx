@@ -1,46 +1,74 @@
-import { plural, displayName, ru, type GroupSummary } from '@church/shared';
+import { useState } from 'react';
+import { displayName, LOCALE_NAMES, type GroupSummary } from '@church/shared';
 import { Avatar } from '../components/Avatar';
-import { Badge, ActionRow, Row, Screen, Section, Title } from '../components/ui';
+import { BrandHeader, LanguageSheet } from '../components/BrandHeader';
+import { GroupDot } from '../components/GroupSwitcher';
+import { IconGlobe, IconPlus, IconSettings } from '../components/icons';
+import { ActionRow, Badge, Row, Screen, Section } from '../components/ui';
+import { useI18n } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import { useMe } from '../lib/queries';
 
-/** Profile, and for admins the church-wide group list. */
+/** Profile, language, and for admins: church settings and all groups. */
 export function More({ groups }: { groups: GroupSummary[] }) {
   const { push, setTab, setActiveGroupId } = useNav();
+  const { t, locale } = useI18n();
   const me = useMe();
+  const [langOpen, setLangOpen] = useState(false);
   const user = me.data?.user;
   if (!user) return null;
 
+  const iconTile = (icon: React.ReactNode) => (
+    <span className="brand-gradient flex h-9 w-9 items-center justify-center rounded-xl text-white">
+      {icon}
+    </span>
+  );
+
   return (
     <Screen tabs>
-      <Title>Ещё</Title>
+      <BrandHeader title={t.nav.more} />
 
-      <Section title={ru.app.profile}>
-        <button
-          type="button"
-          onClick={() => push({ name: 'member', userId: user.id })}
-          className="flex min-h-[64px] w-full items-center gap-3 px-3 py-2 text-left active:bg-bg-secondary"
-        >
-          <Avatar id={user.id} firstName={user.firstName} lastName={user.lastName} size={44} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[17px] font-medium">{displayName(user)}</div>
-            <div className="flex items-center gap-1.5 text-[13px] text-hint">
+      <Section title={t.member.profile}>
+        <Row
+          before={
+            <Avatar id={user.id} firstName={user.firstName} lastName={user.lastName} size={46} />
+          }
+          title={displayName(user)}
+          subtitle={
+            <span className="flex items-center gap-1.5">
               {user.username && <span>@{user.username}</span>}
-              {user.isAdmin && <Badge>{ru.app.adminBadge}</Badge>}
-            </div>
-          </div>
-        </button>
+              {user.isAdmin && <Badge>{t.roles.admin}</Badge>}
+            </span>
+          }
+          onClick={() => push({ name: 'member', userId: user.id })}
+        />
+        <Row
+          before={iconTile(<IconGlobe size={19} />)}
+          title={t.language.title}
+          after={LOCALE_NAMES[locale]}
+          onClick={() => setLangOpen(true)}
+        />
       </Section>
 
       {user.isAdmin && (
-        <Section title={ru.app.churchGroups}>
+        <Section>
+          <Row
+            before={iconTile(<IconSettings size={19} />)}
+            title={t.settings.title}
+            subtitle={t.settings.entry}
+            onClick={() => push({ name: 'settings' })}
+          />
+        </Section>
+      )}
+
+      {user.isAdmin && (
+        <Section title={t.groups.churchGroups}>
           {groups.map((g) => (
             <Row
               key={g.id}
+              before={<GroupDot id={g.id} size={12} />}
               title={g.name}
-              subtitle={`${g.activeCount} ${plural(g.activeCount, ['участник', 'участника', 'участников'])}${
-                g.leaderNames.length ? ` · ${g.leaderNames.join(', ')}` : ''
-              }`}
+              subtitle={`${t.common.members(g.activeCount)}${g.leaderNames.length ? ` · ${g.leaderNames.join(', ')}` : ''}`}
               after={g.pendingCount > 0 ? <Badge tone="danger">{g.pendingCount}</Badge> : undefined}
               onClick={() => {
                 setActiveGroupId(g.id);
@@ -48,16 +76,14 @@ export function More({ groups }: { groups: GroupSummary[] }) {
               }}
             />
           ))}
-          <ActionRow onClick={() => push({ name: 'createGroup' })}>
-            + {ru.app.createGroup}
+          <ActionRow icon={<IconPlus size={20} />} onClick={() => push({ name: 'createGroup' })}>
+            {t.groups.create}
           </ActionRow>
         </Section>
       )}
 
-      <p className="px-4 text-[13px] leading-snug text-hint">
-        Ваши данные видят только лидеры групп и администраторы церкви. Подробнее и запрос на
-        удаление — команда /privacy в боте.
-      </p>
+      <p className="px-4 text-[13px] leading-snug text-hint">{t.home.privacyNote}</p>
+      <LanguageSheet open={langOpen} onClose={() => setLangOpen(false)} />
     </Screen>
   );
 }

@@ -1,44 +1,50 @@
-import { displayName, ru, type MeResponse } from '@church/shared';
+import { displayName, type MeResponse } from '@church/shared';
+import { AnnouncementCard } from '../components/AnnouncementCard';
 import { AttendanceSummary } from '../components/AttendanceSummary';
+import { Avatar } from '../components/Avatar';
+import { BrandHeader } from '../components/BrandHeader';
+import { GroupDot } from '../components/GroupSwitcher';
 import { IconCalendar, IconUsers } from '../components/icons';
 import {
   Badge,
   Card,
   DateBadge,
   EmptyState,
+  HeroCard,
   Row,
   Screen,
   Section,
   Skeleton,
-  Title,
 } from '../components/ui';
-import { dateBadge, relativeDay, timeRange } from '../lib/format';
+import { useFmt } from '../lib/format';
+import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useMyAttendance } from '../lib/queries';
+import { useMyAnnouncements, useMyAttendance } from '../lib/queries';
 
-/** Regular members: their own attendance and the next meeting, nothing else. */
+/** Regular members: their next meeting, own attendance and announcements. */
 export function MemberHome({ me }: { me: MeResponse }) {
   const { push } = useNav();
-  const { user, memberships, church } = me;
-  const att = useMyAttendance();
+  const t = useT();
+  const f = useFmt();
+  const { user, memberships } = me;
   const active = memberships.filter((m) => m.status === 'active');
   const pending = memberships.filter((m) => m.status === 'pending');
-  const tz = church.timezone;
+  const att = useMyAttendance(active.length > 0);
+  const news = useMyAnnouncements(active.length > 0);
 
   return (
     <Screen>
-      <Title subtitle={active.length === 0 ? undefined : church.name}>
-        {ru.app.hello(user.firstName)}
-      </Title>
+      <BrandHeader title={t.home.hello(user.firstName)} />
 
       {pending.length > 0 && (
         <Section>
           {pending.map((m) => (
             <Row
               key={m.groupId}
+              before={<GroupDot id={m.groupId} />}
               title={m.groupName}
-              subtitle={ru.app.statusPending}
-              after={<Badge tone="hint">ожидает</Badge>}
+              subtitle={t.member.statusPending}
+              after={<Badge tone="hint">{t.home.pending}</Badge>}
             />
           ))}
         </Section>
@@ -46,58 +52,69 @@ export function MemberHome({ me }: { me: MeResponse }) {
 
       {active.length === 0 && pending.length === 0 && (
         <Card>
-          <EmptyState icon={<IconUsers size={26} />} title="Вы пока не в группе">
-            {ru.app.noGroupsYet}
+          <EmptyState icon={<IconUsers size={26} />} title={t.home.notInGroupTitle}>
+            {t.home.notInGroupText}
           </EmptyState>
         </Card>
       )}
 
       {active.length > 0 && !att.data && (
         <>
-          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-40 w-full" />
           <Skeleton className="h-44 w-full" />
         </>
       )}
 
       {att.data?.groups.map((g) => (
-        <div key={g.groupId} className="flex flex-col gap-3">
+        <div key={g.groupId} className="flex flex-col gap-4">
           {g.nextMeeting ? (
-            <Card className="p-4">
-              <div className="mb-1 text-[13px] font-medium uppercase tracking-wide text-hint">
-                Ближайшая встреча · {g.groupName}
+            <HeroCard>
+              <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
+                {t.home.nextMeetingIn(g.groupName)}
               </div>
-              <div className="flex items-center gap-3">
-                <DateBadge {...dateBadge(g.nextMeeting.startsAt, tz)} />
+              <div className="flex items-center gap-3.5">
+                <DateBadge {...f.dateBadge(g.nextMeeting.startsAt)} onBrand />
                 <div className="min-w-0">
-                  <div className="truncate text-[18px] font-semibold">{g.nextMeeting.title}</div>
-                  <div className="text-[14px] text-hint">
-                    {relativeDay(g.nextMeeting.startsAt, tz)} ·{' '}
-                    {timeRange(g.nextMeeting.startsAt, g.nextMeeting.endsAt, tz)}
+                  <div className="truncate text-[21px] font-bold leading-tight">
+                    {g.nextMeeting.title}
+                  </div>
+                  <div className="text-[15px] text-white/85">
+                    {f.relativeDay(g.nextMeeting.startsAt)} ·{' '}
+                    {f.timeRange(g.nextMeeting.startsAt, g.nextMeeting.endsAt)}
                   </div>
                 </div>
               </div>
-            </Card>
+            </HeroCard>
           ) : (
             <Card className="flex items-center gap-3 p-4 text-[14px] text-hint">
               <IconCalendar size={22} />
-              Ближайшие встречи пока не назначены — {g.groupName}
+              {t.home.noNextMeeting(g.groupName)}
             </Card>
           )}
-          <AttendanceSummary data={g} tz={tz} />
+          <AttendanceSummary data={g} />
         </div>
       ))}
 
-      <Section title={ru.app.profile}>
+      {(news.data ?? []).length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+            {t.home.announcements}
+          </h2>
+          {news.data!.map((a) => (
+            <AnnouncementCard key={a.id} a={a} showGroup={active.length > 1} />
+          ))}
+        </section>
+      )}
+
+      <Section title={t.member.profile}>
         <Row
+          before={<Avatar id={user.id} firstName={user.firstName} lastName={user.lastName} />}
           title={displayName(user)}
           subtitle={user.username ? `@${user.username}` : undefined}
           onClick={() => push({ name: 'member', userId: user.id })}
         />
       </Section>
-      <p className="px-4 pb-2 text-[13px] leading-snug text-hint">
-        Ваши данные видят только лидеры группы и администраторы церкви. Подробнее — команда /privacy
-        в боте.
-      </p>
+      <p className="px-4 pb-2 text-[13px] leading-snug text-hint">{t.home.privacyNote}</p>
     </Screen>
   );
 }

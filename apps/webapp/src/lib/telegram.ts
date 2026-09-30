@@ -32,6 +32,11 @@ function applyColorScheme() {
 
 export function initTelegram(): void {
   const tg = webApp();
+  if (!tg?.initData) {
+    // Plain browser (development): follow the OS theme.
+    const dark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  }
   if (!tg) return;
   tg.ready();
   tg.expand();
@@ -81,4 +86,20 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Opens WhatsApp with the text prefilled; the user picks the chat (free, no API). */
+export function shareToWhatsApp(text: string): void {
+  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  const tg = webApp();
+  if (tg?.openLink) tg.openLink(url);
+  else window.open(url, '_blank');
+}
+
+/** Opens Telegram's "forward to chat" picker with the text. */
+export function shareToTelegram(text: string): void {
+  const url = `https://t.me/share/url?url=${encodeURIComponent(text)}`;
+  const tg = webApp();
+  if (tg?.openTelegramLink) tg.openTelegramLink(url);
+  else window.open(url, '_blank');
 }

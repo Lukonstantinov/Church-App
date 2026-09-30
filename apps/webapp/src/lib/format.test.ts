@@ -1,30 +1,43 @@
 import { describe, expect, it } from 'vitest';
-import { dateBadge, daysFromToday, durationLabel, relativeDay, timeRange } from './format';
+import { makeFormatters } from './format';
 
 const TZ = 'Europe/Riga';
+const ru = makeFormatters('ru', TZ);
+const en = makeFormatters('en', TZ);
+const lt = makeFormatters('lt', TZ);
 
-describe('format', () => {
+describe('formatters', () => {
   it('formats times in the church zone', () => {
-    expect(timeRange('2026-09-25T16:00:00Z', '2026-09-25T18:00:00Z', TZ)).toBe('19:00–21:00');
+    expect(ru.timeRange('2026-09-25T16:00:00Z', '2026-09-25T18:00:00Z')).toBe('19:00–21:00');
   });
 
-  it('builds calendar badges', () => {
-    expect(dateBadge('2026-09-25T16:00:00Z', TZ)).toMatchObject({ day: '25', weekday: 'пт' });
+  it('builds calendar badges in each language', () => {
+    expect(ru.dateBadge('2026-09-25T16:00:00Z')).toMatchObject({ day: '25', weekday: 'пт' });
+    expect(en.dateBadge('2026-09-25T16:00:00Z')).toMatchObject({ day: '25', weekday: 'Fri' });
   });
 
-  it('counts calendar days in the church zone, not UTC days', () => {
+  it('counts calendar days in the church zone and names them per language', () => {
     const now = new Date('2026-09-25T20:30:00Z'); // 23:30 in Riga, still the 25th
-    expect(daysFromToday('2026-09-25T21:30:00Z', TZ, now)).toBe(1); // 00:30 on the 26th
-    expect(relativeDay('2026-09-25T16:00:00Z', TZ, now)).toBe('Сегодня');
-    expect(relativeDay('2026-09-26T16:00:00Z', TZ, now)).toBe('Завтра');
-    expect(relativeDay('2026-09-24T16:00:00Z', TZ, now)).toBe('Вчера');
-    expect(relativeDay('2026-09-28T16:00:00Z', TZ, now)).toBe('через 3 дня');
-    expect(relativeDay('2026-09-20T16:00:00Z', TZ, now)).toBe('5 дней назад');
+    expect(ru.daysFromToday('2026-09-25T21:30:00Z', now)).toBe(1);
+    expect(ru.relativeDay('2026-09-25T16:00:00Z', now)).toBe('Сегодня');
+    expect(ru.relativeDay('2026-09-26T16:00:00Z', now)).toBe('Завтра');
+    expect(ru.relativeDay('2026-09-28T16:00:00Z', now)).toBe('Через 3 дня');
+    expect(en.relativeDay('2026-09-26T16:00:00Z', now)).toBe('Tomorrow');
+    expect(lt.relativeDay('2026-09-25T16:00:00Z', now)).toBe('Šiandien');
   });
 
-  it('labels durations', () => {
-    expect(durationLabel(45)).toBe('45 мин');
-    expect(durationLabel(90)).toBe('1,5 ч');
-    expect(durationLabel(120)).toBe('2 ч');
+  it('names weekdays Monday-first and durations per language', () => {
+    expect(ru.weekdaysShort[0]).toBe('Пн');
+    expect(en.weekdaysShort[4]).toBe('Fri');
+    expect(ru.every(4)).toBe('каждую пятницу');
+    expect(lt.every(4)).toBe('kiekvieną penktadienį');
+    expect(ru.duration(90)).toBe('1,5 ч');
+    expect(en.duration(120)).toBe('2 h');
+    expect(lt.duration(45)).toBe('45 min.');
+  });
+
+  it('builds month headers with the nominative month name', () => {
+    expect(ru.monthYear('2026-09-25T16:00:00Z')).toBe('Сентябрь 2026');
+    expect(en.monthYear('2026-09-25T16:00:00Z')).toBe('September 2026');
   });
 });

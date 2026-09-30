@@ -1,8 +1,9 @@
-import { ru } from '@church/shared';
+import { BrandHeader } from '../components/BrandHeader';
 import { IconCalendar, IconHome, IconMenu, IconUsers } from '../components/icons';
 import { TabBar, type TabDef } from '../components/TabBar';
-import { Button, EmptyState, ErrorState, Loading, Screen, Title } from '../components/ui';
+import { Button, Card, EmptyState, ErrorState, Loading, Screen } from '../components/ui';
 import { useManagedGroups } from '../lib/groups';
+import { useT } from '../lib/i18n';
 import { useNav, type Tab } from '../lib/nav';
 import { useMe } from '../lib/queries';
 import { Meetings } from './Meetings';
@@ -13,6 +14,7 @@ import { People } from './People';
 /** Leaders and admins: four tabs around the active group. */
 export function ManagerShell() {
   const { tab, setTab, push } = useNav();
+  const t = useT();
   const me = useMe();
   const { managed, active, isLoading, isError, refetch } = useManagedGroups();
 
@@ -21,10 +23,10 @@ export function ManagerShell() {
 
   const isAdmin = me.data?.user.isAdmin === true;
   const tabs: TabDef<Tab>[] = [
-    { key: 'overview', label: 'Обзор', icon: <IconHome /> },
-    { key: 'meetings', label: 'Встречи', icon: <IconCalendar /> },
-    { key: 'people', label: 'Люди', icon: <IconUsers />, badge: active?.pendingCount },
-    { key: 'more', label: 'Ещё', icon: <IconMenu /> },
+    { key: 'overview', label: t.nav.overview, icon: <IconHome /> },
+    { key: 'meetings', label: t.nav.meetings, icon: <IconCalendar /> },
+    { key: 'people', label: t.nav.people, icon: <IconUsers />, badge: active?.pendingCount },
+    { key: 'more', label: t.nav.more, icon: <IconMenu /> },
   ];
 
   // An admin before the first group exists: guide them instead of showing empty tabs.
@@ -33,19 +35,20 @@ export function ManagerShell() {
       <More groups={managed} />
     ) : !active ? (
       <Screen tabs>
-        <Title>{ru.appName}</Title>
-        <EmptyState
-          title="Групп пока нет"
-          action={
-            isAdmin ? (
-              <Button onClick={() => push({ name: 'createGroup' })}>Создать группу</Button>
-            ) : undefined
-          }
-        >
-          {isAdmin
-            ? 'Создайте первую группу, чтобы начать.'
-            : 'Администратор ещё не назначил вам группу.'}
-        </EmptyState>
+        <BrandHeader title={t.appName} />
+        <Card>
+          <EmptyState
+            icon={<IconUsers size={26} />}
+            title={t.groups.noGroupsTitle}
+            action={
+              isAdmin ? (
+                <Button onClick={() => push({ name: 'createGroup' })}>{t.groups.create}</Button>
+              ) : undefined
+            }
+          >
+            {isAdmin ? t.groups.noGroupsAdmin : t.groups.noGroupsLeader}
+          </EmptyState>
+        </Card>
       </Screen>
     ) : tab === 'meetings' ? (
       <Meetings groups={managed} active={active} />

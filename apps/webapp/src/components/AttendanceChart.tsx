@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import type { AttendancePoint } from '@church/shared';
-import { shortDate } from '../lib/format';
+import { useFmt } from '../lib/format';
+import { useT } from '../lib/i18n';
 
 const H = 128; // plot height in px
 
 const pct = (p: AttendancePoint) => (p.total === 0 ? 0 : Math.round((p.attended / p.total) * 100));
-const ddmm = (iso: string, tz: string) =>
-  new Intl.DateTimeFormat('ru-RU', { timeZone: tz, day: '2-digit', month: '2-digit' }).format(
-    new Date(iso),
-  );
 
 /**
  * Attendance per meeting as columns (0–100%). One hue; columns are thin with rounded
@@ -18,12 +15,12 @@ const ddmm = (iso: string, tz: string) =>
 export function AttendanceChart({
   series,
   average,
-  timezone,
 }: {
   series: AttendancePoint[];
   average: number | null;
-  timezone: string;
 }) {
+  const f = useFmt();
+  const t = useT();
   const [selected, setSelected] = useState(series.length - 1);
   const [table, setTable] = useState(false);
   const sel = series[Math.min(selected, series.length - 1)];
@@ -34,18 +31,16 @@ export function AttendanceChart({
         <table className="w-full text-[14px]">
           <thead className="text-left text-[12px] text-hint">
             <tr>
-              <th className="py-1 font-medium">Встреча</th>
-              <th className="py-1 text-right font-medium">Пришли</th>
+              <th className="py-1 font-medium">{t.chart.meeting}</th>
+              <th className="py-1 text-right font-medium">{t.chart.came}</th>
               <th className="py-1 text-right font-medium">%</th>
             </tr>
           </thead>
           <tbody>
             {[...series].reverse().map((p) => (
               <tr key={p.meetingId} className="border-t border-hairline">
-                <td className="py-2">{shortDate(p.startsAt, timezone)}</td>
-                <td className="py-2 text-right tabular-nums">
-                  {p.attended} из {p.total}
-                </td>
+                <td className="py-2">{f.shortDate(p.startsAt)}</td>
+                <td className="py-2 text-right tabular-nums">{t.common.of(p.attended, p.total)}</td>
                 <td className="py-2 text-right font-medium tabular-nums">{pct(p)}%</td>
               </tr>
             ))}
@@ -56,7 +51,7 @@ export function AttendanceChart({
           className="mt-2 min-h-[36px] text-[14px] text-link"
           onClick={() => setTable(false)}
         >
-          Показать график
+          {t.chart.showChart}
         </button>
       </div>
     );
@@ -92,7 +87,7 @@ export function AttendanceChart({
                 key={p.meetingId}
                 type="button"
                 onClick={() => setSelected(i)}
-                aria-label={`${shortDate(p.startsAt, timezone)}: ${p.attended} из ${p.total}, ${pct(p)}%`}
+                aria-label={`${f.shortDate(p.startsAt)}: ${t.common.of(p.attended, p.total)}, ${pct(p)}%`}
                 aria-pressed={on}
                 className="relative flex h-full flex-1 flex-col items-center justify-end"
               >
@@ -116,7 +111,7 @@ export function AttendanceChart({
                 <span
                   className={`mt-1 h-[16px] text-[11px] tabular-nums ${on ? 'text-text' : 'text-hint'}`}
                 >
-                  {ddmm(p.startsAt, timezone)}
+                  {f.ddmm(p.startsAt)}
                 </span>
               </button>
             );
@@ -127,17 +122,17 @@ export function AttendanceChart({
         <span className="min-w-0 truncate text-hint">
           {sel && (
             <>
-              <span className="text-text">{shortDate(sel.startsAt, timezone)}</span> · пришли{' '}
-              {sel.attended} из {sel.total}
+              <span className="text-text">{f.shortDate(sel.startsAt)}</span> ·{' '}
+              {t.chart.cameOf(sel.attended, sel.total)}
             </>
           )}
         </span>
         <button
           type="button"
-          className="min-h-[36px] shrink-0 text-link"
+          className="min-h-[36px] shrink-0 font-semibold text-link"
           onClick={() => setTable(true)}
         >
-          Таблица
+          {t.chart.table}
         </button>
       </div>
     </div>

@@ -1,10 +1,21 @@
 import { useState } from 'react';
-import { plural, type GroupSummary } from '@church/shared';
-import { IconChevronDown, IconCheck } from './icons';
-import { Sheet, SheetOption } from './Sheet';
+import { groupColor, type GroupSummary } from '@church/shared';
+import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
+import { BrandHeader } from './BrandHeader';
+import { Sheet, SheetOption } from './Sheet';
 
-/** Screen title that doubles as the group picker when there is more than one group. */
+export function GroupDot({ id, size = 10 }: { id: number; size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block shrink-0 rounded-full"
+      style={{ width: size, height: size, background: groupColor(id) }}
+    />
+  );
+}
+
+/** Root-screen header whose title is the active group; tap it to switch groups. */
 export function GroupSwitcher({
   groups,
   active,
@@ -15,33 +26,25 @@ export function GroupSwitcher({
   subtitle?: string;
 }) {
   const { setActiveGroupId } = useNav();
+  const t = useT();
   const [open, setOpen] = useState(false);
   const multiple = groups.length > 1;
 
   return (
-    <header className="px-1 pt-1">
-      {multiple ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="-ml-1 flex min-h-[44px] max-w-full items-center gap-1 rounded-xl px-1 text-left active:opacity-70"
-          aria-haspopup="dialog"
-        >
-          <h1 className="truncate text-[26px] font-bold leading-tight">{active.name}</h1>
-          <IconChevronDown className="mt-1 shrink-0 text-hint" />
-        </button>
-      ) : (
-        <h1 className="text-[26px] font-bold leading-tight">{active.name}</h1>
-      )}
-      {subtitle && <div className="text-[15px] text-hint">{subtitle}</div>}
-      <Sheet open={open} onClose={() => setOpen(false)} title="Группа">
+    <>
+      <BrandHeader
+        title={active.name}
+        subtitle={subtitle}
+        onTitleClick={multiple ? () => setOpen(true) : undefined}
+      />
+      <Sheet open={open} onClose={() => setOpen(false)} title={t.nav.group}>
         {groups.map((g) => (
           <SheetOption
             key={g.id}
+            icon={<GroupDot id={g.id} size={12} />}
             label={g.name}
-            hint={`${g.activeCount} ${plural(g.activeCount, ['участник', 'участника', 'участников'])}`}
+            hint={t.common.members(g.activeCount)}
             selected={g.id === active.id}
-            icon={g.id === active.id ? <IconCheck size={18} /> : undefined}
             onClick={() => {
               setActiveGroupId(g.id);
               setOpen(false);
@@ -49,6 +52,6 @@ export function GroupSwitcher({
           />
         ))}
       </Sheet>
-    </header>
+    </>
   );
 }

@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AddOfflineMemberInput,
+  AnnouncementResult,
+  AnnouncementRow,
+  ChurchInfo,
+  Locale,
+  UpdateChurchInput,
   CreateMeetingInput,
   CreateScheduleInput,
   GroupStats,
@@ -35,6 +40,8 @@ export const keys = {
   schedules: (groupId: number) => ['groups', groupId, 'schedules'] as const,
   roll: (meetingId: number) => ['meetings', meetingId, 'roll'] as const,
   myAttendance: ['me', 'attendance'] as const,
+  myAnnouncements: ['me', 'announcements'] as const,
+  announcements: (groupId: number) => ['groups', groupId, 'announcements'] as const,
 };
 
 export function useMe() {
@@ -262,5 +269,92 @@ export function useSaveRoll(meetingId: number) {
       await qc.invalidateQueries({ queryKey: keys.roll(meetingId) });
       await invalidate();
     },
+  });
+}
+
+// ---------- language & church settings ----------
+
+/** Switches the UI language immediately, then saves it for this user. */
+export function useSetLocale() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (locale: Locale) =>
+      apiFetch<MeResponse>('/me', { method: 'PATCH', ...json({ locale }) }),
+    onMutate: (locale) => {
+      const prev = qc.getQueryData<MeResponse>(keys.me);
+      if (prev) qc.setQueryData<MeResponse>(keys.me, { ...prev, user: { ...prev.user, locale } });
+      return { prev };
+    },
+    onError: (_e, _l, ctx) => {
+      if (ctx?.prev) qc.setQueryData(keys.me, ctx.prev);
+    },
+    onSuccess: (me) => qc.setQueryData(keys.me, me),
+  });
+}
+
+function useSetChurch() {
+  const qc = useQueryClient();
+  return (church: ChurchInfo) => {
+    const prev = qc.getQueryData<MeResponse>(keys.me);
+    if (prev) qc.setQueryData<MeResponse>(keys.me, { ...prev, church });
+  };
+}
+
+export function useUpdateChurch() {
+  const setChurch = useSetChurch();
+  return useMutation({
+    mutationFn: (input: UpdateChurchInput) =>
+      apiFetch<ChurchInfo>('/church', { method: 'PATCH', ...json(input) }),
+    onSuccess: setChurch,
+  });
+}
+
+export function useUploadLogo() {
+  const setChurch = useSetChurch();
+  return useMutation({
+    mutationFn: (file: Blob) =>
+      apiFetch<ChurchInfo>('/church/logo', {
+        method: 'PUT',
+        body: file,
+        headers: { 'content-type': file.type || 'application/octet-stream' },
+      }),
+    onSuccess: setChurch,
+  });
+}
+
+export function useRemoveLogo() {
+  const setChurch = useSetChurch();
+  return useMutation({
+    mutationFn: () => apiFetch<ChurchInfo>('/church/logo', { method: 'DELETE' }),
+    onSuccess: setChurch,
+  });
+}
+
+// ---------- announcements ----------
+
+export function useAnnouncements(groupId: number) {
+  return useQuery({
+    queryKey: keys.announcements(groupId),
+    queryFn: () => apiFetch<AnnouncementRow[]>(`/groups/${groupId}/announcements`),
+  });
+}
+
+export function useMyAnnouncements(enabled = true) {
+  return useQuery({
+    queryKey: keys.myAnnouncements,
+    queryFn: () => apiFetch<AnnouncementRow[]>('/me/announcements'),
+    enabled,
+  });
+}
+
+export function useSendAnnouncement(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) =>
+      apiFetch<AnnouncementResult>(`/groups/${groupId}/announcements`, {
+        method: 'POST',
+        ...json({ text }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.announcements(groupId) }),
   });
 }

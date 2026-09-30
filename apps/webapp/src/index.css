@@ -1,77 +1,130 @@
 @import 'tailwindcss';
 
+/* Dark mode follows Telegram's color scheme (set as data-theme on <html>). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 /*
- * Colors come from Telegram's theme (set by telegram-web-app.js on <html>), with
- * fallbacks for a normal browser. Status and chart colors are our own: they need to
- * keep their meaning (green = came, red = missed) whatever theme the user picked.
+ * Surfaces and text come from Telegram's theme; the brand color (chosen by the
+ * church admin) drives buttons, accents, the background glow and the chart.
+ * Attendance status colors are fixed so they keep their meaning in every theme.
  */
 @theme {
   --color-bg: var(--tg-theme-bg-color, #ffffff);
-  --color-bg-secondary: var(--tg-theme-secondary-bg-color, #f1f1f4);
-  --color-section: var(--tg-theme-section-bg-color, #ffffff);
+  --color-bg-secondary: var(--tg-theme-secondary-bg-color, #f2f3f7);
+  --color-section: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #ffffff));
   --color-text: var(--tg-theme-text-color, #111111);
   --color-hint: var(--tg-theme-hint-color, #8a8a8e);
-  --color-link: var(--tg-theme-link-color, #2f6fde);
-  --color-accent: var(--tg-theme-accent-text-color, #2f6fde);
-  --color-button: var(--tg-theme-button-color, #2f6fde);
-  --color-button-text: var(--tg-theme-button-text-color, #ffffff);
   --color-destructive: var(--tg-theme-destructive-text-color, #e53935);
-  --color-section-header: var(--tg-theme-section-header-text-color, #6d6d72);
+  --color-section-header: var(--tg-theme-hint-color, #6d6d72);
+
+  --color-brand: var(--brand);
+  --color-partner: var(--brand-partner);
+  --color-accent: var(--brand-accent);
+  --color-link: var(--brand-accent);
+  --color-button: var(--brand);
+  --color-button-text: #ffffff;
 
   --color-present: var(--c-present);
   --color-late: var(--c-late);
   --color-excused: var(--c-excused);
   --color-absent: var(--c-absent);
-  --color-chart: var(--c-chart);
-  --color-hairline: color-mix(in srgb, var(--color-text) 10%, transparent);
+  --color-chart: var(--brand-accent);
+  --color-hairline: color-mix(in srgb, var(--color-text) 9%, transparent);
 
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 1px rgb(0 0 0 / 0.03);
-  --shadow-bar: 0 -1px 0 var(--color-hairline);
-  --shadow-sheet: 0 -8px 32px rgb(0 0 0 / 0.18);
-  --animate-sheet-in: sheet-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  --radius-card: 22px;
+  --shadow-card:
+    0 1px 2px rgb(0 0 0 / 0.04), 0 10px 30px -18px color-mix(in srgb, var(--brand) 55%, transparent);
+  --shadow-sheet: 0 -12px 40px rgb(0 0 0 / 0.22);
+  --shadow-float: 0 12px 34px -10px rgb(0 0 0 / 0.28);
+  --shadow-cta: 0 10px 24px -10px color-mix(in srgb, var(--brand) 70%, transparent);
+
+  --animate-sheet-in: sheet-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
   --animate-fade-in: fade-in 160ms ease-out;
   --animate-toast-in: toast-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
   --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+  --animate-rise: rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 :root {
+  /* Overwritten at runtime by the church's brand color (lib/theme.ts). */
+  --brand: #2563eb;
+  --brand-dark: #7fb0ff;
+  --brand-partner: #7c3aed;
+  --brand-accent: var(--brand);
+
+  --glass-alpha: 74%;
+  --glass-border: rgb(255 255 255 / 0.7);
+  --glow-1: 34%;
+  --glow-2: 24%;
   --avatar-l: 38%;
+
   --c-present: #1f9d55;
   --c-late: #c77700;
   --c-excused: #3b82d6;
   --c-absent: #d9463e;
-  --c-chart: #2a78d6;
 }
 
-/* Dark: the same hues stepped for a dark surface (Telegram tells us via data-theme). */
 :root[data-theme='dark'] {
+  --brand-accent: var(--brand-dark);
+  --glass-alpha: 66%;
+  --glass-border: rgb(255 255 255 / 0.08);
+  --glow-1: 40%;
+  --glow-2: 28%;
   --avatar-l: 72%;
+
   --c-present: #3ecf7d;
   --c-late: #f0a83a;
   --c-excused: #6aa8f0;
   --c-absent: #f07a72;
-  --c-chart: #3987e5;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]):not([style*='--tg-theme-bg-color']) {
-    --tg-theme-bg-color: #17212b;
-    --tg-theme-secondary-bg-color: #0e1621;
-    --tg-theme-section-bg-color: #17212b;
-    --tg-theme-text-color: #f5f5f5;
-    --tg-theme-hint-color: #708499;
-    --avatar-l: 72%;
-    --c-present: #3ecf7d;
-    --c-late: #f0a83a;
-    --c-excused: #6aa8f0;
-    --c-absent: #f07a72;
-    --c-chart: #3987e5;
+/* Browser preview outside Telegram: a sensible dark palette. */
+:root[data-theme='dark']:not([style*='--tg-theme-bg-color']) {
+  --tg-theme-bg-color: #17212b;
+  --tg-theme-secondary-bg-color: #0e1621;
+  --tg-theme-section-bg-color: #17212b;
+  --tg-theme-text-color: #f5f5f5;
+  --tg-theme-hint-color: #7d8b99;
+}
+
+/* Frosted, tinted glass. Falls back to solid where blur isn't available or wanted. */
+@utility glass {
+  background: color-mix(in srgb, var(--color-section) var(--glass-alpha), transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+  backdrop-filter: blur(22px) saturate(1.6);
+  border: 1px solid var(--glass-border);
+}
+
+@utility glass-strong {
+  background: color-mix(in srgb, var(--color-section) 88%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(1.7);
+  backdrop-filter: blur(28px) saturate(1.7);
+  border: 1px solid var(--glass-border);
+}
+
+@utility brand-gradient {
+  background-image: linear-gradient(
+    135deg,
+    var(--brand) 0%,
+    color-mix(in srgb, var(--brand) 55%, var(--brand-partner)) 100%
+  );
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --glass-alpha: 97%;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-alpha: 100%;
   }
 }
 
 @keyframes sheet-in {
   from {
-    transform: translateY(24px);
+    transform: translateY(28px);
     opacity: 0;
   }
 }
@@ -91,29 +144,62 @@
     opacity: 0.45;
   }
 }
+@keyframes rise {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
 
-html,
-body {
+html {
   background: var(--color-bg-secondary);
+}
+
+body {
   color: var(--color-text);
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
 
-button,
-input,
-select {
-  font: inherit;
-  color: inherit;
+/* The tinted glow behind everything: brand color top-left, partner hue top-right. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      120% 55% at 0% -8%,
+      color-mix(in srgb, var(--brand) var(--glow-1), transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      90% 45% at 105% -4%,
+      color-mix(in srgb, var(--brand-partner) var(--glow-2), transparent),
+      transparent 72%
+    ),
+    var(--color-bg-secondary);
 }
 
-/* Comfortable focus ring for keyboard users; invisible for touch. */
-:focus-visible {
-  outline: 2px solid var(--color-button);
-  outline-offset: 2px;
+/* In the base layer so utility classes (text-white on buttons, etc.) win. */
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand-accent);
+    outline-offset: 2px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

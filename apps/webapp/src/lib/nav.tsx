@@ -20,6 +20,8 @@ export type Route =
   | { name: 'newMeeting'; groupId: number }
   | { name: 'member'; userId: number }
   | { name: 'createGroup' }
+  | { name: 'settings' }
+  | { name: 'announcements'; groupId: number }
   | { name: 'addOffline'; groupId: number };
 
 /** Return false to cancel the navigation (e.g. the user chose to keep editing). */

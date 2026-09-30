@@ -1,11 +1,15 @@
-import { useMemo } from 'react';
-import { ru, type MeResponse } from '@church/shared';
+import { useEffect, useMemo } from 'react';
+import { messages, type MeResponse } from '@church/shared';
 import { ToastProvider } from './components/Toast';
 import { CenterMessage, ErrorState, Loading } from './components/ui';
+import { I18nProvider } from './lib/i18n';
 import { NavProvider, useNav, type Route } from './lib/nav';
+import { applyBrand } from './lib/theme';
 import { useMe } from './lib/queries';
 import { isInsideTelegram } from './lib/telegram';
 import { AddOffline } from './screens/AddOffline';
+import { Announcements } from './screens/Announcements';
+import { ChurchSettings } from './screens/ChurchSettings';
 import { CreateGroup } from './screens/CreateGroup';
 import { ManagerShell } from './screens/ManagerShell';
 import { MemberHome } from './screens/MemberHome';
@@ -34,6 +38,10 @@ function Router({ me }: { me: MeResponse }) {
       return <CreateGroup />;
     case 'addOffline':
       return <AddOffline groupId={route.groupId} />;
+    case 'settings':
+      return me.user.isAdmin ? <ChurchSettings /> : null;
+    case 'announcements':
+      return <Announcements key={route.groupId} groupId={route.groupId} />;
   }
 }
 
@@ -48,17 +56,22 @@ function initialRoute(me: MeResponse): Route | undefined {
 function Gate() {
   const me = useMe();
   const initial = useMemo(() => (me.data ? initialRoute(me.data) : undefined), [me.data]);
+  const brand = me.data?.church.brandColor;
+  useEffect(() => applyBrand(brand), [brand]);
   if (me.isPending) return <Loading />;
   if (me.isError) return <ErrorState onRetry={() => void me.refetch()} />;
   return (
-    <NavProvider initial={initial}>
-      <Router me={me.data} />
-    </NavProvider>
+    <I18nProvider locale={me.data.user.locale}>
+      <NavProvider initial={initial}>
+        <Router me={me.data} />
+      </NavProvider>
+    </I18nProvider>
   );
 }
 
 export function App() {
-  if (!isInsideTelegram()) return <CenterMessage>{ru.app.openInTelegram}</CenterMessage>;
+  if (!isInsideTelegram())
+    return <CenterMessage>{messages('ru').common.openInTelegram}</CenterMessage>;
   return (
     <ToastProvider>
       <Gate />
