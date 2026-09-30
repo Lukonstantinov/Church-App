@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { GrammyError, webhookCallback } from 'grammy';
 import type { Env } from '../env';
 import { createBot, defaultCommands } from './bot';
-import { timingSafeEqualStr } from '../lib/crypto';
+import { deriveToken, timingSafeEqualStr } from '../lib/crypto';
 import { appUrlFor } from '../lib/telegram';
 
 export const botRoutes = new Hono<{ Bindings: Env }>();
@@ -11,12 +11,13 @@ export const botRoutes = new Hono<{ Bindings: Env }>();
 botRoutes.post('/webhook', async (c) => {
   // Cheap early reject before touching the Telegram API.
   const secret = c.req.header('X-Telegram-Bot-Api-Secret-Token') ?? '';
-  if (!timingSafeEqualStr(secret, c.env.WEBHOOK_SECRET)) {
+  const webhookToken = await deriveToken(c.env.WEBHOOK_SECRET, 'webhook');
+  if (!timingSafeEqualStr(secret, webhookToken)) {
     return c.json({ error: { code: 'forbidden', message: 'bad secret' } }, 401);
   }
   const bot = await createBot({ env: c.env, appUrl: appUrlFor(c.env, c.req.url) });
   const handle = webhookCallback(bot, 'cloudflare-mod', {
-    secretToken: c.env.WEBHOOK_SECRET,
+    secretToken: webhookToken,
   });
   return handle(c.req.raw);
 });
@@ -27,7 +28,10 @@ botRoutes.post('/webhook', async (c) => {
  */
 botRoutes.post('/setup', async (c) => {
   const provided = c.req.header('X-Setup-Secret') ?? '';
-  if (!c.env.WEBHOOK_SECRET || !timingSafeEqualStr(provided, c.env.WEBHOOK_SECRET)) {
+  if (
+    !c.env.WEBHOOK_SECRET ||
+    !timingSafeEqualStr(provided, await deriveToken(c.env.WEBHOOK_SECRET, 'setup'))
+  ) {
     return c.json({ error: { code: 'forbidden', message: 'bad setup secret' } }, 403);
   }
   const appUrl = appUrlFor(c.env, c.req.url);
@@ -39,7 +43,7 @@ botRoutes.post('/setup', async (c) => {
     const bot = await createBot({ env: c.env, appUrl });
     step = 'setWebhook';
     await bot.api.setWebhook(`${appUrl}/bot/webhook`, {
-      secret_token: c.env.WEBHOOK_SECRET,
+      secret_token: await deriveToken(c.env.WEBHOOK_SECRET, 'webhook'),
       allowed_updates: ['message', 'callback_query', 'my_chat_member'],
       drop_pending_updates: false,
     });

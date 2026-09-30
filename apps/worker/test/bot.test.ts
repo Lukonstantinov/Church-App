@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { env } from 'cloudflare:workers';
-import { api, mockTelegram } from './helpers';
+import { api, mockTelegram, setupHeader, webhookHeader } from './helpers';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -29,7 +29,7 @@ describe('bot webhook', () => {
     const res = await api('/bot/webhook', {
       method: 'POST',
       json: startUpdate(3002),
-      headers: { 'X-Telegram-Bot-Api-Secret-Token': env.WEBHOOK_SECRET },
+      headers: { 'X-Telegram-Bot-Api-Secret-Token': await webhookHeader() },
     });
     expect(res.status).toBe(200);
     const send = calls.find((c) => c.method === 'sendMessage');
@@ -54,7 +54,7 @@ describe('bot setup', () => {
     const calls = mockTelegram();
     const res = await api('/bot/setup', {
       method: 'POST',
-      headers: { 'X-Setup-Secret': env.WEBHOOK_SECRET },
+      headers: { 'X-Setup-Secret': await setupHeader() },
     });
     expect(res.status).toBe(200);
     const methods = calls.map((c) => c.method);
@@ -64,7 +64,7 @@ describe('bot setup', () => {
     const hook = calls.find((c) => c.method === 'setWebhook');
     expect(hook?.body).toMatchObject({
       url: 'https://app.test/bot/webhook',
-      secret_token: env.WEBHOOK_SECRET,
+      secret_token: await webhookHeader(),
     });
   });
 
@@ -83,7 +83,7 @@ describe('bot setup', () => {
     });
     const res = await api('/bot/setup', {
       method: 'POST',
-      headers: { 'X-Setup-Secret': env.WEBHOOK_SECRET },
+      headers: { 'X-Setup-Secret': await setupHeader() },
     });
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({
