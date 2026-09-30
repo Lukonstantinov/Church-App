@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   addOfflineMemberSchema,
   createGroupSchema,
@@ -14,7 +14,15 @@ import {
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import type { Db } from '../db/client';
-import { groups, memberships, users, type Group, type User } from '../db/schema';
+import {
+  attendance,
+  groups,
+  meetings,
+  memberships,
+  users,
+  type Group,
+  type User,
+} from '../db/schema';
 import { assertCanManageGroup, assertCanViewGroup, canManageGroup } from '../lib/access';
 import { audit } from '../lib/audit';
 import { randomCode } from '../lib/codes';
@@ -208,6 +216,32 @@ groupRoutes.get('/:id/members', async (c) => {
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(and(eq(memberships.groupId, group.id), inArray(memberships.status, [...statuses])))
     .orderBy(users.firstName, users.lastName);
+  // Recent attendance per member: last 8 roll calls of the group (excused don't count).
+  const recent = await db
+    .select({ id: meetings.id })
+    .from(meetings)
+    .where(and(eq(meetings.groupId, group.id), eq(meetings.status, 'done')))
+    .orderBy(desc(meetings.startsAt))
+    .limit(8);
+  const rates = new Map<number, { attended: number; counted: number }>();
+  if (recent.length > 0) {
+    const marks = await db
+      .select({ userId: attendance.userId, status: attendance.status })
+      .from(attendance)
+      .where(
+        inArray(
+          attendance.meetingId,
+          recent.map((r) => r.id),
+        ),
+      );
+    for (const mark of marks) {
+      if (mark.status === 'excused') continue;
+      const r = rates.get(mark.userId) ?? { attended: 0, counted: 0 };
+      r.counted++;
+      if (mark.status !== 'absent') r.attended++;
+      rates.set(mark.userId, r);
+    }
+  }
   const result: MemberRow[] = rows.map(({ m, u }) => ({
     membershipId: m.id,
     userId: u.id,
@@ -221,6 +255,9 @@ groupRoutes.get('/:id/members', async (c) => {
     offline: u.telegramId === null,
     isReachable: u.isReachable,
     guardianConsent: u.guardianConsentAt !== null,
+    recentPercent: rates.get(u.id)?.counted
+      ? Math.round((rates.get(u.id)!.attended / rates.get(u.id)!.counted) * 100)
+      : null,
   }));
   return c.json(result);
 });

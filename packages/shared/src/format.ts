@@ -15,3 +15,16 @@ export function plural(n: number, forms: [one: string, few: string, many: string
       return forms[2];
   }
 }
+
+export interface PluralForms {
+  one: string;
+  few?: string;
+  many?: string;
+  other: string;
+}
+
+/** Picks the grammatical form for `n` using the locale's plural rules (ru/lt need 3 forms). */
+export function pluralize(intlLocale: string, n: number, forms: PluralForms): string {
+  const category = new Intl.PluralRules(intlLocale).select(n) as keyof PluralForms;
+  return forms[category] ?? forms.other;
+}

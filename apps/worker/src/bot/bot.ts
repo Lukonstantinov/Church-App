@@ -1,10 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { Bot, InlineKeyboard, type Context } from 'grammy';
-import { displayName, ru } from '@church/shared';
+import { displayName, messages, type Messages } from '@church/shared';
 import { adminTelegramIds, type Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { memberships, type User } from '../db/schema';
 import { acceptPrivacy, upsertTelegramUser } from '../lib/users';
+import { churchDefaultLocale, localeOf } from '../lib/church';
 import { getBotInfo } from '../lib/telegram';
 import { DEEP_LINK } from '../lib/codes';
 import {
@@ -22,13 +23,14 @@ export interface BotDeps {
   appUrl: string;
 }
 
-type Ctx = Context & { dbUser: User };
+type Ctx = Context & { dbUser: User; t: Messages };
 
 export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
   const bot = new Bot<Ctx>(env.BOT_TOKEN, { botInfo: await getBotInfo(env) });
   const db = getDb(env.DB);
   const admins = adminTelegramIds(env);
-  const openAppKeyboard = () => new InlineKeyboard().webApp(ru.bot.openApp, appUrl);
+  const churchLocale = await churchDefaultLocale(db);
+  const openAppKeyboard = (t: Messages) => new InlineKeyboard().webApp(t.bot.openApp, appUrl);
 
   // Only private chats are handled for now; group chats come later.
   const pm = bot.chatType('private');
@@ -37,6 +39,7 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
   pm.use(async (ctx, next) => {
     if (!ctx.from || ctx.from.is_bot) return;
     ctx.dbUser = await upsertTelegramUser(db, ctx.from, admins);
+    ctx.t = messages(localeOf(ctx.dbUser, churchLocale));
     await next();
   });
 
@@ -45,9 +48,11 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     if (payload.startsWith(DEEP_LINK.join)) {
       await handleJoin(ctx, db, payload.slice(DEEP_LINK.join.length));
     } else if (payload.startsWith(DEEP_LINK.claim)) {
-      await handleClaim(ctx, db, payload.slice(DEEP_LINK.claim.length), openAppKeyboard);
+      await handleClaim(ctx, db, payload.slice(DEEP_LINK.claim.length), openAppKeyboard(ctx.t));
     } else {
-      await ctx.reply(ru.bot.welcome(ctx.dbUser.firstName), { reply_markup: openAppKeyboard() });
+      await ctx.reply(ctx.t.bot.welcome(ctx.dbUser.firstName), {
+        reply_markup: openAppKeyboard(ctx.t),
+      });
     }
   }
 
@@ -55,15 +60,15 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     const result = await requestJoin(database, ctx.dbUser, code);
     switch (result.kind) {
       case 'invalid':
-        return void (await ctx.reply(ru.bot.inviteNotFound));
+        return void (await ctx.reply(ctx.t.bot.inviteNotFound));
       case 'already_member':
-        return void (await ctx.reply(ru.bot.joinAlreadyMember(result.group.name), {
-          reply_markup: openAppKeyboard(),
+        return void (await ctx.reply(ctx.t.bot.joinAlreadyMember(result.group.name), {
+          reply_markup: openAppKeyboard(ctx.t),
         }));
       case 'already_pending':
-        return void (await ctx.reply(ru.bot.joinAlreadyPending(result.group.name)));
+        return void (await ctx.reply(ctx.t.bot.joinAlreadyPending(result.group.name)));
       case 'requested':
-        await ctx.reply(ru.bot.joinRequested(result.group.name));
+        await ctx.reply(ctx.t.bot.joinRequested(result.group.name));
         await notifyJoinRequest(ctx.api, database, result.membership.id);
     }
   }
@@ -72,9 +77,12 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     const payload = ctx.match.trim();
     const needsConsent = payload !== '' && ctx.dbUser.privacyAcceptedAt === null;
     if (needsConsent) {
-      await ctx.reply(ru.bot.privacyNotice, {
+      await ctx.reply(ctx.t.bot.privacyNotice, {
         parse_mode: 'HTML',
-        reply_markup: new InlineKeyboard().text(ru.bot.privacyAccept, `pv:${payload}`.slice(0, 64)),
+        reply_markup: new InlineKeyboard().text(
+          ctx.t.bot.privacyAccept,
+          `pv:${payload}`.slice(0, 64),
+        ),
       });
       return;
     }
@@ -84,7 +92,7 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
   pm.callbackQuery(/^pv:(.*)$/, async (ctx) => {
     await acceptPrivacy(db, ctx.dbUser.id);
     ctx.dbUser.privacyAcceptedAt = new Date().toISOString();
-    await ctx.answerCallbackQuery({ text: ru.bot.privacyAccepted });
+    await ctx.answerCallbackQuery({ text: ctx.t.bot.privacyAccepted });
     await ctx.editMessageReplyMarkup().catch(() => undefined);
     await handlePayload(ctx, ctx.match[1] ?? '');
   });
@@ -96,11 +104,11 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
       where: eq(memberships.id, membershipId),
     });
     if (!membership || !(await canManageGroup(db, ctx.dbUser, membership.groupId))) {
-      return void (await ctx.answerCallbackQuery({ text: ru.bot.notAllowed, show_alert: true }));
+      return void (await ctx.answerCallbackQuery({ text: ctx.t.bot.notAllowed, show_alert: true }));
     }
     const result = await decideJoin(db, ctx.dbUser, membershipId, approve);
     if (result.kind !== 'ok') {
-      await ctx.answerCallbackQuery({ text: ru.bot.alreadyHandled });
+      await ctx.answerCallbackQuery({ text: ctx.t.bot.alreadyHandled });
       await ctx.editMessageReplyMarkup().catch(() => undefined);
       return;
     }
@@ -109,19 +117,19 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
   });
 
   pm.command('app', async (ctx) => {
-    await ctx.reply(ru.bot.openApp, { reply_markup: openAppKeyboard() });
+    await ctx.reply(ctx.t.bot.openApp, { reply_markup: openAppKeyboard(ctx.t) });
   });
 
   pm.command('privacy', async (ctx) => {
-    await ctx.reply(ru.bot.privacyInfo, { parse_mode: 'HTML' });
+    await ctx.reply(ctx.t.bot.privacyInfo, { parse_mode: 'HTML' });
   });
 
   pm.command('help', async (ctx) => {
-    await ctx.reply(ru.bot.help);
+    await ctx.reply(ctx.t.bot.help);
   });
 
   pm.on('message', async (ctx) => {
-    await ctx.reply(ru.bot.help, { reply_markup: openAppKeyboard() });
+    await ctx.reply(ctx.t.bot.help, { reply_markup: openAppKeyboard(ctx.t) });
   });
 
   bot.catch((err) => {
@@ -131,20 +139,24 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
   return bot;
 }
 
-async function handleClaim(ctx: Ctx, db: Db, code: string, keyboard: () => InlineKeyboard) {
+async function handleClaim(ctx: Ctx, db: Db, code: string, keyboard: InlineKeyboard) {
   const result = await claimProfile(db, ctx.dbUser, code);
   if (result.kind !== 'claimed') {
-    await ctx.reply(result.kind === 'invalid' ? ru.bot.claimInvalid : ru.bot.claimAccountInUse);
+    await ctx.reply(
+      result.kind === 'invalid' ? ctx.t.bot.claimInvalid : ctx.t.bot.claimAccountInUse,
+    );
     return;
   }
   ctx.dbUser = result.user;
-  await ctx.reply(ru.bot.claimDone(displayName(result.user)), { reply_markup: keyboard() });
+  await ctx.reply(ctx.t.bot.claimDone(displayName(result.user)), { reply_markup: keyboard });
 }
 
-/** Commands shown in the Telegram menu for everyone. Leader/admin scopes are added later. */
-export const defaultCommands = [
-  { command: 'start', description: ru.commands.start },
-  { command: 'app', description: ru.commands.app },
-  { command: 'privacy', description: ru.commands.privacy },
-  { command: 'help', description: ru.commands.help },
-];
+/** Commands shown in the Telegram menu. Leader/admin scopes are added later. */
+export function commandsFor(t: Messages) {
+  return [
+    { command: 'start', description: t.commands.start },
+    { command: 'app', description: t.commands.app },
+    { command: 'privacy', description: t.commands.privacy },
+    { command: 'help', description: t.commands.help },
+  ];
+}

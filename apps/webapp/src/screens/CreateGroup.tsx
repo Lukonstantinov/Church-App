@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react';
-import { ru } from '@church/shared';
 import { Button, Screen, Section, TextField, Title } from '../components/ui';
+import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import { useCreateGroup } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 
 export function CreateGroup() {
-  const { back, push } = useNav();
+  const { back, setActiveGroupId, setTab } = useNav();
+  const t = useT();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const create = useCreateGroup();
@@ -16,26 +17,27 @@ export function CreateGroup() {
     if (!name.trim()) return;
     const { id } = await create.mutateAsync({ name, description });
     haptic.success();
+    setActiveGroupId(id);
+    setTab('overview');
     back();
-    push({ name: 'group', groupId: id });
   }
 
   return (
     <Screen>
-      <Title>{ru.app.createGroup}</Title>
+      <Title>{t.groups.create}</Title>
       <form onSubmit={submit} className="flex flex-col gap-5">
         <Section>
-          <TextField label={ru.app.groupName} value={name} onChange={setName} autoFocus />
+          <TextField label={t.groups.name} value={name} onChange={setName} autoFocus />
           <TextField
-            label={ru.app.groupDescription}
+            label={t.groups.description}
             value={description}
             onChange={setDescription}
             maxLength={300}
           />
         </Section>
-        {create.isError && <p className="px-4 text-destructive">{ru.app.errorGeneric}</p>}
+        {create.isError && <p className="px-4 text-destructive">{t.common.errorGeneric}</p>}
         <Button type="submit" disabled={!name.trim() || create.isPending}>
-          {ru.app.createGroup}
+          {t.groups.create}
         </Button>
       </form>
     </Screen>

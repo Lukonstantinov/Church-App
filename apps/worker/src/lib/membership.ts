@@ -1,6 +1,6 @@
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { InlineKeyboard, type Api } from 'grammy';
-import { displayName, ru } from '@church/shared';
+import { displayName, messages, type Locale } from '@church/shared';
 import type { Db } from '../db/client';
 import {
   botCards,
@@ -12,6 +12,7 @@ import {
   type User,
 } from '../db/schema';
 import { audit } from './audit';
+import { churchDefaultLocale, localeOf } from './church';
 import { escapeHtml } from './html';
 import { isUnreachableError } from './telegram';
 
@@ -57,13 +58,17 @@ export async function requestJoin(db: Db, user: User, inviteCode: string): Promi
   return { kind: 'requested', group, membership };
 }
 
-/** Telegram chat ids that should receive a group's join requests: its leaders, else admins. */
-async function joinRequestRecipients(
-  db: Db,
-  groupId: number,
-): Promise<{ userId: number; chatId: number }[]> {
+export interface Recipient {
+  userId: number;
+  chatId: number;
+  locale: Locale;
+}
+
+/** Telegram chats to notify for a group: its reachable leaders, else the church admins. */
+export async function leaderRecipients(db: Db, groupId: number): Promise<Recipient[]> {
+  const fallback = await churchDefaultLocale(db);
   const leaders = await db
-    .select({ userId: users.id, chatId: users.telegramId })
+    .select({ userId: users.id, chatId: users.telegramId, locale: users.locale })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(
@@ -78,12 +83,16 @@ async function joinRequestRecipients(
   const rows = leaders.length
     ? leaders
     : await db
-        .select({ userId: users.id, chatId: users.telegramId })
+        .select({ userId: users.id, chatId: users.telegramId, locale: users.locale })
         .from(users)
         .where(
           and(eq(users.isAdmin, true), isNotNull(users.telegramId), eq(users.isReachable, true)),
         );
-  return rows.filter((r): r is { userId: number; chatId: number } => r.chatId !== null);
+  return rows.flatMap((r) =>
+    r.chatId === null
+      ? []
+      : [{ userId: r.userId, chatId: r.chatId, locale: localeOf(r, fallback) }],
+  );
 }
 
 export async function markUnreachable(db: Db, userId: number) {
@@ -101,22 +110,25 @@ export async function notifyJoinRequest(api: Api, db: Db, membershipId: number):
     .get();
   if (!row || row.membership.status !== 'pending') return 0;
 
-  const text = ru.bot.joinCard(
-    escapeHtml(displayName(row.user)),
-    row.user.username ? escapeHtml(row.user.username) : null,
-    escapeHtml(row.group.name),
-  );
-  const keyboard = new InlineKeyboard()
-    .text(ru.bot.approve, `jr:a:${membershipId}`)
-    .text(ru.bot.reject, `jr:r:${membershipId}`);
+  const nameHtml = escapeHtml(displayName(row.user));
+  const usernameHtml = row.user.username ? escapeHtml(row.user.username) : null;
+  const groupHtml = escapeHtml(row.group.name);
 
   let sent = 0;
-  for (const r of await joinRequestRecipients(db, row.group.id)) {
+  for (const r of await leaderRecipients(db, row.group.id)) {
+    const t = messages(r.locale);
+    const keyboard = new InlineKeyboard()
+      .text(t.bot.approve, `jr:a:${membershipId}`)
+      .text(t.bot.reject, `jr:r:${membershipId}`);
     try {
-      const msg = await api.sendMessage(r.chatId, text, {
-        parse_mode: 'HTML',
-        reply_markup: keyboard,
-      });
+      const msg = await api.sendMessage(
+        r.chatId,
+        t.bot.joinCard(nameHtml, usernameHtml, groupHtml),
+        {
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+        },
+      );
       await db.insert(botCards).values({
         kind: 'join_request',
         refId: membershipId,
@@ -182,18 +194,39 @@ export async function announceJoinDecision(
   const nameHtml = escapeHtml(displayName(member));
   const groupHtml = escapeHtml(group.name);
   const byHtml = escapeHtml(displayName(actor));
-  const cardText = approved
-    ? ru.bot.joinCardApproved(nameHtml, groupHtml, byHtml)
-    : ru.bot.joinCardRejected(nameHtml, groupHtml, byHtml);
+  const fallback = await churchDefaultLocale(db);
+  const cardText = (locale: Locale) =>
+    approved
+      ? messages(locale).bot.joinCardApproved(nameHtml, groupHtml, byHtml)
+      : messages(locale).bot.joinCardRejected(nameHtml, groupHtml, byHtml);
 
   const cards = await db
     .select()
     .from(botCards)
     .where(and(eq(botCards.kind, 'join_request'), eq(botCards.refId, membership.id)));
+  const owners = cards.length
+    ? await db
+        .select({ chatId: users.telegramId, locale: users.locale })
+        .from(users)
+        .where(
+          inArray(
+            users.telegramId,
+            cards.map((c) => c.chatId),
+          ),
+        )
+    : [];
+  const localeByChat = new Map(owners.map((o) => [o.chatId, localeOf(o, fallback)]));
   await Promise.all(
     cards.map((card) =>
       api
-        .editMessageText(card.chatId, card.messageId, cardText, { parse_mode: 'HTML' })
+        .editMessageText(
+          card.chatId,
+          card.messageId,
+          cardText(localeByChat.get(card.chatId) ?? fallback),
+          {
+            parse_mode: 'HTML',
+          },
+        )
         .catch((err) => console.warn('card edit failed', err)),
     ),
   );
@@ -202,13 +235,12 @@ export async function announceJoinDecision(
     .where(and(eq(botCards.kind, 'join_request'), eq(botCards.refId, membership.id)));
 
   if (member.telegramId && member.isReachable) {
+    const t = messages(localeOf(member, fallback));
     try {
       await api.sendMessage(
         member.telegramId,
-        approved
-          ? ru.bot.joinApprovedToMember(group.name)
-          : ru.bot.joinRejectedToMember(group.name),
-        approved ? { reply_markup: new InlineKeyboard().webApp(ru.bot.openApp, appUrl) } : {},
+        approved ? t.bot.joinApprovedToMember(group.name) : t.bot.joinRejectedToMember(group.name),
+        approved ? { reply_markup: new InlineKeyboard().webApp(t.bot.openApp, appUrl) } : {},
       );
     } catch (err) {
       if (isUnreachableError(err)) await markUnreachable(db, member.id);

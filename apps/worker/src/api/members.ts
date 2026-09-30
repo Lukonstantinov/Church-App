@@ -13,6 +13,8 @@ import type { AuthVariables } from '../auth/middleware';
 import { groups, memberships, users } from '../db/schema';
 import { canManageGroup, canManageUser, ledGroupIds } from '../lib/access';
 import { audit } from '../lib/audit';
+import { getChurch } from '../lib/church';
+import { memberAttendance } from '../lib/meetings';
 import { issueClaimCode } from '../lib/claim';
 import { announceJoinDecision, decideJoin } from '../lib/membership';
 import { appUrlFor, botApi, claimLink, botUsername } from '../lib/telegram';
@@ -131,7 +133,22 @@ userRoutes.get('/:id', async (c) => {
     .orderBy(groups.name);
 
   const now = new Date().toISOString();
+  const church = await getChurch(db);
+  const attendance = await Promise.all(
+    rows
+      .filter(({ m }) => m.status === 'active')
+      .map(({ m, groupName }) =>
+        memberAttendance(db, {
+          userId: id,
+          groupId: m.groupId,
+          groupName,
+          joinedAt: m.joinedAt,
+          timezone: church.timezone,
+        }),
+      ),
+  );
   const detail: MemberDetail = {
+    attendance,
     user: {
       id: target.id,
       firstName: target.firstName,

@@ -1,0 +1,1 @@
+ALTER TABLE `church_settings` ADD `app_url` text;

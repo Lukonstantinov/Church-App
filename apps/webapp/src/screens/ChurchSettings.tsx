@@ -1,0 +1,203 @@
+import { useRef, useState } from 'react';
+import {
+  BRAND_COLOR_KEYS,
+  BRAND_COLORS,
+  LOCALE_NAMES,
+  LOCALES,
+  type BrandColor,
+  type Locale,
+} from '@church/shared';
+import { ChurchLogo } from '../components/BrandHeader';
+import { IconImage, IconTrash } from '../components/icons';
+import { useToast } from '../components/Toast';
+import { ActionRow, Button, Screen, Section, TextField, Title } from '../components/ui';
+import { useT } from '../lib/i18n';
+import { prepareLogo } from '../lib/image';
+import { useMe, useRemoveLogo, useUpdateChurch, useUploadLogo } from '../lib/queries';
+import { applyBrand } from '../lib/theme';
+import { confirmDialog, haptic } from '../lib/telegram';
+
+const TIMEZONES = [
+  'Europe/Riga',
+  'Europe/Vilnius',
+  'Europe/Tallinn',
+  'Europe/Helsinki',
+  'Europe/Warsaw',
+  'Europe/Berlin',
+  'Europe/Prague',
+  'Europe/Dublin',
+  'Europe/London',
+  'Europe/Kyiv',
+  'Europe/Chisinau',
+  'Europe/Madrid',
+  'Europe/Oslo',
+  'Europe/Stockholm',
+];
+
+export function ChurchSettings() {
+  const t = useT();
+  const toast = useToast();
+  const me = useMe();
+  const church = me.data!.church;
+  const update = useUpdateChurch();
+  const upload = useUploadLogo();
+  const removeLogo = useRemoveLogo();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState(church.name);
+
+  const zones = TIMEZONES.includes(church.timezone) ? TIMEZONES : [church.timezone, ...TIMEZONES];
+
+  async function patch(input: Parameters<typeof update.mutateAsync>[0]) {
+    try {
+      await update.mutateAsync(input);
+      haptic.success();
+      toast(t.common.saved);
+    } catch {
+      toast(t.common.saveFailed, 'error');
+    }
+  }
+
+  async function pickColor(key: BrandColor) {
+    applyBrand(key); // preview instantly
+    haptic.tap();
+    await patch({ brandColor: key });
+  }
+
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    try {
+      await upload.mutateAsync(await prepareLogo(file));
+      haptic.success();
+      toast(t.settings.logoUpdated);
+    } catch {
+      haptic.error();
+      toast(t.settings.logoFailed, 'error');
+    } finally {
+      if (fileInput.current) fileInput.current.value = '';
+    }
+  }
+
+  const select =
+    'min-h-[44px] w-full rounded-xl bg-hairline px-3 text-[16px] font-medium outline-none';
+
+  return (
+    <Screen>
+      <Title>{t.settings.title}</Title>
+
+      {/* Live preview of what everyone sees at the top of the app. */}
+      <div className="brand-gradient relative overflow-hidden rounded-[var(--radius-card)] p-5 text-white shadow-cta">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-8 -top-12 h-40 w-40 rounded-full bg-white/20 blur-2xl"
+        />
+        <div className="relative flex items-center gap-3">
+          <ChurchLogo size={56} />
+          <div className="min-w-0">
+            <div className="truncate text-[20px] font-bold">{name.trim() || church.name}</div>
+            <div className="text-[14px] text-white/80">
+              {LOCALE_NAMES[church.defaultLocale]} · {church.timezone}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Section title={t.settings.name}>
+        <TextField label={t.settings.name} value={name} onChange={setName} maxLength={80} />
+        <div className="p-3">
+          <Button
+            small
+            onClick={() => void patch({ name })}
+            disabled={!name.trim() || name.trim() === church.name || update.isPending}
+          >
+            {t.common.save}
+          </Button>
+        </div>
+      </Section>
+
+      <Section title={t.settings.logo} footer={t.settings.logoHint}>
+        <div className="flex items-center gap-4 p-4">
+          <ChurchLogo size={72} />
+          <div className="flex flex-1 flex-col gap-2">
+            <Button small onClick={() => fileInput.current?.click()} disabled={upload.isPending}>
+              <IconImage size={17} />{' '}
+              {church.logoUrl ? t.settings.changeLogo : t.settings.uploadLogo}
+            </Button>
+          </div>
+        </div>
+        {church.logoUrl && (
+          <ActionRow
+            destructive
+            icon={<IconTrash size={18} />}
+            disabled={removeLogo.isPending}
+            onClick={async () => {
+              if (await confirmDialog(`${t.settings.removeLogo}?`)) await removeLogo.mutateAsync();
+            }}
+          >
+            {t.settings.removeLogo}
+          </ActionRow>
+        )}
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml,image/*"
+          className="hidden"
+          onChange={(e) => void onFile(e.target.files?.[0])}
+        />
+      </Section>
+
+      <Section title={t.settings.color} footer={t.settings.colorHint}>
+        <div className="grid grid-cols-5 gap-3 p-4">
+          {BRAND_COLOR_KEYS.map((key) => {
+            const c = BRAND_COLORS[key];
+            const on = key === church.brandColor;
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-label={key}
+                aria-pressed={on}
+                onClick={() => void pickColor(key)}
+                className={`aspect-square rounded-2xl transition active:scale-90 ${on ? 'ring-[3px] ring-text/80 ring-offset-2 ring-offset-[var(--color-section)]' : ''}`}
+                style={{ background: `linear-gradient(135deg, ${c.light}, ${c.partner})` }}
+              >
+                {on && <span className="text-[18px] font-bold text-white">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      </Section>
+
+      <Section title={t.settings.defaultLanguage} footer={t.settings.defaultLanguageHint}>
+        <div className="p-3">
+          <select
+            className={select}
+            value={church.defaultLocale}
+            onChange={(e) => void patch({ defaultLocale: e.target.value as Locale })}
+          >
+            {LOCALES.map((l) => (
+              <option key={l} value={l}>
+                {LOCALE_NAMES[l]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </Section>
+
+      <Section title={t.settings.timezone} footer={t.settings.timezoneHint}>
+        <div className="p-3">
+          <select
+            className={select}
+            value={church.timezone}
+            onChange={(e) => void patch({ timezone: e.target.value })}
+          >
+            {zones.map((z) => (
+              <option key={z} value={z}>
+                {z.replace('_', ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+      </Section>
+    </Screen>
+  );
+}

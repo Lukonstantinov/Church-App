@@ -2,6 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { memberships, groups, users, type User } from '../db/schema';
 import type { MeResponse } from '@church/shared';
+import { getChurch, localeOf } from './church';
 
 export interface TelegramProfile {
   id: number;
@@ -75,7 +76,9 @@ export async function loadMe(db: Db, user: User): Promise<MeResponse> {
     .where(and(eq(memberships.userId, user.id), isNull(groups.archivedAt)))
     .orderBy(groups.name);
 
+  const church = await getChurch(db);
   return {
+    church,
     user: {
       id: user.id,
       telegramId: user.telegramId,
@@ -84,6 +87,7 @@ export async function loadMe(db: Db, user: User): Promise<MeResponse> {
       username: user.username,
       isAdmin: user.isAdmin,
       privacyAccepted: user.privacyAcceptedAt !== null,
+      locale: localeOf(user, church.defaultLocale),
     },
     memberships: rows.filter((r) => r.status === 'active' || r.status === 'pending'),
   };

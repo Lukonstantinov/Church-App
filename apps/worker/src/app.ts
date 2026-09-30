@@ -4,6 +4,7 @@ import type { ApiErrorBody } from '@church/shared';
 import type { Env } from './env';
 import { apiRoutes } from './api/routes';
 import { botRoutes } from './bot/routes';
+import { mediaRoutes } from './api/church';
 
 export const app = new Hono<{ Bindings: Env }>();
 
@@ -25,6 +26,7 @@ app.get('/health', async (c) => {
 });
 
 app.route('/bot', botRoutes);
+app.route('/media', mediaRoutes);
 app.route('/api', apiRoutes);
 
 app.notFound((c) => {

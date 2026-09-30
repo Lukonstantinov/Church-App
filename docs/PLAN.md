@@ -572,6 +572,8 @@ Each phase ends with a deploy to staging and a short check on a real phone.
 
 ### Phase 0 · Foundation (S)
 
+**Status: done.**
+
 - pnpm monorepo, TypeScript, ESLint and Prettier, Vitest; CI workflow.
 - Wrangler config with staging and production environments, D1 databases, first migration.
 - Hono app: `/health`, `/bot/webhook` (grammY, secret check), static assets.
@@ -581,6 +583,8 @@ Each phase ends with a deploy to staging and a short check on a real phone.
 
 ### Phase 1 · Church, groups, members (M)
 
+**Status: done.**
+
 - Schema: users, groups, memberships, church_settings, audit_log. Bootstrap admins from env.
 - Admin: create and archive groups, assign leaders.
 - Invite links and QR codes, privacy acceptance, join requests with leader cards (multi-leader sync), approve and reject.
@@ -589,6 +593,8 @@ Each phase ends with a deploy to staging and a short check on a real phone.
 - **Done when:** an admin creates two groups, a leader invites three phones and approves them, adds one offline member, and that member later claims the profile. Members can't see each other's data (tested).
 
 ### Phase 2 · Meetings and attendance (M)
+
+**Status: built** (on branch `feature/attendance`). Differences from the plan: the roll-call screen has its own sticky Save bar instead of Telegram's MainButton, and the reminder button opens the app with `?roll=<id>` (an inline web-app button) so no BotFather "Configure Mini App" step is needed.
 
 - Schedules, the hourly generator (time-zone tested), one-off events and cancelling.
 - Roll-call screen (tap, long-press, guests, main-button save), 14-day edit window, audit.

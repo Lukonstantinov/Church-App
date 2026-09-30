@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { displayName, ru, type ClaimCodeResponse } from '@church/shared';
+import { displayName, type ClaimCodeResponse } from '@church/shared';
+import { AttendanceSummary } from '../components/AttendanceSummary';
+import { Avatar } from '../components/Avatar';
+import { GroupDot } from '../components/GroupSwitcher';
 import { LinkShare } from '../components/LinkShare';
 import {
   ActionRow,
@@ -11,9 +14,9 @@ import {
   Screen,
   Section,
   TextField,
-  Title,
   Toggle,
 } from '../components/ui';
+import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import {
   useIssueClaimCode,
@@ -27,6 +30,7 @@ import { confirmDialog, haptic } from '../lib/telegram';
 
 export function MemberScreen({ userId }: { userId: number }) {
   const { back } = useNav();
+  const t = useT();
   const me = useMe();
   const detail = useMemberDetail(userId);
   const updateUser = useUpdateUser(userId);
@@ -40,7 +44,7 @@ export function MemberScreen({ userId }: { userId: number }) {
 
   if (detail.isPending) return <Loading />;
   if (detail.isError) return <ErrorState onRetry={() => void detail.refetch()} />;
-  const { user, memberships, permissions } = detail.data;
+  const { user, memberships, permissions, attendance } = detail.data;
   const actorIsAdmin = me.data?.user.isAdmin === true;
   const isSelf = me.data?.user.id === user.id;
 
@@ -58,55 +62,57 @@ export function MemberScreen({ userId }: { userId: number }) {
 
   return (
     <Screen>
-      <Title
-        subtitle={
-          <span className="flex flex-wrap items-center gap-1.5">
-            {user.username && <span>@{user.username}</span>}
-            {user.isAdmin && <Badge>{ru.app.adminBadge}</Badge>}
-            {user.offline && <Badge tone="hint">{ru.app.offline}</Badge>}
-            {!user.offline && !user.isReachable && (
-              <Badge tone="danger">{ru.app.unreachable}</Badge>
-            )}
-          </span>
-        }
-      >
-        {displayName(user)}
-      </Title>
+      <header className="flex flex-col items-center gap-2 pt-4 text-center">
+        <Avatar id={user.id} firstName={user.firstName} lastName={user.lastName} size={84} />
+        <h1 className="text-[26px] font-bold leading-tight tracking-tight">{displayName(user)}</h1>
+        <div className="flex flex-wrap items-center justify-center gap-1.5 text-[15px] text-hint">
+          {user.username && <span>@{user.username}</span>}
+          {user.isAdmin && <Badge>{t.roles.admin}</Badge>}
+          {user.offline && <Badge tone="hint">{t.common.offline}</Badge>}
+          {!user.offline && !user.isReachable && (
+            <Badge tone="danger">{t.common.unreachable}</Badge>
+          )}
+        </div>
+      </header>
+
+      {attendance.map((a) => (
+        <AttendanceSummary key={a.groupId} data={a} showStreak={permissions.canEditProfile} />
+      ))}
 
       {permissions.canEditProfile && (
-        <Section title={ru.app.profile}>
+        <Section title={t.member.profile}>
           {editing ? (
             <>
               <TextField
-                label={ru.app.firstName}
+                label={t.member.firstName}
                 value={firstName}
                 onChange={setFirstName}
                 autoFocus
               />
-              <TextField label={ru.app.lastName} value={lastName} onChange={setLastName} />
+              <TextField label={t.member.lastName} value={lastName} onChange={setLastName} />
               <div className="flex gap-2 px-4 py-3">
                 <Button
                   small
                   onClick={() => void saveEdit()}
                   disabled={!firstName.trim() || updateUser.isPending}
                 >
-                  {ru.app.save}
+                  {t.common.save}
                 </Button>
                 <Button small variant="secondary" onClick={() => setEditing(false)}>
-                  {ru.app.cancel}
+                  {t.common.cancel}
                 </Button>
               </div>
             </>
           ) : (
-            <ActionRow onClick={startEdit}>{ru.app.edit}</ActionRow>
+            <ActionRow onClick={startEdit}>{t.common.edit}</ActionRow>
           )}
         </Section>
       )}
 
       {permissions.canEditProfile && (
-        <Section footer={ru.app.guardianConsentHint}>
+        <Section footer={t.member.guardianConsentHint}>
           <Toggle
-            label={ru.app.guardianConsent}
+            label={t.member.guardianConsent}
             checked={user.guardianConsentAt !== null}
             disabled={updateUser.isPending}
             onChange={(v) => void updateUser.mutateAsync({ guardianConsent: v })}
@@ -114,63 +120,63 @@ export function MemberScreen({ userId }: { userId: number }) {
         </Section>
       )}
 
-      <Section title={isSelf ? ru.app.myGroups : ru.app.groups}>
-        {memberships.map((m) => (
-          <div key={m.membershipId}>
-            <Row
-              title={m.groupName}
-              subtitle={m.status === 'pending' ? ru.app.statusPending : undefined}
-              after={m.role === 'leader' ? ru.app.roleLeader : ru.app.roleMember}
-            />
-            {actorIsAdmin && m.status === 'active' && (
-              <ActionRow
-                disabled={updateMembership.isPending}
-                onClick={() =>
-                  void updateMembership.mutateAsync({
-                    membershipId: m.membershipId,
-                    role: m.role === 'leader' ? 'member' : 'leader',
-                  })
-                }
-              >
-                {m.role === 'leader' ? ru.app.makeMember : ru.app.makeLeader}
-              </ActionRow>
-            )}
-            {permissions.canEditProfile &&
-              m.status === 'active' &&
-              (actorIsAdmin || m.role !== 'leader') && (
+      {memberships.length > 0 && (
+        <Section title={isSelf ? t.member.myGroups : t.member.groups}>
+          {memberships.map((m) => (
+            <div key={m.membershipId}>
+              <Row
+                before={<GroupDot id={m.groupId} />}
+                title={m.groupName}
+                subtitle={m.status === 'pending' ? t.member.statusPending : undefined}
+                after={m.role === 'leader' ? <Badge>{t.roles.leader}</Badge> : t.roles.member}
+              />
+              {actorIsAdmin && m.status === 'active' && (
                 <ActionRow
-                  destructive
                   disabled={updateMembership.isPending}
-                  onClick={async () => {
-                    if (await confirmDialog(ru.app.removeConfirm)) {
-                      await updateMembership.mutateAsync({
-                        membershipId: m.membershipId,
-                        status: 'left',
-                      });
-                      if (memberships.length === 1) back();
-                    }
-                  }}
+                  onClick={() =>
+                    void updateMembership.mutateAsync({
+                      membershipId: m.membershipId,
+                      role: m.role === 'leader' ? 'member' : 'leader',
+                    })
+                  }
                 >
-                  {ru.app.removeFromGroup}
+                  {m.role === 'leader' ? t.member.makeMember : t.member.makeLeader}
                 </ActionRow>
               )}
-          </div>
-        ))}
-      </Section>
+              {permissions.canEditProfile &&
+                m.status === 'active' &&
+                (actorIsAdmin || m.role !== 'leader') && (
+                  <ActionRow
+                    destructive
+                    disabled={updateMembership.isPending}
+                    onClick={async () => {
+                      if (await confirmDialog(t.member.removeConfirm)) {
+                        await updateMembership.mutateAsync({
+                          membershipId: m.membershipId,
+                          status: 'left',
+                        });
+                        if (memberships.length === 1) back();
+                      }
+                    }}
+                  >
+                    {t.member.removeFromGroup}
+                  </ActionRow>
+                )}
+            </div>
+          ))}
+        </Section>
+      )}
 
       {permissions.canIssueClaimCode && (
-        <Section title={ru.app.claimCode} footer={ru.app.claimCodeHint}>
+        <Section title={t.member.claimCode} footer={t.member.claimCodeHint}>
           {claim ? (
-            <LinkShare
-              link={claim.link}
-              shareText="Ссылка для привязки твоего профиля к Telegram"
-            />
+            <LinkShare link={claim.link} shareText={t.member.claimShare} />
           ) : (
             <ActionRow
               disabled={issueClaim.isPending}
               onClick={async () => setClaim(await issueClaim.mutateAsync())}
             >
-              {ru.app.issueClaimCode}
+              {t.member.issueClaimCode}
             </ActionRow>
           )}
         </Section>
@@ -183,7 +189,7 @@ export function MemberScreen({ userId }: { userId: number }) {
             disabled={setAdmin.isPending}
             onClick={() => void setAdmin.mutateAsync(!user.isAdmin)}
           >
-            {user.isAdmin ? ru.app.removeAdmin : ru.app.makeAdmin}
+            {user.isAdmin ? t.member.removeAdmin : t.member.makeAdmin}
           </ActionRow>
         </Section>
       )}

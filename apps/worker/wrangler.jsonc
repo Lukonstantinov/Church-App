@@ -11,10 +11,12 @@
     "directory": "../webapp/dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/bot/*", "/health"],
+    "run_worker_first": ["/api/*", "/bot/*", "/media/*", "/health"],
   },
   "observability": { "enabled": true },
   "vars": { "ENVIRONMENT": "development" },
+  // Every 5 min: send queued bot messages. Hourly: create meetings, roll-call reminders.
+  "triggers": { "crons": ["*/5 * * * *", "7 * * * *"] },
   "d1_databases": [
     {
       "binding": "DB",
@@ -27,6 +29,7 @@
     "staging": {
       "name": "church-app-staging",
       "vars": { "ENVIRONMENT": "staging" },
+      "triggers": { "crons": ["*/5 * * * *", "7 * * * *"] },
       "d1_databases": [
         {
           "binding": "DB",
@@ -39,6 +42,7 @@
     "production": {
       "name": "church-app",
       "vars": { "ENVIRONMENT": "production" },
+      "triggers": { "crons": ["*/5 * * * *", "7 * * * *"] },
       "d1_databases": [
         {
           "binding": "DB",

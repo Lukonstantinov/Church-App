@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { signInitData } from '../src/auth/initData';
+import { deriveToken } from '../src/lib/crypto';
 import { app } from '../src/app';
 
 export interface FakeTgUser {
@@ -114,11 +115,15 @@ function tgFrom(user: FakeTgUser) {
   };
 }
 
+/** Header value Telegram would send for the configured secret. */
+export const webhookHeader = () => deriveToken(env.WEBHOOK_SECRET, 'webhook');
+export const setupHeader = () => deriveToken(env.WEBHOOK_SECRET, 'setup');
+
 async function postUpdate(update: Record<string, unknown>) {
   return api('/bot/webhook', {
     method: 'POST',
     json: { update_id: ++updateSeq, ...update },
-    headers: { 'X-Telegram-Bot-Api-Secret-Token': env.WEBHOOK_SECRET },
+    headers: { 'X-Telegram-Bot-Api-Secret-Token': await webhookHeader() },
   });
 }
 

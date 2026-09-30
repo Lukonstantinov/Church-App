@@ -38,8 +38,8 @@ Add these under **Settings → Secrets and variables → Actions → New reposit
 | `CLOUDFLARE_ACCOUNT_ID`  | account ID from step 2                                                  |
 | `BOT_TOKEN_STAGING`      | test bot token                                                          |
 | `BOT_TOKEN_PROD`         | real bot token                                                          |
-| `WEBHOOK_SECRET_STAGING` | any random string, 32+ letters and digits                               |
-| `WEBHOOK_SECRET_PROD`    | a different random string, 32+ letters and digits                       |
+| `WEBHOOK_SECRET_STAGING` | any random string of 32+ characters                                     |
+| `WEBHOOK_SECRET_PROD`    | a different random string of 32+ characters                             |
 | `ADMIN_TELEGRAM_IDS`     | comma-separated Telegram IDs of church admins, e.g. `12345678,87654321` |
 
 Optional **variables** (same page, _Variables_ tab): `APP_URL_STAGING` / `APP_URL_PROD`, only if you use a custom domain.
