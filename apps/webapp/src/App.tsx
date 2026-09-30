@@ -16,6 +16,9 @@ import { MemberHome } from './screens/MemberHome';
 import { MemberScreen } from './screens/MemberScreen';
 import { NewMeeting } from './screens/NewMeeting';
 import { NewTransaction } from './screens/NewTransaction';
+import { EventForm } from './screens/EventForm';
+import { EventScreen } from './screens/EventScreen';
+import { GroupSettings } from './screens/GroupSettings';
 import { RollCall } from './screens/RollCall';
 import { Schedule } from './screens/Schedule';
 
@@ -43,6 +46,14 @@ function Router({ me }: { me: MeResponse }) {
       return me.user.isAdmin ? <ChurchSettings /> : null;
     case 'newTransaction':
       return <NewTransaction groupId={route.groupId} kind={route.kind} />;
+    case 'event':
+      return <EventScreen key={route.eventId} eventId={route.eventId} />;
+    case 'eventForm':
+      return (
+        <EventForm key={route.eventId ?? 'new'} groupId={route.groupId} eventId={route.eventId} />
+      );
+    case 'groupSettings':
+      return <GroupSettings key={route.groupId} groupId={route.groupId} />;
     case 'announcements':
       return <Announcements key={route.groupId} groupId={route.groupId} />;
   }

@@ -18,16 +18,27 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { usePast, useUpcoming, useUpdateMeeting } from '../lib/queries';
+import { useEvents, usePast, useUpcoming, useUpdateMeeting } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
 import { canRollNow } from './Overview';
+import { storage } from '../lib/storage';
+import { EventCard } from '../components/EventCard';
 
 type View = 'upcoming' | 'past';
+type Kind = 'meetings' | 'events';
+const KIND_KEY = 'church.calendarKind';
 
 export function Meetings({ groups, active }: { groups: GroupSummary[]; active: GroupSummary }) {
   const { push } = useNav();
   const t = useT();
   const [view, setView] = useState<View>('upcoming');
+  const [kind, setKindState] = useState<Kind>(() =>
+    storage.get(KIND_KEY) === 'events' ? 'events' : 'meetings',
+  );
+  const setKind = (k: Kind) => {
+    setKindState(k);
+    storage.set(KIND_KEY, k);
+  };
   const [limit, setLimit] = useState(20);
   const [sheetFor, setSheetFor] = useState<MeetingRow | null>(null);
 
@@ -39,70 +50,91 @@ export function Meetings({ groups, active }: { groups: GroupSummary[]; active: G
     <Screen tabs>
       <GroupSwitcher groups={groups} active={active} subtitle={t.nav.meetings} />
 
-      <div className="flex gap-2">
-        <Button
-          small
-          variant="glass"
-          onClick={() => push({ name: 'schedule', groupId: active.id })}
-        >
-          <IconRepeat size={16} /> {t.meetings.schedule}
-        </Button>
-        <Button
-          small
-          variant="glass"
-          onClick={() => push({ name: 'newMeeting', groupId: active.id })}
-        >
-          <IconPlus size={16} /> {t.meetings.newShort}
-        </Button>
-      </div>
+      <KindSwitch kind={kind} onChange={setKind} />
 
-      <Segmented
-        value={view}
-        onChange={setView}
-        options={[
-          { key: 'upcoming', label: t.meetings.upcoming },
-          { key: 'past', label: t.meetings.past },
-        ]}
-      />
+      {kind === 'meetings' ? (
+        <>
+          <div className="flex gap-2">
+            <Button
+              small
+              variant="glass"
+              onClick={() => push({ name: 'schedule', groupId: active.id })}
+            >
+              <IconRepeat size={16} /> {t.meetings.schedule}
+            </Button>
+            <Button
+              small
+              variant="glass"
+              onClick={() => push({ name: 'newMeeting', groupId: active.id })}
+            >
+              <IconPlus size={16} /> {t.meetings.newShort}
+            </Button>
+          </div>
 
-      {list.isPending ? (
-        <div className="flex flex-col gap-2">
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-[76px] w-full" />
-          ))}
-        </div>
-      ) : (list.data ?? []).length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<IconCalendar size={26} />}
-            title={view === 'upcoming' ? t.meetings.noUpcoming : t.meetings.noPast}
-            action={
-              view === 'upcoming' ? (
-                <Button onClick={() => push({ name: 'schedule', groupId: active.id })}>
-                  {t.overview.setupSchedule}
-                </Button>
-              ) : undefined
-            }
-          >
-            {view === 'upcoming' ? t.meetings.noUpcomingText : t.meetings.noPastText}
-          </EmptyState>
-        </Card>
+          <Segmented
+            value={view}
+            onChange={setView}
+            options={[
+              { key: 'upcoming', label: t.meetings.upcoming },
+              { key: 'past', label: t.meetings.past },
+            ]}
+          />
+
+          {list.isPending ? (
+            <div className="flex flex-col gap-2">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-[76px] w-full" />
+              ))}
+            </div>
+          ) : (list.data ?? []).length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={<IconCalendar size={26} />}
+                title={view === 'upcoming' ? t.meetings.noUpcoming : t.meetings.noPast}
+                action={
+                  view === 'upcoming' ? (
+                    <Button onClick={() => push({ name: 'schedule', groupId: active.id })}>
+                      {t.overview.setupSchedule}
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {view === 'upcoming' ? t.meetings.noUpcomingText : t.meetings.noPastText}
+              </EmptyState>
+            </Card>
+          ) : (
+            <MeetingList
+              meetings={list.data ?? []}
+              past={view === 'past'}
+              onOpen={(m) =>
+                view === 'past' && m.status !== 'cancelled'
+                  ? push({ name: 'roll', meetingId: m.id })
+                  : setSheetFor(m)
+              }
+            />
+          )}
+
+          {view === 'past' && (past.data?.length ?? 0) >= limit && (
+            <Button variant="glass" onClick={() => setLimit((n) => n + 20)}>
+              {t.meetings.showMore}
+            </Button>
+          )}
+        </>
       ) : (
-        <MeetingList
-          meetings={list.data ?? []}
-          past={view === 'past'}
-          onOpen={(m) =>
-            view === 'past' && m.status !== 'cancelled'
-              ? push({ name: 'roll', meetingId: m.id })
-              : setSheetFor(m)
-          }
-        />
-      )}
-
-      {view === 'past' && (past.data?.length ?? 0) >= limit && (
-        <Button variant="glass" onClick={() => setLimit((n) => n + 20)}>
-          {t.meetings.showMore}
-        </Button>
+        <>
+          <Button onClick={() => push({ name: 'eventForm', groupId: active.id })}>
+            <IconPlus size={18} /> {t.events.new}
+          </Button>
+          <Segmented
+            value={view}
+            onChange={setView}
+            options={[
+              { key: 'upcoming', label: t.meetings.upcoming },
+              { key: 'past', label: t.meetings.past },
+            ]}
+          />
+          <EventsPanel groupId={active.id} view={view} />
+        </>
       )}
 
       <MeetingSheet meeting={sheetFor} onClose={() => setSheetFor(null)} />
@@ -259,5 +291,57 @@ function MeetingSheet({ meeting, onClose }: { meeting: MeetingRow | null; onClos
       )}
       <SheetOption label={t.common.close} onClick={onClose} />
     </Sheet>
+  );
+}
+
+/** Big two-way switch at the top of the tab: regular meetings or one-off events. */
+function KindSwitch({ kind, onChange }: { kind: Kind; onChange: (k: Kind) => void }) {
+  const t = useT();
+  const item = (k: Kind, label: string) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={kind === k}
+      onClick={() => onChange(k)}
+      className={`flex-1 pb-2 text-[20px] font-bold tracking-tight transition-colors ${
+        kind === k
+          ? 'border-b-[3px] border-[var(--brand)] text-text'
+          : 'border-b-[3px] border-transparent text-hint'
+      }`}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div className="flex gap-4 px-1" role="tablist">
+      {item('meetings', t.events.tabMeetings)}
+      {item('events', t.events.tabEvents)}
+    </div>
+  );
+}
+
+function EventsPanel({ groupId, view }: { groupId: number; view: View }) {
+  const t = useT();
+  const { push } = useNav();
+  const q = useEvents(groupId, view);
+  if (q.isPending) return <Skeleton className="h-40 w-full" />;
+  const list = q.data ?? [];
+  if (list.length === 0)
+    return (
+      <Card>
+        <EmptyState
+          icon={<IconCalendar size={26} />}
+          title={view === 'upcoming' ? t.events.noUpcoming : t.events.noPast}
+        >
+          {view === 'upcoming' ? t.events.noUpcomingText : undefined}
+        </EmptyState>
+      </Card>
+    );
+  return (
+    <div className="flex flex-col gap-3">
+      {list.map((e) => (
+        <EventCard key={e.id} e={e} onClick={() => push({ name: 'event', eventId: e.id })} />
+      ))}
+    </div>
   );
 }

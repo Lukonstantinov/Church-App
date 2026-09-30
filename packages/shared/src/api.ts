@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BRAND_COLOR_KEYS, type BrandColor } from './brand';
+import { chatUrlSchema } from './events';
 import { LOCALES, type Locale } from './i18n/locales';
 
 /** Roles within a single group. Church-wide admin is a separate flag on the user. */
@@ -12,6 +13,8 @@ export type MembershipStatus = z.infer<typeof membershipStatusSchema>;
 export interface MeMembership {
   groupId: number;
   groupName: string;
+  /** Group's Telegram chat (active members only). */
+  chatUrl?: string | null;
   role: GroupRole;
   status: MembershipStatus;
 }
@@ -84,6 +87,8 @@ export interface GroupDetail extends GroupSummary {
   /** Only present for leaders/admins. */
   inviteLink: string | null;
   canManage: boolean;
+  /** The group's Telegram chat, if linked. */
+  chatUrl: string | null;
 }
 
 const name = z.string().trim().min(1).max(64);
@@ -104,6 +109,7 @@ export type CreateGroupInput = z.input<typeof createGroupSchema>;
 export const updateGroupSchema = z.object({
   name: name.optional(),
   description: optionalText(300).optional(),
+  chatUrl: chatUrlSchema.optional(),
 });
 export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 

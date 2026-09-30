@@ -70,6 +70,7 @@ export async function loadMe(db: Db, user: User): Promise<MeResponse> {
       groupName: groups.name,
       role: memberships.role,
       status: memberships.status,
+      chatUrl: groups.chatUrl,
     })
     .from(memberships)
     .innerJoin(groups, eq(groups.id, memberships.groupId))
@@ -89,7 +90,9 @@ export async function loadMe(db: Db, user: User): Promise<MeResponse> {
       privacyAccepted: user.privacyAcceptedAt !== null,
       locale: localeOf(user, church.defaultLocale),
     },
-    memberships: rows.filter((r) => r.status === 'active' || r.status === 'pending'),
+    memberships: rows
+      .filter((r) => r.status === 'active' || r.status === 'pending')
+      .map((r) => ({ ...r, chatUrl: r.status === 'active' ? r.chatUrl : null })),
   };
 }
 

@@ -144,6 +144,7 @@ groupRoutes.get('/:id', async (c) => {
   const detail: GroupDetail = {
     ...summary!,
     canManage,
+    chatUrl: group.chatUrl,
     inviteLink: canManage ? inviteLink(await botUsername(c.env), group.inviteCode) : null,
   };
   return c.json(detail);

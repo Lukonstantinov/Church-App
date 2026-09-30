@@ -167,3 +167,12 @@ export const IconCoins = make(
     <path d="M10 16.2c.9.2 1.9.3 3 .3 2.8 0 5-1.1 5-2.5v-4M14 11.8c2.3-.2 4-1.2 4-2.3" />
   </>,
 );
+export const IconMapPin = make(
+  <>
+    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0113 0c0 5.4-6.5 11-6.5 11z" />
+    <circle cx="12" cy="10" r="2.3" />
+  </>,
+);
+export const IconLink = make(
+  <path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" />,
+);

@@ -5,7 +5,7 @@ import { Avatar } from '../components/Avatar';
 import { MyDuesCard } from '../components/MyDuesCard';
 import { BrandHeader } from '../components/BrandHeader';
 import { GroupDot } from '../components/GroupSwitcher';
-import { IconCalendar, IconUsers } from '../components/icons';
+import { IconCalendar, IconTelegram, IconUsers } from '../components/icons';
 import {
   Badge,
   Card,
@@ -20,7 +20,9 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useMyAnnouncements, useMyAttendance, useMyFinance } from '../lib/queries';
+import { useMyAnnouncements, useMyAttendance, useMyEvents, useMyFinance } from '../lib/queries';
+import { openTelegramLink } from '../lib/telegram';
+import { EventCard } from '../components/EventCard';
 
 /** Regular members: their next meeting, own attendance and announcements. */
 export function MemberHome({ me }: { me: MeResponse }) {
@@ -33,6 +35,8 @@ export function MemberHome({ me }: { me: MeResponse }) {
   const att = useMyAttendance(active.length > 0);
   const news = useMyAnnouncements(active.length > 0);
   const finance = useMyFinance(active.length > 0);
+  const events = useMyEvents(active.length > 0);
+  const chats = active.filter((m) => m.chatUrl);
 
   return (
     <Screen>
@@ -96,6 +100,40 @@ export function MemberHome({ me }: { me: MeResponse }) {
           <AttendanceSummary data={g} />
         </div>
       ))}
+
+      {(events.data ?? []).length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+            {t.events.upcomingOnHome}
+          </h2>
+          {events.data!.map((e) => (
+            <EventCard
+              key={e.id}
+              e={e}
+              showGroup={active.length > 1}
+              onClick={() => push({ name: 'event', eventId: e.id })}
+            />
+          ))}
+        </section>
+      )}
+
+      {chats.length > 0 && (
+        <Section>
+          {chats.map((m) => (
+            <Row
+              key={m.groupId}
+              before={
+                <span className="brand-gradient flex h-9 w-9 items-center justify-center rounded-xl text-white">
+                  <IconTelegram size={19} />
+                </span>
+              }
+              title={t.groups.openGroupChat}
+              subtitle={chats.length > 1 ? m.groupName : undefined}
+              onClick={() => openTelegramLink(m.chatUrl!)}
+            />
+          ))}
+        </Section>
+      )}
 
       {finance.data?.map((g) => (
         <MyDuesCard key={g.groupId} g={g} showGroup={active.length > 1} />

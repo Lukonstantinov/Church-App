@@ -67,6 +67,8 @@ export const groups = sqliteTable('groups', {
   membersSeeTreasury: integer('members_see_treasury', { mode: 'boolean' }).notNull().default(false),
   /** Expected monthly dues per paying member, in cents of the church currency. */
   monthlyFeeCents: integer('monthly_fee_cents').notNull().default(500),
+  /** Link to the group's Telegram chat (t.me/…), shown to members. */
+  chatUrl: text('chat_url'),
   archivedAt: text('archived_at'),
   createdAt: createdAt(),
 });
@@ -332,3 +334,106 @@ export const transactions = sqliteTable(
 );
 
 export type Transaction = typeof transactions.$inferSelect;
+
+/**
+ * One-off happenings (camp, trip, concert). Every section beyond title and time is
+ * optional and switched on per event: gallery, RSVP, duty roles, cost tracking.
+ */
+export const events = sqliteTable(
+  'events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    title: text('title').notNull(),
+    description: text('description'),
+    startsAt: text('starts_at').notNull(),
+    endsAt: text('ends_at'),
+    location: text('location'),
+    coverMediaId: integer('cover_media_id').references(() => media.id),
+    hasGallery: integer('has_gallery', { mode: 'boolean' }).notNull().default(false),
+    hasRsvp: integer('has_rsvp', { mode: 'boolean' }).notNull().default(false),
+    hasDuties: integer('has_duties', { mode: 'boolean' }).notNull().default(false),
+    hasCost: integer('has_cost', { mode: 'boolean' }).notNull().default(false),
+    /** Per person, when the event costs money. */
+    priceCents: integer('price_cents'),
+    /** Link to a Telegram chat for this event (t.me/…). */
+    chatUrl: text('chat_url'),
+    status: text('status', { enum: ['scheduled', 'cancelled'] })
+      .notNull()
+      .default('scheduled'),
+    createdBy: integer('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('events_group_starts').on(t.groupId, t.startsAt),
+    check('events_status', sql`${t.status} IN ('scheduled', 'cancelled')`),
+  ],
+);
+
+export const eventPhotos = sqliteTable(
+  'event_photos',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id),
+    mediaId: integer('media_id')
+      .notNull()
+      .references(() => media.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index('event_photos_event').on(t.eventId)],
+);
+
+export const eventRsvps = sqliteTable(
+  'event_rsvps',
+  {
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    status: text('status', { enum: ['going', 'not_going'] }).notNull(),
+    updatedAt: text('updated_at').notNull().default(now),
+  },
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.userId] }),
+    check('event_rsvps_status', sql`${t.status} IN ('going', 'not_going')`),
+  ],
+);
+
+/** Duties for an event ("Worship", "Food", "Photos"), each with people assigned. */
+export const eventRoles = sqliteTable(
+  'event_roles',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id),
+    name: text('name').notNull(),
+    slots: integer('slots').notNull().default(1),
+    sort: integer('sort').notNull().default(0),
+  },
+  (t) => [index('event_roles_event').on(t.eventId)],
+);
+
+export const eventRoleAssignees = sqliteTable(
+  'event_role_assignees',
+  {
+    roleId: integer('role_id')
+      .notNull()
+      .references(() => eventRoles.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+  },
+  (t) => [
+    primaryKey({ columns: [t.roleId, t.userId] }),
+    index('event_role_assignees_user').on(t.userId),
+  ],
+);
+
+export type EventRow = typeof events.$inferSelect;

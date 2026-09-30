@@ -23,6 +23,9 @@ export type Route =
   | { name: 'settings' }
   | { name: 'announcements'; groupId: number }
   | { name: 'newTransaction'; groupId: number; kind: 'income' | 'expense' | 'donation' }
+  | { name: 'event'; eventId: number }
+  | { name: 'eventForm'; groupId: number; eventId?: number }
+  | { name: 'groupSettings'; groupId: number }
   | { name: 'addOffline'; groupId: number };
 
 /** Return false to cancel the navigation (e.g. the user chose to keep editing). */
@@ -31,6 +34,8 @@ type BackGuard = () => boolean | Promise<boolean>;
 interface Nav {
   route: Route;
   push: (r: Route) => void;
+  /** Swap the current screen for another (e.g. form → the thing it created). */
+  replace: (r: Route) => void;
   back: () => void;
   tab: Tab;
   setTab: (t: Tab) => void;
@@ -60,6 +65,12 @@ export function NavProvider({ children, initial }: { children: ReactNode; initia
 
   const push = useCallback((r: Route) => {
     setStack((s) => [...s, r]);
+    window.scrollTo(0, 0);
+  }, []);
+
+  const replace = useCallback((r: Route) => {
+    guard.current = null;
+    setStack((s) => [...s.slice(0, -1), r]);
     window.scrollTo(0, 0);
   }, []);
 
@@ -95,6 +106,7 @@ export function NavProvider({ children, initial }: { children: ReactNode; initia
     () => ({
       route: stack[stack.length - 1]!,
       push,
+      replace,
       back,
       tab,
       setTab,
@@ -102,7 +114,7 @@ export function NavProvider({ children, initial }: { children: ReactNode; initia
       setActiveGroupId,
       setBackGuard,
     }),
-    [stack, push, back, tab, activeGroupId, setActiveGroupId, setBackGuard],
+    [stack, push, replace, back, tab, activeGroupId, setActiveGroupId, setBackGuard],
   );
   return <NavContext.Provider value={value}>{children}</NavContext.Provider>;
 }

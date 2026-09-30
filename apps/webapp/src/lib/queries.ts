@@ -27,6 +27,13 @@ import type {
   UpdateUserInput,
 } from '@church/shared';
 import type {
+  CreateEventInput,
+  EventDetail,
+  EventSummary,
+  RoleInput,
+  RsvpStatus,
+  UpdateEventInput,
+  UpdateGroupInput,
   CreateTransactionInput,
   DuesSheet,
   MyFinanceGroup,
@@ -58,6 +65,9 @@ export const keys = {
     ['groups', groupId, 'treasury', 'tx', filter] as const,
   dues: (groupId: number, year: number) => ['groups', groupId, 'treasury', 'dues', year] as const,
   myFinance: ['me', 'finance'] as const,
+  events: (groupId: number, scope: string) => ['groups', groupId, 'events', scope] as const,
+  event: (id: number) => ['events', id] as const,
+  myEvents: ['me', 'events'] as const,
 };
 
 export function useMe() {
@@ -493,5 +503,113 @@ export function useMyFinance(enabled = true) {
     queryKey: keys.myFinance,
     queryFn: () => apiFetch<MyFinanceGroup[]>('/me/finance'),
     enabled,
+  });
+}
+
+// ---------- events ----------
+
+export function useEvents(groupId: number, scope: 'upcoming' | 'past', enabled = true) {
+  return useQuery({
+    queryKey: keys.events(groupId, scope),
+    queryFn: () => apiFetch<EventSummary[]>(`/groups/${groupId}/events?scope=${scope}`),
+    enabled,
+  });
+}
+
+export function useEvent(id: number, enabled = true) {
+  return useQuery({
+    queryKey: keys.event(id),
+    queryFn: () => apiFetch<EventDetail>(`/events/${id}`),
+    enabled,
+  });
+}
+
+export function useMyEvents(enabled = true) {
+  return useQuery({
+    queryKey: keys.myEvents,
+    queryFn: () => apiFetch<EventSummary[]>('/me/events'),
+    enabled,
+  });
+}
+
+/** After any event change: store the fresh detail, refresh lists (and money, if touched). */
+function useEventSaved() {
+  const qc = useQueryClient();
+  return (e: EventDetail) => {
+    qc.setQueryData(keys.event(e.id), e);
+    void qc.invalidateQueries({ queryKey: ['groups', e.groupId, 'events'] });
+    void qc.invalidateQueries({ queryKey: keys.myEvents });
+    void qc.invalidateQueries({ queryKey: keys.treasury(e.groupId) });
+  };
+}
+
+function useEventMutation<I>(request: (input: I) => Promise<EventDetail>) {
+  const saved = useEventSaved();
+  return useMutation({ mutationFn: request, onSuccess: saved });
+}
+
+const send = (method: string, body?: unknown): RequestInit => ({
+  method,
+  body: body === undefined ? undefined : JSON.stringify(body),
+});
+
+export function useCreateEvent(groupId: number) {
+  return useEventMutation((input: CreateEventInput) =>
+    apiFetch<EventDetail>(`/groups/${groupId}/events`, send('POST', input)),
+  );
+}
+
+export function useUpdateEvent(id: number) {
+  return useEventMutation((input: UpdateEventInput) =>
+    apiFetch<EventDetail>(`/events/${id}`, send('PATCH', input)),
+  );
+}
+
+export function useSetRoles(id: number) {
+  return useEventMutation((roles: RoleInput[]) =>
+    apiFetch<EventDetail>(`/events/${id}/roles`, send('PUT', { roles })),
+  );
+}
+
+export function useRsvp(id: number) {
+  return useEventMutation((input: { status: RsvpStatus | null; userId?: number }) =>
+    apiFetch<EventDetail>(`/events/${id}/rsvp`, send('PUT', input)),
+  );
+}
+
+export function useAddPhotos(id: number) {
+  return useEventMutation((mediaIds: number[]) =>
+    apiFetch<EventDetail>(`/events/${id}/photos`, send('POST', { mediaIds })),
+  );
+}
+
+export function useDeletePhoto(id: number) {
+  return useEventMutation((photoId: number) =>
+    apiFetch<EventDetail>(`/events/${id}/photos/${photoId}`, send('DELETE')),
+  );
+}
+
+export function useEventPayment(id: number) {
+  return useEventMutation((input: { userId: number; amountCents?: number }) =>
+    apiFetch<EventDetail>(`/events/${id}/payments`, send('POST', input)),
+  );
+}
+
+export function useEventExpense(id: number) {
+  return useEventMutation(
+    (input: { amountCents: number; note?: string | null; receiptMediaId?: number | null }) =>
+      apiFetch<EventDetail>(`/events/${id}/expenses`, send('POST', input)),
+  );
+}
+
+export function useUpdateGroup(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateGroupInput) => apiFetch(`/groups/${groupId}`, send('PATCH', input)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.group(groupId) });
+      void qc.invalidateQueries({ queryKey: keys.groups });
+      void qc.invalidateQueries({ queryKey: keys.me });
+    },
   });
 }

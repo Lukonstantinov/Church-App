@@ -61,6 +61,19 @@ export function More({ groups }: { groups: GroupSummary[] }) {
         </Section>
       )}
 
+      {groups.length > 0 && (
+        <Section title={t.groups.groupSettings}>
+          {groups.map((g) => (
+            <Row
+              key={g.id}
+              before={<GroupDot id={g.id} size={12} />}
+              title={g.name}
+              onClick={() => push({ name: 'groupSettings', groupId: g.id })}
+            />
+          ))}
+        </Section>
+      )}
+
       {user.isAdmin && (
         <Section title={t.groups.churchGroups}>
           {groups.map((g) => (

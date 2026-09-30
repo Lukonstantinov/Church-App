@@ -103,3 +103,12 @@ export function shareToTelegram(text: string): void {
   if (tg?.openTelegramLink) tg.openTelegramLink(url);
   else window.open(url, '_blank');
 }
+
+/** Opens a t.me link inside Telegram (chat, channel, invite). */
+export function openTelegramLink(url: string): void {
+  const tg = webApp();
+  if (tg?.openTelegramLink && /^https:\/\/(t\.me|telegram\.me)\//.test(url))
+    tg.openTelegramLink(url);
+  else if (tg?.openLink) tg.openLink(url);
+  else window.open(url, '_blank');
+}
