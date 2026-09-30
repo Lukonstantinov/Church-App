@@ -19,9 +19,7 @@ scripts/       Deploy and development helpers
 
 1. In **@BotFather**, send `/newbot` twice: a **test bot** for staging and the **real bot** for production. Save both tokens.
 2. Get your numeric Telegram ID from **@userinfobot**, plus the ID of a second admin you trust.
-3. After the first deploy (step 4), enable Mini App links for each bot:
-   @BotFather → `/mybots` → your bot → **Bot Settings → Configure Mini App → Enable Mini App**.
-   Use the Worker URL shown in the deploy summary.
+3. _Optional, needed later for `?startapp=` deep links:_ after the first deploy, in @BotFather → `/mybots` → your bot → **Bot Settings → Configure Mini App → Enable Mini App**, and paste that bot's own Worker URL (staging URL for the test bot, production URL for the real bot). The menu button and "Open app" button already work without this.
 
 ### 2. Cloudflare (free plan)
 
