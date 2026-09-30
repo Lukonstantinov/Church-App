@@ -1,0 +1,44 @@
+@import 'tailwindcss';
+
+/*
+ * Colors come from Telegram's theme (set by telegram-web-app.js on <html>),
+ * with fallbacks for a normal browser during development.
+ */
+@theme {
+  --color-bg: var(--tg-theme-bg-color, #ffffff);
+  --color-bg-secondary: var(--tg-theme-secondary-bg-color, #f1f1f4);
+  --color-section: var(--tg-theme-section-bg-color, #ffffff);
+  --color-text: var(--tg-theme-text-color, #111111);
+  --color-hint: var(--tg-theme-hint-color, #8a8a8e);
+  --color-link: var(--tg-theme-link-color, #2f6fde);
+  --color-accent: var(--tg-theme-accent-text-color, #2f6fde);
+  --color-button: var(--tg-theme-button-color, #2f6fde);
+  --color-button-text: var(--tg-theme-button-text-color, #ffffff);
+  --color-destructive: var(--tg-theme-destructive-text-color, #e53935);
+  --color-section-header: var(--tg-theme-section-header-text-color, #6d6d72);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([style*='--tg-theme-bg-color']) {
+    --tg-theme-bg-color: #17212b;
+    --tg-theme-secondary-bg-color: #0e1621;
+    --tg-theme-section-bg-color: #17212b;
+    --tg-theme-text-color: #f5f5f5;
+    --tg-theme-hint-color: #708499;
+  }
+}
+
+html,
+body {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+}

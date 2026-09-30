@@ -1,0 +1,104 @@
+name: Deploy
+
+# Push to master → staging. Production only via "Run workflow" (Actions tab).
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+env:
+  TARGET: ${{ inputs.environment || 'staging' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BOT_TOKEN: ${{ (inputs.environment || 'staging') == 'production' && secrets.BOT_TOKEN_PROD || secrets.BOT_TOKEN_STAGING }}
+      WEBHOOK_SECRET: ${{ (inputs.environment || 'staging') == 'production' && secrets.WEBHOOK_SECRET_PROD || secrets.WEBHOOK_SECRET_STAGING }}
+      ADMIN_TELEGRAM_IDS: ${{ secrets.ADMIN_TELEGRAM_IDS }}
+      APP_URL: ${{ (inputs.environment || 'staging') == 'production' && vars.APP_URL_PROD || vars.APP_URL_STAGING }}
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          missing=""
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID BOT_TOKEN WEBHOOK_SECRET ADMIN_TELEGRAM_IDS; do
+            [ -z "${!v}" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::Deploy to $TARGET skipped. Missing secrets:$missing (see README → Setup)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.config.outputs.ready == 'true'
+      - uses: pnpm/action-setup@v4
+        if: steps.config.outputs.ready == 'true'
+      - uses: actions/setup-node@v5
+        if: steps.config.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install, check, test, build
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm test
+          pnpm build
+
+      - name: Ensure D1 database
+        if: steps.config.outputs.ready == 'true'
+        run: node scripts/ensure-d1.mjs "$TARGET"
+
+      - name: Apply database migrations
+        if: steps.config.outputs.ready == 'true'
+        working-directory: apps/worker
+        run: pnpm exec wrangler d1 migrations apply DB --remote --env "$TARGET"
+
+      - name: Deploy worker
+        id: deploy
+        if: steps.config.outputs.ready == 'true'
+        working-directory: apps/worker
+        run: |
+          pnpm exec wrangler deploy --env "$TARGET" | tee deploy.log
+          url="${APP_URL:-$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.log | head -1)}"
+          if [ -z "$url" ]; then echo "::error::Could not determine deployment URL"; exit 1; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Upload worker secrets
+        if: steps.config.outputs.ready == 'true'
+        working-directory: apps/worker
+        run: |
+          umask 077
+          node -e 'const e=process.env; const s={BOT_TOKEN:e.BOT_TOKEN, WEBHOOK_SECRET:e.WEBHOOK_SECRET, ADMIN_TELEGRAM_IDS:e.ADMIN_TELEGRAM_IDS}; if (e.APP_URL) s.APP_URL=e.APP_URL; require("fs").writeFileSync("secrets.json", JSON.stringify(s))'
+          pnpm exec wrangler secret bulk secrets.json --env "$TARGET"
+          rm -f secrets.json
+
+      - name: Register Telegram webhook, commands and menu button
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          url="${{ steps.deploy.outputs.url }}"
+          for i in 1 2 3 4 5; do
+            if curl -fsS -X POST "$url/bot/setup" -H "X-Setup-Secret: $WEBHOOK_SECRET"; then echo; break; fi
+            echo "setup attempt $i failed, retrying in $((i * 5))s"; sleep $((i * 5))
+            [ "$i" = 5 ] && exit 1
+          done
+          curl -fsS "$url/health?deep=1"
+          echo "### Deployed to $TARGET: $url" >> "$GITHUB_STEP_SUMMARY"
