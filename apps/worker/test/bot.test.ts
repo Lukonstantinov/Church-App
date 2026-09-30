@@ -67,4 +67,29 @@ describe('bot setup', () => {
       secret_token: env.WEBHOOK_SECRET,
     });
   });
+
+  it("reports which step failed and Telegram's reason", async () => {
+    mockTelegram();
+    const okFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+      if (url.pathname.endsWith('/setWebhook')) {
+        return new Response(
+          JSON.stringify({ ok: false, error_code: 401, description: 'Unauthorized' }),
+          { headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return okFetch(input, init);
+    });
+    const res = await api('/bot/setup', {
+      method: 'POST',
+      headers: { 'X-Setup-Secret': env.WEBHOOK_SECRET },
+    });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      ok: false,
+      failedStep: 'setWebhook',
+      telegramError: '401 Unauthorized',
+    });
+  });
 });

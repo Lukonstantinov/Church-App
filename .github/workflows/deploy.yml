@@ -96,9 +96,9 @@ jobs:
         run: |
           url="${{ steps.deploy.outputs.url }}"
           for i in 1 2 3 4 5; do
-            if curl -fsS -X POST "$url/bot/setup" -H "X-Setup-Secret: $WEBHOOK_SECRET"; then echo; break; fi
+            if curl -sS --fail-with-body -X POST "$url/bot/setup" -H "X-Setup-Secret: $WEBHOOK_SECRET"; then echo; break; fi
             echo "setup attempt $i failed, retrying in $((i * 5))s"; sleep $((i * 5))
             [ "$i" = 5 ] && exit 1
           done
-          curl -fsS "$url/health?deep=1"
+          curl -sS --fail-with-body "$url/health?deep=1"
           echo "### Deployed to $TARGET: $url" >> "$GITHUB_STEP_SUMMARY"
