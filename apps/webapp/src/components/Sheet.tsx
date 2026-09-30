@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 /** Bottom sheet: dims the page, slides up, closes on backdrop tap or Escape. */
 export function Sheet({
@@ -25,7 +26,9 @@ export function Sheet({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  // Portal to <body>: ancestors with backdrop-filter/transform (glass cards, page animations)
+  // create their own stacking context, which would trap the sheet under the tab bar.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end justify-center"
       role="dialog"
@@ -40,7 +43,8 @@ export function Sheet({
         {title && <h2 className="px-5 pb-2 pt-2 text-[19px] font-semibold">{title}</h2>}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
