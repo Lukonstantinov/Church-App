@@ -8,6 +8,8 @@ export interface Env {
   WEBHOOK_SECRET: string;
   /** Comma-separated Telegram user ids that are always church admins (secret). */
   ADMIN_TELEGRAM_IDS?: string;
+  /** Optional: bot @username without "@". Skips a getMe call; required for offline local dev. */
+  BOT_USERNAME?: string;
   /** Optional public URL override (custom domain). Defaults to the request origin. */
   APP_URL?: string;
 }

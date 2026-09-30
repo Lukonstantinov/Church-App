@@ -3,10 +3,7 @@ import { webhookCallback } from 'grammy';
 import type { Env } from '../env';
 import { createBot, defaultCommands } from './bot';
 import { timingSafeEqualStr } from '../lib/crypto';
-
-export function appUrlFor(env: Env, requestUrl: string): string {
-  return env.APP_URL ?? new URL(requestUrl).origin;
-}
+import { appUrlFor } from '../lib/telegram';
 
 export const botRoutes = new Hono<{ Bindings: Env }>();
 

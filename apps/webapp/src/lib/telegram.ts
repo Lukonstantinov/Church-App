@@ -43,3 +43,35 @@ export const haptic = {
   error: () => webApp()?.HapticFeedback?.notificationOccurred('error'),
   tap: () => webApp()?.HapticFeedback?.selectionChanged(),
 };
+
+/** Native confirm dialog inside Telegram; window.confirm elsewhere. */
+export function confirmDialog(message: string): Promise<boolean> {
+  const tg = webApp();
+  if (tg?.showConfirm) {
+    return new Promise((resolve) => {
+      try {
+        tg.showConfirm(message, (ok) => resolve(ok));
+      } catch {
+        resolve(window.confirm(message));
+      }
+    });
+  }
+  return Promise.resolve(window.confirm(message));
+}
+
+/** Opens Telegram's "share to chat" sheet for a link. */
+export function shareLink(url: string, text: string): void {
+  const share = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  const tg = webApp();
+  if (tg?.openTelegramLink) tg.openTelegramLink(share);
+  else window.open(share, '_blank');
+}
+
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}

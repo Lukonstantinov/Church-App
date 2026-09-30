@@ -97,3 +97,21 @@ export const auditLog = sqliteTable(
 export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type Membership = typeof memberships.$inferSelect;
+
+/**
+ * Bot messages with action buttons that were sent to several people (e.g. a join
+ * request card to every leader). Stored so all copies can be updated once one
+ * person acts.
+ */
+export const botCards = sqliteTable(
+  'bot_cards',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    kind: text('kind', { enum: ['join_request'] }).notNull(),
+    refId: integer('ref_id').notNull(),
+    chatId: integer('chat_id').notNull(),
+    messageId: integer('message_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('bot_cards_ref').on(t.kind, t.refId)],
+);

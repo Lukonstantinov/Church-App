@@ -17,6 +17,7 @@ export default defineConfig(async () => {
             BOT_TOKEN: '123456:TEST-TOKEN',
             WEBHOOK_SECRET: 'test-webhook-secret-0123456789abcdef',
             ADMIN_TELEGRAM_IDS: '1001',
+            BOT_USERNAME: '', // force the getMe path (ignores a local .dev.vars value)
             TEST_MIGRATIONS: migrations,
           },
         },

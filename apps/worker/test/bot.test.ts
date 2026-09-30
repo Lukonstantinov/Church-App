@@ -1,38 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { env } from 'cloudflare:workers';
-import { api } from './helpers';
-
-interface TgCall {
-  method: string;
-  body: Record<string, unknown>;
-}
-
-/** Stubs the Telegram Bot API and records every call the bot makes. */
-function mockTelegram(): TgCall[] {
-  const calls: TgCall[] = [];
-  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
-    const method = url.pathname.split('/').pop()!;
-    const body = init?.body ? JSON.parse(String(init.body)) : {};
-    calls.push({ method, body });
-    const result =
-      method === 'getMe'
-        ? {
-            id: 999,
-            is_bot: true,
-            first_name: 'TestBot',
-            username: 'test_bot',
-            can_join_groups: true,
-            can_read_all_group_messages: false,
-            supports_inline_queries: false,
-          }
-        : true;
-    return new Response(JSON.stringify({ ok: true, result }), {
-      headers: { 'content-type': 'application/json' },
-    });
-  });
-  return calls;
-}
+import { api, mockTelegram } from './helpers';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -51,11 +19,7 @@ const startUpdate = (fromId: number) => ({
 describe('bot webhook', () => {
   it('rejects updates without the secret token', async () => {
     const calls = mockTelegram();
-    const res = await api('/bot/webhook', {
-      method: 'POST',
-      body: JSON.stringify(startUpdate(3001)),
-      headers: { 'content-type': 'application/json' },
-    });
+    const res = await api('/bot/webhook', { method: 'POST', json: startUpdate(3001) });
     expect(res.status).toBe(401);
     expect(calls).toHaveLength(0);
   });
@@ -64,11 +28,8 @@ describe('bot webhook', () => {
     const calls = mockTelegram();
     const res = await api('/bot/webhook', {
       method: 'POST',
-      body: JSON.stringify(startUpdate(3002)),
-      headers: {
-        'content-type': 'application/json',
-        'X-Telegram-Bot-Api-Secret-Token': env.WEBHOOK_SECRET,
-      },
+      json: startUpdate(3002),
+      headers: { 'X-Telegram-Bot-Api-Secret-Token': env.WEBHOOK_SECRET },
     });
     expect(res.status).toBe(200);
     const send = calls.find((c) => c.method === 'sendMessage');

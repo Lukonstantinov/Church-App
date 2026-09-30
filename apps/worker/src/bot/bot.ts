@@ -1,12 +1,20 @@
+import { eq } from 'drizzle-orm';
 import { Bot, InlineKeyboard, type Context } from 'grammy';
-import type { UserFromGetMe } from 'grammy/types';
-import { ru } from '@church/shared';
+import { displayName, ru } from '@church/shared';
 import { adminTelegramIds, type Env } from '../env';
-import { getDb } from '../db/client';
-import { upsertTelegramUser } from '../lib/users';
-
-/** getMe result cached per isolate so every webhook call doesn't cost an extra API request. */
-let cachedBotInfo: { token: string; info: UserFromGetMe } | undefined;
+import { getDb, type Db } from '../db/client';
+import { memberships, type User } from '../db/schema';
+import { acceptPrivacy, upsertTelegramUser } from '../lib/users';
+import { getBotInfo } from '../lib/telegram';
+import { DEEP_LINK } from '../lib/codes';
+import {
+  announceJoinDecision,
+  decideJoin,
+  notifyJoinRequest,
+  requestJoin,
+} from '../lib/membership';
+import { canManageGroup } from '../lib/access';
+import { claimProfile } from '../lib/claim';
 
 export interface BotDeps {
   env: Env;
@@ -14,15 +22,10 @@ export interface BotDeps {
   appUrl: string;
 }
 
-export async function createBot({ env, appUrl }: BotDeps): Promise<Bot> {
-  const bot = new Bot(env.BOT_TOKEN, {
-    botInfo: cachedBotInfo?.token === env.BOT_TOKEN ? cachedBotInfo.info : undefined,
-  });
-  if (!bot.isInited()) {
-    await bot.init();
-    cachedBotInfo = { token: env.BOT_TOKEN, info: bot.botInfo };
-  }
+type Ctx = Context & { dbUser: User };
 
+export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
+  const bot = new Bot<Ctx>(env.BOT_TOKEN, { botInfo: await getBotInfo(env) });
   const db = getDb(env.DB);
   const admins = adminTelegramIds(env);
   const openAppKeyboard = () => new InlineKeyboard().webApp(ru.bot.openApp, appUrl);
@@ -30,18 +33,87 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot> {
   // Only private chats are handled for now; group chats come later.
   const pm = bot.chatType('private');
 
-  // Keep the stored profile fresh on every private interaction.
-  pm.use(async (ctx: Context, next) => {
-    if (ctx.from && !ctx.from.is_bot) await upsertTelegramUser(db, ctx.from, admins);
+  // Load (and create on first contact) the user behind every private update.
+  pm.use(async (ctx, next) => {
+    if (!ctx.from || ctx.from.is_bot) return;
+    ctx.dbUser = await upsertTelegramUser(db, ctx.from, admins);
     await next();
   });
 
+  /** Runs a deep-link payload (join/claim) for a user who has accepted the privacy notice. */
+  async function handlePayload(ctx: Ctx, payload: string) {
+    if (payload.startsWith(DEEP_LINK.join)) {
+      await handleJoin(ctx, db, payload.slice(DEEP_LINK.join.length));
+    } else if (payload.startsWith(DEEP_LINK.claim)) {
+      await handleClaim(ctx, db, payload.slice(DEEP_LINK.claim.length), openAppKeyboard);
+    } else {
+      await ctx.reply(ru.bot.welcome(ctx.dbUser.firstName), { reply_markup: openAppKeyboard() });
+    }
+  }
+
+  async function handleJoin(ctx: Ctx, database: Db, code: string) {
+    const result = await requestJoin(database, ctx.dbUser, code);
+    switch (result.kind) {
+      case 'invalid':
+        return void (await ctx.reply(ru.bot.inviteNotFound));
+      case 'already_member':
+        return void (await ctx.reply(ru.bot.joinAlreadyMember(result.group.name), {
+          reply_markup: openAppKeyboard(),
+        }));
+      case 'already_pending':
+        return void (await ctx.reply(ru.bot.joinAlreadyPending(result.group.name)));
+      case 'requested':
+        await ctx.reply(ru.bot.joinRequested(result.group.name));
+        await notifyJoinRequest(ctx.api, database, result.membership.id);
+    }
+  }
+
   pm.command('start', async (ctx) => {
-    await ctx.reply(ru.bot.welcome(ctx.from.first_name), { reply_markup: openAppKeyboard() });
+    const payload = ctx.match.trim();
+    const needsConsent = payload !== '' && ctx.dbUser.privacyAcceptedAt === null;
+    if (needsConsent) {
+      await ctx.reply(ru.bot.privacyNotice, {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard().text(ru.bot.privacyAccept, `pv:${payload}`.slice(0, 64)),
+      });
+      return;
+    }
+    await handlePayload(ctx, payload);
+  });
+
+  pm.callbackQuery(/^pv:(.*)$/, async (ctx) => {
+    await acceptPrivacy(db, ctx.dbUser.id);
+    ctx.dbUser.privacyAcceptedAt = new Date().toISOString();
+    await ctx.answerCallbackQuery({ text: ru.bot.privacyAccepted });
+    await ctx.editMessageReplyMarkup().catch(() => undefined);
+    await handlePayload(ctx, ctx.match[1] ?? '');
+  });
+
+  pm.callbackQuery(/^jr:([ar]):(\d+)$/, async (ctx) => {
+    const approve = ctx.match[1] === 'a';
+    const membershipId = Number(ctx.match[2]);
+    const membership = await db.query.memberships.findFirst({
+      where: eq(memberships.id, membershipId),
+    });
+    if (!membership || !(await canManageGroup(db, ctx.dbUser, membership.groupId))) {
+      return void (await ctx.answerCallbackQuery({ text: ru.bot.notAllowed, show_alert: true }));
+    }
+    const result = await decideJoin(db, ctx.dbUser, membershipId, approve);
+    if (result.kind !== 'ok') {
+      await ctx.answerCallbackQuery({ text: ru.bot.alreadyHandled });
+      await ctx.editMessageReplyMarkup().catch(() => undefined);
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    await announceJoinDecision(ctx.api, db, result, ctx.dbUser, appUrl);
   });
 
   pm.command('app', async (ctx) => {
     await ctx.reply(ru.bot.openApp, { reply_markup: openAppKeyboard() });
+  });
+
+  pm.command('privacy', async (ctx) => {
+    await ctx.reply(ru.bot.privacyInfo, { parse_mode: 'HTML' });
   });
 
   pm.command('help', async (ctx) => {
@@ -59,9 +131,20 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot> {
   return bot;
 }
 
+async function handleClaim(ctx: Ctx, db: Db, code: string, keyboard: () => InlineKeyboard) {
+  const result = await claimProfile(db, ctx.dbUser, code);
+  if (result.kind !== 'claimed') {
+    await ctx.reply(result.kind === 'invalid' ? ru.bot.claimInvalid : ru.bot.claimAccountInUse);
+    return;
+  }
+  ctx.dbUser = result.user;
+  await ctx.reply(ru.bot.claimDone(displayName(result.user)), { reply_markup: keyboard() });
+}
+
 /** Commands shown in the Telegram menu for everyone. Leader/admin scopes are added later. */
 export const defaultCommands = [
   { command: 'start', description: ru.commands.start },
   { command: 'app', description: ru.commands.app },
+  { command: 'privacy', description: ru.commands.privacy },
   { command: 'help', description: ru.commands.help },
 ];

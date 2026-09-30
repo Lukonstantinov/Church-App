@@ -32,15 +32,16 @@ describe('/api/me', () => {
     expect(body.memberships).toEqual([]);
   });
 
-  it('keeps name fresh and does not duplicate the user', async () => {
-    await api('/api/me', { user: { id: 2003, first_name: 'Old' } });
-    const res = await api('/api/me', { user: { id: 2003, first_name: 'New' } });
-    const body = (await res.json()) as MeResponse;
-    expect(body.user.firstName).toBe('New');
+  it('refreshes username but keeps the stored (leader-editable) name, without duplicating', async () => {
     const first = (await (
-      await api('/api/me', { user: { id: 2003, first_name: 'New' } })
+      await api('/api/me', { user: { id: 2003, first_name: 'Original', username: 'old' } })
     ).json()) as MeResponse;
-    expect(first.user.id).toBe(body.user.id);
+    const second = (await (
+      await api('/api/me', { user: { id: 2003, first_name: 'Nickname', username: 'new' } })
+    ).json()) as MeResponse;
+    expect(second.user.id).toBe(first.user.id);
+    expect(second.user.firstName).toBe('Original');
+    expect(second.user.username).toBe('new');
   });
 
   it('grants admin to ADMIN_TELEGRAM_IDS', async () => {
