@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit real values.
+BOT_TOKEN=123456:replace-with-your-dev-bot-token
+WEBHOOK_SECRET=replace-with-a-long-random-string
+ADMIN_TELEGRAM_IDS=12345678

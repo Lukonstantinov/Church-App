@@ -1,0 +1,52 @@
+// Cloudflare Worker config. Top level = local development (`wrangler dev`).
+// `env.staging` / `env.production` are deployed by .github/workflows/deploy.yml,
+// which fills in the real D1 database ids (scripts/ensure-d1.mjs).
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "church-app-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "../webapp/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/bot/*", "/health"],
+  },
+  "observability": { "enabled": true },
+  "vars": { "ENVIRONMENT": "development" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "church-app-dev",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "env": {
+    "staging": {
+      "name": "church-app-staging",
+      "vars": { "ENVIRONMENT": "staging" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "church-app-staging",
+          "database_id": "__D1_ID_STAGING__",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+    "production": {
+      "name": "church-app",
+      "vars": { "ENVIRONMENT": "production" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "church-app-production",
+          "database_id": "__D1_ID_PRODUCTION__",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+  },
+}

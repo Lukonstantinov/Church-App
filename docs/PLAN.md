@@ -6,17 +6,17 @@ A Telegram bot and Mini App for a church's youth groups. Leaders use it for roll
 
 ## 0. Decisions
 
-| Topic | Decision | Consequence |
-|---|---|---|
-| Scope | **One church, several groups** | Every group-owned table has `group_id`. Admins are church-wide; leaders and members are per group. One person can belong to several groups. |
-| Attendance | **Leader roll call only** | No self check-in or codes. The leader taps names; members only see their own history. |
-| Finance | **Group cash flow + voluntary donations** | No dues and nothing owed, so no "Paid / Due" badges and no `/pay @user`. A treasury ledger per group, with optional donor attribution. |
-| Hosting | **Cloudflare only** (Workers, Static Assets, D1, Cron Triggers) | One account, one deploy, same origin for app and API, no sleeping, no keep-alive pinging. |
-| Language | **Russian only** | All interface text lives in one `ru` dictionary, so another language can be added later without refactoring. |
-| Reminders | **Leader approves each** | The system flags inactive members and a leader decides whether to send a message, message the member personally, snooze or dismiss. |
-| Offline members | **Supported** | Leaders can add people without Telegram. They can link Telegram later with a claim code. |
-| Exports | **Excel + PDF in the reports phase** | Files are built in the Mini App and sent into the Telegram chat by the bot. |
-| Jurisdiction | **EU / Baltics, so GDPR** | Religious data is a special category and children's data needs extra care (see §13). |
+| Topic           | Decision                                                        | Consequence                                                                                                                                 |
+| --------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scope           | **One church, several groups**                                  | Every group-owned table has `group_id`. Admins are church-wide; leaders and members are per group. One person can belong to several groups. |
+| Attendance      | **Leader roll call only**                                       | No self check-in or codes. The leader taps names; members only see their own history.                                                       |
+| Finance         | **Group cash flow + voluntary donations**                       | No dues and nothing owed, so no "Paid / Due" badges and no `/pay @user`. A treasury ledger per group, with optional donor attribution.      |
+| Hosting         | **Cloudflare only** (Workers, Static Assets, D1, Cron Triggers) | One account, one deploy, same origin for app and API, no sleeping, no keep-alive pinging.                                                   |
+| Language        | **Russian only**                                                | All interface text lives in one `ru` dictionary, so another language can be added later without refactoring.                                |
+| Reminders       | **Leader approves each**                                        | The system flags inactive members and a leader decides whether to send a message, message the member personally, snooze or dismiss.         |
+| Offline members | **Supported**                                                   | Leaders can add people without Telegram. They can link Telegram later with a claim code.                                                    |
+| Exports         | **Excel + PDF in the reports phase**                            | Files are built in the Mini App and sent into the Telegram chat by the bot.                                                                 |
+| Jurisdiction    | **EU / Baltics, so GDPR**                                       | Religious data is a special category and children's data needs extra care (see §13).                                                        |
 
 Defaults for questions still open are in §20.
 
@@ -25,6 +25,7 @@ Defaults for questions still open are in §20.
 ## 1. Goals and non-goals
 
 **Goals**
+
 - A leader records attendance for 30 people in under a minute on a phone.
 - Treasury is transparent: every entry records who entered it and when, and entries are reversed rather than silently deleted.
 - Inactive members get noticed and receive a personal check-in from a person rather than a bot.
@@ -32,6 +33,7 @@ Defaults for questions still open are in §20.
 - One volunteer can maintain it: one repo, one cloud account, automated deploys.
 
 **Non-goals (for now)**
+
 - Processing real payments. The app only records cash, bank transfers and donations.
 - More than one church.
 - Features that would break without Telegram, such as SMS or email. Offline members exist only as records kept by leaders.
@@ -64,6 +66,7 @@ Defaults for questions still open are in §20.
 ```
 
 **Why this layout**
+
 - **Same origin:** the Mini App and API are served by the same Worker, so no CORS setup and one URL to register in BotFather.
 - **Webhook, not long polling:** there's no process to keep alive. Telegram pushes each update to the Worker.
 - **Heavy work runs on the phone:** Excel and PDF files and charts are built in the Mini App. The Worker only relays the file to Telegram, which keeps it within the 10 ms CPU limit.
@@ -71,30 +74,31 @@ Defaults for questions still open are in §20.
 
 **Stack**
 
-| Layer | Choice |
-|---|---|
-| Language | TypeScript everywhere |
-| Worker | Hono, grammY (`webhookCallback(bot, "cloudflare-mod")`), Drizzle ORM (D1 driver), zod |
-| Mini App | React 18, Vite, Tailwind, `@telegram-apps/sdk-react`, `@telegram-apps/telegram-ui`, TanStack Query, Chart.js |
-| Exports | ExcelJS (styled .xlsx), pdfmake (its bundled Roboto font includes Cyrillic). Both load only when the Reports screen opens. |
-| Tests | Vitest + `@cloudflare/vitest-pool-workers` (real D1 in tests), Playwright smoke tests with a mocked Telegram environment |
-| Tooling | pnpm workspaces, ESLint, Prettier, Wrangler |
+| Layer    | Choice                                                                                                                     |
+| -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Language | TypeScript everywhere                                                                                                      |
+| Worker   | Hono, grammY (`webhookCallback(bot, "cloudflare-mod")`), Drizzle ORM (D1 driver), zod                                      |
+| Mini App | React 19, Vite, Tailwind 4, official `telegram-web-app.js` bridge (+ `@types/telegram-web-app`), TanStack Query, Chart.js  |
+| Exports  | ExcelJS (styled .xlsx), pdfmake (its bundled Roboto font includes Cyrillic). Both load only when the Reports screen opens. |
+| Tests    | Vitest + `@cloudflare/vitest-pool-workers` (real D1 in tests), Playwright smoke tests with a mocked Telegram environment   |
+| Tooling  | pnpm workspaces, ESLint, Prettier, Wrangler                                                                                |
 
 ---
 
 ## 3. Free-tier budget and capacity
 
-| Resource | Free limit | Expected use (≈150 members, 6 groups, weekly meetings) | Headroom |
-|---|---|---|---|
-| Worker requests | 100k / day | ~2–5k / day | 20×+ |
-| Worker CPU | 10 ms per request / cron run | JSON API and HMAC checks ≈ 1–3 ms | Heavy work runs on the phone |
-| External requests per run | 50 | Outbox drains ≤ 25 messages per run | OK |
-| Cron triggers | 5 per account | 2 used | 3 spare |
-| D1 storage | 5 GB | < 20 MB after 5 years | Effectively unlimited |
-| D1 reads / writes | 5M / 100k per day | < 50k / < 2k | Large |
-| GitHub Actions (private repo) | 2,000 min / month | CI ~150 + backups ~10 | OK |
+| Resource                      | Free limit                   | Expected use (≈150 members, 6 groups, weekly meetings) | Headroom                     |
+| ----------------------------- | ---------------------------- | ------------------------------------------------------ | ---------------------------- |
+| Worker requests               | 100k / day                   | ~2–5k / day                                            | 20×+                         |
+| Worker CPU                    | 10 ms per request / cron run | JSON API and HMAC checks ≈ 1–3 ms                      | Heavy work runs on the phone |
+| External requests per run     | 50                           | Outbox drains ≤ 25 messages per run                    | OK                           |
+| Cron triggers                 | 5 per account                | 2 used                                                 | 3 spare                      |
+| D1 storage                    | 5 GB                         | < 20 MB after 5 years                                  | Effectively unlimited        |
+| D1 reads / writes             | 5M / 100k per day            | < 50k / < 2k                                           | Large                        |
+| GitHub Actions (private repo) | 2,000 min / month            | CI ~150 + backups ~10                                  | OK                           |
 
 Telegram limits matter more than hosting limits:
+
 - The bot can only message people who have pressed **Start**. The join flow guarantees they have.
 - Sending is capped at about 30 messages per second overall and 1 per second per chat. The outbox handles this and backs off on HTTP 429.
 - Bot files can be up to 50 MB, far above any report.
@@ -214,6 +218,7 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 **Indexes:** `meetings(group_id, starts_at)`, `attendance(user_id)`, `ledger_entries(group_id, occurred_on)`, `memberships(group_id, status)`, `outbox(status, next_attempt_at)`.
 
 **Derived values (computed, not stored)**
+
 - **Attendance %** = (present + late) ÷ (meetings with status `done` since `joined_at`, excluding excused). Cancelled meetings and meetings without a roll call don't count.
 - **Current streak:** walk the member's `done` meetings from newest to oldest. Each `absent` adds 1, `excused` is skipped, and `present` or `late` stops the count.
 - **Treasury balance** = Σ income + Σ donation − Σ expense, over entries that aren't voided.
@@ -223,6 +228,7 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 ## 6. Authentication and permissions
 
 **Mini App requests**
+
 1. The web app sends `Authorization: tma <initDataRaw>` on every call.
 2. The Worker validates it (Web Crypto HMAC-SHA256):
    - `secret = HMAC("WebAppData", BOT_TOKEN)`
@@ -232,21 +238,22 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 4. User IDs sent in the request body are never trusted. Identity always comes from `initData`.
 
 **Bot updates**
+
 - The webhook checks the `X-Telegram-Bot-Api-Secret-Token` header, then trusts `ctx.from`.
 - Callback buttons carry only IDs (e.g. `flag:send:123`). The handler re-checks that whoever pressed it is a leader of that flag's group.
 
 **Permission matrix**
 
-| Action | Member | Leader (own groups) | Admin |
-|---|---|---|---|
-| See own attendance, own donations, schedule | ✅ | ✅ | ✅ |
-| See other members' data | ❌ | ✅ own groups | ✅ all |
-| Approve joins, add offline members, change roles | ❌ | ✅ (not other leaders' roles) | ✅ |
-| Roll call, create or cancel meetings | ❌ | ✅ | ✅ |
-| Add or void ledger entries, manage categories | ❌ | ✅ | ✅ |
-| Handle inactivity flags | ❌ | ✅ | ✅ |
-| Export reports | ❌ | ✅ own groups | ✅ church-wide |
-| Create or archive groups, assign leaders, church settings, audit log | ❌ | ❌ | ✅ |
+| Action                                                               | Member | Leader (own groups)           | Admin          |
+| -------------------------------------------------------------------- | ------ | ----------------------------- | -------------- |
+| See own attendance, own donations, schedule                          | ✅     | ✅                            | ✅             |
+| See other members' data                                              | ❌     | ✅ own groups                 | ✅ all         |
+| Approve joins, add offline members, change roles                     | ❌     | ✅ (not other leaders' roles) | ✅             |
+| Roll call, create or cancel meetings                                 | ❌     | ✅                            | ✅             |
+| Add or void ledger entries, manage categories                        | ❌     | ✅                            | ✅             |
+| Handle inactivity flags                                              | ❌     | ✅                            | ✅             |
+| Export reports                                                       | ❌     | ✅ own groups                 | ✅ church-wide |
+| Create or archive groups, assign leaders, church settings, audit log | ❌     | ❌                            | ✅             |
 
 **First admin:** `ADMIN_TELEGRAM_IDS` (a Worker secret) is applied on startup. Always keep **at least two admins** so the church can't be locked out.
 
@@ -255,6 +262,7 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 ## 7. Key flows
 
 ### 7.1 Joining a group
+
 1. A leader shares an invite link or QR code: `https://t.me/<bot>?start=g_<inviteCode>`.
 2. The person taps it and presses **Start**. The bot shows a short privacy notice in Russian with a **[Принимаю]** (I accept) button.
 3. Accepting creates a `pending` membership. Every leader of the group gets a card:
@@ -264,6 +272,7 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 5. Leaders can rotate the invite code if a link leaks.
 
 ### 7.2 Offline member and claim code
+
 1. A leader adds a member with a name only (no Telegram) and records guardian consent if the child is under the consent age.
 2. The member can then be included in roll calls like anyone else.
 3. Later, the leader taps **Выдать код привязки** (issue link code) and gets `https://t.me/<bot>?start=c_<code>`, valid for 7 days.
@@ -271,6 +280,7 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 5. If that Telegram account already has memberships, the bot asks an admin to merge them. This is a rare case with an admin-only tool.
 
 ### 7.3 Meetings and roll call
+
 1. Each group has schedules (e.g. Fridays 19:00, 120 min). The hourly job creates meetings 4 weeks ahead; `UNIQUE(schedule_id, starts_at)` stops duplicates. Leaders can also add one-off events or cancel a meeting.
 2. **Roll-call screen:** active members as of the meeting date, sorted by first name, with a search box.
    - Tap a row to mark **present** (green). Long-press for **late** or **excused**.
@@ -279,11 +289,13 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
    - Telegram's main button reads **Сохранить (18 из 24)**. Saving sets the meeting to `done` and writes all attendance rows in one D1 batch.
 3. Leaders can edit a roll call for 14 days afterwards. Every change goes to the audit log.
 4. **Reminder:** one hour after a meeting ends with no roll call, leaders get:
+
    > Отметьте посещаемость: «Пятничная встреча», 12.09 [Открыть]
 
    The button uses `startapp=roll_<meetingId>` to open the Mini App straight on that roll call.
 
 ### 7.4 Finance
+
 1. Leaders record **income**, **expense** or **donation**, each with an amount, category, date and note.
    - A donation can name a donor (member picker) or be marked anonymous.
 2. Mistakes are fixed by **voiding** (reason required) and re-entering. Voided entries stay visible, struck through, and are excluded from totals.
@@ -294,14 +306,17 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 4. **Members** see only their own donations and a thank-you total. Whether members see the group treasury balance is a per-group setting (default: hidden).
 
 ### 7.5 Inactivity and pastoral care (leader approves)
+
 1. **Daily scan** (10:00 church time): for each active membership, compute the streak (§5). If it reaches the group threshold and no flag exists for that streak, create an `open` flag. A card goes to every leader of the group (via the outbox):
    > 🔔 **Анна Петрова** пропустила 3 встречи подряд (последний раз была 22.08).
    > [💬 Отправить сообщение] [✍️ Написать лично] [⏰ Отложить 2 нед.] [✖️ Закрыть]
 2. **Button actions:**
    - **Отправить сообщение** (send message) sends the group's check-in template from the bot, e.g.:
+
      > «Привет, Анна! Мы скучаем по тебе на встречах 🙂 Всё ли хорошо? Будем рады видеть тебя в пятницу, 26.09!»
 
      There's an "edit text" option in the Mini App. The flag becomes `messaged`.
+
    - **Написать лично** (write personally) opens a direct chat with the member: `t.me/<username>` if they have one, otherwise the Mini App shows their name. The leader then marks the flag `contacted`. This is the most personal option and the one the design encourages.
    - **Отложить 2 нед.** (snooze 2 weeks) and **Закрыть** (dismiss) do what they say.
 3. The first leader's action updates every leader's card, so nobody sends a duplicate.
@@ -311,6 +326,7 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 7. **Weekly summary** for leaders (Monday 09:00): attendance trend, open flags, treasury change.
 
 ### 7.6 Reports and exports
+
 1. **Reports** screen (leaders and admins): choose a group (admins can choose "all"), a date range and a report type:
    - **Attendance matrix:** members × meetings, cells coloured П/О/У/Н (present/late/excused/absent), % column, totals row, guest counts.
    - **Treasury:** entries list, totals by category, monthly cash flow, donations summary. Anonymous donations show as "Аноним".
@@ -323,6 +339,7 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 4. The Excel and PDF libraries (~1.5 MB) load only when Reports is opened, so the main app stays small.
 
 ### 7.7 Backups
+
 - **D1 Time Travel:** restore to any point in the last 7 days on the free plan.
 - **Weekly GitHub Actions job:**
   1. `wrangler d1 export` produces a gzipped SQL file.
@@ -338,18 +355,18 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 
 **Commands** are shown per role with `setMyCommands`. Leaders and admins get a chat-scoped list, refreshed when their role changes.
 
-| Command | Who | Description (RU menu text) |
-|---|---|---|
-| `/start` | all | Приветствие; handles `g_…` (join) and `c_…` (claim) payloads |
-| `/app` | all | Открыть приложение |
-| `/me` | all | Моя посещаемость и пожертвования |
-| `/privacy` | all | Политика конфиденциальности, мои данные |
-| `/help` | all | Помощь |
-| `/roll` | leader | Отметить посещаемость сегодняшней встречи |
-| `/доход`, `/income` | leader | Записать доход |
-| `/расход`, `/expense` | leader | Записать расход |
-| `/flags` | leader | Кто давно не был |
-| `/groups` | admin | Группы церкви |
+| Command               | Who    | Description (RU menu text)                                   |
+| --------------------- | ------ | ------------------------------------------------------------ |
+| `/start`              | all    | Приветствие; handles `g_…` (join) and `c_…` (claim) payloads |
+| `/app`                | all    | Открыть приложение                                           |
+| `/me`                 | all    | Моя посещаемость и пожертвования                             |
+| `/privacy`            | all    | Политика конфиденциальности, мои данные                      |
+| `/help`               | all    | Помощь                                                       |
+| `/roll`               | leader | Отметить посещаемость сегодняшней встречи                    |
+| `/доход`, `/income`   | leader | Записать доход                                               |
+| `/расход`, `/expense` | leader | Записать расход                                              |
+| `/flags`              | leader | Кто давно не был                                             |
+| `/groups`             | admin  | Группы церкви                                                |
 
 **Tone:** warm and short, in Russian, with at most one emoji per message.
 
@@ -407,6 +424,7 @@ Errors use one shape: `{ error: { code, message } }`. Every endpoint gets a role
 The app follows Telegram theme variables (light and dark), uses the Telegram back and main buttons and haptic feedback, and is built for a 360 px wide screen.
 
 **Member** (no tabs, one scrolling screen)
+
 - **Главная** (home):
   - next meeting (date, time, place)
   - my attendance % (ring chart) and last 8 meetings as dots
@@ -415,6 +433,7 @@ The app follows Telegram theme variables (light and dark), uses the Telegram bac
 - **Профиль** (profile): name, privacy notice, "download my data" and "delete my account" request.
 
 **Leader** (bottom tabs, with a group switcher at the top if they lead more than one group)
+
 - **Обзор** (overview):
   - tiles: average attendance over 4 weeks, active members, treasury balance, open flags
   - attendance trend chart
@@ -431,6 +450,7 @@ The app follows Telegram theme variables (light and dark), uses the Telegram bac
   - member detail: attendance history, %, donations, role, claim code, guardian consent
 
 **Admin** (everything above plus a **Церковь** (church) tab)
+
 - groups: create, archive, assign leaders
 - church-wide stats and reports
 - settings: name, time zone, currency, backup chat
@@ -443,10 +463,10 @@ The app follows Telegram theme variables (light and dark), uses the Telegram bac
 
 Two Cron Triggers are used; three stay spare.
 
-| Cron (UTC) | Job | Details |
-|---|---|---|
-| `*/5 * * * *` | **Outbox drain** | Sends up to 25 pending rows (`next_attempt_at ≤ now`). On 429 it waits `retry_after`. On 403 it marks the user unreachable and the row dead. Other errors back off exponentially, max 5 attempts. |
-| `7 * * * *` | **Hourly tick** | For each group, in church local time: (a) generate meetings 4 weeks ahead; (b) roll-call reminder for meetings that ended over an hour ago with no roll call; (c) at 10:00, inactivity scan and flag cards; (d) Monday 09:00, weekly leader summary; (e) daily 03:00, housekeeping (expire claim codes, purge sent outbox rows older than 30 days, anonymize per the retention rules). Each sub-job is recorded in `job_runs` so it never runs twice. |
+| Cron (UTC)    | Job              | Details                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `*/5 * * * *` | **Outbox drain** | Sends up to 25 pending rows (`next_attempt_at ≤ now`). On 429 it waits `retry_after`. On 403 it marks the user unreachable and the row dead. Other errors back off exponentially, max 5 attempts.                                                                                                                                                                                                                                                     |
+| `7 * * * *`   | **Hourly tick**  | For each group, in church local time: (a) generate meetings 4 weeks ahead; (b) roll-call reminder for meetings that ended over an hour ago with no roll call; (c) at 10:00, inactivity scan and flag cards; (d) Monday 09:00, weekly leader summary; (e) daily 03:00, housekeeping (expire claim codes, purge sent outbox rows older than 30 days, anonymize per the retention rules). Each sub-job is recorded in `job_runs` so it never runs twice. |
 
 Messages a user triggers directly (approve buttons, "send check-in") go out immediately in that request. The outbox is only for bulk or scheduled sends.
 
@@ -466,6 +486,7 @@ Messages a user triggers directly (approve buttons, "send check-in") go out imme
 > This is not legal advice. The church's responsible person should review §13 and the privacy notice before launch.
 
 **Security**
+
 - `initData` HMAC check on every API call. Webhook secret token. Role checks on the server for every route and callback.
 - zod validation on all input. Parameterized queries only (Drizzle). No raw user HTML is ever rendered.
 - Secrets live only in Wrangler secrets and GitHub secrets, never in the repo. The repo should be **private**.
@@ -473,6 +494,7 @@ Messages a user triggers directly (approve buttons, "send check-in") go out imme
 - Basic rate limiting per Telegram user on write endpoints and exports.
 
 **GDPR**
+
 - **Special category data.** Membership in a church youth group reveals religious belief (Art. 9). The likely basis is **Art. 9(2)(d)**: a not-for-profit religious body processing data about its members and regular contacts, provided the data isn't disclosed outside the church without consent.
   - The design supports this: no third-party analytics, no data sharing, and exports go only to leaders' own chats.
 - **Children.** The digital consent age varies by country (13 in Latvia and Estonia, 14 in Lithuania, up to 16 elsewhere).
@@ -497,13 +519,13 @@ Messages a user triggers directly (approve buttons, "send check-in") go out imme
 
 ## 15. Testing strategy
 
-| Level | What | Tool |
-|---|---|---|
-| Unit | initData validation (valid, tampered, expired), streak calc, attendance %, balance, money parsing, time-zone schedule generation | Vitest (`packages/shared`, `apps/worker`) |
-| Integration | Every API route with real D1: happy path, forbidden role, wrong group, validation errors; the roll-call batch; voiding; flag lifecycle; outbox retry and 403 handling | `@cloudflare/vitest-pool-workers` |
-| Bot | Command and callback handlers with a fake Telegram API (grammY transformer) | Vitest |
-| UI smoke | Member and leader flows with a mocked Telegram environment (`mockTelegramEnv`) | Playwright (pre-installed Chromium) |
-| Manual | A real phone on the staging bot before each production deploy: iOS, Android, Desktop | checklist in `docs/` |
+| Level       | What                                                                                                                                                                  | Tool                                      |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Unit        | initData validation (valid, tampered, expired), streak calc, attendance %, balance, money parsing, time-zone schedule generation                                      | Vitest (`packages/shared`, `apps/worker`) |
+| Integration | Every API route with real D1: happy path, forbidden role, wrong group, validation errors; the roll-call batch; voiding; flag lifecycle; outbox retry and 403 handling | `@cloudflare/vitest-pool-workers`         |
+| Bot         | Command and callback handlers with a fake Telegram API (grammY transformer)                                                                                           | Vitest                                    |
+| UI smoke    | Member and leader flows with a mocked Telegram environment (stubbed `telegram-web-app.js`)                                                                            | Playwright (pre-installed Chromium)       |
+| Manual      | A real phone on the staging bot before each production deploy: iOS, Android, Desktop                                                                                  | checklist in `docs/`                      |
 
 CI must pass typecheck, lint and tests before any deploy.
 
@@ -511,14 +533,15 @@ CI must pass typecheck, lint and tests before any deploy.
 
 ## 16. Environments and deployment
 
-| | Staging | Production |
-|---|---|---|
-| Bot | `@<Church>YouthDevBot` | `@<Church>YouthBot` |
-| Worker | `church-app-staging.<acct>.workers.dev` | `church-app.<acct>.workers.dev` |
-| D1 | `church-staging` (seeded with fake data) | `church-prod` (EU hint) |
-| Deploy | automatic on push to `main` | manual "Deploy production" workflow (approval) |
+|        | Staging                                  | Production                                     |
+| ------ | ---------------------------------------- | ---------------------------------------------- |
+| Bot    | `@<Church>YouthDevBot`                   | `@<Church>YouthBot`                            |
+| Worker | `church-app-staging.<acct>.workers.dev`  | `church-app.<acct>.workers.dev`                |
+| D1     | `church-staging` (seeded with fake data) | `church-prod` (EU hint)                        |
+| Deploy | automatic on push to `main`              | manual "Deploy production" workflow (approval) |
 
 **Deploy steps** (both environments):
+
 1. `pnpm build` (web app into the Worker assets)
 2. `drizzle-kit` migrations: `wrangler d1 migrations apply --remote`
 3. `wrangler deploy --env <env>`
@@ -548,6 +571,7 @@ A custom domain is optional. `workers.dev` already has HTTPS and works with Tele
 Each phase ends with a deploy to staging and a short check on a real phone.
 
 ### Phase 0 · Foundation (S)
+
 - pnpm monorepo, TypeScript, ESLint and Prettier, Vitest; CI workflow.
 - Wrangler config with staging and production environments, D1 databases, first migration.
 - Hono app: `/health`, `/bot/webhook` (grammY, secret check), static assets.
@@ -556,6 +580,7 @@ Each phase ends with a deploy to staging and a short check on a real phone.
 - **Done when:** on the staging bot, `/start` replies in Russian, and the menu button opens the Mini App showing your name loaded from `/api/me` after the server checks it.
 
 ### Phase 1 · Church, groups, members (M)
+
 - Schema: users, groups, memberships, church_settings, audit_log. Bootstrap admins from env.
 - Admin: create and archive groups, assign leaders.
 - Invite links and QR codes, privacy acceptance, join requests with leader cards (multi-leader sync), approve and reject.
@@ -564,6 +589,7 @@ Each phase ends with a deploy to staging and a short check on a real phone.
 - **Done when:** an admin creates two groups, a leader invites three phones and approves them, adds one offline member, and that member later claims the profile. Members can't see each other's data (tested).
 
 ### Phase 2 · Meetings and attendance (M)
+
 - Schedules, the hourly generator (time-zone tested), one-off events and cancelling.
 - Roll-call screen (tap, long-press, guests, main-button save), 14-day edit window, audit.
 - Member home: next meeting, attendance %, last-8 dots. Leader overview tiles and trend chart.
@@ -571,6 +597,7 @@ Each phase ends with a deploy to staging and a short check on a real phone.
 - **Done when:** a real meeting's roll call for 20 people is saved in under 60 seconds, the numbers match a hand count, and the missing-roll-call reminder arrives once, not twice.
 
 ### Phase 3 · Treasury and donations (M)
+
 - Ledger categories (seeded defaults in Russian), income, expense and donation entries, donor picker and anonymous option.
 - Voiding with a reason, and an entries list with filters.
 - Balance, monthly cash flow chart, member "Мои пожертвования", setting for members seeing the treasury.
@@ -578,6 +605,7 @@ Each phase ends with a deploy to staging and a short check on a real phone.
 - **Done when:** a month of real transactions matches the paper or bank record, a voided entry drops out of totals but stays visible, and members see only their own donations.
 
 ### Phase 4 · Inactivity and pastoral care (M)
+
 - Streak computation (shared, unit-tested), daily scan, flags with one flag per streak.
 - Leader cards with send, write personally, snooze and dismiss; card sync across leaders; offline-member variant.
 - Editable Russian check-in template per group, reply forwarding, auto-resolve on return.
@@ -585,12 +613,14 @@ Each phase ends with a deploy to staging and a short check on a real phone.
 - **Done when:** with seeded history, exactly the expected members are flagged, each once. Acting on one leader's card updates the other leaders' cards. A member who attends again is resolved automatically.
 
 ### Phase 5 · Reports and exports (M)
+
 - Report JSON endpoints.
 - Excel (attendance matrix, treasury, members) and PDF (the same three, with charts). Both load on demand.
 - `/reports/deliver` sending files to the chat, with rate limiting. Admin church-wide reports.
 - **Done when:** a leader gets `Посещаемость_…xlsx` and `…pdf` in the bot chat within 5 seconds, the Cyrillic text is correct, and the files open on iOS, Android and a PC.
 
 ### Phase 6 · Hardening and launch (S–M)
+
 - GDPR pieces: `PRIVACY.ru.md`, `/privacy`, data export, deletion by anonymization, retention housekeeping.
 - Weekly backup workflow, plus a tested restore runbook.
 - Rate limits, error logging (Workers Observability), a production deploy with approval.
@@ -604,36 +634,37 @@ Each phase ends with a deploy to staging and a short check on a real phone.
 
 ## 19. Risks and mitigations
 
-| Risk | Mitigation |
-|---|---|
-| Free-tier terms change | Portable code: Drizzle can move to Postgres (Neon), and the static assets can be hosted anywhere. Workers Paid is $5 a month with no code change. |
-| A cron run exceeds 10 ms CPU as data grows | Work is SQL-heavy (DB time isn't CPU), batched per group; monitor in Workers logs. |
-| Teens block or delete the bot | `is_reachable` flag; leaders see "недоступен" (unreachable) and use "Написать лично" instead. |
-| Admin loses access | At least two admins, set by env var and editable in the app. |
-| A mistake or dispute in the treasury | Void-only corrections, audit log, monthly PDF archived in the leaders' chat. |
-| A leaked invite link | Leader approval is always required, and codes can be rotated. |
-| Data loss | D1 Time Travel (7 days) plus weekly exports to the admin chat, with a tested restore. |
-| GDPR complaint | Special-category basis written down, minimal data, privacy notice, rights tooling, retention job. |
-| A single maintainer | Plain stack, one repo, tests and CI, docs for setup, deploy and restore. |
+| Risk                                       | Mitigation                                                                                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free-tier terms change                     | Portable code: Drizzle can move to Postgres (Neon), and the static assets can be hosted anywhere. Workers Paid is $5 a month with no code change. |
+| A cron run exceeds 10 ms CPU as data grows | Work is SQL-heavy (DB time isn't CPU), batched per group; monitor in Workers logs.                                                                |
+| Teens block or delete the bot              | `is_reachable` flag; leaders see "недоступен" (unreachable) and use "Написать лично" instead.                                                     |
+| Admin loses access                         | At least two admins, set by env var and editable in the app.                                                                                      |
+| A mistake or dispute in the treasury       | Void-only corrections, audit log, monthly PDF archived in the leaders' chat.                                                                      |
+| A leaked invite link                       | Leader approval is always required, and codes can be rotated.                                                                                     |
+| Data loss                                  | D1 Time Travel (7 days) plus weekly exports to the admin chat, with a tested restore.                                                             |
+| GDPR complaint                             | Special-category basis written down, minimal data, privacy notice, rights tooling, retention job.                                                 |
+| A single maintainer                        | Plain stack, one repo, tests and CI, docs for setup, deploy and restore.                                                                          |
 
 ---
 
 ## 20. Open questions (defaults used if unanswered)
 
-| Question | Default |
-|---|---|
-| Number of groups, members and leaders | ≤ 10 groups, ≤ 300 members |
-| Time zone and currency | `Europe/Riga`, EUR |
-| Inactivity threshold | 3 consecutive missed meetings (per group setting) |
-| Can members see the group treasury balance? | Hidden (per-group toggle) |
-| Roll-call edit window | 14 days |
-| Retention after leaving | Anonymize after 24 months |
-| Consent age used for guardian consent | Set per church (13 / 14 / 16) |
-| Who is the data controller contact? | Church name + admin contact in the privacy notice |
+| Question                                    | Default                                           |
+| ------------------------------------------- | ------------------------------------------------- |
+| Number of groups, members and leaders       | ≤ 10 groups, ≤ 300 members                        |
+| Time zone and currency                      | `Europe/Riga`, EUR                                |
+| Inactivity threshold                        | 3 consecutive missed meetings (per group setting) |
+| Can members see the group treasury balance? | Hidden (per-group toggle)                         |
+| Roll-call edit window                       | 14 days                                           |
+| Retention after leaving                     | Anonymize after 24 months                         |
+| Consent age used for guardian consent       | Set per church (13 / 14 / 16)                     |
+| Who is the data controller contact?         | Church name + admin contact in the privacy notice |
 
 ---
 
 ## 21. Future ideas (out of scope)
+
 - Bot posts meeting announcements and reminders in the youth group chat.
 - RSVP for events and camps, with capacity limits.
 - Birthday greetings (would need birth dates, which is more personal data, so only as opt-in).
