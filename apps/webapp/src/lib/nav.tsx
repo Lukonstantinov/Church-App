@@ -11,7 +11,7 @@ import {
 import { storage } from './storage';
 import { webApp } from './telegram';
 
-export type Tab = 'overview' | 'meetings' | 'people' | 'more';
+export type Tab = 'overview' | 'meetings' | 'treasury' | 'people' | 'more';
 
 export type Route =
   | { name: 'root' }
@@ -22,6 +22,7 @@ export type Route =
   | { name: 'createGroup' }
   | { name: 'settings' }
   | { name: 'announcements'; groupId: number }
+  | { name: 'newTransaction'; groupId: number; kind: 'income' | 'expense' | 'donation' }
   | { name: 'addOffline'; groupId: number };
 
 /** Return false to cancel the navigation (e.g. the user chose to keep editing). */

@@ -4,7 +4,7 @@ import { auditLog } from '../db/schema';
 export interface AuditEntry {
   actorUserId: number | null;
   action: string;
-  entity: 'church' | 'group' | 'membership' | 'user';
+  entity: 'church' | 'group' | 'membership' | 'user' | 'transaction' | 'event';
   entityId: number;
   groupId?: number | null;
   data?: Record<string, unknown>;

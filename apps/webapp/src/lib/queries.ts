@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AddOfflineMemberInput,
   AnnouncementResult,
@@ -26,6 +26,17 @@ import type {
   UpdateMembershipInput,
   UpdateUserInput,
 } from '@church/shared';
+import type {
+  CreateTransactionInput,
+  DuesSheet,
+  MyFinanceGroup,
+  PayDuesInput,
+  TransactionPage,
+  TransactionRow,
+  TreasurySettingsInput,
+  TreasurySummary,
+  UpdateTransactionInput,
+} from '@church/shared';
 import { apiFetch } from './api';
 
 export const keys = {
@@ -42,6 +53,11 @@ export const keys = {
   myAttendance: ['me', 'attendance'] as const,
   myAnnouncements: ['me', 'announcements'] as const,
   announcements: (groupId: number) => ['groups', groupId, 'announcements'] as const,
+  treasury: (groupId: number) => ['groups', groupId, 'treasury'] as const,
+  transactions: (groupId: number, filter: string) =>
+    ['groups', groupId, 'treasury', 'tx', filter] as const,
+  dues: (groupId: number, year: number) => ['groups', groupId, 'treasury', 'dues', year] as const,
+  myFinance: ['me', 'finance'] as const,
 };
 
 export function useMe() {
@@ -356,5 +372,126 @@ export function useSendAnnouncement(groupId: number) {
         ...json({ text }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.announcements(groupId) }),
+  });
+}
+
+// ---------- treasury ----------
+
+export function useTreasury(groupId: number) {
+  return useQuery({
+    queryKey: keys.treasury(groupId),
+    queryFn: () => apiFetch<TreasurySummary>(`/groups/${groupId}/treasury`),
+  });
+}
+
+/** Cash-book entries, newest first; `filter` is a comma list of kinds ("" = all). */
+export function useTransactions(
+  groupId: number,
+  filter: string,
+  opts: { member?: number; enabled?: boolean } = {},
+) {
+  const extra = opts.member ? `&member=${opts.member}` : '';
+  return useInfiniteQuery({
+    queryKey: keys.transactions(groupId, `${filter}${extra}`),
+    enabled: opts.enabled ?? true,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      apiFetch<TransactionPage>(
+        `/groups/${groupId}/transactions?kind=${filter}${extra}${pageParam ? `&before=${encodeURIComponent(pageParam)}` : ''}`,
+      ),
+    getNextPageParam: (last) => last.nextCursor,
+  });
+}
+
+export function useDues(groupId: number, year: number) {
+  return useQuery({
+    queryKey: keys.dues(groupId, year),
+    queryFn: () => apiFetch<DuesSheet>(`/groups/${groupId}/dues?year=${year}`),
+  });
+}
+
+/** Everything under the group's treasury key (summary, lists, dues) is refreshed. */
+function useInvalidateTreasury(groupId: number) {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: keys.treasury(groupId) });
+}
+
+export function useCreateTransaction(groupId: number) {
+  const invalidate = useInvalidateTreasury(groupId);
+  return useMutation({
+    mutationFn: (input: CreateTransactionInput) =>
+      apiFetch<TransactionRow>(`/groups/${groupId}/transactions`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateTransaction(groupId: number) {
+  const invalidate = useInvalidateTreasury(groupId);
+  return useMutation({
+    mutationFn: ({ id, ...input }: UpdateTransactionInput & { id: number }) =>
+      apiFetch<TransactionRow>(`/transactions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+export function usePayDues(groupId: number) {
+  const invalidate = useInvalidateTreasury(groupId);
+  return useMutation({
+    mutationFn: (input: PayDuesInput) =>
+      apiFetch<{ created: number[]; skipped: string[] }>(`/groups/${groupId}/dues`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSetDuesExempt(groupId: number) {
+  const invalidate = useInvalidateTreasury(groupId);
+  return useMutation({
+    mutationFn: (input: { userId: number; exempt: boolean }) =>
+      apiFetch(`/groups/${groupId}/dues/exempt`, { method: 'PUT', body: JSON.stringify(input) }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useTreasurySettings(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TreasurySettingsInput) =>
+      apiFetch<TreasurySummary>(`/groups/${groupId}/treasury`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: (data) => {
+      qc.setQueryData(keys.treasury(groupId), data);
+      void qc.invalidateQueries({ queryKey: keys.treasury(groupId) });
+    },
+  });
+}
+
+/** Uploads an already-resized image; returns its id for attaching. */
+export function useUploadMedia(groupId: number, kind: 'receipt' | 'event' = 'receipt') {
+  return useMutation({
+    mutationFn: (file: Blob) =>
+      apiFetch<{ id: number; url: string }>(`/groups/${groupId}/media?kind=${kind}`, {
+        method: 'POST',
+        body: file,
+        headers: { 'content-type': file.type || 'application/octet-stream' },
+      }),
+  });
+}
+
+export function useMyFinance(enabled = true) {
+  return useQuery({
+    queryKey: keys.myFinance,
+    queryFn: () => apiFetch<MyFinanceGroup[]>('/me/finance'),
+    enabled,
   });
 }

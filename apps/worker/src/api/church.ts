@@ -5,9 +5,10 @@ import { LOGO_MAX_BYTES, updateChurchSchema, updateMeSchema } from '@church/shar
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db/client';
-import { churchSettings, users } from '../db/schema';
+import { churchSettings, media, users } from '../db/schema';
 import { audit } from '../lib/audit';
 import { getChurch, isValidTimezone } from '../lib/church';
+import { fromBase64, readImageUpload, toBase64, verifyMediaSignature } from '../lib/media';
 import { loadMe } from '../lib/users';
 import { parseBody } from './util';
 
@@ -53,47 +54,10 @@ churchRoutes.patch('/', async (c) => {
   return c.json(await getChurch(db));
 });
 
-/** Recognises PNG, JPEG and WebP by their first bytes (the Content-Type header is not trusted). */
-export function sniffImage(bytes: Uint8Array): 'image/png' | 'image/jpeg' | 'image/webp' | null {
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47
-  ) {
-    return 'image/png';
-  }
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
-    return 'image/jpeg';
-  if (
-    bytes.length >= 12 &&
-    String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' &&
-    String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
-  ) {
-    return 'image/webp';
-  }
-  return null;
-}
-
-function toBase64(bytes: Uint8Array): string {
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(bin);
-}
-
 churchRoutes.put('/logo', async (c) => {
   requireAdmin(c);
   const db = c.get('db');
-  const declared = Number(c.req.header('content-length') ?? 0);
-  if (declared > LOGO_MAX_BYTES) throw new HTTPException(413, { message: 'too_large' });
-  const bytes = new Uint8Array(await c.req.arrayBuffer());
-  if (bytes.length === 0) throw new HTTPException(400, { message: 'empty' });
-  if (bytes.length > LOGO_MAX_BYTES) throw new HTTPException(413, { message: 'too_large' });
-  const mime = sniffImage(bytes);
-  if (!mime) throw new HTTPException(415, { message: 'unsupported_image' });
+  const { bytes, mime } = await readImageUpload(c.req, LOGO_MAX_BYTES);
   await db
     .update(churchSettings)
     .set({ logoData: toBase64(bytes), logoMime: mime, logoUpdatedAt: new Date().toISOString() })
@@ -125,14 +89,30 @@ mediaRoutes.get('/logo', async (c) => {
     columns: { logoData: true, logoMime: true },
   });
   if (!row?.logoData || !row.logoMime) return c.body(null, 404);
-  const bin = atob(row.logoData);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return c.body(bytes, 200, {
+  return c.body(fromBase64(row.logoData), 200, {
     'Content-Type': row.logoMime,
     'Cache-Control': c.req.query('v')
       ? 'public, max-age=31536000, immutable'
       : 'public, max-age=300',
+    'X-Content-Type-Options': 'nosniff',
+  });
+});
+
+/** GET /media/m/:id?e=&s= — uploaded images (receipts, event photos) behind a signed URL. */
+mediaRoutes.get('/m/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  const exp = Number(c.req.query('e'));
+  const sig = c.req.query('s') ?? '';
+  if (!Number.isSafeInteger(id) || id <= 0) return c.body(null, 404);
+  if (!(await verifyMediaSignature(c.env.WEBHOOK_SECRET, id, exp, sig))) return c.body(null, 403);
+  const row = await getDb(c.env.DB).query.media.findFirst({
+    columns: { data: true, mime: true },
+    where: eq(media.id, id),
+  });
+  if (!row) return c.body(null, 404);
+  return c.body(fromBase64(row.data), 200, {
+    'Content-Type': row.mime,
+    'Cache-Control': 'private, max-age=86400, immutable',
     'X-Content-Type-Options': 'nosniff',
   });
 });

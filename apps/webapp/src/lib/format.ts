@@ -63,9 +63,11 @@ export function makeFormatters(locale: Locale, tz: string, t: Messages = message
     },
     dateBadge: (iso: string) => {
       const d = new Date(iso);
+      const month = noDot(fmt({ month: 'short' }).format(d));
       return {
         day: fmt({ day: 'numeric' }).format(d),
-        month: noDot(fmt({ month: 'short' }).format(d)),
+        // Some languages (Lithuanian) format a lone short month as a number.
+        month: /^\d+$/.test(month) ? (t.time.monthsShort[Number(month) - 1] ?? month) : month,
         weekday: noDot(fmt({ weekday: 'short' }).format(d)),
       };
     },
@@ -87,6 +89,27 @@ export function makeFormatters(locale: Locale, tz: string, t: Messages = message
       if (min < 60) return t.time.minutes(min);
       const h = min / 60;
       return t.time.hours(new Intl.NumberFormat(intl, { maximumFractionDigits: 1 }).format(h));
+    },
+    /** "окт" for a "YYYY-MM" period. */
+    monthShort: (period: string) => t.time.monthsShort[Number(period.slice(5, 7)) - 1] ?? period,
+    /** "Октябрь 2026" for a "YYYY-MM" period. */
+    periodLong(period: string) {
+      return this.monthYear(`${period}-15T12:00:00Z`);
+    },
+    /** "12 окт" for a "YYYY-MM-DD" date. */
+    dayMonthShort: (date: string) =>
+      `${Number(date.slice(8, 10))} ${t.time.monthsShort[Number(date.slice(5, 7)) - 1] ?? ''}`,
+    /** "5 €", "12,50 €", "+5 €" — whole amounts without decimals. */
+    money: (cents: number, currency: string, opts: { sign?: boolean } = {}) => {
+      const digits = cents % 100 === 0 ? 0 : 2;
+      const s = new Intl.NumberFormat(intl, {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+        signDisplay: opts.sign ? 'exceptZero' : 'auto',
+      }).format(cents / 100);
+      return s.replace('-', '−');
     },
     /** Local "YYYY-MM-DD" for date inputs. */
     todayInput: (now = new Date()) => ymd(now),

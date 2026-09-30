@@ -7,6 +7,7 @@ import { churchRoutes, meRoutes } from './church';
 import { groupRoutes } from './groups';
 import { groupMeetingRoutes, meetingRoutes, myAttendanceRoutes, scheduleRoutes } from './meetings';
 import { membershipRoutes, userRoutes } from './members';
+import { groupTreasuryRoutes, myFinanceRoutes, transactionRoutes } from './treasury';
 
 export const apiRoutes = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
@@ -21,7 +22,10 @@ apiRoutes.route('/church', churchRoutes);
 apiRoutes.route('/groups', groupRoutes);
 apiRoutes.route('/groups', groupMeetingRoutes);
 apiRoutes.route('/groups', groupAnnouncementRoutes);
+apiRoutes.route('/groups', groupTreasuryRoutes);
 apiRoutes.route('/me/announcements', myAnnouncementRoutes);
+apiRoutes.route('/me/finance', myFinanceRoutes);
+apiRoutes.route('/transactions', transactionRoutes);
 apiRoutes.route('/schedules', scheduleRoutes);
 apiRoutes.route('/meetings', meetingRoutes);
 apiRoutes.route('/me/attendance', myAttendanceRoutes);

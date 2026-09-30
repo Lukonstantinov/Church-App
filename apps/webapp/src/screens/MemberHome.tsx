@@ -2,6 +2,7 @@ import { displayName, type MeResponse } from '@church/shared';
 import { AnnouncementCard } from '../components/AnnouncementCard';
 import { AttendanceSummary } from '../components/AttendanceSummary';
 import { Avatar } from '../components/Avatar';
+import { MyDuesCard } from '../components/MyDuesCard';
 import { BrandHeader } from '../components/BrandHeader';
 import { GroupDot } from '../components/GroupSwitcher';
 import { IconCalendar, IconUsers } from '../components/icons';
@@ -19,7 +20,7 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useMyAnnouncements, useMyAttendance } from '../lib/queries';
+import { useMyAnnouncements, useMyAttendance, useMyFinance } from '../lib/queries';
 
 /** Regular members: their next meeting, own attendance and announcements. */
 export function MemberHome({ me }: { me: MeResponse }) {
@@ -31,6 +32,7 @@ export function MemberHome({ me }: { me: MeResponse }) {
   const pending = memberships.filter((m) => m.status === 'pending');
   const att = useMyAttendance(active.length > 0);
   const news = useMyAnnouncements(active.length > 0);
+  const finance = useMyFinance(active.length > 0);
 
   return (
     <Screen>
@@ -93,6 +95,10 @@ export function MemberHome({ me }: { me: MeResponse }) {
           )}
           <AttendanceSummary data={g} />
         </div>
+      ))}
+
+      {finance.data?.map((g) => (
+        <MyDuesCard key={g.groupId} g={g} showGroup={active.length > 1} />
       ))}
 
       {(news.data ?? []).length > 0 && (

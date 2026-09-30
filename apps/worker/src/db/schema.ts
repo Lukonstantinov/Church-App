@@ -65,6 +65,8 @@ export const groups = sqliteTable('groups', {
   inactivityThreshold: integer('inactivity_threshold').notNull().default(3),
   checkinTemplate: text('checkin_template'),
   membersSeeTreasury: integer('members_see_treasury', { mode: 'boolean' }).notNull().default(false),
+  /** Expected monthly dues per paying member, in cents of the church currency. */
+  monthlyFeeCents: integer('monthly_fee_cents').notNull().default(500),
   archivedAt: text('archived_at'),
   createdAt: createdAt(),
 });
@@ -87,6 +89,8 @@ export const memberships = sqliteTable(
       .default('pending'),
     joinedAt: text('joined_at'),
     leftAt: text('left_at'),
+    /** Doesn't pay monthly dues (not shown as owing on the dues sheet). */
+    duesExempt: integer('dues_exempt', { mode: 'boolean' }).notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
@@ -258,3 +262,73 @@ export const announcements = sqliteTable(
   },
   (t) => [index('announcements_group_created').on(t.groupId, t.createdAt)],
 );
+
+/**
+ * Uploaded images (receipts, event photos), resized in the browser. Stored in D1 so the
+ * app stays on the free plan without a payment card; served through signed URLs.
+ */
+export const media = sqliteTable(
+  'media',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    groupId: integer('group_id').references(() => groups.id),
+    kind: text('kind', { enum: ['receipt', 'event'] }).notNull(),
+    mime: text('mime').notNull(),
+    data: text('data').notNull(),
+    bytes: integer('bytes').notNull(),
+    createdBy: integer('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index('media_group').on(t.groupId)],
+);
+
+export const TRANSACTION_KINDS = [
+  'income',
+  'expense',
+  'donation',
+  'dues',
+  'event_payment',
+  'event_expense',
+] as const;
+
+/**
+ * Group cash book. Amounts are positive; the kind decides the sign (expenses subtract).
+ * Entries are never deleted, only voided, so the history stays auditable.
+ */
+export const transactions = sqliteTable(
+  'transactions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    kind: text('kind', { enum: TRANSACTION_KINDS }).notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    /** Local calendar date "YYYY-MM-DD" in the church time zone. */
+    occurredOn: text('occurred_on').notNull(),
+    /** Who paid (dues, donations, event payments). */
+    memberUserId: integer('member_user_id').references(() => users.id),
+    /** Dues month "YYYY-MM". */
+    period: text('period'),
+    category: text('category'),
+    note: text('note'),
+    eventId: integer('event_id'),
+    receiptMediaId: integer('receipt_media_id').references(() => media.id),
+    createdBy: integer('created_by').references(() => users.id),
+    createdAt: createdAt(),
+    voidedAt: text('voided_at'),
+    voidedBy: integer('voided_by'),
+  },
+  (t) => [
+    index('transactions_group_date').on(t.groupId, t.occurredOn),
+    index('transactions_member').on(t.memberUserId),
+    index('transactions_event').on(t.eventId),
+    check('transactions_amount', sql`${t.amountCents} > 0`),
+    check(
+      'transactions_kind',
+      sql`${t.kind} IN ('income', 'expense', 'donation', 'dues', 'event_payment', 'event_expense')`,
+    ),
+  ],
+);
+
+export type Transaction = typeof transactions.$inferSelect;

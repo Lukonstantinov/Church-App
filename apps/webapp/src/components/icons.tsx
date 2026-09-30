@@ -135,3 +135,35 @@ export const IconWhatsApp = make(
 export const IconTelegram = make(
   <path d="M20.5 4.5L3.5 11.2l5.4 2 2 6.3 3-3.7 4.6 3.6 2-14.9zM8.9 13.2l9-6.2-6.9 7.9" />,
 );
+export const IconWallet = make(
+  <>
+    <path d="M4 7.5A2.5 2.5 0 016.5 5H18v3" />
+    <rect x="4" y="8" width="16" height="11" rx="2.5" />
+    <path d="M16 13.5h.1" />
+  </>,
+);
+export const IconHeart = make(
+  <path d="M12 19s-7-4.4-7-9.5A3.8 3.8 0 0112 7a3.8 3.8 0 017 2.5C19 14.6 12 19 12 19z" />,
+);
+export const IconArrowDown = make(<path d="M12 5v14M6 13l6 6 6-6" />);
+export const IconArrowUp = make(<path d="M12 19V5M6 11l6-6 6 6" />);
+export const IconReceipt = make(
+  <>
+    <path d="M6 3.5h12v17l-2.5-1.5-2 1.5-1.5-1.5-1.5 1.5-2-1.5L6 20.5z" />
+    <path d="M9 8h6M9 11.5h6M9 15h3.5" />
+  </>,
+);
+export const IconCamera = make(
+  <>
+    <path d="M4 8.5A1.5 1.5 0 015.5 7h2.3l1.4-2h5.6l1.4 2h2.3A1.5 1.5 0 0120 8.5v9a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 17.5z" />
+    <circle cx="12" cy="13" r="3.5" />
+  </>,
+);
+export const IconChart = make(<path d="M5 19V11M10 19V5M15 19v-6M20 19V9" />);
+export const IconCoins = make(
+  <>
+    <ellipse cx="9" cy="7" rx="5" ry="2.5" />
+    <path d="M4 7v4c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5V7" />
+    <path d="M10 16.2c.9.2 1.9.3 3 .3 2.8 0 5-1.1 5-2.5v-4M14 11.8c2.3-.2 4-1.2 4-2.3" />
+  </>,
+);

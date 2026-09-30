@@ -177,7 +177,7 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
   );
 }
 
-function QuickAction({
+export function QuickAction({
   icon,
   label,
   onClick,
@@ -191,7 +191,9 @@ function QuickAction({
       <span className="brand-gradient flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-cta">
         {icon}
       </span>
-      <span className="w-full truncate text-[13px] font-semibold">{label}</span>
+      <span className="line-clamp-2 w-full text-center text-[13px] font-semibold leading-tight break-words hyphens-auto">
+        {label}
+      </span>
     </Card>
   );
 }

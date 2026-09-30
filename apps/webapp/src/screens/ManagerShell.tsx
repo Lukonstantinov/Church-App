@@ -1,5 +1,5 @@
 import { BrandHeader } from '../components/BrandHeader';
-import { IconCalendar, IconHome, IconMenu, IconUsers } from '../components/icons';
+import { IconCalendar, IconHome, IconMenu, IconUsers, IconWallet } from '../components/icons';
 import { TabBar, type TabDef } from '../components/TabBar';
 import { Button, Card, EmptyState, ErrorState, Loading, Screen } from '../components/ui';
 import { useManagedGroups } from '../lib/groups';
@@ -10,6 +10,7 @@ import { Meetings } from './Meetings';
 import { More } from './More';
 import { Overview } from './Overview';
 import { People } from './People';
+import { Treasury } from './Treasury';
 
 /** Leaders and admins: four tabs around the active group. */
 export function ManagerShell() {
@@ -25,6 +26,7 @@ export function ManagerShell() {
   const tabs: TabDef<Tab>[] = [
     { key: 'overview', label: t.nav.overview, icon: <IconHome /> },
     { key: 'meetings', label: t.nav.meetings, icon: <IconCalendar /> },
+    { key: 'treasury', label: t.nav.treasury, icon: <IconWallet /> },
     { key: 'people', label: t.nav.people, icon: <IconUsers />, badge: active?.pendingCount },
     { key: 'more', label: t.nav.more, icon: <IconMenu /> },
   ];
@@ -52,6 +54,8 @@ export function ManagerShell() {
       </Screen>
     ) : tab === 'meetings' ? (
       <Meetings groups={managed} active={active} />
+    ) : tab === 'treasury' ? (
+      <Treasury groups={managed} active={active} />
     ) : tab === 'people' ? (
       <People groups={managed} active={active} />
     ) : (

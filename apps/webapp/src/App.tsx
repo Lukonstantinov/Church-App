@@ -15,6 +15,7 @@ import { ManagerShell } from './screens/ManagerShell';
 import { MemberHome } from './screens/MemberHome';
 import { MemberScreen } from './screens/MemberScreen';
 import { NewMeeting } from './screens/NewMeeting';
+import { NewTransaction } from './screens/NewTransaction';
 import { RollCall } from './screens/RollCall';
 import { Schedule } from './screens/Schedule';
 
@@ -40,6 +41,8 @@ function Router({ me }: { me: MeResponse }) {
       return <AddOffline groupId={route.groupId} />;
     case 'settings':
       return me.user.isAdmin ? <ChurchSettings /> : null;
+    case 'newTransaction':
+      return <NewTransaction groupId={route.groupId} kind={route.kind} />;
     case 'announcements':
       return <Announcements key={route.groupId} groupId={route.groupId} />;
   }

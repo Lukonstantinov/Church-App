@@ -6,3 +6,4 @@ export { ru } from './i18n/ru';
 export * from './format';
 export * from './brand';
 export * from './i18n/locales';
+export * from './finance';
