@@ -214,3 +214,17 @@ export function parseAmount(input: string): number | null {
   const cents = Math.round(Number(s) * 100);
   return cents > 0 && cents <= 100_000_000 ? cents : null;
 }
+
+/** Everything needed to build a year's report on the phone. */
+export interface TreasuryExport {
+  year: number;
+  groupName: string;
+  currency: string;
+  /** Balance before the year started, and at the end of it (or now). */
+  openingCents: number;
+  closingCents: number;
+  transactions: TransactionRow[];
+}
+
+/** Largest report file the bot will send (Telegram allows 50 MB; ours are small). */
+export const DOCUMENT_MAX_BYTES = 8_000_000;

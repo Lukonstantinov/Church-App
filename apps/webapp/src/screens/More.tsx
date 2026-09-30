@@ -3,7 +3,7 @@ import { displayName, LOCALE_NAMES, type GroupSummary } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { BrandHeader, LanguageSheet } from '../components/BrandHeader';
 import { GroupDot } from '../components/GroupSwitcher';
-import { IconGlobe, IconPlus, IconSettings } from '../components/icons';
+import { IconChart, IconGlobe, IconPlus, IconSettings } from '../components/icons';
 import { ActionRow, Badge, Row, Screen, Section } from '../components/ui';
 import { useI18n } from '../lib/i18n';
 import { useNav } from '../lib/nav';
@@ -11,7 +11,7 @@ import { useMe } from '../lib/queries';
 
 /** Profile, language, and for admins: church settings and all groups. */
 export function More({ groups }: { groups: GroupSummary[] }) {
-  const { push, setTab, setActiveGroupId } = useNav();
+  const { push, setTab, setActiveGroupId, activeGroupId } = useNav();
   const { t, locale } = useI18n();
   const me = useMe();
   const [langOpen, setLangOpen] = useState(false);
@@ -57,6 +57,22 @@ export function More({ groups }: { groups: GroupSummary[] }) {
             title={t.settings.title}
             subtitle={t.settings.entry}
             onClick={() => push({ name: 'settings' })}
+          />
+        </Section>
+      )}
+
+      {groups.length > 0 && (
+        <Section>
+          <Row
+            before={iconTile(<IconChart size={19} />)}
+            title={t.reports.title}
+            subtitle={t.reports.entry}
+            onClick={() =>
+              push({
+                name: 'reports',
+                groupId: groups.find((g) => g.id === activeGroupId)?.id ?? groups[0]!.id,
+              })
+            }
           />
         </Section>
       )}

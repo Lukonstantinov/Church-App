@@ -19,6 +19,7 @@ import { NewTransaction } from './screens/NewTransaction';
 import { EventForm } from './screens/EventForm';
 import { EventScreen } from './screens/EventScreen';
 import { GroupSettings } from './screens/GroupSettings';
+import { Reports } from './screens/Reports';
 import { RollCall } from './screens/RollCall';
 import { Schedule } from './screens/Schedule';
 
@@ -52,6 +53,8 @@ function Router({ me }: { me: MeResponse }) {
       return (
         <EventForm key={route.eventId ?? 'new'} groupId={route.groupId} eventId={route.eventId} />
       );
+    case 'reports':
+      return <Reports key={route.groupId} groupId={route.groupId} />;
     case 'groupSettings':
       return <GroupSettings key={route.groupId} groupId={route.groupId} />;
     case 'announcements':

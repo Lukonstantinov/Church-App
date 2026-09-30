@@ -352,3 +352,14 @@ export interface AnnouncementResult {
   /** Members who blocked the bot. */
   unreachable: number;
 }
+
+export interface AttendanceExport {
+  year: number;
+  groupName: string;
+  meetings: { id: number; startsAt: string; title: string; guestCount: number }[];
+  rows: {
+    member: { id: number; firstName: string; lastName: string | null };
+    /** Same order as `meetings`; null = no mark (not a member yet, or not recorded). */
+    statuses: (AttendanceStatus | null)[];
+  }[];
+}

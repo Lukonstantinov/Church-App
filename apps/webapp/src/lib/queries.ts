@@ -27,6 +27,8 @@ import type {
   UpdateUserInput,
 } from '@church/shared';
 import type {
+  AttendanceExport,
+  TreasuryExport,
   CreateEventInput,
   EventDetail,
   EventSummary,
@@ -613,3 +615,20 @@ export function useUpdateGroup(groupId: number) {
     },
   });
 }
+
+// ---------- reports ----------
+
+export const fetchTreasuryExport = (groupId: number, year: number) =>
+  apiFetch<TreasuryExport>(`/groups/${groupId}/treasury/export?year=${year}`);
+export const fetchDues = (groupId: number, year: number) =>
+  apiFetch<DuesSheet>(`/groups/${groupId}/dues?year=${year}`);
+export const fetchAttendanceExport = (groupId: number, year: number) =>
+  apiFetch<AttendanceExport>(`/groups/${groupId}/attendance/export?year=${year}`);
+
+/** The bot sends the file to the user's own chat. */
+export const sendDocumentToChat = (file: Blob, name: string) =>
+  apiFetch<{ ok: true }>(`/me/document?name=${encodeURIComponent(name)}`, {
+    method: 'POST',
+    body: file,
+    headers: { 'content-type': 'application/octet-stream' },
+  });

@@ -66,7 +66,13 @@ export function mockTelegram({ failFor = [] as number[] } = {}): TgCall[] {
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
     const method = url.pathname.split('/').pop()!;
-    const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+    // File uploads (sendDocument) are multipart streams; record them without parsing.
+    const body =
+      typeof init?.body === 'string'
+        ? (JSON.parse(init.body) as Record<string, unknown>)
+        : init?.body
+          ? { multipart: true }
+          : {};
     calls.push({ method, body });
     const json = (payload: unknown) =>
       new Response(JSON.stringify(payload), { headers: { 'content-type': 'application/json' } });

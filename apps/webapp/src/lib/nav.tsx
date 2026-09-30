@@ -26,6 +26,7 @@ export type Route =
   | { name: 'event'; eventId: number }
   | { name: 'eventForm'; groupId: number; eventId?: number }
   | { name: 'groupSettings'; groupId: number }
+  | { name: 'reports'; groupId: number }
   | { name: 'addOffline'; groupId: number };
 
 /** Return false to cancel the navigation (e.g. the user chose to keep editing). */

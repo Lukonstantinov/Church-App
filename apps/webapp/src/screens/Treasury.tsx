@@ -67,7 +67,11 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
     <Screen tabs>
       <GroupSwitcher groups={groups} active={active} subtitle={t.treasury.subtitle} />
 
-      {s ? <BalanceHero s={s} /> : <Skeleton className="h-40 w-full" />}
+      {s ? (
+        <BalanceHero s={s} onReports={() => push({ name: 'reports', groupId: active.id })} />
+      ) : (
+        <Skeleton className="h-40 w-full" />
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <QuickAction
@@ -104,14 +108,23 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
   );
 }
 
-function BalanceHero({ s }: { s: TreasurySummary }) {
+function BalanceHero({ s, onReports }: { s: TreasurySummary; onReports: () => void }) {
   const t = useT();
   const f = useFmt();
   const money = useMoney();
   return (
     <HeroCard>
-      <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">
-        <IconWallet size={16} /> {t.treasury.balance}
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">
+          <IconWallet size={16} /> {t.treasury.balance}
+        </span>
+        <button
+          type="button"
+          onClick={onReports}
+          className="flex h-8 items-center gap-1.5 rounded-full bg-white/18 px-3 text-[13px] font-semibold active:scale-95"
+        >
+          <IconChart size={15} /> {t.reports.title}
+        </button>
       </div>
       <div className="mt-2 text-[40px] font-bold leading-none tracking-tight tabular-nums">
         {money(s.balanceCents)}
