@@ -24,6 +24,12 @@ export const churchSettings = sqliteTable(
     adminBackupChatId: integer('admin_backup_chat_id'),
     /** Public Mini App origin, saved by /bot/setup so cron jobs can build "open app" buttons. */
     appUrl: text('app_url'),
+    defaultLocale: text('default_locale').notNull().default('ru'),
+    brandColor: text('brand_color').notNull().default('blue'),
+    /** Small raster logo (resized in the browser), base64. */
+    logoData: text('logo_data'),
+    logoMime: text('logo_mime'),
+    logoUpdatedAt: text('logo_updated_at'),
   },
   (t) => [check('church_settings_singleton', sql`${t.id} = 1`)],
 );
@@ -36,6 +42,8 @@ export const users = sqliteTable('users', {
   lastName: text('last_name'),
   username: text('username'),
   languageCode: text('language_code'),
+  /** UI language chosen in the app; NULL = church default. */
+  locale: text('locale'),
   isAdmin: integer('is_admin', { mode: 'boolean' }).notNull().default(false),
   /** Set to false when Telegram answers 403 (user blocked the bot). */
   isReachable: integer('is_reachable', { mode: 'boolean' }).notNull().default(true),
@@ -235,3 +243,18 @@ export const jobRuns = sqliteTable(
 
 export type Meeting = typeof meetings.$inferSelect;
 export type MeetingSchedule = typeof meetingSchedules.$inferSelect;
+
+export const announcements = sqliteTable(
+  'announcements',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    authorId: integer('author_id').references(() => users.id),
+    text: text('text').notNull(),
+    recipients: integer('recipients').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index('announcements_group_created').on(t.groupId, t.createdAt)],
+);

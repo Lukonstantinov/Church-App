@@ -29,6 +29,13 @@
       "when": 1790765742647,
       "tag": "0003_church_app_url",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790771713860,
+      "tag": "0004_settings_announcements",
+      "breakpoints": true
     }
   ]
 }

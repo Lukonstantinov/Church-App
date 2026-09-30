@@ -2,7 +2,9 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { GrammyError, webhookCallback } from 'grammy';
 import type { Env } from '../env';
-import { createBot, defaultCommands } from './bot';
+import { commandsFor, createBot } from './bot';
+import { LOCALES, messages } from '@church/shared';
+import { churchDefaultLocale } from '../lib/church';
 import { deriveToken, timingSafeEqualStr } from '../lib/crypto';
 import { appUrlFor } from '../lib/telegram';
 import { getDb } from '../db/client';
@@ -54,10 +56,19 @@ botRoutes.post('/setup', async (c) => {
     step = 'saveAppUrl';
     await getDb(c.env.DB).update(churchSettings).set({ appUrl }).where(eq(churchSettings.id, 1));
     step = 'setMyCommands';
-    await bot.api.setMyCommands(defaultCommands);
+    // Default menu in the church language, plus a translated menu per Telegram UI language.
+    const churchLocale = await churchDefaultLocale(getDb(c.env.DB));
+    await bot.api.setMyCommands(commandsFor(messages(churchLocale)));
+    for (const locale of LOCALES) {
+      await bot.api.setMyCommands(commandsFor(messages(locale)), { language_code: locale });
+    }
     step = 'setChatMenuButton';
     await bot.api.setChatMenuButton({
-      menu_button: { type: 'web_app', text: 'Открыть', web_app: { url: appUrl } },
+      menu_button: {
+        type: 'web_app',
+        text: messages(churchLocale).bot.menuButton,
+        web_app: { url: appUrl },
+      },
     });
     return c.json({ ok: true, webhook: `${appUrl}/bot/webhook`, bot: bot.botInfo.username });
   } catch (err) {

@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import type { Env } from '../env';
 import { requireTelegramAuth, type AuthVariables } from '../auth/middleware';
 import { loadMe } from '../lib/users';
+import { groupAnnouncementRoutes, myAnnouncementRoutes } from './announcements';
+import { churchRoutes, meRoutes } from './church';
 import { groupRoutes } from './groups';
 import { groupMeetingRoutes, meetingRoutes, myAttendanceRoutes, scheduleRoutes } from './meetings';
 import { membershipRoutes, userRoutes } from './members';
@@ -14,8 +16,12 @@ apiRoutes.get('/me', async (c) => {
   return c.json(await loadMe(c.get('db'), c.get('user')));
 });
 
+apiRoutes.route('/me', meRoutes);
+apiRoutes.route('/church', churchRoutes);
 apiRoutes.route('/groups', groupRoutes);
 apiRoutes.route('/groups', groupMeetingRoutes);
+apiRoutes.route('/groups', groupAnnouncementRoutes);
+apiRoutes.route('/me/announcements', myAnnouncementRoutes);
 apiRoutes.route('/schedules', scheduleRoutes);
 apiRoutes.route('/meetings', meetingRoutes);
 apiRoutes.route('/me/attendance', myAttendanceRoutes);

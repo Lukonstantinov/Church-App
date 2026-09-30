@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { BRAND_COLOR_KEYS, type BrandColor } from './brand';
+import { LOCALES, type Locale } from './i18n/locales';
 
 /** Roles within a single group. Church-wide admin is a separate flag on the user. */
 export const groupRoleSchema = z.enum(['leader', 'member']);
@@ -19,7 +21,30 @@ export interface ChurchInfo {
   /** IANA zone, e.g. "Europe/Riga". Schedules and all displayed times use it. */
   timezone: string;
   currency: string;
+  /** Language for people who haven't picked one. */
+  defaultLocale: Locale;
+  brandColor: BrandColor;
+  /** Relative URL of the uploaded logo (cache-busted), or null. */
+  logoUrl: string | null;
 }
+
+export const updateMeSchema = z.object({ locale: z.enum(LOCALES) });
+export type UpdateMeInput = z.input<typeof updateMeSchema>;
+
+export const updateChurchSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  timezone: z.string().min(1).max(64).optional(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .optional(),
+  defaultLocale: z.enum(LOCALES).optional(),
+  brandColor: z.enum(BRAND_COLOR_KEYS as [BrandColor, ...BrandColor[]]).optional(),
+});
+export type UpdateChurchInput = z.input<typeof updateChurchSchema>;
+
+/** Logos are resized in the browser; the server accepts at most this many bytes. */
+export const LOGO_MAX_BYTES = 300_000;
 
 export interface MeResponse {
   church: ChurchInfo;
@@ -31,6 +56,8 @@ export interface MeResponse {
     username: string | null;
     isAdmin: boolean;
     privacyAccepted: boolean;
+    /** Effective UI language (own choice, else church default). */
+    locale: Locale;
   };
   memberships: MeMembership[];
 }
@@ -292,4 +319,30 @@ export interface MemberAttendance {
 
 export interface MyAttendanceResponse {
   groups: MemberAttendance[];
+}
+
+// ---------- Announcements ----------
+
+export const createAnnouncementSchema = z.object({
+  text: z.string().trim().min(1).max(2000),
+});
+export type CreateAnnouncementInput = z.input<typeof createAnnouncementSchema>;
+
+export interface AnnouncementRow {
+  id: number;
+  groupId: number;
+  groupName: string;
+  text: string;
+  createdAt: string;
+  author: { id: number; firstName: string; lastName: string | null } | null;
+  /** How many members the bot sent it to. */
+  recipients: number;
+}
+
+export interface AnnouncementResult {
+  announcement: AnnouncementRow;
+  /** Members without a Telegram account (can't receive it). */
+  noTelegram: number;
+  /** Members who blocked the bot. */
+  unreachable: number;
 }

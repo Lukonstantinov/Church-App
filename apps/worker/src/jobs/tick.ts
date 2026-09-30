@@ -1,6 +1,6 @@
 import { and, eq, gte, lt } from 'drizzle-orm';
 import { InlineKeyboard } from 'grammy';
-import { DAY_MS, HOUR_MS, ru } from '@church/shared';
+import { DAY_MS, HOUR_MS, INTL_LOCALE, messages, type Locale } from '@church/shared';
 import type { Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { groups, jobRuns, meetings, outbox } from '../db/schema';
@@ -57,24 +57,26 @@ export async function remindMissingRollCalls(db: Db, env: Env, timezone: string,
   if (rows.length === 0) return;
 
   const appUrl = await getAppUrl(db, env.APP_URL);
-  const date = new Intl.DateTimeFormat('ru-RU', {
-    timeZone: timezone,
-    weekday: 'short',
-    day: 'numeric',
-    month: 'long',
-  });
+  const formatDate = (iso: string, locale: Locale) =>
+    new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+      timeZone: timezone,
+      weekday: 'short',
+      day: 'numeric',
+      month: 'long',
+    }).format(new Date(iso));
 
   for (const { meeting, groupName } of rows) {
     if (!(await claim(db, 'roll_reminder', String(meeting.id), '1'))) continue;
-    const text = ru.bot.rollReminder(
-      escapeHtml(meeting.title),
-      escapeHtml(groupName),
-      date.format(new Date(meeting.startsAt)),
-    );
-    const reply_markup = appUrl
-      ? new InlineKeyboard().webApp(ru.bot.rollReminderButton, `${appUrl}/?roll=${meeting.id}`)
-      : undefined;
     for (const r of await leaderRecipients(db, meeting.groupId)) {
+      const t = messages(r.locale);
+      const text = t.bot.rollReminder(
+        escapeHtml(meeting.title),
+        escapeHtml(groupName),
+        formatDate(meeting.startsAt, r.locale),
+      );
+      const reply_markup = appUrl
+        ? new InlineKeyboard().webApp(t.bot.rollReminderButton, `${appUrl}/?roll=${meeting.id}`)
+        : undefined;
       await enqueue(db, {
         chatId: r.chatId,
         method: 'sendMessage',

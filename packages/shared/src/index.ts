@@ -1,5 +1,8 @@
 export * from './api';
 export * from './attendance';
 export * from './time';
-export * from './i18n/ru';
+export * from './i18n/index';
+export { ru } from './i18n/ru';
 export * from './format';
+export * from './brand';
+export * from './i18n/locales';
