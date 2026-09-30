@@ -210,3 +210,111 @@ body::before {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Text on a ministry's coloured blocks follows its chosen text colour. */
+.on-brand [class*='text-white'] {
+  color: color-mix(in srgb, var(--on-brand) 88%, transparent) !important;
+}
+
+/* Opening animations a ministry can choose. */
+@keyframes env-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes env-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes env-slide {
+  from {
+    opacity: 0;
+    transform: translateX(42px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes env-zoom {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes env-flip {
+  from {
+    opacity: 0;
+    transform: perspective(900px) rotateY(-24deg) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes env-blur {
+  from {
+    opacity: 0;
+    filter: blur(14px);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+@keyframes env-bounce {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  80% {
+    transform: scale(0.99);
+  }
+  100% {
+    transform: none;
+  }
+}
+.env-anim-rise {
+  animation: env-rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.env-anim-fade {
+  animation: env-fade 380ms ease both;
+}
+.env-anim-slide {
+  animation: env-slide 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.env-anim-zoom {
+  animation: env-zoom 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.env-anim-flip {
+  animation: env-flip 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: left center;
+}
+.env-anim-blur {
+  animation: env-blur 480ms ease both;
+}
+.env-anim-bounce {
+  animation: env-bounce 560ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*='env-anim-'] {
+    animation: none !important;
+  }
+}

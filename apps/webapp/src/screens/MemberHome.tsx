@@ -1,5 +1,7 @@
 import { displayName, type MeResponse } from '@church/shared';
-import { AnnouncementCard } from '../components/AnnouncementCard';
+import { FeedEntry } from '../components/FeedEntry';
+import { PosterCard } from '../components/Poster';
+import { useEnv } from '../lib/env';
 import { AttendanceSummary } from '../components/AttendanceSummary';
 import { Avatar } from '../components/Avatar';
 import { MyDuesCard } from '../components/MyDuesCard';
@@ -30,6 +32,7 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
   const t = useT();
   const f = useFmt();
   const { user } = me;
+  const { env } = useEnv();
   // Inside one ministry: only its data.
   const memberships =
     groupId === undefined ? me.memberships : me.memberships.filter((m) => m.groupId === groupId);
@@ -151,14 +154,23 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
         <MyDuesCard key={g.groupId} g={g} showGroup={active.length > 1} />
       ))}
 
+      {env && <FeedEntry g={env} fallbackTheme={me.church.brandColor} />}
+
       {(inScope(news.data) ?? []).length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
             {t.home.announcements}
           </h2>
-          {inScope(news.data)!.map((a) => (
-            <AnnouncementCard key={a.id} a={a} showGroup={active.length > 1} />
-          ))}
+          {inScope(news.data)!
+            .slice(0, 3)
+            .map((a) => (
+              <PosterCard
+                key={a.id}
+                post={a}
+                showGroup={active.length > 1}
+                onOpen={() => push({ name: 'post', groupId: a.groupId, postId: a.id })}
+              />
+            ))}
         </section>
       )}
 

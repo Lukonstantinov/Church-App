@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
 import {
   zonedToUtc,
@@ -55,8 +55,9 @@ export async function loadEventOr404(db: Db, id: number): Promise<EventRow> {
 /** Members of the event's group (and admins) may view; leaders/admins manage. */
 export async function eventAccess(db: Db, user: User, event: EventRow) {
   const a = await accessIn(db, user, event.groupId);
-  if (!a.member) throw new HTTPException(404, { message: 'event_not_found' });
-  return { canManage: a.perms.has('events.manage') };
+  // Pinned events are shown to the whole church on the main page.
+  if (!a.member && !event.pinnedAt) throw new HTTPException(404, { message: 'event_not_found' });
+  return { canManage: a.perms.has('events.manage'), member: a.member };
 }
 
 async function peopleIn(db: Db, groupId: number, userIds: number[]): Promise<Set<number>> {
@@ -153,7 +154,7 @@ const features = (e: EventRow) => ({
 async function summarize(
   db: Db,
   secret: string,
-  rows: (EventRow & { groupName: string })[],
+  rows: (EventRow & { groupName: string; groupBrand?: string | null })[],
   userId: number,
 ): Promise<EventSummary[]> {
   if (rows.length === 0) return [];
@@ -191,6 +192,8 @@ async function summarize(
       priceCents: e.priceCents,
       status: e.status,
       goingCount: goingBy.get(e.id) ?? 0,
+      pinned: e.pinnedAt !== null,
+      brandColor: e.groupBrand ?? null,
       myRsvp: mineBy.get(e.id) ?? null,
       myRoles: myRoles.filter((r) => r.eventId === e.id).map((r) => r.name),
     })),
@@ -215,7 +218,7 @@ export async function listEvents(
   if (groupIds.length === 0) return [];
   const now = new Date().toISOString();
   const rows = await db
-    .select({ event: events, groupName: groups.name })
+    .select({ event: events, groupName: groups.name, groupBrand: groups.brandColor })
     .from(events)
     .innerJoin(groups, eq(groups.id, events.groupId))
     .where(
@@ -229,7 +232,7 @@ export async function listEvents(
   return summarize(
     db,
     secret,
-    rows.map((r) => ({ ...r.event, groupName: r.groupName })),
+    rows.map((r) => ({ ...r.event, groupName: r.groupName, groupBrand: r.groupBrand })),
     userId,
   );
 }
@@ -248,15 +251,16 @@ export async function eventDetail(
 ): Promise<EventDetail> {
   const canManage = await can(db, user, event.groupId, 'events.manage');
   const group = await db.query.groups.findFirst({
-    columns: { name: true },
+    columns: { name: true, brandColor: true },
     where: eq(groups.id, event.groupId),
   });
   const [summary] = await summarize(
     db,
     secret,
-    [{ ...event, groupName: group?.name ?? '' }],
+    [{ ...event, groupName: group?.name ?? '', groupBrand: group?.brandColor }],
     user.id,
   );
+  const member = (await accessIn(db, user, event.groupId)).member;
 
   const [members, rsvps, roles, assignees, photos, money] = await Promise.all([
     db
@@ -359,5 +363,31 @@ export async function eventDetail(
     finance,
     myPaidCents: paidBy.get(user.id) ?? 0,
     canManage,
+    member,
   };
+}
+
+/** Upcoming pinned events of every (non-archived) ministry, for the main page. */
+export async function listPinned(db: Db, secret: string, userId: number) {
+  const now = new Date().toISOString();
+  const rows = await db
+    .select({ event: events, groupName: groups.name, groupBrand: groups.brandColor })
+    .from(events)
+    .innerJoin(groups, eq(groups.id, events.groupId))
+    .where(
+      and(
+        isNotNull(events.pinnedAt),
+        isNull(groups.archivedAt),
+        eq(events.status, 'scheduled'),
+        stillOn(now),
+      ),
+    )
+    .orderBy(asc(events.startsAt))
+    .limit(10);
+  return summarize(
+    db,
+    secret,
+    rows.map((r) => ({ ...r.event, groupName: r.groupName, groupBrand: r.groupBrand })),
+    userId,
+  );
 }

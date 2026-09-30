@@ -55,7 +55,10 @@ export function ManagerShell({ env }: { env: GroupSummary }) {
 
   return (
     <>
-      {body}
+      {/* Only the content animates: a transform on an ancestor would unpin the tab bar. */}
+      <div key={env.id} className={`env-anim-${env.animation}`}>
+        {body}
+      </div>
       <TabBar tabs={tabs} active={current} onChange={setTab} />
     </>
   );

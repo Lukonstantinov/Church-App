@@ -24,6 +24,9 @@ export type Route =
   | { name: 'createGroup' }
   | { name: 'settings' }
   | { name: 'announcements'; groupId: number }
+  | { name: 'post'; groupId: number; postId: number }
+  | { name: 'newPost'; groupId: number }
+  | { name: 'telemetry' }
   | { name: 'newTransaction'; groupId: number; kind: 'income' | 'expense' | 'donation' }
   | { name: 'event'; eventId: number }
   | { name: 'eventForm'; groupId: number; eventId?: number }

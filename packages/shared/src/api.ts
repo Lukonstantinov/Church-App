@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { isBrandValue, patternSchema, type BrandValue, type PatternConfig } from './brand';
+import {
+  ENTER_ANIMATIONS,
+  isBrandValue,
+  isTextColor,
+  patternSchema,
+  type BrandValue,
+  type EnterAnimation,
+  type PatternConfig,
+} from './brand';
 import type { Permission } from './permissions';
 import { chatUrlSchema } from './events';
 import { LOCALES, type Locale } from './i18n/locales';
@@ -65,6 +73,8 @@ export interface MeResponse {
     lastName: string | null;
     username: string | null;
     isAdmin: boolean;
+    /** Church admin from the deployment config (ADMIN_TELEGRAM_IDS): sees telemetry. */
+    isDeveloper: boolean;
     privacyAccepted: boolean;
     /** Effective UI language (own choice, else church default). */
     locale: Locale;
@@ -93,6 +103,15 @@ export interface GroupSummary {
   positionName: string | null;
   brandColor: string | null;
   pattern: PatternConfig | null;
+  /** Text on the ministry's coloured blocks. */
+  textColor: string;
+  animation: EnterAnimation;
+  /** Colour of the new-posts counter; null = the theme colour. */
+  badgeColor: string | null;
+  logoMediaId: number | null;
+  /** New posts and new chat messages (comments) since the person last opened the feed. */
+  unreadPosts: number;
+  unreadComments: number;
   logoUrl: string | null;
 }
 
@@ -124,6 +143,13 @@ export type CreateGroupInput = z.input<typeof createGroupSchema>;
 export const updateGroupSchema = z.object({
   brandColor: z.string().refine(isBrandValue, 'theme').nullable().optional(),
   pattern: patternSchema.nullable().optional(),
+  textColor: z.string().refine(isTextColor, 'text colour').optional(),
+  animation: z.enum(ENTER_ANIMATIONS).optional(),
+  badgeColor: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/i)
+    .nullable()
+    .optional(),
   logoMediaId: z.number().int().positive().nullable().optional(),
   name: name.optional(),
   description: optionalText(300).optional(),
@@ -350,20 +376,84 @@ export interface MyAttendanceResponse {
 
 // ---------- Announcements ----------
 
+const hexColor = z.string().regex(/^#[0-9a-f]{6}$/i, '#rrggbb');
+
+/** A post in a ministry's feed: text, optionally a headline, photos and a tint (a poster). */
 export const createAnnouncementSchema = z.object({
-  text: z.string().trim().min(1).max(2000),
+  title: z
+    .string()
+    .trim()
+    .max(120)
+    .nullish()
+    .transform((v) => (v ? v : null)),
+  text: z.string().trim().min(1).max(4000),
+  mediaIds: z.array(z.number().int().positive()).max(10).default([]),
+  tintColor: hexColor.nullish(),
+  tintStrength: z.number().min(0).max(0.9).nullish(),
+  templateId: z.number().int().positive().nullish(),
+  /** Also send it to members in Telegram (default). */
+  notify: z.boolean().default(true),
 });
 export type CreateAnnouncementInput = z.input<typeof createAnnouncementSchema>;
+
+export const REACTIONS = ['👍', '❤️', '🙏', '🔥', '😂', '🎉'] as const;
+export const reactionSchema = z.object({ emoji: z.enum(REACTIONS) });
+export const commentSchema = z.object({ text: z.string().trim().min(1).max(1000) });
+
+export interface PosterLook {
+  brandColor: string | null;
+  pattern: PatternConfig | null;
+  textColor: string;
+  logoUrl: string | null;
+}
 
 export interface AnnouncementRow {
   id: number;
   groupId: number;
   groupName: string;
+  title: string | null;
   text: string;
   createdAt: string;
   author: { id: number; firstName: string; lastName: string | null } | null;
   /** How many members the bot sent it to. */
   recipients: number;
+  photos: { id: number; url: string }[];
+  tint: { color: string; strength: number } | null;
+  /** Background for posters without photos (a template or the ministry's own look). */
+  look: PosterLook | null;
+  reactions: { emoji: string; count: number; mine: boolean }[];
+  commentCount: number;
+  canDelete: boolean;
+}
+
+export interface CommentRow {
+  id: number;
+  text: string;
+  createdAt: string;
+  author: { id: number; firstName: string; lastName: string | null };
+  mine: boolean;
+  canDelete: boolean;
+}
+
+// ---------- Design templates ----------
+
+export const templateInputSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  brandColor: z.string().refine(isBrandValue, 'theme').nullable(),
+  pattern: patternSchema.nullable(),
+  textColor: z.string().refine(isTextColor, 'text colour').default('auto'),
+  logoMediaId: z.number().int().positive().nullish(),
+});
+export type TemplateInput = z.input<typeof templateInputSchema>;
+
+export interface DesignTemplate {
+  id: number;
+  name: string;
+  brandColor: string | null;
+  pattern: PatternConfig | null;
+  textColor: string;
+  logoUrl: string | null;
+  mine: boolean;
 }
 
 export interface AnnouncementResult {
@@ -401,3 +491,31 @@ export const addExistingMemberSchema = z.object({
   positionId: z.number().int().positive().optional(),
 });
 export type AddExistingMemberInput = z.input<typeof addExistingMemberSchema>;
+
+// ---------- Developer telemetry ----------
+
+export interface Telemetry {
+  environment: string;
+  generatedAt: string;
+  database: { sizeBytes: number | null; limitBytes: number };
+  tables: { name: string; rows: number }[];
+  media: { kind: string; count: number; bytes: number }[];
+  users: {
+    total: number;
+    withTelegram: number;
+    active1d: number;
+    active7d: number;
+    active30d: number;
+    blockedBot: number;
+  };
+  ministries: { total: number; archived: number };
+  bot: {
+    pending: number;
+    sent24h: number;
+    dead: number;
+    recentErrors: { method: string; error: string | null; at: string }[];
+  };
+  jobs: { job: string; lastRun: string }[];
+  /** Cloudflare free-plan limits this app is designed around. */
+  limits: { key: string; value: string }[];
+}

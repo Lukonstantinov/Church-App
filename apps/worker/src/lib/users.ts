@@ -47,10 +47,14 @@ export async function upsertTelegramUser(
     const changed = (Object.keys(refresh) as (keyof typeof refresh)[]).some(
       (k) => existing[k] !== refresh[k],
     );
-    if (!changed) return existing;
+    // "Last seen" is refreshed at most once an hour, for the activity numbers.
+    const now = new Date();
+    const stale =
+      !existing.lastSeenAt || now.getTime() - Date.parse(existing.lastSeenAt) > 3_600_000;
+    if (!changed && !stale) return existing;
     const [updated] = await db
       .update(users)
-      .set(refresh)
+      .set({ ...refresh, lastSeenAt: now.toISOString() })
       .where(eq(users.id, existing.id))
       .returning();
     return updated!;
@@ -58,14 +62,14 @@ export async function upsertTelegramUser(
 
   const [row] = await db
     .insert(users)
-    .values({ ...values, isAdmin: isBootstrapAdmin })
+    .values({ ...values, isAdmin: isBootstrapAdmin, lastSeenAt: new Date().toISOString() })
     .onConflictDoUpdate({ target: users.telegramId, set: refresh }) // concurrent first requests
     .returning();
   if (!row) throw new Error('upsert returned no row');
   return row;
 }
 
-export async function loadMe(db: Db, user: User): Promise<MeResponse> {
+export async function loadMe(db: Db, user: User, developer = false): Promise<MeResponse> {
   const rows = await db
     .select({
       groupId: groups.id,
@@ -94,6 +98,7 @@ export async function loadMe(db: Db, user: User): Promise<MeResponse> {
       lastName: user.lastName,
       username: user.username,
       isAdmin: user.isAdmin,
+      isDeveloper: developer && user.isAdmin,
       privacyAccepted: user.privacyAcceptedAt !== null,
       locale: localeOf(user, church.defaultLocale),
     },

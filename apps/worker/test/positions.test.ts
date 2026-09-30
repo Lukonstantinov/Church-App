@@ -211,6 +211,12 @@ describe('adding people and environment look', () => {
     const found = await apiJson<PersonSearchRow[]>(`/api/groups/${b.id}/people-search?q=zoy`, {
       user: ADMIN,
     });
+    // Case-insensitive for Cyrillic too.
+    const cyr = await apiJson<PersonSearchRow[]>(
+      `/api/groups/${b.id}/people-search?q=${encodeURIComponent('зО')}`,
+      { user: ADMIN },
+    );
+    expect(cyr.some((p) => p.firstName === 'Зоя')).toBe(true);
     const zoya = found.find((p) => p.firstName === 'Зоя')!;
     expect(zoya).toMatchObject({ username: 'zoya_k', inGroup: false });
 

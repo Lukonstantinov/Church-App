@@ -1,18 +1,27 @@
-import { displayName, resolveBrand, type GroupSummary, type MeResponse } from '@church/shared';
+import {
+  displayName,
+  resolveBrand,
+  type EventSummary,
+  type GroupSummary,
+  type MeResponse,
+} from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { BrandHeader } from '../components/BrandHeader';
-import { PatternLayer } from '../components/PatternLayer';
+import { PatternLayer, onBrandStyle } from '../components/PatternLayer';
+import { UnreadBadges } from '../components/FeedEntry';
 import { IconPlus, IconSettings, IconUsers } from '../components/icons';
 import { Badge, Card, EmptyState, Loading, Row, Screen, Section } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useGroups } from '../lib/queries';
+import { useGroups, usePinnedEvents } from '../lib/queries';
+import { useEventWhen } from '../components/EventCard';
 
 /** Main page: every ministry the person belongs to (admins: all), two per row. */
 export function Hub({ me }: { me: MeResponse }) {
   const t = useT();
   const { push } = useNav();
   const groups = useGroups();
+  const pinned = usePinnedEvents();
   if (groups.isPending) return <Loading />;
   const list = groups.data ?? [];
   const pending = me.memberships.filter((m) => m.status === 'pending');
@@ -21,6 +30,24 @@ export function Hub({ me }: { me: MeResponse }) {
   return (
     <Screen>
       <BrandHeader title={t.env.hubTitle} subtitle={t.env.hubSubtitle(list.length)} />
+
+      {(pinned.data ?? []).length > 0 && (
+        <section>
+          <h2 className="mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+            📌 {t.feed.pinned}
+          </h2>
+          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+            {pinned.data!.map((e) => (
+              <PinnedEventCard
+                key={e.id}
+                e={e}
+                fallbackTheme={me.church.brandColor}
+                onClick={() => push({ name: 'event', eventId: e.id })}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {list.length === 0 && !isAdmin ? (
         <Card>
@@ -75,6 +102,18 @@ export function Hub({ me }: { me: MeResponse }) {
           subtitle={me.user.username ? `@${me.user.username}` : undefined}
           onClick={() => push({ name: 'member', userId: me.user.id })}
         />
+        {me.user.isDeveloper && (
+          <Row
+            before={
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-text/85 text-[17px] text-[var(--color-section)]">
+                📊
+              </span>
+            }
+            title={t.dev.title}
+            subtitle={t.dev.entry}
+            onClick={() => push({ name: 'telemetry' })}
+          />
+        )}
         {isAdmin && (
           <Row
             before={
@@ -105,6 +144,7 @@ export function EnvCard({
 }) {
   const t = useT();
   const theme = resolveBrand(g.brandColor ?? fallbackTheme);
+  const on = onBrandStyle(g.textColor, !!g.pattern);
   const initials = g.name
     .split(/\s+/)
     .filter(Boolean)
@@ -116,8 +156,11 @@ export function EnvCard({
     <button
       type="button"
       onClick={onClick}
-      className="relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left text-white shadow-cta transition active:scale-[0.97]"
-      style={{ background: `linear-gradient(145deg, ${theme.light} 0%, ${theme.partner} 100%)` }}
+      className={`relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left shadow-cta transition active:scale-[0.97] ${on.className}`}
+      style={{
+        ...on.style,
+        background: `linear-gradient(145deg, ${theme.light} 0%, ${theme.partner} 100%)`,
+      }}
     >
       <PatternLayer pattern={g.pattern} logoUrl={g.logoUrl} />
       <span
@@ -136,11 +179,14 @@ export function EnvCard({
             {initials || '•'}
           </span>
         )}
-        {g.pendingCount > 0 && (
-          <span className="min-w-[22px] rounded-full bg-white px-1.5 text-center text-[12px] font-bold leading-[22px] text-[var(--brand)]">
-            +{g.pendingCount}
-          </span>
-        )}
+        <span className="flex items-center gap-1">
+          {g.pendingCount > 0 && (
+            <span className="min-w-[22px] rounded-full bg-white px-1.5 text-center text-[12px] font-bold leading-[22px] text-[var(--brand)]">
+              +{g.pendingCount}
+            </span>
+          )}
+          <UnreadBadges g={g} fallbackTheme={fallbackTheme} />
+        </span>
       </div>
       <div className="relative mt-auto pt-4">
         <div className="line-clamp-2 text-[18px] font-bold leading-tight">{g.name}</div>
@@ -151,6 +197,40 @@ export function EnvCard({
           </span>
         )}
       </div>
+    </button>
+  );
+}
+
+/** A pinned church-wide event on the main page, in its ministry's colours. */
+function PinnedEventCard({
+  e,
+  fallbackTheme,
+  onClick,
+}: {
+  e: EventSummary;
+  fallbackTheme: string;
+  onClick: () => void;
+}) {
+  const when = useEventWhen();
+  const theme = resolveBrand(e.brandColor ?? fallbackTheme);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative flex h-[150px] w-[78%] max-w-[320px] shrink-0 snap-start flex-col justify-end overflow-hidden rounded-[24px] p-4 text-left text-white shadow-cta transition active:scale-[0.98]"
+      style={{ background: `linear-gradient(145deg, ${theme.light}, ${theme.partner})` }}
+    >
+      {e.coverUrl && (
+        <>
+          <img src={e.coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+        </>
+      )}
+      <span className="relative text-[12px] font-bold uppercase tracking-wider text-white/80">
+        {e.groupName}
+      </span>
+      <span className="relative line-clamp-2 text-[19px] font-bold leading-tight">{e.title}</span>
+      <span className="relative text-[13px] text-white/85">{when(e)}</span>
     </button>
   );
 }

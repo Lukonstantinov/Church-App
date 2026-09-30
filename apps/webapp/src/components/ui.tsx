@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEnv } from '../lib/env';
 import { useT } from '../lib/i18n';
-import { PatternLayer } from './PatternLayer';
+import { PatternLayer, onBrandStyle } from './PatternLayer';
 
 /** Page container. `tabs` leaves room for the floating tab bar. */
 export function Screen({ children, tabs }: { children: ReactNode; tabs?: boolean }) {
@@ -382,9 +382,11 @@ export function HeroCard({
 }) {
   // Inside a ministry, its pattern decorates the hero blocks too.
   const { env } = useEnv();
+  const on = onBrandStyle(env?.textColor, !!env?.pattern);
   return (
     <div
-      className={`brand-gradient relative overflow-hidden rounded-[var(--radius-card)] p-5 text-white shadow-cta ${className}`}
+      className={`brand-gradient relative overflow-hidden rounded-[var(--radius-card)] p-5 shadow-cta ${on.className} ${className}`}
+      style={on.style}
     >
       <PatternLayer pattern={env?.pattern} logoUrl={env?.logoUrl} />
       <div

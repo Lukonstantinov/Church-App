@@ -2,8 +2,10 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
+  ENTER_ANIMATIONS,
   PERMISSIONS,
   readPattern,
+  type EnterAnimation,
   addExistingMemberSchema,
   addOfflineMemberSchema,
   normalizePermissions,
@@ -35,6 +37,7 @@ import { audit } from '../lib/audit';
 import { randomCode } from '../lib/codes';
 import { churchDefaultLocale } from '../lib/church';
 import { groupLogoUrl } from '../lib/groups';
+import { markFeedRead, unreadCounts } from '../lib/feed';
 import { assertGroupMedia } from '../lib/media';
 import { createDefaultPositions, defaultPositionId, permsOf, roleFor } from '../lib/positions';
 import { botApi, botUsername, inviteLink } from '../lib/telegram';
@@ -46,7 +49,7 @@ export const groupRoutes = new Hono<{ Bindings: Env; Variables: AuthVariables }>
 async function summarize(db: Db, user: User, list: Group[]): Promise<GroupSummary[]> {
   if (list.length === 0) return [];
   const ids = list.map((g) => g.id);
-  const [counts, leaders, mine] = await Promise.all([
+  const [counts, leaders, mine, unread] = await Promise.all([
     db
       .select({
         groupId: memberships.groupId,
@@ -87,6 +90,7 @@ async function summarize(db: Db, user: User, list: Group[]): Promise<GroupSummar
           eq(memberships.status, 'active'),
         ),
       ),
+    unreadCounts(db, user.id, ids),
   ]);
   const countBy = new Map(counts.map((c) => [c.groupId, c]));
   const mineBy = new Map(mine.map((m) => [m.groupId, m]));
@@ -114,6 +118,14 @@ async function summarize(db: Db, user: User, list: Group[]): Promise<GroupSummar
       positionName: m?.positionName ?? null,
       brandColor: g.brandColor,
       pattern: readPattern(g.pattern),
+      textColor: g.textColor,
+      badgeColor: g.badgeColor,
+      logoMediaId: g.logoMediaId,
+      unreadPosts: unread.get(g.id)?.posts ?? 0,
+      unreadComments: unread.get(g.id)?.comments ?? 0,
+      animation: (ENTER_ANIMATIONS as readonly string[]).includes(g.animation)
+        ? (g.animation as EnterAnimation)
+        : 'rise',
       logoUrl: groupLogoUrl(g),
     };
   });
@@ -356,9 +368,10 @@ groupRoutes.post('/:id/members', async (c) => {
 groupRoutes.get('/:id/people-search', async (c) => {
   const db = c.get('db');
   const group = await assertCan(db, c.get('user'), idParam(c), 'people.manage');
-  const q = (c.req.query('q') ?? '').trim().replace(/^@/, '').toLowerCase();
-  const like = `%${q.replace(/[%_]/g, '')}%`;
-  const rows = await db
+  const q = (c.req.query('q') ?? '').trim().replace(/^@/, '').toLocaleLowerCase();
+  // SQLite's lower() only folds Latin letters, so Cyrillic/Lithuanian names are matched
+  // here instead. A church directory is small enough to scan.
+  const everyone = await db
     .select({
       userId: users.id,
       firstName: users.firstName,
@@ -367,16 +380,21 @@ groupRoutes.get('/:id/people-search', async (c) => {
       telegramId: users.telegramId,
     })
     .from(users)
-    .where(
-      and(
-        isNull(users.anonymizedAt),
-        q
-          ? sql`(lower(${users.firstName}) like ${like} or lower(coalesce(${users.lastName}, '')) like ${like} or lower(coalesce(${users.username}, '')) like ${like})`
-          : undefined,
-      ),
-    )
+    .where(isNull(users.anonymizedAt))
     .orderBy(users.firstName, users.lastName)
-    .limit(40);
+    .limit(5000);
+  const rows = everyone
+    .filter(
+      (u) =>
+        !q ||
+        [
+          u.firstName,
+          u.lastName ?? '',
+          u.username ?? '',
+          `${u.firstName} ${u.lastName ?? ''}`,
+        ].some((v) => v.toLocaleLowerCase().includes(q)),
+    )
+    .slice(0, 40);
   const here = rows.length
     ? await db
         .select({ userId: memberships.userId })
@@ -489,5 +507,14 @@ groupRoutes.delete('/:id/chat', async (c) => {
   const db = c.get('db');
   const group = await assertCan(db, c.get('user'), idParam(c), 'settings');
   await unlinkChat(botApi(c.env), db, group);
+  return c.json({ ok: true });
+});
+
+/** Opening the feed: everything in it counts as seen. */
+groupRoutes.post('/:id/feed/read', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const group = await assertCanViewGroup(db, user, idParam(c));
+  await markFeedRead(db, user.id, group.id);
   return c.json({ ok: true });
 });

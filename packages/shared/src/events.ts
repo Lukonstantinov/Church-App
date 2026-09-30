@@ -77,6 +77,8 @@ export const updateEventSchema = z.object({
   priceCents: z.number().int().min(0).max(10_000_000).nullable().optional(),
   chatUrl: chatUrlSchema.optional(),
   status: z.enum(['scheduled', 'cancelled']).optional(),
+  /** Show at the top of the main page for the whole church. */
+  pinned: z.boolean().optional(),
 });
 export type UpdateEventInput = z.input<typeof updateEventSchema>;
 
@@ -121,6 +123,9 @@ export interface EventSummary {
   priceCents: number | null;
   status: 'scheduled' | 'cancelled';
   goingCount: number;
+  pinned: boolean;
+  /** The ministry's colours, for cards shown outside it (pinned on the main page). */
+  brandColor: string | null;
   myRsvp: RsvpStatus | null;
   /** Duty names the requester is assigned to. */
   myRoles: string[];
@@ -156,4 +161,6 @@ export interface EventDetail extends EventSummary {
   /** What the requester has paid for this event. */
   myPaidCents: number;
   canManage: boolean;
+  /** Belongs to the ministry (can answer RSVP); false when seeing a pinned event. */
+  member: boolean;
 }

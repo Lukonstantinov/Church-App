@@ -24,7 +24,8 @@ import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
-import { useGroupStats } from '../lib/queries';
+import { useGroupStats, useMe } from '../lib/queries';
+import { FeedEntry } from '../components/FeedEntry';
 
 const HOUR = 3_600_000;
 
@@ -38,6 +39,7 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
   const t = useT();
   const f = useFmt();
   const stats = useGroupStats(active.id);
+  const me = useMe();
   const s = stats.data;
   // Requests only matter to people who can approve them.
   const pending = s && can('people.manage') ? s.pendingCount : 0;
@@ -124,13 +126,15 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
             </Card>
           )}
 
+          <FeedEntry g={active} fallbackTheme={me.data?.church.brandColor ?? 'blue'} />
+
           {(can('announce') || can('meetings.manage') || can('people.manage')) && (
             <div className="grid grid-cols-3 gap-3">
               {can('announce') && (
                 <QuickAction
                   icon={<IconMegaphone size={22} />}
                   label={t.overview.quickAnnounce}
-                  onClick={() => push({ name: 'announcements', groupId: active.id })}
+                  onClick={() => push({ name: 'newPost', groupId: active.id })}
                 />
               )}
               {can('meetings.manage') && (

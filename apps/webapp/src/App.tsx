@@ -12,7 +12,9 @@ import { AddPerson } from './screens/AddPerson';
 import { PositionEditor, Positions } from './screens/Positions';
 import { isInsideTelegram } from './lib/telegram';
 import { AddOffline } from './screens/AddOffline';
-import { Announcements } from './screens/Announcements';
+import { Feed, PostScreen } from './screens/Feed';
+import { PostEditor } from './screens/PostEditor';
+import { Telemetry } from './screens/Telemetry';
 import { ChurchSettings } from './screens/ChurchSettings';
 import { CreateGroup } from './screens/CreateGroup';
 import { ManagerShell } from './screens/ManagerShell';
@@ -38,7 +40,13 @@ function EnvHome({ me, groupId }: { me: MeResponse; groupId: number }) {
   const groups = useGroups();
   if (groups.isPending) return <Loading />;
   if (!env || env.id !== groupId) return <ErrorState onRetry={() => void groups.refetch()} />;
-  return manages ? <ManagerShell env={env} /> : <MemberHome me={me} groupId={env.id} />;
+  return manages ? (
+    <ManagerShell env={env} />
+  ) : (
+    <div key={env.id} className={`env-anim-${env.animation}`}>
+      <MemberHome me={me} groupId={env.id} />
+    </div>
+  );
 }
 
 /** Applies the open environment's theme (or the church one) and provides its rights. */
@@ -100,7 +108,13 @@ function Router({ me }: { me: MeResponse }) {
     case 'groupSettings':
       return <GroupSettings key={route.groupId} groupId={route.groupId} />;
     case 'announcements':
-      return <Announcements key={route.groupId} groupId={route.groupId} />;
+      return <Feed key={route.groupId} groupId={route.groupId} />;
+    case 'post':
+      return <PostScreen key={route.postId} groupId={route.groupId} postId={route.postId} />;
+    case 'telemetry':
+      return me.user.isDeveloper ? <Telemetry /> : null;
+    case 'newPost':
+      return <PostEditor key={route.groupId} groupId={route.groupId} />;
   }
 }
 

@@ -113,10 +113,26 @@ const TILES = {
 export type PatternKey = keyof typeof TILES;
 export const PATTERN_KEYS = Object.keys(TILES) as PatternKey[];
 
+export const PATTERN_LAYOUTS = [
+  'grid',
+  'checker',
+  'brick',
+  'domino',
+  'honeycomb',
+  'scatter',
+] as const;
+export type PatternLayout = (typeof PATTERN_LAYOUTS)[number];
+export const PATTERN_ALTERNATES = ['none', 'rotate', 'mirror', 'size'] as const;
+export type PatternAlternate = (typeof PATTERN_ALTERNATES)[number];
+
 /**
  * A ministry's background pattern: one icon repeated over its colours.
- * - `kind`: a ready-made shape, any emoji, or the ministry's logo
- * - `size`: tile size in px (smaller = denser); `opacity` 0.05–0.8; `angle` −45…45°
+ * - `kind`/`value`: a ready-made shape, any emoji, or the ministry's logo
+ * - `size`: cell size in px; `scale`: icon size within its cell (spacing)
+ * - `layout`: grid, checkers, bricks, dominoes, honeycomb or scatter
+ * - `angle`: tilt of the whole pattern; `iconAngle`: rotation of each icon
+ * - `alternate`: every other icon flipped, mirrored or smaller
+ * - `opacity` of the icons; `shade`: darkens (<0) or lightens (>0) the whole block
  */
 export interface PatternConfig {
   kind: 'preset' | 'emoji' | 'logo';
@@ -124,6 +140,11 @@ export interface PatternConfig {
   size: number;
   opacity: number;
   angle: number;
+  layout?: PatternLayout;
+  scale?: number;
+  iconAngle?: number;
+  alternate?: PatternAlternate;
+  shade?: number;
 }
 
 export const DEFAULT_PATTERN: PatternConfig = {
@@ -132,6 +153,11 @@ export const DEFAULT_PATTERN: PatternConfig = {
   size: 44,
   opacity: 0.18,
   angle: -20,
+  layout: 'grid',
+  scale: 0.6,
+  iconAngle: 0,
+  alternate: 'none',
+  shade: 0,
 };
 
 /** Emoji may be several code points (flags, ZWJ sequences) but never markup. */
@@ -141,9 +167,14 @@ export const patternSchema = z
   .object({
     kind: z.enum(['preset', 'emoji', 'logo']),
     value: z.string().max(16),
-    size: z.number().min(16).max(120),
-    opacity: z.number().min(0.03).max(0.8),
-    angle: z.number().min(-45).max(45),
+    size: z.number().min(16).max(160),
+    opacity: z.number().min(0.03).max(1),
+    angle: z.number().min(-90).max(90),
+    layout: z.enum(PATTERN_LAYOUTS).optional(),
+    scale: z.number().min(0.2).max(1.2).optional(),
+    iconAngle: z.number().min(-180).max(180).optional(),
+    alternate: z.enum(PATTERN_ALTERNATES).optional(),
+    shade: z.number().min(-0.7).max(0.7).optional(),
   })
   .refine(
     (p) => p.kind === 'logo' || (p.kind === 'preset' ? p.value in TILES : SAFE_EMOJI.test(p.value)),
@@ -165,30 +196,147 @@ export function readPattern(raw: unknown): PatternConfig | null {
   return r.success ? r.data : null;
 }
 
-/**
- * CSS for the repeating layer. Emoji and shapes become an SVG tile; the logo is used
- * as an image. Tilt is applied by rotating an oversized layer (see PatternLayer).
- */
-export function patternBackground(
-  p: PatternConfig,
-  logoUrl?: string | null,
-): { image: string; size: string } | null {
-  const s = Math.round(p.size);
+/** Icon markup centred on (0,0), `d` px wide. */
+function iconMarkup(p: PatternConfig, d: number, logoDataUrl?: string | null): string | null {
   if (p.kind === 'logo') {
-    return logoUrl ? { image: `url("${logoUrl}")`, size: `${Math.round(s * 0.6)}px` } : null;
+    if (!logoDataUrl) return null;
+    return `<image href='${logoDataUrl}' x='${-d / 2}' y='${-d / 2}' width='${d}' height='${d}' preserveAspectRatio='xMidYMid meet'/>`;
   }
-  let svg: string;
   if (p.kind === 'preset') {
     const tile = TILES[p.value as PatternKey];
     if (!tile) return null;
-    // Scale the preset tile to the chosen size.
-    svg = tile.replace(/width='(\d+)' height='(\d+)'/, (_m, w: string, h: string) => {
-      const k = s / Number(w);
-      return `width='${s}' height='${Math.round(Number(h) * k)}' viewBox='0 0 ${w} ${h}'`;
-    });
-  } else {
-    const fs = Math.round(s * 0.55);
-    svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${s}' height='${s}'><text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-size='${fs}' font-family='Apple Color Emoji,Segoe UI Emoji,Noto Color Emoji,sans-serif'>${p.value}</text></svg>`;
+    const m = /width='(\d+)' height='(\d+)'>([\s\S]*)<\/svg>$/.exec(tile);
+    if (!m) return null;
+    return `<svg x='${-d / 2}' y='${-d / 2}' width='${d}' height='${d}' viewBox='0 0 ${m[1]} ${m[2]}' overflow='visible'>${m[3]}</svg>`;
   }
-  return { image: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`, size: `${s}px` };
+  return `<text x='0' y='0' dominant-baseline='central' text-anchor='middle' font-size='${Math.round(d * 0.9)}' font-family='Apple Color Emoji,Segoe UI Emoji,Noto Color Emoji,sans-serif'>${p.value}</text>`;
 }
+
+/** Icon centres (in cells) and tile size (in cells) for each layout. */
+function layoutPoints(layout: PatternLayout): {
+  w: number;
+  h: number;
+  pts: [number, number, number?, number?][];
+} {
+  switch (layout) {
+    case 'checker':
+      return {
+        w: 2,
+        h: 2,
+        pts: [
+          [0.5, 0.5],
+          [1.5, 1.5],
+        ],
+      };
+    case 'brick':
+      return {
+        w: 1,
+        h: 2,
+        pts: [
+          [0.5, 0.5],
+          [0, 1.5],
+          [1, 1.5],
+        ],
+      };
+    case 'domino':
+      return {
+        w: 3,
+        h: 2,
+        pts: [
+          [0.5, 0.5],
+          [1.5, 0.5],
+          [0, 1.5],
+          [2, 1.5],
+          [3, 1.5],
+        ],
+      };
+    case 'honeycomb':
+      return {
+        w: 1,
+        h: 1.732,
+        pts: [
+          [0.5, 0.433],
+          [0, 1.299],
+          [1, 1.299],
+        ],
+      };
+    case 'scatter':
+      // Fixed "random" spots: [x, y, extra rotation, size factor].
+      return {
+        w: 3,
+        h: 3,
+        pts: [
+          [0.45, 0.5, -18, 1],
+          [1.7, 0.35, 32, 0.75],
+          [2.55, 1.25, -40, 1.1],
+          [1.15, 1.45, 12, 0.85],
+          [0.35, 2.35, 48, 0.8],
+          [1.85, 2.5, -8, 1],
+        ],
+      };
+    default:
+      return { w: 1, h: 1, pts: [[0.5, 0.5]] };
+  }
+}
+
+/**
+ * CSS for the repeating layer: one SVG tile with the icons placed by the layout.
+ * The logo must be passed as a data: URL (an SVG used as a background can't load
+ * other URLs). Tilt is applied by rotating an oversized layer (see PatternLayer).
+ */
+export function patternBackground(
+  p: PatternConfig,
+  logoDataUrl?: string | null,
+): { image: string; size: string; width: number; height: number } | null {
+  const cell = Math.round(p.size);
+  const d = Math.max(4, Math.round(cell * (p.scale ?? 0.6)));
+  const icon = iconMarkup(p, d, logoDataUrl);
+  if (!icon) return null;
+  const { w, h, pts } = layoutPoints(p.layout ?? 'grid');
+  const W = Math.round(w * cell);
+  const H = Math.round(h * cell);
+  const alt = p.alternate ?? 'none';
+  const uses = pts
+    .map(([x, y, rot = 0, k = 1], i) => {
+      const odd = i % 2 === 1;
+      const r = (p.iconAngle ?? 0) + rot + (alt === 'rotate' && odd ? 180 : 0);
+      const sx = (alt === 'mirror' && odd ? -1 : 1) * (alt === 'size' && odd ? 0.6 : 1) * k;
+      const sy = (alt === 'size' && odd ? 0.6 : 1) * k;
+      return `<g transform='translate(${(x * cell).toFixed(1)} ${(y * cell).toFixed(1)}) rotate(${r}) scale(${sx} ${sy})'><use href='#i'/></g>`;
+    })
+    .join('');
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${W}' height='${H}'><defs><g id='i'>${icon}</g></defs>${uses}</svg>`;
+  return {
+    image: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`,
+    size: `${W}px ${H}px`,
+    width: W,
+    height: H,
+  };
+}
+
+/** Text on a ministry's coloured blocks: automatic, light, dark or a custom colour. */
+export type TextColor = 'auto' | 'light' | 'dark' | `#${string}`;
+export const isTextColor = (v: unknown): v is TextColor =>
+  v === 'auto' ||
+  v === 'light' ||
+  v === 'dark' ||
+  (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v));
+
+export function resolveTextColor(v: string | null | undefined): string {
+  if (v === 'dark') return '#111418';
+  if (v && /^#[0-9a-f]{6}$/i.test(v)) return v;
+  return '#ffffff';
+}
+
+/** Opening animations a ministry can choose. */
+export const ENTER_ANIMATIONS = [
+  'rise',
+  'fade',
+  'slide',
+  'zoom',
+  'flip',
+  'blur',
+  'bounce',
+  'none',
+] as const;
+export type EnterAnimation = (typeof ENTER_ANIMATIONS)[number];

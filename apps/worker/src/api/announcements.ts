@@ -1,64 +1,257 @@
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { and, eq, isNull } from 'drizzle-orm';
-import { createAnnouncementSchema } from '@church/shared';
+import {
+  commentSchema,
+  createAnnouncementSchema,
+  reactionSchema,
+  templateInputSchema,
+  readPattern,
+  type DesignTemplate,
+} from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
-import { groups, memberships } from '../db/schema';
-import { assertCan, assertCanViewGroup } from '../lib/access';
-import { createAnnouncement, listAnnouncements } from '../lib/announcements';
+import {
+  announcementComments,
+  announcements,
+  designTemplates,
+  groups,
+  media,
+  memberships,
+} from '../db/schema';
+import { accessIn, assertCan, assertCanViewGroup, groupsWithPermission } from '../lib/access';
+import {
+  createAnnouncement,
+  listAnnouncements,
+  listComments,
+  toggleReaction,
+} from '../lib/announcements';
 import { getAppUrl } from '../lib/church';
+import { assertGroupMedia, signedMediaUrl } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi } from '../lib/telegram';
 import { idParam, parseBody } from './util';
 
 type App = { Bindings: Env; Variables: AuthVariables };
 
-/** /api/groups/:id/announcements */
+/** /api/groups/:id/announcements — the ministry's feed. */
 export const groupAnnouncementRoutes = new Hono<App>();
 
 groupAnnouncementRoutes.get('/:id/announcements', async (c) => {
   const db = c.get('db');
-  const group = await assertCanViewGroup(db, c.get('user'), idParam(c));
-  return c.json(await listAnnouncements(db, [group.id]));
+  const user = c.get('user');
+  const group = await assertCanViewGroup(db, user, idParam(c));
+  const moderate = (await accessIn(db, user, group.id)).perms.has('announce');
+  const before = Number(c.req.query('before')) || undefined;
+  return c.json(
+    await listAnnouncements(db, {
+      groupIds: [group.id],
+      viewer: user,
+      secret: c.env.WEBHOOK_SECRET,
+      before,
+      canModerate: () => moderate,
+    }),
+  );
 });
 
 groupAnnouncementRoutes.post('/:id/announcements', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
   const group = await assertCan(db, user, idParam(c), 'announce');
-  const { text } = await parseBody(c, createAnnouncementSchema);
+  const input = await parseBody(c, createAnnouncementSchema);
+  for (const id of input.mediaIds) await assertGroupMedia(db, group.id, id);
+  if (input.templateId) {
+    const tpl = await db.query.designTemplates.findFirst({
+      columns: { id: true },
+      where: eq(designTemplates.id, input.templateId),
+    });
+    if (!tpl) throw new HTTPException(400, { message: 'invalid_template' });
+  }
   const appUrl = (await getAppUrl(db, c.env.APP_URL)) ?? appUrlFor(c.env, c.req.url);
-  const result = await createAnnouncement(db, { group, author: user, text, appUrl });
+  const { row: _row, ...result } = await createAnnouncement(db, {
+    group,
+    author: user,
+    input,
+    appUrl,
+    secret: c.env.WEBHOOK_SECRET,
+  });
   // Send the first batch right away; the 5-minute cron sends anything left over.
-  c.executionCtx.waitUntil(
-    drainOutbox(db, botApi(c.env), { limit: 40 }).catch((err) =>
-      console.error('announce drain', err),
-    ),
-  );
+  if (input.notify) {
+    c.executionCtx.waitUntil(
+      drainOutbox(db, botApi(c.env), { limit: 40 }).catch((err) =>
+        console.error('announce drain', err),
+      ),
+    );
+  }
   return c.json(result, 201);
 });
 
-/** /api/me/announcements — recent announcements from the user's groups (member home). */
+/** /api/me/announcements — recent posts from all the user's ministries (member home). */
 export const myAnnouncementRoutes = new Hono<App>();
 
 myAnnouncementRoutes.get('/', async (c) => {
   const db = c.get('db');
+  const user = c.get('user');
   const rows = await db
     .select({ groupId: memberships.groupId })
     .from(memberships)
     .innerJoin(groups, eq(groups.id, memberships.groupId))
     .where(
       and(
-        eq(memberships.userId, c.get('user').id),
+        eq(memberships.userId, user.id),
         eq(memberships.status, 'active'),
         isNull(groups.archivedAt),
       ),
     );
+  const moderated = new Set(await groupsWithPermission(db, user.id, 'announce'));
   return c.json(
-    await listAnnouncements(
-      db,
-      rows.map((r) => r.groupId),
-      5,
-    ),
+    await listAnnouncements(db, {
+      groupIds: rows.map((r) => r.groupId),
+      viewer: user,
+      secret: c.env.WEBHOOK_SECRET,
+      limit: 5,
+      canModerate: (g) => user.isAdmin || moderated.has(g),
+    }),
   );
+});
+
+/** /api/announcements/:id — reactions, comments, deletion. Members of the ministry only. */
+export const announcementRoutes = new Hono<App>();
+
+async function loadPost(c: { get: (k: 'db' | 'user') => unknown }, id: number) {
+  const db = c.get('db') as AuthVariables['db'];
+  const user = c.get('user') as AuthVariables['user'];
+  const post = await db.query.announcements.findFirst({ where: eq(announcements.id, id) });
+  if (!post || post.deletedAt) throw new HTTPException(404, { message: 'not_found' });
+  const access = await accessIn(db, user, post.groupId);
+  if (!access.member) throw new HTTPException(404, { message: 'not_found' });
+  return { db, user, post, moderate: access.perms.has('announce') };
+}
+
+announcementRoutes.post('/:id/reactions', async (c) => {
+  const { db, user, post } = await loadPost(c, idParam(c));
+  const { emoji } = await parseBody(c, reactionSchema);
+  await toggleReaction(db, post.id, user.id, emoji);
+  return c.json({ ok: true });
+});
+
+announcementRoutes.get('/:id/comments', async (c) => {
+  const { db, user, post, moderate } = await loadPost(c, idParam(c));
+  return c.json(await listComments(db, post.id, user, moderate));
+});
+
+announcementRoutes.post('/:id/comments', async (c) => {
+  const { db, user, post, moderate } = await loadPost(c, idParam(c));
+  const { text } = await parseBody(c, commentSchema);
+  await db.insert(announcementComments).values({ announcementId: post.id, userId: user.id, text });
+  return c.json(await listComments(db, post.id, user, moderate), 201);
+});
+
+announcementRoutes.delete('/:id', async (c) => {
+  const { db, user, post, moderate } = await loadPost(c, idParam(c));
+  if (post.authorId !== user.id && !moderate)
+    throw new HTTPException(403, { message: 'forbidden' });
+  await db
+    .update(announcements)
+    .set({ deletedAt: new Date().toISOString() })
+    .where(eq(announcements.id, post.id));
+  return c.json({ ok: true });
+});
+
+/** /api/comments/:id — authors and moderators remove a comment. */
+export const commentRoutes = new Hono<App>();
+
+commentRoutes.delete('/:id', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const comment = await db.query.announcementComments.findFirst({
+    where: eq(announcementComments.id, idParam(c)),
+  });
+  if (!comment || comment.deletedAt) throw new HTTPException(404, { message: 'not_found' });
+  const post = await db.query.announcements.findFirst({
+    where: eq(announcements.id, comment.announcementId),
+  });
+  const moderate = post ? (await accessIn(db, user, post.groupId)).perms.has('announce') : false;
+  if (comment.userId !== user.id && !moderate)
+    throw new HTTPException(403, { message: 'forbidden' });
+  await db
+    .update(announcementComments)
+    .set({ deletedAt: new Date().toISOString() })
+    .where(eq(announcementComments.id, comment.id));
+  return c.json({ ok: true });
+});
+
+/**
+ * /api/templates — church-wide design templates (colours, pattern, text colour).
+ * Anyone who may change a ministry's look or post announcements can save them.
+ */
+export const templateRoutes = new Hono<App>();
+
+async function canDesign(c: { get: (k: 'db' | 'user') => unknown }) {
+  const db = c.get('db') as AuthVariables['db'];
+  const user = c.get('user') as AuthVariables['user'];
+  if (user.isAdmin) return true;
+  const [a, b] = await Promise.all([
+    groupsWithPermission(db, user.id, 'settings'),
+    groupsWithPermission(db, user.id, 'announce'),
+  ]);
+  return a.length + b.length > 0;
+}
+
+templateRoutes.get('/', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  if (!(await canDesign(c))) throw new HTTPException(403, { message: 'forbidden' });
+  const rows = await db.select().from(designTemplates).orderBy(designTemplates.id);
+  const list: DesignTemplate[] = await Promise.all(
+    rows.map(async (r) => ({
+      id: r.id,
+      name: r.name,
+      brandColor: r.brandColor,
+      pattern: readPattern(r.pattern),
+      textColor: r.textColor,
+      logoUrl: r.logoMediaId ? await signedMediaUrl(c.env.WEBHOOK_SECRET, r.logoMediaId) : null,
+      mine: r.createdBy === user.id,
+    })),
+  );
+  return c.json(list);
+});
+
+templateRoutes.post('/', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  if (!(await canDesign(c))) throw new HTTPException(403, { message: 'forbidden' });
+  const input = await parseBody(c, templateInputSchema);
+  if (input.logoMediaId) {
+    const m = await db.query.media.findFirst({
+      columns: { id: true },
+      where: eq(media.id, input.logoMediaId),
+    });
+    if (!m) throw new HTTPException(400, { message: 'invalid_media' });
+  }
+  const [row] = await db
+    .insert(designTemplates)
+    .values({
+      name: input.name,
+      brandColor: input.brandColor,
+      pattern: input.pattern ? JSON.stringify(input.pattern) : null,
+      textColor: input.textColor,
+      logoMediaId: input.logoMediaId ?? null,
+      createdBy: user.id,
+    })
+    .returning({ id: designTemplates.id });
+  return c.json({ id: row!.id }, 201);
+});
+
+templateRoutes.delete('/:id', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const row = await db.query.designTemplates.findFirst({
+    where: eq(designTemplates.id, idParam(c)),
+  });
+  if (!row) throw new HTTPException(404, { message: 'not_found' });
+  if (row.createdBy !== user.id && !user.isAdmin)
+    throw new HTTPException(403, { message: 'forbidden' });
+  await db.delete(designTemplates).where(eq(designTemplates.id, row.id));
+  return c.json({ ok: true });
 });

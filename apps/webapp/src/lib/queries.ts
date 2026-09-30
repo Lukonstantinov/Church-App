@@ -27,6 +27,10 @@ import type {
   UpdateUserInput,
 } from '@church/shared';
 import type {
+  CommentRow,
+  CreateAnnouncementInput,
+  DesignTemplate,
+  TemplateInput,
   AddExistingMemberInput,
   PersonSearchRow,
   PositionInput,
@@ -381,15 +385,133 @@ export function useMyAnnouncements(enabled = true) {
   });
 }
 
+/** Publishes a post; a plain string is a text-only announcement. */
 export function useSendAnnouncement(groupId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (text: string) =>
+    mutationFn: (input: string | CreateAnnouncementInput) =>
       apiFetch<AnnouncementResult>(`/groups/${groupId}/announcements`, {
         method: 'POST',
-        ...json({ text }),
+        ...json(typeof input === 'string' ? { text: input } : input),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.announcements(groupId) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.announcements(groupId) });
+      void qc.invalidateQueries({ queryKey: keys.myAnnouncements });
+    },
+  });
+}
+
+/** The ministry's feed, newest first, paged by post id. */
+export function useFeed(groupId: number) {
+  return useInfiniteQuery({
+    queryKey: [...keys.announcements(groupId), 'feed'],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      apiFetch<AnnouncementRow[]>(
+        `/groups/${groupId}/announcements${pageParam ? `?before=${pageParam}` : ''}`,
+      ),
+    getNextPageParam: (last) => (last.length >= 20 ? last[last.length - 1]!.id : undefined),
+  });
+}
+
+function useFeedChanged(groupId: number) {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: keys.announcements(groupId) });
+    void qc.invalidateQueries({ queryKey: keys.myAnnouncements });
+  };
+}
+
+export function useReact(groupId: number) {
+  const changed = useFeedChanged(groupId);
+  return useMutation({
+    mutationFn: ({ postId, emoji }: { postId: number; emoji: string }) =>
+      apiFetch(`/announcements/${postId}/reactions`, send('POST', { emoji })),
+    onSuccess: changed,
+  });
+}
+
+export function useComments(postId: number) {
+  return useQuery({
+    queryKey: ['announcements', postId, 'comments'],
+    queryFn: () => apiFetch<CommentRow[]>(`/announcements/${postId}/comments`),
+    // A light "live" chat: refresh while the post is open.
+    refetchInterval: 10_000,
+  });
+}
+
+export function useAddComment(groupId: number, postId: number) {
+  const qc = useQueryClient();
+  const changed = useFeedChanged(groupId);
+  return useMutation({
+    mutationFn: (text: string) =>
+      apiFetch<CommentRow[]>(`/announcements/${postId}/comments`, send('POST', { text })),
+    onSuccess: (list) => {
+      qc.setQueryData(['announcements', postId, 'comments'], list);
+      changed();
+    },
+  });
+}
+
+export function useDeleteComment(groupId: number, postId: number) {
+  const qc = useQueryClient();
+  const changed = useFeedChanged(groupId);
+  return useMutation({
+    mutationFn: (id: number) => apiFetch(`/comments/${id}`, send('DELETE')),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['announcements', postId, 'comments'] });
+      changed();
+    },
+  });
+}
+
+export function useDeletePost(groupId: number) {
+  const changed = useFeedChanged(groupId);
+  return useMutation({
+    mutationFn: (id: number) => apiFetch(`/announcements/${id}`, send('DELETE')),
+    onSuccess: changed,
+  });
+}
+
+/** Opening the feed clears the unread counters on the ministry card. */
+export function useMarkFeedRead(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch(`/groups/${groupId}/feed/read`, send('POST')),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.groups }),
+  });
+}
+
+export function useTemplates(enabled = true) {
+  return useQuery({
+    queryKey: ['templates'],
+    queryFn: () => apiFetch<DesignTemplate[]>('/templates'),
+    enabled,
+  });
+}
+
+export function useSaveTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TemplateInput) =>
+      apiFetch<{ id: number }>('/templates', send('POST', input)),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['templates'] }),
+  });
+}
+
+export function useDeleteTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiFetch(`/templates/${id}`, send('DELETE')),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['templates'] }),
+  });
+}
+
+export function usePinnedEvents(enabled = true) {
+  return useQuery({
+    queryKey: ['events', 'pinned'],
+    queryFn: () => apiFetch<EventSummary[]>('/events/pinned'),
+    enabled,
   });
 }
 

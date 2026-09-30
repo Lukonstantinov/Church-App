@@ -22,6 +22,7 @@ import {
   eventDetail,
   eventTimes,
   listEvents,
+  listPinned,
   loadEventOr404,
   setRoles,
   setRsvp,
@@ -82,6 +83,12 @@ groupEventRoutes.post('/:id/events', async (c) => {
 /** /api/events/:id */
 export const eventRoutes = new Hono<App>();
 
+/** GET /api/events/pinned — pinned upcoming events of the whole church (main page). */
+eventRoutes.get('/pinned', async (c) => {
+  const user = c.get('user');
+  return c.json(await listPinned(c.get('db'), c.env.WEBHOOK_SECRET, user.id));
+});
+
 eventRoutes.get('/:id', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
@@ -108,6 +115,7 @@ eventRoutes.patch('/:id', async (c) => {
   if (input.location !== undefined) patch.location = input.location;
   if (input.chatUrl !== undefined) patch.chatUrl = input.chatUrl;
   if (input.status !== undefined) patch.status = input.status;
+  if (input.pinned !== undefined) patch.pinnedAt = input.pinned ? new Date().toISOString() : null;
   if (input.priceCents !== undefined) patch.priceCents = input.priceCents;
   if (input.coverMediaId !== undefined) {
     if (input.coverMediaId) await assertGroupMedia(db, event.groupId, input.coverMediaId);

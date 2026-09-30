@@ -4,6 +4,7 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -55,6 +56,8 @@ export const users = sqliteTable('users', {
   claimExpiresAt: text('claim_expires_at'),
   createdAt: createdAt(),
   anonymizedAt: text('anonymized_at'),
+  /** Last time the person used the app or the bot (updated at most hourly). */
+  lastSeenAt: text('last_seen_at'),
 });
 
 export const groups = sqliteTable('groups', {
@@ -80,6 +83,12 @@ export const groups = sqliteTable('groups', {
   chatLinkCode: text('chat_link_code'),
   /** Decorative pattern over the theme colours (PATTERNS key), NULL = plain. */
   pattern: text('pattern'),
+  /** 'auto' | 'light' | 'dark' | '#rrggbb' — text on the ministry's coloured blocks. */
+  textColor: text('text_color').notNull().default('auto'),
+  /** How the ministry opens (ENTER_ANIMATIONS key). */
+  animation: text('animation').notNull().default('rise'),
+  /** Colour of the "new posts" counter on the ministry card; NULL = the theme colour. */
+  badgeColor: text('badge_color'),
   archivedAt: text('archived_at'),
   createdAt: createdAt(),
 });
@@ -271,8 +280,18 @@ export const announcements = sqliteTable(
       .notNull()
       .references(() => groups.id),
     authorId: integer('author_id').references(() => users.id),
+    /** Poster headline (optional). */
+    title: text('title'),
     text: text('text').notNull(),
+    /** JSON array of media ids: the poster's photos, in order. */
+    mediaIds: text('media_ids', { mode: 'json' }).$type<number[]>(),
+    /** Colour laid over the photos so the headline stays readable. */
+    tintColor: text('tint_color'),
+    tintStrength: real('tint_strength'),
+    /** Design template used as the poster background when there are no photos. */
+    templateId: integer('template_id'),
     recipients: integer('recipients').notNull().default(0),
+    deletedAt: text('deleted_at'),
     createdAt: createdAt(),
   },
   (t) => [index('announcements_group_created').on(t.groupId, t.createdAt)],
@@ -373,6 +392,8 @@ export const events = sqliteTable(
     priceCents: integer('price_cents'),
     /** Link to a Telegram chat for this event (t.me/…). */
     chatUrl: text('chat_url'),
+    /** Pinned to the top of the main page, for the whole church. */
+    pinnedAt: text('pinned_at'),
     status: text('status', { enum: ['scheduled', 'cancelled'] })
       .notNull()
       .default('scheduled'),
@@ -471,3 +492,66 @@ export const positions = sqliteTable(
 );
 
 export type Position = typeof positions.$inferSelect;
+
+/** Reactions to an announcement in a ministry's feed (one per person per emoji). */
+export const announcementReactions = sqliteTable(
+  'announcement_reactions',
+  {
+    announcementId: integer('announcement_id')
+      .notNull()
+      .references(() => announcements.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    emoji: text('emoji').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.announcementId, t.userId, t.emoji] })],
+);
+
+/** Comments under an announcement: the ministry's small in-app chat. */
+export const announcementComments = sqliteTable(
+  'announcement_comments',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    announcementId: integer('announcement_id')
+      .notNull()
+      .references(() => announcements.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    text: text('text').notNull(),
+    createdAt: createdAt(),
+    deletedAt: text('deleted_at'),
+  },
+  (t) => [index('announcement_comments_post').on(t.announcementId, t.id)],
+);
+
+/** Reusable looks (colours, pattern, text colour) for ministries and posters. */
+export const designTemplates = sqliteTable('design_templates', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  brandColor: text('brand_color'),
+  pattern: text('pattern'),
+  textColor: text('text_color').notNull().default('auto'),
+  /** Logo shown in the pattern when it uses the logo (media id). */
+  logoMediaId: integer('logo_media_id'),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: createdAt(),
+});
+
+/** What each person has already seen in a ministry's feed (for the unread counters). */
+export const feedReads = sqliteTable(
+  'feed_reads',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    lastPostId: integer('last_post_id').notNull().default(0),
+    lastCommentId: integer('last_comment_id').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.groupId] })],
+);

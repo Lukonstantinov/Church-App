@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MeResponse } from '@church/shared';
+import type { MeResponse, Telemetry } from '@church/shared';
 import { api, makeInitData } from './helpers';
 
 describe('/health', () => {
@@ -55,5 +55,23 @@ describe('unknown api route', () => {
   it('returns JSON 404', async () => {
     const res = await api('/api/nope', { user: { id: 2004, first_name: 'A' } });
     expect(res.status).toBe(404);
+  });
+});
+
+describe('/api/dev/telemetry', () => {
+  it('is only for the developers from ADMIN_TELEGRAM_IDS', async () => {
+    const me = await (await api('/api/me', { user: { id: 1001, first_name: 'Админ' } })).json();
+    expect((me as MeResponse).user.isDeveloper).toBe(true);
+    const res = await api('/api/dev/telemetry', { user: { id: 1001, first_name: 'Админ' } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Telemetry;
+    expect(body.environment).toBeTruthy();
+    expect(body.users.total).toBeGreaterThan(0);
+    expect(body.users.active1d).toBeGreaterThan(0);
+    expect(body.tables.find((t) => t.name === 'users')!.rows).toBeGreaterThan(0);
+    expect(body.limits.length).toBeGreaterThan(3);
+    expect((await api('/api/dev/telemetry', { user: { id: 7777, first_name: 'X' } })).status).toBe(
+      403,
+    );
   });
 });

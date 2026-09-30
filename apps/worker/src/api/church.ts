@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { eq } from 'drizzle-orm';
 import { LOGO_MAX_BYTES, updateChurchSchema, updateMeSchema } from '@church/shared';
-import type { Env } from '../env';
+import { isDeveloper, type Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db/client';
 import { churchSettings, groups, media, users } from '../db/schema';
@@ -22,7 +22,7 @@ meRoutes.patch('/', async (c) => {
   const user = c.get('user');
   const { locale } = await parseBody(c, updateMeSchema);
   await db.update(users).set({ locale }).where(eq(users.id, user.id));
-  return c.json(await loadMe(db, { ...user, locale }));
+  return c.json(await loadMe(db, { ...user, locale }, isDeveloper(c.env, user)));
 });
 
 /** /api/church — settings. Everyone can read; only admins change them. */

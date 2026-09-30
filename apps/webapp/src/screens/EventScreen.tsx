@@ -35,6 +35,7 @@ import {
   ProgressBar,
   Screen,
   Section,
+  Toggle,
 } from '../components/ui';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
@@ -147,10 +148,21 @@ function EventBody({ e }: { e: EventDetail }) {
         <Card className="whitespace-pre-line p-4 text-[16px] leading-relaxed">{e.description}</Card>
       )}
 
-      {e.features.rsvp && <RsvpBlock e={e} />}
+      {e.features.rsvp && e.member && <RsvpBlock e={e} />}
       {e.features.duties && <DutiesBlock e={e} />}
       {e.features.gallery && <GalleryBlock e={e} />}
       {e.features.cost && (e.canManage ? <MoneyBlock e={e} /> : <MyCost e={e} />)}
+
+      {e.canManage && (
+        <Section footer={t.feed.pinnedHint}>
+          <Toggle
+            label={`📌 ${t.feed.pin}`}
+            checked={e.pinned}
+            disabled={update.isPending}
+            onChange={(pinned) => update.mutate({ pinned })}
+          />
+        </Section>
+      )}
 
       {e.canManage && (
         <Button

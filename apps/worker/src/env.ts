@@ -22,3 +22,8 @@ export function adminTelegramIds(env: Env): Set<number> {
       .filter((n) => Number.isSafeInteger(n) && n > 0),
   );
 }
+
+/** The people who deploy and run the app (ADMIN_TELEGRAM_IDS) get the telemetry screen. */
+export function isDeveloper(env: Env, user: { telegramId: number | null; isAdmin: boolean }) {
+  return user.isAdmin && user.telegramId !== null && adminTelegramIds(env).has(user.telegramId);
+}

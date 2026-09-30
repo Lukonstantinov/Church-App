@@ -162,9 +162,26 @@ describe('ministry look and deletion', () => {
       (x) => x.id === g.id,
     )!;
     expect(s.pattern).toEqual({ ...DEFAULT_PATTERN, value: '🎸', angle: 30 });
+    expect(s).toMatchObject({ textColor: 'auto', animation: 'rise' });
+    await apiJson(`/api/groups/${g.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { textColor: '#1a1a1a', animation: 'flip' },
+    });
+    const after = (await apiJson<GroupSummary[]>('/api/groups', { user: ADMIN })).find(
+      (x) => x.id === g.id,
+    )!;
+    expect(after).toMatchObject({ textColor: '#1a1a1a', animation: 'flip' });
+    const badText = await api(`/api/groups/${g.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { textColor: 'red; background:url(x)' },
+    });
+    expect(badText.status).toBe(400);
     for (const bad of [
       { ...DEFAULT_PATTERN, value: '<svg onload=x>' },
-      { ...DEFAULT_PATTERN, angle: 90 },
+      { ...DEFAULT_PATTERN, angle: 120 },
+      { ...DEFAULT_PATTERN, layout: 'spiral' },
       { ...DEFAULT_PATTERN, kind: 'preset', value: 'nope' },
     ]) {
       const res = await api(`/api/groups/${g.id}`, {

@@ -165,12 +165,12 @@ function Form({ g }: { g: GroupDetail }) {
         />
       </Section>
 
-      <Section title={t.env.pattern}>
+      <Section title={t.env.look}>
         <PatternDesigner
           env={g}
           fallbackTheme={churchTheme}
           saving={update.isPending}
-          onSave={(pattern) => void patchNow({ pattern })}
+          onSave={(look) => void patchNow(look)}
         />
       </Section>
 
