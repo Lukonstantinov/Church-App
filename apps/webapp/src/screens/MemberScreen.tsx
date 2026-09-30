@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { displayName, ru, type ClaimCodeResponse } from '@church/shared';
+import { AttendanceSummary } from '../components/AttendanceSummary';
 import { LinkShare } from '../components/LinkShare';
 import {
   ActionRow,
@@ -40,7 +41,8 @@ export function MemberScreen({ userId }: { userId: number }) {
 
   if (detail.isPending) return <Loading />;
   if (detail.isError) return <ErrorState onRetry={() => void detail.refetch()} />;
-  const { user, memberships, permissions } = detail.data;
+  const { user, memberships, permissions, attendance } = detail.data;
+  const tz = me.data?.church.timezone ?? 'Europe/Riga';
   const actorIsAdmin = me.data?.user.isAdmin === true;
   const isSelf = me.data?.user.id === user.id;
 
@@ -72,6 +74,15 @@ export function MemberScreen({ userId }: { userId: number }) {
       >
         {displayName(user)}
       </Title>
+
+      {attendance.map((a) => (
+        <AttendanceSummary
+          key={a.groupId}
+          data={a}
+          tz={tz}
+          showStreak={permissions.canEditProfile}
+        />
+      ))}
 
       {permissions.canEditProfile && (
         <Section title={ru.app.profile}>

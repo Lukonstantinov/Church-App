@@ -96,6 +96,8 @@ export interface MemberRow {
   offline: boolean;
   isReachable: boolean;
   guardianConsent: boolean;
+  /** Attendance rate over the group's last 8 roll calls; null if none recorded yet. */
+  recentPercent: number | null;
 }
 
 export interface MemberDetail {

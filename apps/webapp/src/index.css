@@ -1,8 +1,9 @@
 @import 'tailwindcss';
 
 /*
- * Colors come from Telegram's theme (set by telegram-web-app.js on <html>),
- * with fallbacks for a normal browser during development.
+ * Colors come from Telegram's theme (set by telegram-web-app.js on <html>), with
+ * fallbacks for a normal browser. Status and chart colors are our own: they need to
+ * keep their meaning (green = came, red = missed) whatever theme the user picked.
  */
 @theme {
   --color-bg: var(--tg-theme-bg-color, #ffffff);
@@ -16,15 +17,78 @@
   --color-button-text: var(--tg-theme-button-text-color, #ffffff);
   --color-destructive: var(--tg-theme-destructive-text-color, #e53935);
   --color-section-header: var(--tg-theme-section-header-text-color, #6d6d72);
+
+  --color-present: var(--c-present);
+  --color-late: var(--c-late);
+  --color-excused: var(--c-excused);
+  --color-absent: var(--c-absent);
+  --color-chart: var(--c-chart);
+  --color-hairline: color-mix(in srgb, var(--color-text) 10%, transparent);
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 1px rgb(0 0 0 / 0.03);
+  --shadow-bar: 0 -1px 0 var(--color-hairline);
+  --shadow-sheet: 0 -8px 32px rgb(0 0 0 / 0.18);
+  --animate-sheet-in: sheet-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-toast-in: toast-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+}
+
+:root {
+  --avatar-l: 38%;
+  --c-present: #1f9d55;
+  --c-late: #c77700;
+  --c-excused: #3b82d6;
+  --c-absent: #d9463e;
+  --c-chart: #2a78d6;
+}
+
+/* Dark: the same hues stepped for a dark surface (Telegram tells us via data-theme). */
+:root[data-theme='dark'] {
+  --avatar-l: 72%;
+  --c-present: #3ecf7d;
+  --c-late: #f0a83a;
+  --c-excused: #6aa8f0;
+  --c-absent: #f07a72;
+  --c-chart: #3987e5;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([style*='--tg-theme-bg-color']) {
+  :root:not([data-theme]):not([style*='--tg-theme-bg-color']) {
     --tg-theme-bg-color: #17212b;
     --tg-theme-secondary-bg-color: #0e1621;
     --tg-theme-section-bg-color: #17212b;
     --tg-theme-text-color: #f5f5f5;
     --tg-theme-hint-color: #708499;
+    --avatar-l: 72%;
+    --c-present: #3ecf7d;
+    --c-late: #f0a83a;
+    --c-excused: #6aa8f0;
+    --c-absent: #f07a72;
+    --c-chart: #3987e5;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(-12px);
+    opacity: 0;
+  }
+}
+@keyframes shimmer {
+  50% {
+    opacity: 0.45;
   }
 }
 
@@ -39,6 +103,24 @@ body {
   overscroll-behavior: none;
 }
 
-body {
-  padding-bottom: env(safe-area-inset-bottom);
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Comfortable focus ring for keyboard users; invisible for touch. */
+:focus-visible {
+  outline: 2px solid var(--color-button);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

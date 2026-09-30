@@ -25,11 +25,18 @@ export function startParam(): string | null {
   return webApp()?.initDataUnsafe?.start_param ?? null;
 }
 
+function applyColorScheme() {
+  const scheme = webApp()?.colorScheme;
+  if (scheme) document.documentElement.dataset.theme = scheme;
+}
+
 export function initTelegram(): void {
   const tg = webApp();
   if (!tg) return;
   tg.ready();
   tg.expand();
+  applyColorScheme();
+  tg.onEvent?.('themeChanged', applyColorScheme);
   try {
     tg.setHeaderColor('secondary_bg_color');
     tg.setBackgroundColor('secondary_bg_color');

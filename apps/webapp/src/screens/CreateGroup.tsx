@@ -6,7 +6,7 @@ import { useCreateGroup } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 
 export function CreateGroup() {
-  const { back, push } = useNav();
+  const { back, setActiveGroupId, setTab } = useNav();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const create = useCreateGroup();
@@ -16,8 +16,9 @@ export function CreateGroup() {
     if (!name.trim()) return;
     const { id } = await create.mutateAsync({ name, description });
     haptic.success();
+    setActiveGroupId(id);
+    setTab('overview');
     back();
-    push({ name: 'group', groupId: id });
   }
 
   return (
