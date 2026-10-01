@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { MEETING_KINDS, displayName, type MeetingDetail, type MeetingKind } from '@church/shared';
 import { Avatar } from '../components/Avatar';
+import { GroupTheme } from '../components/GroupTheme';
+import { IconCheck, IconChat, IconFood, IconMapPin, IconSend } from '../components/icons';
 import { Pill } from '../components/LookControls';
 import { useMoney } from '../components/money';
 import { NotifySheet } from '../components/NotifySheet';
@@ -28,7 +30,7 @@ import {
   useUpdateMeeting,
 } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
-import { KIND_EMOJI, MeetingView } from './MeetingScreen';
+import { MeetingView } from './MeetingScreen';
 
 /**
  * Opens a meeting for the person who was given a job on it (lead / snacks) as exactly
@@ -40,13 +42,19 @@ export function TaskScreen({ meetingId }: { meetingId: number }) {
   const [full, setFull] = useState(false);
   if (q.isPending) return <Loading />;
   if (q.isError || !q.data) return <ErrorState onRetry={() => void q.refetch()} />;
-  if (!q.data.myRole || full) return <MeetingView key={q.data.id} m={q.data} />;
+  // Wears the ministry's own look, even when opened from a bot link.
   return (
-    <TaskView
-      key={q.data.id}
-      m={q.data}
-      onFull={q.data.canManage ? () => setFull(true) : undefined}
-    />
+    <GroupTheme groupId={q.data.groupId}>
+      {!q.data.myRole || full ? (
+        <MeetingView key={q.data.id} m={q.data} />
+      ) : (
+        <TaskView
+          key={q.data.id}
+          m={q.data}
+          onFull={q.data.canManage ? () => setFull(true) : undefined}
+        />
+      )}
+    </GroupTheme>
   );
 }
 
@@ -125,7 +133,9 @@ function TaskView({ m, onFull }: { m: MeetingDetail; onFull?: () => void }) {
 
       <Card className="flex flex-col gap-3 p-4">
         {m.myAcceptedAt ? (
-          <div className="text-[15px] font-semibold text-present">✅ {t.meetings.confirmed}</div>
+          <div className="flex items-center gap-1.5 text-[15px] font-semibold text-present">
+            <IconCheck size={18} /> {t.meetings.confirmed}
+          </div>
         ) : (
           <>
             <p className="text-[14px]">{t.meetings.answerHint}</p>
@@ -155,7 +165,7 @@ function TaskView({ m, onFull }: { m: MeetingDetail; onFull?: () => void }) {
       {leader ? (
         <>
           <p className="px-3 text-[13px] text-hint">{t.meetings.taskLeaderLine}</p>
-          <Section title={`📍 ${t.meetings.taskPlace}`}>
+          <Section title={t.meetings.taskPlace}>
             <div className="flex flex-col gap-2 p-3">
               <TextField
                 label={t.meetings.taskPlace}
@@ -174,7 +184,7 @@ function TaskView({ m, onFull }: { m: MeetingDetail; onFull?: () => void }) {
               )}
             </div>
           </Section>
-          <Section title={`💬 ${t.meetings.taskTopic}`}>
+          <Section title={t.meetings.taskTopic}>
             <div className="p-3">
               <TextField
                 label={t.meetings.taskTopic}
@@ -192,12 +202,12 @@ function TaskView({ m, onFull }: { m: MeetingDetail; onFull?: () => void }) {
                   key={k}
                   on={kind === k}
                   onClick={() => setKind(k)}
-                  label={`${KIND_EMOJI[k]} ${t.meetings.kinds[k]}`}
+                  label={t.meetings.kinds[k]}
                 />
               ))}
             </div>
           </Section>
-          <Section title={`🍕 ${t.meetings.taskSnack}`}>
+          <Section title={t.meetings.taskSnack}>
             <button
               type="button"
               onClick={() => setPicker(true)}
@@ -211,8 +221,8 @@ function TaskView({ m, onFull }: { m: MeetingDetail; onFull?: () => void }) {
                   size={36}
                 />
               ) : (
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-hairline text-[18px]">
-                  🍕
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-hairline text-hint">
+                  <IconFood size={18} />
                 </span>
               )}
               <span className="min-w-0 flex-1">
@@ -230,7 +240,8 @@ function TaskView({ m, onFull }: { m: MeetingDetail; onFull?: () => void }) {
             {m.snackPerson && (
               <div className="border-t border-hairline px-4 py-2.5">
                 <Button small variant="glass" onClick={() => setNotify(true)}>
-                  📨 {m.snackNotifiedAt ? t.meetings.sendAgain : t.meetings.sendMessage}
+                  <IconSend size={15} />{' '}
+                  {m.snackNotifiedAt ? t.meetings.sendAgain : t.meetings.sendMessage}
                 </Button>
               </div>
             )}
@@ -242,11 +253,19 @@ function TaskView({ m, onFull }: { m: MeetingDetail; onFull?: () => void }) {
       ) : (
         <Card className="flex flex-col gap-2 p-4 text-[15px]">
           <p>{t.meetings.taskSnackLine}</p>
-          <p>
-            🍕 {t.meetings.budget}: <b>{money(budget)}</b>
+          <p className="flex items-center gap-2">
+            <IconFood size={16} className="text-hint" /> {t.meetings.budget}: <b>{money(budget)}</b>
           </p>
-          {m.location && <p>📍 {m.location}</p>}
-          {m.topic && <p>💬 {m.topic}</p>}
+          {m.location && (
+            <p className="flex items-center gap-2">
+              <IconMapPin size={16} className="text-hint" /> {m.location}
+            </p>
+          )}
+          {m.topic && (
+            <p className="flex items-center gap-2">
+              <IconChat size={16} className="text-hint" /> {m.topic}
+            </p>
+          )}
         </Card>
       )}
 

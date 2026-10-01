@@ -5,7 +5,6 @@ import {
   type AnnouncementRow,
   type EventSummary,
   type GroupSummary,
-  type PosterLook,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
@@ -16,11 +15,11 @@ import { CountdownBar } from './Countdown';
 import { EventCard, EventCover } from './EventCard';
 import { CalendarTile, GroupCalendar, calendarOnHome, setCalendarOnHome } from './GroupCalendar';
 import { UnreadBadges } from './FeedEntry';
-import { IconClock, IconMegaphone, IconPlus, IconUserPlus, IconUsers } from './icons';
+import { IconClock, IconEdit, IconMegaphone, IconPlus, IconUserPlus, IconUsers } from './icons';
 import { MeetingHeroLines } from '../screens/MeetingScreen';
 import { canRollNow } from '../screens/Overview';
 import { Button, DateBadge, HeroCard } from './ui';
-import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
+import { LookTop } from './LookTop';
 import { PosterCard, PosterMedia, hasCover } from './Poster';
 
 export interface HomeAction {
@@ -81,7 +80,7 @@ export function useHomeActions(
   if (can('announce'))
     actions.push({
       key: 'post',
-      icon: <span className="text-[17px] leading-none">✍️</span>,
+      icon: <IconEdit size={18} />,
       label: t.overview.quickPost,
       onClick: () => push({ name: 'newPost', groupId: g.id }),
     });
@@ -217,7 +216,7 @@ export function HomeHighlights({
                       onClick={toggle}
                       className="self-center rounded-full bg-hairline px-3 py-1 text-[13px] font-semibold"
                     >
-                      ▴ {t.overview.collapse}
+                      {t.overview.collapse}
                     </button>
                   </div>
                 );
@@ -290,29 +289,6 @@ function PostTile({ post, onToggle }: { post: AnnouncementRow; onToggle: () => v
   );
 }
 
-/** The ministry's look (pattern, photo, text colour) as the tile's coloured top. */
-function LookTop({
-  look,
-  className,
-  children,
-}: {
-  look: Pick<PosterLook, 'pattern' | 'logoUrl' | 'backdrop' | 'backdropUrl' | 'textColor'> | null;
-  className: string;
-  children: ReactNode;
-}) {
-  const on = onBrandStyle(look?.textColor, !!(look?.pattern || look?.backdropUrl));
-  return (
-    <div
-      className={`brand-gradient relative overflow-hidden ${on.className} ${className}`}
-      style={on.style}
-    >
-      <PatternLayer pattern={look?.pattern} logoUrl={look?.logoUrl} />
-      <BackdropLayer backdrop={look?.backdrop} url={look?.backdropUrl} />
-      <div className="relative flex min-h-full flex-1 flex-col justify-between">{children}</div>
-    </div>
-  );
-}
-
 function EventTile({ e, g, onToggle }: { e: EventSummary; g: GroupSummary; onToggle: () => void }) {
   const f = useFmt();
   const cover = e.coverUrl || e.design?.banner;
@@ -362,7 +338,7 @@ function MeetingTile({
           <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
           {m.leader && (
             <span className="mb-1 truncate rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--brand)]">
-              🎤 {m.leader.firstName}
+              {m.leader.firstName}
             </span>
           )}
         </div>

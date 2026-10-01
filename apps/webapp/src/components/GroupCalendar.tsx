@@ -23,7 +23,7 @@ import {
 import { storage } from '../lib/storage';
 import { confirmDialog, haptic } from '../lib/telegram';
 import { CountdownBar, daysUntil } from './Countdown';
-import { IconChevronRight } from './icons';
+import { IconCheck, IconChevronRight, IconClock, IconMic } from './icons';
 import { NotifySheet } from './NotifySheet';
 import { PersonPicker } from './PersonPicker';
 import { Sheet } from './Sheet';
@@ -349,7 +349,7 @@ function DaySheet({
                   />
                 ))}
               </div>
-              <p className="text-[12px] text-hint">🔒 {t.meetings.noteHint}</p>
+              <p className="text-[12px] text-hint">{t.meetings.noteHint}</p>
               <Button
                 disabled={!note.text.trim() || saveNote.isPending}
                 onClick={() => void submitNote()}
@@ -387,9 +387,16 @@ function DaySheet({
                       {f.timeRange(m.startsAt, m.endsAt)}
                       {m.topic ? ` · «${m.topic}»` : ''}
                     </span>
-                    <span className="block truncate text-[13px]">
-                      🎤 {m.leader ? displayName(m.leader) : t.meetings.noLeader}
-                      {m.leaderAcceptedAt ? ' ✅' : m.leaderNotifiedAt ? ' ⏳' : ''}
+                    <span className="flex items-center gap-1 truncate text-[13px]">
+                      <IconMic size={14} className="shrink-0 text-hint" />
+                      <span className="truncate">
+                        {m.leader ? displayName(m.leader) : t.meetings.noLeader}
+                      </span>
+                      {m.leaderAcceptedAt ? (
+                        <IconCheck size={14} className="shrink-0 text-present" />
+                      ) : m.leaderNotifiedAt ? (
+                        <IconClock size={14} className="shrink-0 text-hint" />
+                      ) : null}
                     </span>
                   </button>
                   {manage && upcoming && (

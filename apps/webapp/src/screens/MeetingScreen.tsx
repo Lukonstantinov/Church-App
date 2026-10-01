@@ -8,8 +8,19 @@ import {
   type UpdateMeetingInput,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
+import { GroupTheme } from '../components/GroupTheme';
+import { LookTop } from '../components/LookTop';
 import { AudiencePicker } from '../components/AudiencePicker';
-import { IconCalendar, IconClock, IconMapPin, IconPlus, IconUsers } from '../components/icons';
+import {
+  IconCalendar,
+  IconCheck,
+  IconClock,
+  IconFood,
+  IconMapPin,
+  IconPlus,
+  IconSend,
+  IconUsers,
+} from '../components/icons';
 import { Pill } from '../components/LookControls';
 import { useMoney } from '../components/money';
 import { NotifySheet } from '../components/NotifySheet';
@@ -28,6 +39,7 @@ import {
   TextArea,
   TextField,
 } from '../components/ui';
+import { useEnv } from '../lib/env';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
@@ -40,14 +52,6 @@ import {
 } from '../lib/queries';
 import { confirmDialog, haptic, openTelegramLink } from '../lib/telegram';
 import { canRollNow } from './Overview';
-
-export const KIND_EMOJI: Record<MeetingKind, string> = {
-  prayer: '🙏',
-  worship: '🎶',
-  outside: '🌳',
-  guest: '🎤',
-  prophetic: '🔥',
-};
 
 /** Topic, place and leader under a meeting's title on a coloured hero card. */
 export function MeetingHeroLines({
@@ -63,12 +67,12 @@ export function MeetingHeroLines({
       <div className="flex flex-wrap items-center gap-1.5">
         {meeting.leader && (
           <span className="rounded-full bg-white px-2.5 py-1 text-[13px] font-bold text-[var(--brand)]">
-            🎤 {displayName(meeting.leader)}
+            {displayName(meeting.leader)}
           </span>
         )}
         {meeting.kind && (
           <span className="rounded-full bg-white/20 px-2.5 py-1 text-[13px] font-semibold">
-            {KIND_EMOJI[meeting.kind]} {t.meetings.kinds[meeting.kind]}
+            {t.meetings.kinds[meeting.kind]}
           </span>
         )}
         {meeting.location && (
@@ -91,7 +95,11 @@ export function MeetingScreen({ meetingId }: { meetingId: number }) {
   const q = useMeeting(meetingId);
   if (q.isPending) return <Loading />;
   if (q.isError || !q.data) return <ErrorState onRetry={() => void q.refetch()} />;
-  return <MeetingView key={q.data.id} m={q.data} />;
+  return (
+    <GroupTheme groupId={q.data.groupId}>
+      <MeetingView key={q.data.id} m={q.data} />
+    </GroupTheme>
+  );
 }
 
 export function MeetingView({ m }: { m: MeetingDetail }) {
@@ -139,7 +147,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           <span className="truncate">{m.groupName}</span>
           {m.kind && (
             <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-1 normal-case tracking-normal">
-              {KIND_EMOJI[m.kind]} {t.meetings.kinds[m.kind]}
+              {t.meetings.kinds[m.kind]}
             </span>
           )}
         </div>
@@ -159,7 +167,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
         {m.topic && <div className="mt-3 text-[17px] font-semibold">«{m.topic}»</div>}
         {m.audience && (
           <div className="mt-2 inline-flex rounded-full bg-white/20 px-2.5 py-1 text-[13px] font-semibold">
-            🔒 {t.meetings.chosenCount(m.audience.length)}
+            {t.meetings.chosenCount(m.audience.length)}
           </div>
         )}
         {m.location && (
@@ -222,8 +230,8 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
                 size={36}
               />
             ) : (
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-hairline text-[18px]">
-                🍕
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-hairline text-hint">
+                <IconFood size={18} />
               </span>
             )}
             <span className="min-w-0 flex-1">
@@ -432,49 +440,52 @@ function LeaderCard({
   onNotify?: () => void;
 }) {
   const t = useT();
+  const { env } = useEnv();
   if (!person && !canAssign) return null;
   return (
-    <div className="brand-gradient flex flex-col gap-3 rounded-[var(--radius-card)] p-4 text-white shadow-cta">
-      <div className="flex items-center gap-3">
-        {person ? (
-          <Avatar
-            id={person.id}
-            firstName={person.firstName}
-            lastName={person.lastName}
-            size={44}
-          />
-        ) : (
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20">
-            <IconUsers size={22} />
-          </span>
-        )}
-        <button
-          type="button"
-          disabled={!person?.username}
-          onClick={() => person?.username && openTelegramLink(`https://t.me/${person.username}`)}
-          className="min-w-0 flex-1 text-left"
-        >
-          <span className="block text-[12px] font-bold uppercase tracking-wider text-white/80">
-            {t.meetings.leader}
-          </span>
-          <span className="block truncate text-[19px] font-bold">
-            {person ? displayName(person) : t.meetings.noLeader}
-          </span>
-        </button>
-        {canAssign && (
+    <LookTop look={env} className="rounded-[var(--radius-card)] p-4 shadow-cta">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          {person ? (
+            <Avatar
+              id={person.id}
+              firstName={person.firstName}
+              lastName={person.lastName}
+              size={44}
+            />
+          ) : (
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20">
+              <IconUsers size={22} />
+            </span>
+          )}
           <button
             type="button"
-            onClick={onAssign}
-            className="shrink-0 rounded-full bg-white/22 px-3.5 py-2 text-[14px] font-semibold active:scale-95"
+            disabled={!person?.username}
+            onClick={() => person?.username && openTelegramLink(`https://t.me/${person.username}`)}
+            className="min-w-0 flex-1 text-left"
           >
-            {person ? t.common.edit : t.meetings.assignLeader}
+            <span className="block text-[12px] font-bold uppercase tracking-wider text-white/80">
+              {t.meetings.leader}
+            </span>
+            <span className="block truncate text-[19px] font-bold">
+              {person ? displayName(person) : t.meetings.noLeader}
+            </span>
           </button>
+          {canAssign && (
+            <button
+              type="button"
+              onClick={onAssign}
+              className="shrink-0 rounded-full bg-white/22 px-3.5 py-2 text-[14px] font-semibold active:scale-95"
+            >
+              {person ? t.common.edit : t.meetings.assignLeader}
+            </button>
+          )}
+        </div>
+        {person && onNotify && (
+          <NotifyRow notifiedAt={notifiedAt} acceptedAt={acceptedAt} onNotify={onNotify} onBrand />
         )}
       </div>
-      {person && onNotify && (
-        <NotifyRow notifiedAt={notifiedAt} acceptedAt={acceptedAt} onNotify={onNotify} onBrand />
-      )}
-    </div>
+    </LookTop>
   );
 }
 
@@ -496,11 +507,17 @@ function NotifyRow({
     <div className="flex items-center justify-between gap-2">
       <span className={`text-[13px] ${onBrand ? 'text-white/85' : 'text-hint'}`}>
         {acceptedAt ? (
-          <b className={onBrand ? 'text-white' : 'text-present'}>✅ {t.meetings.accepted}</b>
+          <b
+            className={`inline-flex items-center gap-1 ${onBrand ? 'text-white' : 'text-present'}`}
+          >
+            <IconCheck size={14} /> {t.meetings.accepted}
+          </b>
         ) : notifiedAt ? (
           <>
             ✓ {t.meetings.messageSent} · {f.dayMonth(notifiedAt)} {f.time(notifiedAt)}
-            <span className="block">⏳ {t.meetings.waitingAnswer}</span>
+            <span className="flex items-center gap-1">
+              <IconClock size={13} /> {t.meetings.waitingAnswer}
+            </span>
           </>
         ) : (
           t.meetings.notSentYet
@@ -513,7 +530,9 @@ function NotifyRow({
           onBrand ? 'bg-white text-[var(--brand)]' : 'brand-gradient text-white'
         }`}
       >
-        📨 {notifiedAt ? t.meetings.sendAgain : t.meetings.sendMessage}
+        <span className="inline-flex items-center gap-1.5">
+          <IconSend size={15} /> {notifiedAt ? t.meetings.sendAgain : t.meetings.sendMessage}
+        </span>
       </button>
     </div>
   );
@@ -631,12 +650,7 @@ function EditForm({
         <div className="flex flex-wrap gap-2">
           <Pill on={kind === null} onClick={() => setKind(null)} label={t.meetings.kindNone} />
           {MEETING_KINDS.map((k) => (
-            <Pill
-              key={k}
-              on={kind === k}
-              onClick={() => setKind(k)}
-              label={`${KIND_EMOJI[k]} ${t.meetings.kinds[k]}`}
-            />
+            <Pill key={k} on={kind === k} onClick={() => setKind(k)} label={t.meetings.kinds[k]} />
           ))}
         </div>
       </div>

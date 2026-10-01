@@ -16,6 +16,7 @@ import {
   useUploadMedia,
 } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
+import { IconSend } from './icons';
 import { MeetingPoster } from './MeetingPoster';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
@@ -255,7 +256,7 @@ export function NotifySheet({
           </div>
         )}
         <Button disabled={loading || busy !== null || !text.trim()} onClick={() => void send()}>
-          📨{' '}
+          <IconSend size={16} />{' '}
           {busy === 'poster'
             ? t.meetings.preparing
             : busy === 'send'

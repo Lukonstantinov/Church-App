@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { displayName, type GroupSummary, type MeetingRow } from '@church/shared';
 import { GroupCalendar, calendarOnHome, setCalendarOnHome } from '../components/GroupCalendar';
-import { KIND_EMOJI } from './MeetingScreen';
 import { GroupSwitcher } from '../components/GroupSwitcher';
 import { IconCalendar, IconClock, IconPlus, IconRepeat } from '../components/icons';
 import {
@@ -219,7 +218,6 @@ function MeetingRowView({
                 🎤 {displayName(m.leader)}
               </span>
             )}
-            {m.kind && <span className="shrink-0 text-[13px]">{KIND_EMOJI[m.kind]}</span>}
             {m.topic && <span className="truncate text-[13px] italic text-hint">{m.topic}</span>}
             {m.audience && (
               <span className="shrink-0 rounded-full bg-hairline px-2 py-0.5 text-[12px] font-semibold text-hint">

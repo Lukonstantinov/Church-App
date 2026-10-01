@@ -176,3 +176,28 @@ export const IconMapPin = make(
 export const IconLink = make(
   <path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" />,
 );
+
+export const IconTasks = make(
+  <>
+    <rect x="8" y="2.5" width="8" height="4" rx="1" />
+    <path d="M16 4.5h2a2 2 0 0 1 2 2V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h2" />
+    <path d="M9 14l2 2 4-4" />
+  </>,
+);
+export const IconChat = make(
+  <path d="M20.5 15.5a2 2 0 0 1-2 2H7.5l-4 3.5V5.5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" />,
+);
+export const IconFood = make(
+  <>
+    <path d="M4 3v6a2.5 2.5 0 0 0 2.5 2.5H9A2.5 2.5 0 0 0 11.5 9V3" />
+    <path d="M7.75 3v18" />
+    <path d="M20 21V3c-2.8 1.2-4.5 4-4.5 7v3h4.5" />
+  </>,
+);
+export const IconMic = make(
+  <>
+    <rect x="9" y="2.5" width="6" height="11" rx="3" />
+    <path d="M18.5 10.5v1a6.5 6.5 0 0 1-13 0v-1" />
+    <path d="M12 18v3.5" />
+  </>,
+);
