@@ -209,6 +209,8 @@ async function summarize(
         myRoles: myRoles.filter((r) => r.eventId === e.id).map((r) => r.name),
         design,
         templateId: e.templateId,
+        countdown: e.countdown,
+        createdAt: e.createdAt,
         look: brand ? await posterLook(secret, brand, design, tpl) : null,
       };
     }),

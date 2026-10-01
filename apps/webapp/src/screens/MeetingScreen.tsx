@@ -31,7 +31,7 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useMeeting, useMeetingPeople, useUpdateMeeting } from '../lib/queries';
+import { useGroup, useMeeting, useMeetingPeople, useUpdateMeeting } from '../lib/queries';
 import { confirmDialog, haptic, openTelegramLink } from '../lib/telegram';
 import { canRollNow } from './Overview';
 
@@ -95,7 +95,11 @@ function MeetingView({ m }: { m: MeetingDetail }) {
   const toast = useToast();
   const { push } = useNav();
   const update = useUpdateMeeting();
-  const [editing, setEditing] = useState(false);
+  // The assigned leader lands straight in the form while the place or topic is missing.
+  const [editing, setEditing] = useState(
+    m.canEdit && !m.canManage && m.status === 'scheduled' && (!m.topic || !m.location),
+  );
+  const group = useGroup(m.groupId);
   const [picker, setPicker] = useState<'leader' | 'snack' | null>(null);
   const [notify, setNotify] = useState<{
     role: 'leader' | 'snack';
@@ -161,6 +165,7 @@ function MeetingView({ m }: { m: MeetingDetail }) {
         canAssign={m.canManage}
         onAssign={() => setPicker('leader')}
         notifiedAt={m.leaderNotifiedAt}
+        acceptedAt={m.leaderAcceptedAt}
         onNotify={m.canManage ? () => setNotify({ role: 'leader', person: m.leader }) : undefined}
       />
 
@@ -226,6 +231,7 @@ function MeetingView({ m }: { m: MeetingDetail }) {
             <div className="border-t border-hairline px-4 py-2.5">
               <NotifyRow
                 notifiedAt={m.snackNotifiedAt}
+                acceptedAt={m.snackAcceptedAt}
                 onNotify={() => setNotify({ role: 'snack', person: m.snackPerson })}
               />
             </div>
@@ -354,10 +360,10 @@ function MeetingView({ m }: { m: MeetingDetail }) {
       />
       {notify && (
         <NotifySheet
-          meetingId={m.id}
+          meeting={m}
+          group={group.data}
           role={notify.role}
           person={notify.person}
-          notes={m.notes}
           onClose={() => setNotify(null)}
         />
       )}
@@ -371,12 +377,14 @@ function LeaderCard({
   canAssign,
   onAssign,
   notifiedAt,
+  acceptedAt,
   onNotify,
 }: {
   person: MeetingPerson | null;
   canAssign: boolean;
   onAssign: () => void;
   notifiedAt: string | null;
+  acceptedAt: string | null;
   onNotify?: () => void;
 }) {
   const t = useT();
@@ -419,18 +427,22 @@ function LeaderCard({
           </button>
         )}
       </div>
-      {person && onNotify && <NotifyRow notifiedAt={notifiedAt} onNotify={onNotify} onBrand />}
+      {person && onNotify && (
+        <NotifyRow notifiedAt={notifiedAt} acceptedAt={acceptedAt} onNotify={onNotify} onBrand />
+      )}
     </div>
   );
 }
 
-/** "Message sent" state and the button to send (again). */
+/** "Message sent" / confirmed state and the button to send (again). */
 function NotifyRow({
   notifiedAt,
+  acceptedAt,
   onNotify,
   onBrand,
 }: {
   notifiedAt: string | null;
+  acceptedAt: string | null;
   onNotify: () => void;
   onBrand?: boolean;
 }) {
@@ -439,9 +451,16 @@ function NotifyRow({
   return (
     <div className="flex items-center justify-between gap-2">
       <span className={`text-[13px] ${onBrand ? 'text-white/85' : 'text-hint'}`}>
-        {notifiedAt
-          ? `✓ ${t.meetings.messageSent} · ${f.dayMonth(notifiedAt)} ${f.time(notifiedAt)}`
-          : t.meetings.notSentYet}
+        {acceptedAt ? (
+          <b className={onBrand ? 'text-white' : 'text-present'}>✅ {t.meetings.accepted}</b>
+        ) : notifiedAt ? (
+          <>
+            ✓ {t.meetings.messageSent} · {f.dayMonth(notifiedAt)} {f.time(notifiedAt)}
+            <span className="block">⏳ {t.meetings.waitingAnswer}</span>
+          </>
+        ) : (
+          t.meetings.notSentYet
+        )}
       </span>
       <button
         type="button"

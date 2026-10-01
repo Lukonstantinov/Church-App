@@ -11,7 +11,7 @@ import {
   type PatternConfig,
 } from './brand';
 import type { Permission } from './permissions';
-import { chatUrlSchema } from './events';
+import { chatUrlSchema, type EventSummary } from './events';
 import { postBlocksSchema, postDesignSchema, type PostBlockView, type PostDesign } from './posts';
 import { LOCALES, type Locale } from './i18n/locales';
 
@@ -324,6 +324,9 @@ export interface MeetingRow {
   /** When the leader / snack person was last messaged (nothing is sent automatically). */
   leaderNotifiedAt: string | null;
   snackNotifiedAt: string | null;
+  /** When they pressed "Agree" in the bot message (null = not yet). */
+  leaderAcceptedAt: string | null;
+  snackAcceptedAt: string | null;
   /** Counts are filled for meetings that have a saved roll call. */
   counts: Record<AttendanceStatus, number>;
 }
@@ -387,7 +390,45 @@ export interface MeetingDetail extends MeetingRow {
 export const notifyMeetingSchema = z.object({
   role: z.enum(['leader', 'snack']),
   notes: optionalText(500).optional(),
+  /** The message as edited by the sender (plain text); omitted = the default text. */
+  text: z.string().trim().min(1).max(3000).optional(),
+  /** A poster image (uploaded media) sent with the message. */
+  posterMediaId: z.number().int().positive().nullish(),
 });
+
+/** Colours for calendar notes (iPhone-calendar style). */
+export const NOTE_COLORS = [
+  '#ef4444',
+  '#f59e0b',
+  '#22c55e',
+  '#06b6d4',
+  '#6366f1',
+  '#d946ef',
+  '#64748b',
+] as const;
+
+export const calendarNoteSchema = z.object({
+  date,
+  text: z.string().trim().min(1).max(300),
+  color: z.enum(NOTE_COLORS),
+});
+export type CalendarNoteInput = z.input<typeof calendarNoteSchema>;
+
+export interface CalendarNote {
+  id: number;
+  date: string;
+  text: string;
+  color: string;
+}
+
+/** The ministry calendar: coming meetings the person may see, events, and (for leaders) notes. */
+export interface CalendarData {
+  meetings: MeetingRow[];
+  events: EventSummary[];
+  /** null when the person can't see leaders' notes. */
+  notes: CalendarNote[] | null;
+  canNote: boolean;
+}
 export type NotifyMeetingInput = z.input<typeof notifyMeetingSchema>;
 
 export interface RollEntry {

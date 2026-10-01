@@ -148,6 +148,8 @@ export async function toMeetingRows(db: Db, list: Meeting[]): Promise<MeetingRow
     audience: audience.get(m.id) ?? null,
     leaderNotifiedAt: m.leaderNotifiedAt,
     snackNotifiedAt: m.snackNotifiedAt,
+    leaderAcceptedAt: m.leaderAcceptedAt,
+    snackAcceptedAt: m.snackAcceptedAt,
     counts: counts.get(m.id) ?? emptyCounts(),
   }));
 }

@@ -225,6 +225,12 @@ export const meetings = sqliteTable(
     /** When the leader / snack person was last sent a message about this meeting. */
     leaderNotifiedAt: text('leader_notified_at'),
     snackNotifiedAt: text('snack_notified_at'),
+    /** Who sent the message (told when the person agrees or can't). */
+    leaderNotifiedBy: integer('leader_notified_by'),
+    snackNotifiedBy: integer('snack_notified_by'),
+    /** When the person pressed "Agree" in the bot message. */
+    leaderAcceptedAt: text('leader_accepted_at'),
+    snackAcceptedAt: text('snack_accepted_at'),
     /** The schedule slot it was made for; stays put when the meeting is moved. */
     slotAt: text('slot_at'),
     rollTakenBy: integer('roll_taken_by'),
@@ -453,6 +459,8 @@ export const events = sqliteTable(
     pinnedAt: text('pinned_at'),
     /** Cover design (PostDesign JSON) when there is no cover photo, like posts. */
     design: text('design'),
+    /** Show a "🔥 N days left" countdown on the ministry home. */
+    countdown: integer('countdown', { mode: 'boolean' }).notNull().default(false),
     templateId: integer('template_id'),
     status: text('status', { enum: ['scheduled', 'cancelled'] })
       .notNull()
@@ -677,4 +685,22 @@ export const fileParts = sqliteTable(
     data: bytesColumn('data').notNull(),
   },
   (t) => [primaryKey({ columns: [t.fileId, t.idx] })],
+);
+
+/** Leaders' notes on calendar days, each with a colour (only leaders see them). */
+export const calendarNotes = sqliteTable(
+  'calendar_notes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    /** Local date "YYYY-MM-DD". */
+    date: text('date').notNull(),
+    text: text('text').notNull(),
+    color: text('color').notNull(),
+    createdBy: integer('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index('calendar_notes_group_date').on(t.groupId, t.date)],
 );

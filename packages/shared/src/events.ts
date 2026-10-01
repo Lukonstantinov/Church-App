@@ -62,6 +62,8 @@ export const createEventSchema = z.object({
   /** Cover design when there is no cover photo (same choices as posts). */
   design: postDesignSchema.nullish(),
   templateId: z.number().int().positive().nullish(),
+  /** Show a "🔥 N days left" countdown. */
+  countdown: z.boolean().default(false),
   features: featuresSchema.default({ gallery: false, rsvp: false, duties: false, cost: false }),
   priceCents: z.number().int().min(0).max(10_000_000).nullish(),
   chatUrl: chatUrlSchema,
@@ -80,6 +82,7 @@ export const updateEventSchema = z.object({
   coverMediaId: z.number().int().positive().nullable().optional(),
   design: postDesignSchema.nullable().optional(),
   templateId: z.number().int().positive().nullable().optional(),
+  countdown: z.boolean().optional(),
   features: featuresSchema.partial().optional(),
   priceCents: z.number().int().min(0).max(10_000_000).nullable().optional(),
   chatUrl: chatUrlSchema.optional(),
@@ -135,6 +138,8 @@ export interface EventSummary {
   brandColor: string | null;
   design: PostDesign | null;
   templateId: number | null;
+  countdown: boolean;
+  createdAt: string;
   /** The cover's look when there is no cover photo. */
   look: PosterLook | null;
   myRsvp: RsvpStatus | null;

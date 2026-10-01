@@ -19,7 +19,7 @@ export type Route =
   | { name: 'env'; groupId: number }
   | { name: 'roll'; meetingId: number }
   | { name: 'schedule'; groupId: number }
-  | { name: 'newMeeting'; groupId: number }
+  | { name: 'newMeeting'; groupId: number; date?: string }
   | { name: 'member'; userId: number }
   | { name: 'createGroup' }
   | { name: 'settings' }
@@ -37,7 +37,7 @@ export type Route =
   | { name: 'meeting'; meetingId: number }
   | { name: 'contacts'; groupId: number }
   | { name: 'event'; eventId: number }
-  | { name: 'eventForm'; groupId: number; eventId?: number }
+  | { name: 'eventForm'; groupId: number; eventId?: number; date?: string }
   | { name: 'groupSettings'; groupId: number }
   | { name: 'reports'; groupId: number }
   | { name: 'positions'; groupId: number }

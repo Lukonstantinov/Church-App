@@ -11,7 +11,13 @@ import {
 } from './announcements';
 import { churchRoutes, meRoutes } from './church';
 import { groupRoutes } from './groups';
-import { groupMeetingRoutes, meetingRoutes, myAttendanceRoutes, scheduleRoutes } from './meetings';
+import {
+  calendarNoteRoutes,
+  groupMeetingRoutes,
+  meetingRoutes,
+  myAttendanceRoutes,
+  scheduleRoutes,
+} from './meetings';
 import { membershipRoutes, userRoutes } from './members';
 import { groupPositionRoutes, positionRoutes } from './positions';
 import { devRoutes } from './dev';
@@ -50,6 +56,7 @@ apiRoutes.route('/dev', devRoutes);
 apiRoutes.route('/transactions', transactionRoutes);
 apiRoutes.route('/schedules', scheduleRoutes);
 apiRoutes.route('/meetings', meetingRoutes);
+apiRoutes.route('/calendar-notes', calendarNoteRoutes);
 apiRoutes.route('/me/attendance', myAttendanceRoutes);
 apiRoutes.route('/memberships', membershipRoutes);
 apiRoutes.route('/users', userRoutes);

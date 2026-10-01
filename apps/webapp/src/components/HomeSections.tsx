@@ -11,7 +11,9 @@ import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import { useEvents, useFeed } from '../lib/queries';
 import { haptic } from '../lib/telegram';
+import { CountdownBar } from './Countdown';
 import { EventCard, EventCover } from './EventCard';
+import { CalendarTile, GroupCalendar, calendarOnHome, setCalendarOnHome } from './GroupCalendar';
 import { UnreadBadges } from './FeedEntry';
 import { IconClock, IconMegaphone, IconPlus, IconUserPlus, IconUsers } from './icons';
 import { MeetingHeroLines } from '../screens/MeetingScreen';
@@ -112,6 +114,7 @@ export type MeetingTileData = Pick<
   Partial<Pick<MeetingRow, 'status'>>;
 
 type Item =
+  | { kind: 'calendar' }
   | { kind: 'meeting'; meeting: MeetingTileData }
   | { kind: 'post'; post: AnnouncementRow }
   | { kind: 'event'; event: EventSummary };
@@ -142,9 +145,11 @@ export function HomeHighlights({
   const feed = useFeed(g.id);
   const events = useEvents(g.id, 'upcoming');
   const [open, setOpen] = useState<string | null>(null);
+  const [withCalendar, setWithCalendar] = useState(() => calendarOnHome(g.id));
   const first = feed.data?.pages[0] ?? [];
   const shownEvents = (events.data ?? []).filter((e) => e.status !== 'cancelled').slice(0, 6);
   const items: Item[] = [
+    ...(withCalendar ? [{ kind: 'calendar' as const }] : []),
     ...meetings
       .filter((m) => m.status !== 'cancelled')
       .map((meeting) => ({ kind: 'meeting' as const, meeting })),
@@ -155,11 +160,13 @@ export function HomeHighlights({
   ];
   const latest = first.find((p) => !p.pinned && !echoesEvent(p, shownEvents));
   const keyOf = (i: Item) =>
-    i.kind === 'post'
-      ? `p${i.post.id}`
-      : i.kind === 'event'
-        ? `e${i.event.id}`
-        : `m${i.meeting.id}`;
+    i.kind === 'calendar'
+      ? 'cal'
+      : i.kind === 'post'
+        ? `p${i.post.id}`
+        : i.kind === 'event'
+          ? `e${i.event.id}`
+          : `m${i.meeting.id}`;
   const openPost = (id: number) => push({ name: 'post', groupId: g.id, postId: id });
   const openEvent = (id: number) => push({ name: 'event', eventId: id });
 
@@ -181,7 +188,22 @@ export function HomeHighlights({
               if (expanded)
                 return (
                   <div key={k} className="col-span-2 flex flex-col gap-1.5">
-                    {item.kind === 'meeting' ? (
+                    {item.kind === 'calendar' ? (
+                      <>
+                        <GroupCalendar g={g} />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCalendarOnHome(g.id, false);
+                            setWithCalendar(false);
+                            setOpen(null);
+                          }}
+                          className="self-center text-[13px] font-semibold text-hint"
+                        >
+                          {t.meetings.hideCalendar}
+                        </button>
+                      </>
+                    ) : item.kind === 'meeting' ? (
                       <MeetingExpanded meeting={item.meeting} onRoll={onRoll} />
                     ) : item.kind === 'post' ? (
                       <PosterCard post={item.post} onOpen={() => openPost(item.post.id)} />
@@ -197,7 +219,9 @@ export function HomeHighlights({
                     </button>
                   </div>
                 );
-              return item.kind === 'meeting' ? (
+              return item.kind === 'calendar' ? (
+                <CalendarTile key={k} g={g} onToggle={toggle} />
+              ) : item.kind === 'meeting' ? (
                 <MeetingTile key={k} m={item.meeting} onToggle={toggle} />
               ) : item.kind === 'post' ? (
                 <PostTile key={k} post={item.post} onToggle={toggle} />
@@ -283,6 +307,7 @@ function EventTile({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
         <span className="truncate text-[12px] text-hint">
           {f.weekdayDayMonth(e.startsAt)} · {f.time(e.startsAt)}
         </span>
+        <CountdownBar e={e} compact />
       </div>
     </Tile>
   );

@@ -1,6 +1,8 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   UpdateAnnouncementInput,
+  CalendarData,
+  CalendarNoteInput,
   NotifyMeetingInput,
   ContactRow,
   MeetingDetail,
@@ -317,6 +319,39 @@ export function useMeetingPeople(id: number, enabled: boolean) {
     enabled,
   });
 }
+
+/** The ministry calendar: meetings, events and (for leaders) colour notes. */
+export function useCalendar(groupId: number) {
+  return useQuery({
+    queryKey: ['groups', groupId, 'calendar'],
+    queryFn: () => apiFetch<CalendarData>(`/groups/${groupId}/calendar`),
+  });
+}
+
+export function useSaveNote(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: CalendarNoteInput & { id?: number }) =>
+      id
+        ? apiFetch(`/calendar-notes/${id}`, { method: 'PATCH', ...json(input) })
+        : apiFetch(`/groups/${groupId}/calendar-notes`, { method: 'POST', ...json(input) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['groups', groupId, 'calendar'] }),
+  });
+}
+
+export function useDeleteNote(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiFetch(`/calendar-notes/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['groups', groupId, 'calendar'] }),
+  });
+}
+
+/** The default message for a meeting's leader or snack person (plain text to edit). */
+export const fetchNotifyText = (meetingId: number, role: 'leader' | 'snack', notes: string) =>
+  apiFetch<{ text: string }>(
+    `/meetings/${meetingId}/notify-text?role=${role}&notes=${encodeURIComponent(notes)}`,
+  );
 
 /** Send the leader or snack person their bot message (with the meeting notes). */
 export function useNotifyMeeting() {

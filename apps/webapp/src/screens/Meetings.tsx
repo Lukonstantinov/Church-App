@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { displayName, type GroupSummary, type MeetingRow } from '@church/shared';
-import { MeetingCalendar } from '../components/MeetingCalendar';
+import { GroupCalendar, calendarOnHome, setCalendarOnHome } from '../components/GroupCalendar';
 import { KIND_EMOJI } from './MeetingScreen';
 import { GroupSwitcher } from '../components/GroupSwitcher';
 import { IconCalendar, IconClock, IconPlus, IconRepeat } from '../components/icons';
@@ -82,6 +82,8 @@ export function Meetings({ groups, active }: { groups: GroupSummary[]; active: G
             ]}
           />
 
+          {view === 'upcoming' && <CalendarSection g={active} />}
+
           {list.isPending ? (
             <div className="flex flex-col gap-2">
               {[0, 1, 2].map((i) => (
@@ -106,14 +108,6 @@ export function Meetings({ groups, active }: { groups: GroupSummary[]; active: G
             </Card>
           ) : (
             <>
-              {view === 'upcoming' && can('meetings.manage') && (
-                <section>
-                  <h2 className="mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-                    {t.meetings.calendar}
-                  </h2>
-                  <MeetingCalendar meetings={list.data ?? []} />
-                </section>
-              )}
               <MeetingList
                 meetings={list.data ?? []}
                 past={view === 'past'}
@@ -310,5 +304,34 @@ function EventsPanel({ groupId, view }: { groupId: number; view: View }) {
         <EventCard key={e.id} e={e} onClick={() => push({ name: 'event', eventId: e.id })} />
       ))}
     </div>
+  );
+}
+
+/** The ministry calendar, with the person's choice to keep it on the ministry's home. */
+function CalendarSection({ g }: { g: GroupSummary }) {
+  const t = useT();
+  const [onHome, setOnHome] = useState(() => calendarOnHome(g.id));
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between gap-2 px-3">
+        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-section-header">
+          {t.meetings.calendarTitle}
+        </h2>
+        <button
+          type="button"
+          onClick={() => {
+            setCalendarOnHome(g.id, !onHome);
+            setOnHome(!onHome);
+          }}
+          className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${
+            onHome ? 'bg-brand/15 text-accent' : 'bg-hairline text-hint'
+          }`}
+        >
+          {onHome ? '✓ ' : ''}
+          {t.meetings.showCalendarHome}
+        </button>
+      </div>
+      <GroupCalendar key={g.id} g={g} />
+    </section>
   );
 }

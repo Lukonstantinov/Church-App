@@ -17,6 +17,7 @@ import {
 import { can } from '../lib/access';
 import { claimProfile } from '../lib/claim';
 import { completeChatLink, handleJoinRequest, retryPendingLink } from '../lib/chats';
+import { answerMeetingRole } from '../lib/meetingNotify';
 
 export interface BotDeps {
   env: Env;
@@ -159,6 +160,26 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     }
     await ctx.answerCallbackQuery();
     await announceJoinDecision(ctx.api, db, result, ctx.dbUser, appUrl);
+  });
+
+  // "Agree" / "Can't" under a meeting assignment.
+  pm.callbackQuery(/^ma:([yn]):(\d+):([ls])$/, async (ctx) => {
+    const agree = ctx.match[1] === 'y';
+    const result = await answerMeetingRole(db, ctx.api, {
+      meetingId: Number(ctx.match[2]),
+      role: ctx.match[3] === 'l' ? 'leader' : 'snack',
+      agree,
+      user: ctx.dbUser,
+    });
+    await ctx.editMessageReplyMarkup().catch(() => undefined);
+    if (result === 'not_yours') {
+      await ctx.answerCallbackQuery({ text: ctx.t.bot.meetingNotYours, show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    await ctx.reply(agree ? ctx.t.bot.meetingAgreed : ctx.t.bot.meetingDeclined, {
+      reply_markup: openAppKeyboard(ctx.t),
+    });
   });
 
   pm.command('app', async (ctx) => {

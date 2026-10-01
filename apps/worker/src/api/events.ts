@@ -89,6 +89,7 @@ groupEventRoutes.post('/:id/events', async (c) => {
       coverMediaId: input.coverMediaId ?? null,
       design: input.design ? JSON.stringify(input.design) : null,
       templateId: input.templateId ?? null,
+      countdown: input.countdown ?? false,
       hasGallery: input.features.gallery,
       hasRsvp: input.features.rsvp,
       hasDuties: input.features.duties || input.roles.length > 0,
@@ -152,6 +153,7 @@ eventRoutes.patch('/:id', async (c) => {
       patch.design = input.design ? JSON.stringify(input.design) : null;
     if (input.templateId !== undefined) patch.templateId = input.templateId;
   }
+  if (input.countdown !== undefined) patch.countdown = input.countdown;
   if (input.coverMediaId !== undefined) {
     if (input.coverMediaId) await assertGroupMedia(db, event.groupId, input.coverMediaId);
     patch.coverMediaId = input.coverMediaId;

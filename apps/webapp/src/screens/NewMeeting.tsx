@@ -9,13 +9,13 @@ import { useNav } from '../lib/nav';
 import { useCreateMeeting } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 
-export function NewMeeting({ groupId }: { groupId: number }) {
+export function NewMeeting({ groupId, date: initialDate }: { groupId: number; date?: string }) {
   const { back, push } = useNav();
   const t = useT();
   const f = useFmt();
   const toast = useToast();
   const create = useCreateMeeting(groupId);
-  const [date, setDate] = useState(() => f.todayInput());
+  const [date, setDate] = useState(() => initialDate ?? f.todayInput());
   const [audience, setAudience] = useState<number[] | null>(null);
   const [form, setForm] = useState<MeetingFormValue>({
     title: t.newMeeting.defaultTitle,

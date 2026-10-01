@@ -5,7 +5,11 @@ import {
   createMeetingSchema,
   createScheduleSchema,
   saveRollSchema,
+  addDays,
+  calendarNoteSchema,
+  localDate,
   notifyMeetingSchema,
+  type CalendarData,
   updateMeetingSchema,
   updateScheduleSchema,
   zonedToUtc,
@@ -22,6 +26,7 @@ import {
   meetingSchedules,
   meetings,
   memberships,
+  calendarNotes,
   groups,
   meetingAudience,
   transactions,
@@ -29,8 +34,10 @@ import {
   type Meeting,
   type MeetingSchedule,
 } from '../db/schema';
-import { accessIn, assertCan, can } from '../lib/access';
-import { notifyMeetingRole } from '../lib/meetingNotify';
+import { accessIn, assertCan, assertCanViewGroup, can } from '../lib/access';
+import { listEvents } from '../lib/events';
+import { defaultMeetingText, notifyMeetingRole } from '../lib/meetingNotify';
+import { assertGroupMedia, signedMediaUrl } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi } from '../lib/telegram';
 import { audit } from '../lib/audit';
@@ -100,6 +107,89 @@ groupMeetingRoutes.get('/:id/stats', async (c) => {
   const db = c.get('db');
   const group = await assertCan(db, c.get('user'), idParam(c), 'any');
   return c.json(await groupStats(db, group.id));
+});
+
+/**
+ * The ministry calendar for anyone in it: coming meetings (those meant for them; leaders
+ * see all), coming events, and leaders' colour notes (leaders only).
+ */
+groupMeetingRoutes.get('/:id/calendar', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const group = await assertCanViewGroup(db, user, idParam(c));
+  const access = await accessIn(db, user, group.id);
+  const manage = access.perms.has('meetings.manage');
+  const now = new Date().toISOString();
+  const coming = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.groupId, group.id), gte(meetings.endsAt, now)))
+    .orderBy(asc(meetings.startsAt))
+    .limit(100);
+  const audience = await audienceOf(
+    db,
+    coming.map((m) => m.id),
+  );
+  const visible = manage ? coming : coming.filter((m) => meetingIsFor(audience, m.id, user.id));
+  const today = localDate(new Date(), (await getChurch(db)).timezone);
+  const body: CalendarData = {
+    meetings: await toMeetingRows(db, visible),
+    events: await listEvents(db, c.env.WEBHOOK_SECRET, [group.id], user.id, 'upcoming'),
+    notes: manage
+      ? (
+          await db
+            .select()
+            .from(calendarNotes)
+            .where(
+              and(
+                eq(calendarNotes.groupId, group.id),
+                gte(calendarNotes.date, addDays(today, -31)),
+              ),
+            )
+            .orderBy(asc(calendarNotes.date))
+            .limit(300)
+        ).map((n) => ({ id: n.id, date: n.date, text: n.text, color: n.color }))
+      : null,
+    canNote: manage,
+  };
+  return c.json(body);
+});
+
+/** A leader's colour note on a calendar day. */
+groupMeetingRoutes.post('/:id/calendar-notes', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const group = await assertCan(db, user, idParam(c), 'meetings.manage');
+  const input = await parseBody(c, calendarNoteSchema);
+  const [row] = await db
+    .insert(calendarNotes)
+    .values({ groupId: group.id, ...input, createdBy: user.id })
+    .returning();
+  return c.json({ id: row!.id, date: row!.date, text: row!.text, color: row!.color }, 201);
+});
+
+export const calendarNoteRoutes = new Hono<App>();
+
+async function loadNote(c: { get: (k: 'db' | 'user') => unknown }, id: number) {
+  const db = c.get('db') as AuthVariables['db'];
+  const user = c.get('user') as AuthVariables['user'];
+  const note = await db.query.calendarNotes.findFirst({ where: eq(calendarNotes.id, id) });
+  if (!note || !(await can(db, user, note.groupId, 'meetings.manage')))
+    throw new HTTPException(404, { message: 'not_found' });
+  return { db, note };
+}
+
+calendarNoteRoutes.patch('/:id', async (c) => {
+  const { db, note } = await loadNote(c, idParam(c));
+  const input = await parseBody(c, calendarNoteSchema.partial());
+  await db.update(calendarNotes).set(input).where(eq(calendarNotes.id, note.id));
+  return c.json({ ok: true });
+});
+
+calendarNoteRoutes.delete('/:id', async (c) => {
+  const { db, note } = await loadNote(c, idParam(c));
+  await db.delete(calendarNotes).where(eq(calendarNotes.id, note.id));
+  return c.json({ ok: true });
 });
 
 /**
@@ -451,10 +541,12 @@ meetingRoutes.patch('/:id', async (c) => {
   if (input.leaderUserId !== undefined && input.leaderUserId !== meeting.leaderUserId) {
     patch.leaderUserId = input.leaderUserId;
     patch.leaderNotifiedAt = null;
+    patch.leaderAcceptedAt = null;
   }
   if (input.snackUserId !== undefined && input.snackUserId !== meeting.snackUserId) {
     patch.snackUserId = input.snackUserId;
     patch.snackNotifiedAt = null;
+    patch.snackAcceptedAt = null;
   }
   if (input.budgetCents !== undefined) patch.budgetCents = input.budgetCents;
   if (input.date || input.startTime || input.durationMin) {
@@ -497,43 +589,83 @@ meetingRoutes.patch('/:id', async (c) => {
   return c.json((await toMeetingRows(db, [updated]))[0]);
 });
 
-/**
- * Message the meeting's leader (managers) or snack person (managers and the leader),
- * with the meeting notes — which are saved on the meeting at the same time.
- */
-meetingRoutes.post('/:id/notify', async (c) => {
-  const db = c.get('db');
-  const user = c.get('user');
-  const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, idParam(c)) });
+/** Who may message whom: managers the leader; managers and the leader the snack person. */
+async function notifyTarget(
+  c: { get: (k: 'db' | 'user') => unknown },
+  id: number,
+  role: 'leader' | 'snack',
+) {
+  const db = c.get('db') as AuthVariables['db'];
+  const user = c.get('user') as AuthVariables['user'];
+  const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, id) });
   if (!meeting) throw new HTTPException(404, { message: 'not_found' });
   const a = await meetingAccess(db, user, meeting);
-  const input = await parseBody(c, notifyMeetingSchema);
-  if (input.role === 'leader' ? !a.manage : !a.edit)
+  if (role === 'leader' ? !a.manage : !a.edit)
     throw new HTTPException(a.member ? 403 : 404, { message: 'forbidden' });
-  const userId = input.role === 'leader' ? meeting.leaderUserId : meeting.snackUserId;
+  const userId = role === 'leader' ? meeting.leaderUserId : meeting.snackUserId;
   if (!userId) throw new HTTPException(409, { message: 'nobody_assigned' });
+  const group = (await db.query.groups.findFirst({ where: eq(groups.id, meeting.groupId) }))!;
+  return { db, user, meeting, group, userId };
+}
+
+/** The default message, so the sender can read and edit it before sending. */
+meetingRoutes.get('/:id/notify-text', async (c) => {
+  const role = c.req.query('role') === 'snack' ? 'snack' : 'leader';
+  const { db, meeting, group, userId } = await notifyTarget(c, idParam(c), role);
+  const notes = c.req.query('notes');
+  return c.json({
+    text: await defaultMeetingText(db, {
+      meeting,
+      groupName: group.name,
+      userId,
+      role,
+      budgetCents: meeting.budgetCents ?? group.meetingBudgetCents,
+      notes: notes === undefined ? meeting.notes : notes || null,
+    }),
+  });
+});
+
+/**
+ * Send the leader or snack person the message (as edited, else the default), with
+ * "Agree" / "Can't" buttons and an optional poster. The notes are saved on the meeting.
+ */
+meetingRoutes.post('/:id/notify', async (c) => {
+  const input = await parseBody(c, notifyMeetingSchema);
+  const { db, user, meeting, group, userId } = await notifyTarget(c, idParam(c), input.role);
   if (input.notes !== undefined) {
     await db.update(meetings).set({ notes: input.notes }).where(eq(meetings.id, meeting.id));
   }
+  if (input.posterMediaId) await assertGroupMedia(db, meeting.groupId, input.posterMediaId);
   const updated = (await db.query.meetings.findFirst({ where: eq(meetings.id, meeting.id) }))!;
-  const group = (await db.query.groups.findFirst({ where: eq(groups.id, meeting.groupId) }))!;
+  const text =
+    input.text ??
+    (await defaultMeetingText(db, {
+      meeting: updated,
+      groupName: group.name,
+      userId,
+      role: input.role,
+      budgetCents: updated.budgetCents ?? group.meetingBudgetCents,
+      notes: updated.notes,
+    }));
   const sent = await notifyMeetingRole(db, {
     meeting: updated,
-    groupName: group.name,
     userId,
     role: input.role,
-    budgetCents: updated.budgetCents ?? group.meetingBudgetCents,
+    text,
+    posterUrl: input.posterMediaId
+      ? await signedMediaUrl(c.env.WEBHOOK_SECRET, input.posterMediaId)
+      : null,
     envAppUrl: c.env.APP_URL,
     fallbackUrl: appUrlFor(c.env, c.req.url),
-    notes: updated.notes,
   });
   if (sent) {
+    const now = new Date().toISOString();
     await db
       .update(meetings)
       .set(
         input.role === 'leader'
-          ? { leaderNotifiedAt: new Date().toISOString() }
-          : { snackNotifiedAt: new Date().toISOString() },
+          ? { leaderNotifiedAt: now, leaderNotifiedBy: user.id, leaderAcceptedAt: null }
+          : { snackNotifiedAt: now, snackNotifiedBy: user.id, snackAcceptedAt: null },
       )
       .where(eq(meetings.id, meeting.id));
     c.executionCtx.waitUntil(

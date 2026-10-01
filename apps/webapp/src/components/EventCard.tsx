@@ -1,5 +1,6 @@
 import type { EventSummary } from '@church/shared';
 import { useFmt } from '../lib/format';
+import { CountdownBar } from './Countdown';
 import { useT } from '../lib/i18n';
 import { IconCheck, IconMapPin, IconUsers } from './icons';
 import { PosterMedia } from './Poster';
@@ -89,6 +90,11 @@ export function EventCard({
             <div className="mt-0.5 flex items-center gap-1 truncate text-[14px] text-hint">
               <IconMapPin size={14} className="shrink-0" />
               <span className="truncate">{e.location}</span>
+            </div>
+          )}
+          {e.countdown && (
+            <div className="mt-2">
+              <CountdownBar e={e} />
             </div>
           )}
           <div className="mt-2 flex flex-wrap gap-1.5">

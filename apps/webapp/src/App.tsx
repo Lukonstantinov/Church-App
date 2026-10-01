@@ -76,7 +76,7 @@ function Router({ me }: { me: MeResponse }) {
     case 'schedule':
       return <Schedule key={route.groupId} groupId={route.groupId} />;
     case 'newMeeting':
-      return <NewMeeting groupId={route.groupId} />;
+      return <NewMeeting groupId={route.groupId} date={route.date} />;
     case 'member':
       return <MemberScreen key={route.userId} userId={route.userId} />;
     case 'createGroup':
@@ -97,7 +97,12 @@ function Router({ me }: { me: MeResponse }) {
       return <EventScreen key={route.eventId} eventId={route.eventId} />;
     case 'eventForm':
       return (
-        <EventForm key={route.eventId ?? 'new'} groupId={route.groupId} eventId={route.eventId} />
+        <EventForm
+          key={route.eventId ?? 'new'}
+          groupId={route.groupId}
+          eventId={route.eventId}
+          date={route.date}
+        />
       );
     case 'reports':
       return <Reports key={route.groupId} groupId={route.groupId} />;

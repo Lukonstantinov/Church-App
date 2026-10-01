@@ -30,6 +30,12 @@ import {
 } from './helpers';
 
 const TZ = 'Europe/Riga';
+const PNG = Uint8Array.from(
+  atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  ),
+  (ch) => ch.charCodeAt(0),
+);
 let calls: TgCall[];
 beforeEach(() => {
   calls = mockTelegram();
@@ -312,5 +318,148 @@ describe('meetings for chosen people', () => {
       ).status,
     ).toBe(400);
     void outsider;
+  });
+});
+
+describe('message preview, answers and the calendar', () => {
+  it('the leader reads and changes the text, then agrees or declines with a button', async () => {
+    const g = await createEnv('Сообщение ведущему');
+    const lead = fakeUser('Лидер');
+    const other = fakeUser('Другой');
+    const leadId = await join(lead, g);
+    await join(other, g);
+    const date = addDays(localDate(new Date(), TZ), 5);
+    const meeting = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, startTime: '19:00', durationMin: 120, title: 'Молодёжка' },
+    });
+    await patch(meeting.id, { leaderUserId: leadId });
+
+    // The default text, with the notes, to read and change before sending.
+    const preview = await apiJson<{ text: string }>(
+      `/api/meetings/${meeting.id}/notify-text?role=leader&notes=${encodeURIComponent('Возьми гитару')}`,
+      { user: ADMIN },
+    );
+    expect(preview.text).toContain('Вы ведёте встречу');
+    expect(preview.text).toContain('Возьми гитару');
+    expect(preview.text).not.toContain('<b>');
+
+    const photo = (
+      (await (
+        await api(`/api/groups/${g.id}/media?kind=event`, {
+          method: 'POST',
+          user: ADMIN,
+          body: PNG,
+        })
+      ).json()) as { id: number }
+    ).id;
+    const res = await apiJson<{ sent: boolean }>(`/api/meetings/${meeting.id}/notify`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { role: 'leader', text: 'Привет, <друг>!\nВедёшь в пятницу.', posterMediaId: photo },
+    });
+    expect(res.sent).toBe(true);
+    const msg = await sentTo(lead.id, 'Ведёшь в пятницу');
+    expect(String(msg!.body.text)).toContain('<b>Привет, &lt;друг&gt;!</b>');
+    expect(JSON.stringify(msg!.body.reply_markup)).toContain(`ma:y:${meeting.id}:l`);
+    expect(
+      calls.some(
+        (c) =>
+          c.method === 'sendPhoto' &&
+          c.body.chat_id === lead.id &&
+          String(c.body.photo).includes(`/media/m/${photo}`),
+      ),
+    ).toBe(true);
+
+    // Someone else's button does nothing; the leader agrees and the sender hears of it.
+    await pressButton(other, `ma:y:${meeting.id}:l`);
+    expect(
+      (await apiJson<MeetingDetail>(`/api/meetings/${meeting.id}`, { user: ADMIN }))
+        .leaderAcceptedAt,
+    ).toBeNull();
+    await pressButton(lead, `ma:y:${meeting.id}:l`);
+    expect(
+      (await apiJson<MeetingDetail>(`/api/meetings/${meeting.id}`, { user: ADMIN }))
+        .leaderAcceptedAt,
+    ).not.toBeNull();
+    expect(await sentTo(ADMIN.id, 'Лидер подтвердил(а)')).toBeDefined();
+
+    // "Can't" frees the place, and the sender is told to choose someone else.
+    await apiJson(`/api/meetings/${meeting.id}/notify`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { role: 'leader' },
+    });
+    await pressButton(lead, `ma:n:${meeting.id}:l`);
+    const freed = await apiJson<MeetingDetail>(`/api/meetings/${meeting.id}`, { user: ADMIN });
+    expect(freed.leader).toBeNull();
+    expect(freed.leaderNotifiedAt).toBeNull();
+    expect(await sentTo(ADMIN.id, 'Лидер не может')).toBeDefined();
+  });
+
+  it('everyone sees meetings and events; only leaders write and see notes', async () => {
+    const g = await createEnv('Календарь');
+    const member = fakeUser('Участник');
+    await join(member, g);
+    const date = addDays(localDate(new Date(), TZ), 3);
+    await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, startTime: '19:00', durationMin: 120, title: 'Молодёжка' },
+    });
+    await apiJson(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'Лагерь', date: addDays(date, 10), startTime: '10:00', countdown: true },
+    });
+
+    const note = await api(`/api/groups/${g.id}/calendar-notes`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, text: 'Купить свечи', color: '#22c55e' },
+    });
+    expect(note.status).toBe(201);
+    const { id: noteId } = (await note.json()) as { id: number };
+    expect(
+      (
+        await api(`/api/groups/${g.id}/calendar-notes`, {
+          method: 'POST',
+          user: member,
+          json: { date, text: 'x', color: '#22c55e' },
+        })
+      ).status,
+    ).toBe(403);
+
+    type Cal = {
+      meetings: MeetingRow[];
+      events: EventSummary[];
+      notes: unknown[] | null;
+      canNote: boolean;
+    };
+    const lead = await apiJson<Cal>(`/api/groups/${g.id}/calendar`, { user: ADMIN });
+    expect(lead.canNote).toBe(true);
+    expect(lead.notes).toEqual([{ id: noteId, date, text: 'Купить свечи', color: '#22c55e' }]);
+    const seen = await apiJson<Cal>(`/api/groups/${g.id}/calendar`, { user: member });
+    expect(seen).toMatchObject({ canNote: false, notes: null });
+    expect(seen.meetings.map((m) => m.title)).toEqual(['Молодёжка']);
+    expect(seen.events[0]).toMatchObject({ title: 'Лагерь', countdown: true });
+
+    expect(
+      (
+        await api(`/api/calendar-notes/${noteId}`, {
+          method: 'PATCH',
+          user: ADMIN,
+          json: { date, text: 'Купить свечи и чай', color: '#6366f1' },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await api(`/api/calendar-notes/${noteId}`, { method: 'DELETE', user: member })).status,
+    ).toBe(404);
+    expect(
+      (await api(`/api/calendar-notes/${noteId}`, { method: 'DELETE', user: ADMIN })).status,
+    ).toBe(200);
+    expect((await apiJson<Cal>(`/api/groups/${g.id}/calendar`, { user: ADMIN })).notes).toEqual([]);
   });
 });

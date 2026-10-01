@@ -62,15 +62,31 @@ interface RoleDraft {
 }
 
 /** Create an event (eventId absent) or edit one. */
-export function EventForm({ groupId, eventId }: { groupId: number; eventId?: number }) {
+export function EventForm({
+  groupId,
+  eventId,
+  date: initialDate,
+}: {
+  groupId: number;
+  eventId?: number;
+  date?: string;
+}) {
   const existing = useEvent(eventId ?? 0, eventId !== undefined);
-  if (eventId === undefined) return <EventFormBody groupId={groupId} />;
+  if (eventId === undefined) return <EventFormBody groupId={groupId} initialDate={initialDate} />;
   if (existing.isPending) return <Loading />;
   if (existing.isError) return <ErrorState onRetry={() => void existing.refetch()} />;
   return <EventFormBody groupId={groupId} event={existing.data} />;
 }
 
-function EventFormBody({ groupId, event }: { groupId: number; event?: EventDetail }) {
+function EventFormBody({
+  groupId,
+  event,
+  initialDate,
+}: {
+  groupId: number;
+  event?: EventDetail;
+  initialDate?: string;
+}) {
   const t = useT();
   const f = useFmt();
   const money = useMoney();
@@ -88,7 +104,9 @@ function EventFormBody({ groupId, event }: { groupId: number; event?: EventDetai
   const [description, setDescription] = useState(event?.description ?? '');
   const [location, setLocation] = useState(event?.location ?? '');
   const [date, setDate] = useState(() =>
-    event ? f.todayInput(new Date(event.startsAt)) : f.todayInput(new Date(Date.now() + 7 * 864e5)),
+    event
+      ? f.todayInput(new Date(event.startsAt))
+      : (initialDate ?? f.todayInput(new Date(Date.now() + 7 * 864e5))),
   );
   const [startTime, setStartTime] = useState(event ? f.time(event.startsAt) : '18:00');
   const [hasEnd, setHasEnd] = useState(!!event?.endsAt);
@@ -116,6 +134,7 @@ function EventFormBody({ groupId, event }: { groupId: number; event?: EventDetai
     })) ?? [],
   );
   const [notify, setNotify] = useState(true);
+  const [countdown, setCountdown] = useState(event?.countdown ?? false);
   // Without a cover photo the event shows a designed cover, like posts.
   const [look, setLook] = useState<CoverState>(() =>
     initCover(event?.design, event?.templateId, event?.look, true),
@@ -171,6 +190,7 @@ function EventFormBody({ groupId, event }: { groupId: number; event?: EventDetai
       coverMediaId: cover?.id ?? null,
       ...coverPayload(look, coverLook.templateId),
       features,
+      countdown,
       priceCents: features.cost ? priceCents : null,
       chatUrl: chatUrl.trim() || null,
     };
@@ -322,6 +342,16 @@ function EventFormBody({ groupId, event }: { groupId: number; event?: EventDetai
             <TimeField label={t.events.end} value={endTime} onChange={setEndTime} />
           </>
         )}
+        <Toggle
+          label={
+            <span className="flex flex-col">
+              <span>{t.meetings.countdown}</span>
+              <span className="text-[12px] font-normal text-hint">{t.meetings.countdownHint}</span>
+            </span>
+          }
+          checked={countdown}
+          onChange={setCountdown}
+        />
       </Section>
 
       <section>
