@@ -8,9 +8,11 @@ import {
   type UpdateMeetingInput,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
+import { AudiencePicker } from '../components/AudiencePicker';
 import { IconCalendar, IconClock, IconMapPin, IconPlus, IconUsers } from '../components/icons';
 import { Pill } from '../components/LookControls';
 import { useMoney } from '../components/money';
+import { NotifySheet } from '../components/NotifySheet';
 import { PersonPicker } from '../components/PersonPicker';
 import { useToast } from '../components/Toast';
 import {
@@ -95,6 +97,10 @@ function MeetingView({ m }: { m: MeetingDetail }) {
   const update = useUpdateMeeting();
   const [editing, setEditing] = useState(false);
   const [picker, setPicker] = useState<'leader' | 'snack' | null>(null);
+  const [notify, setNotify] = useState<{
+    role: 'leader' | 'snack';
+    person: MeetingPerson | null;
+  } | null>(null);
   const people = useMeetingPeople(m.id, m.canEdit && (editing || picker !== null));
   const cancelled = m.status === 'cancelled';
   const budget = m.budgetCents ?? m.defaultBudgetCents;
@@ -102,9 +108,9 @@ function MeetingView({ m }: { m: MeetingDetail }) {
 
   async function save(input: UpdateMeetingInput) {
     try {
-      const res = await update.mutateAsync({ id: m.id, ...input });
+      await update.mutateAsync({ id: m.id, ...input });
       haptic.success();
-      toast(res.notified.length ? t.meetings.notified : t.common.saved);
+      toast(t.common.saved);
       return true;
     } catch {
       haptic.error();
@@ -138,6 +144,11 @@ function MeetingView({ m }: { m: MeetingDetail }) {
           </div>
         </div>
         {m.topic && <div className="mt-3 text-[17px] font-semibold">«{m.topic}»</div>}
+        {m.audience && (
+          <div className="mt-2 inline-flex rounded-full bg-white/20 px-2.5 py-1 text-[13px] font-semibold">
+            🔒 {t.meetings.chosenCount(m.audience.length)}
+          </div>
+        )}
         {m.location && (
           <div className="mt-2 flex items-center gap-1.5 text-[15px] text-white/90">
             <IconMapPin size={16} /> {m.location}
@@ -145,7 +156,13 @@ function MeetingView({ m }: { m: MeetingDetail }) {
         )}
       </HeroCard>
 
-      <LeaderCard person={m.leader} canAssign={m.canManage} onAssign={() => setPicker('leader')} />
+      <LeaderCard
+        person={m.leader}
+        canAssign={m.canManage}
+        onAssign={() => setPicker('leader')}
+        notifiedAt={m.leaderNotifiedAt}
+        onNotify={m.canManage ? () => setNotify({ role: 'leader', person: m.leader }) : undefined}
+      />
 
       {m.canEdit && !m.canManage && !m.topic && !m.location && (
         <Card className="p-4 text-[14px]">{t.meetings.youLead}</Card>
@@ -205,6 +222,14 @@ function MeetingView({ m }: { m: MeetingDetail }) {
               <span className="text-[14px] font-semibold text-link">{t.common.edit}</span>
             )}
           </button>
+          {m.snackPerson && m.canEdit && (
+            <div className="border-t border-hairline px-4 py-2.5">
+              <NotifyRow
+                notifiedAt={m.snackNotifiedAt}
+                onNotify={() => setNotify({ role: 'snack', person: m.snackPerson })}
+              />
+            </div>
+          )}
           {m.expenses && (
             <div className="border-t border-hairline px-4 py-3">
               <div className="mb-2 flex items-center justify-between text-[14px]">
@@ -315,8 +340,27 @@ function MeetingView({ m }: { m: MeetingDetail }) {
         people={people.data}
         value={picker === 'leader' ? (m.leader?.id ?? null) : (m.snackPerson?.id ?? null)}
         onClose={() => setPicker(null)}
-        onPick={(id) => void save(picker === 'leader' ? { leaderUserId: id } : { snackUserId: id })}
+        onPick={(id) => {
+          const role = picker;
+          // Choosing someone doesn't message them; then offer notes and "send".
+          void save(role === 'leader' ? { leaderUserId: id } : { snackUserId: id }).then(
+            (ok) =>
+              ok &&
+              id &&
+              role &&
+              setNotify({ role, person: people.data?.find((p) => p.id === id) ?? null }),
+          );
+        }}
       />
+      {notify && (
+        <NotifySheet
+          meetingId={m.id}
+          role={notify.role}
+          person={notify.person}
+          notes={m.notes}
+          onClose={() => setNotify(null)}
+        />
+      )}
     </Screen>
   );
 }
@@ -326,44 +370,88 @@ function LeaderCard({
   person,
   canAssign,
   onAssign,
+  notifiedAt,
+  onNotify,
 }: {
   person: MeetingPerson | null;
   canAssign: boolean;
   onAssign: () => void;
+  notifiedAt: string | null;
+  onNotify?: () => void;
 }) {
   const t = useT();
   if (!person && !canAssign) return null;
   return (
-    <div className="brand-gradient flex items-center gap-3 rounded-[var(--radius-card)] p-4 text-white shadow-cta">
-      {person ? (
-        <Avatar id={person.id} firstName={person.firstName} lastName={person.lastName} size={44} />
-      ) : (
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20">
-          <IconUsers size={22} />
-        </span>
-      )}
-      <button
-        type="button"
-        disabled={!person?.username}
-        onClick={() => person?.username && openTelegramLink(`https://t.me/${person.username}`)}
-        className="min-w-0 flex-1 text-left"
-      >
-        <span className="block text-[12px] font-bold uppercase tracking-wider text-white/80">
-          {t.meetings.leader}
-        </span>
-        <span className="block truncate text-[19px] font-bold">
-          {person ? displayName(person) : t.meetings.noLeader}
-        </span>
-      </button>
-      {canAssign && (
+    <div className="brand-gradient flex flex-col gap-3 rounded-[var(--radius-card)] p-4 text-white shadow-cta">
+      <div className="flex items-center gap-3">
+        {person ? (
+          <Avatar
+            id={person.id}
+            firstName={person.firstName}
+            lastName={person.lastName}
+            size={44}
+          />
+        ) : (
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20">
+            <IconUsers size={22} />
+          </span>
+        )}
         <button
           type="button"
-          onClick={onAssign}
-          className="shrink-0 rounded-full bg-white/22 px-3.5 py-2 text-[14px] font-semibold active:scale-95"
+          disabled={!person?.username}
+          onClick={() => person?.username && openTelegramLink(`https://t.me/${person.username}`)}
+          className="min-w-0 flex-1 text-left"
         >
-          {person ? t.common.edit : t.meetings.assignLeader}
+          <span className="block text-[12px] font-bold uppercase tracking-wider text-white/80">
+            {t.meetings.leader}
+          </span>
+          <span className="block truncate text-[19px] font-bold">
+            {person ? displayName(person) : t.meetings.noLeader}
+          </span>
         </button>
-      )}
+        {canAssign && (
+          <button
+            type="button"
+            onClick={onAssign}
+            className="shrink-0 rounded-full bg-white/22 px-3.5 py-2 text-[14px] font-semibold active:scale-95"
+          >
+            {person ? t.common.edit : t.meetings.assignLeader}
+          </button>
+        )}
+      </div>
+      {person && onNotify && <NotifyRow notifiedAt={notifiedAt} onNotify={onNotify} onBrand />}
+    </div>
+  );
+}
+
+/** "Message sent" state and the button to send (again). */
+function NotifyRow({
+  notifiedAt,
+  onNotify,
+  onBrand,
+}: {
+  notifiedAt: string | null;
+  onNotify: () => void;
+  onBrand?: boolean;
+}) {
+  const t = useT();
+  const f = useFmt();
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className={`text-[13px] ${onBrand ? 'text-white/85' : 'text-hint'}`}>
+        {notifiedAt
+          ? `✓ ${t.meetings.messageSent} · ${f.dayMonth(notifiedAt)} ${f.time(notifiedAt)}`
+          : t.meetings.notSentYet}
+      </span>
+      <button
+        type="button"
+        onClick={onNotify}
+        className={`shrink-0 rounded-full px-3.5 py-2 text-[14px] font-semibold active:scale-95 ${
+          onBrand ? 'bg-white text-[var(--brand)]' : 'brand-gradient text-white'
+        }`}
+      >
+        📨 {notifiedAt ? t.meetings.sendAgain : t.meetings.sendMessage}
+      </button>
     </div>
   );
 }
@@ -392,6 +480,7 @@ function EditForm({
   const [topic, setTopic] = useState(m.topic ?? '');
   const [kind, setKind] = useState<MeetingKind | null>(m.kind);
   const [notes, setNotes] = useState(m.notes ?? '');
+  const [audience, setAudience] = useState<number[] | null>(m.audience);
   const [budget, setBudget] = useState(((m.budgetCents ?? m.defaultBudgetCents) / 100).toFixed(2));
 
   function submit() {
@@ -410,6 +499,8 @@ function EditForm({
       const cents = Math.round(Number(budget.replace(',', '.')) * 100);
       if (Number.isFinite(cents) && cents >= 0 && cents !== (m.budgetCents ?? m.defaultBudgetCents))
         input.budgetCents = cents;
+      if (JSON.stringify(audience) !== JSON.stringify(m.audience))
+        input.audience = audience?.length ? audience : null;
     }
     onSave(input);
   }
@@ -497,6 +588,12 @@ function EditForm({
           />
           <span className="text-hint">{money.symbol}</span>
         </label>
+      )}
+      {m.canManage && (
+        <div>
+          <div className="mb-2 text-[13px] text-hint">{t.meetings.audience}</div>
+          <AudiencePicker groupId={m.groupId} value={audience} onChange={setAudience} />
+        </div>
       )}
       <div>
         <div className="mb-1 text-[13px] text-hint">{t.meetings.notes}</div>

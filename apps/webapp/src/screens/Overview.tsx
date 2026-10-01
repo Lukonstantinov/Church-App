@@ -2,24 +2,13 @@ import type { GroupSummary, MeetingRow } from '@church/shared';
 import { AttendanceChart } from '../components/AttendanceChart';
 import { GroupSwitcher } from '../components/GroupSwitcher';
 import { IconCalendar, IconClock, IconUsers } from '../components/icons';
-import {
-  Badge,
-  Button,
-  Card,
-  DateBadge,
-  EmptyState,
-  HeroCard,
-  Screen,
-  Skeleton,
-  StatTile,
-} from '../components/ui';
+import { Badge, Button, Card, EmptyState, Screen, Skeleton, StatTile } from '../components/ui';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
-import { useGroupStats, useMe } from '../lib/queries';
+import { useGroupStats, useMe, useUpcoming } from '../lib/queries';
 import { HomeActionRow, HomeHighlights, useHomeActions } from '../components/HomeSections';
-import { MeetingHeroLines } from './MeetingScreen';
 
 const HOUR = 3_600_000;
 
@@ -37,6 +26,7 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
   const s = stats.data;
   // Requests only matter to people who can approve them.
   const pending = s && can('people.manage') ? s.pendingCount : 0;
+  const upcoming = useUpcoming(active.id);
   const actions = useHomeActions(active, me.data?.church.brandColor ?? 'blue', can);
 
   return (
@@ -48,7 +38,11 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
       />
 
       <HomeActionRow actions={actions} />
-      <HomeHighlights g={active} />
+      <HomeHighlights
+        g={active}
+        meetings={(upcoming.data ?? []).filter((m) => m.status !== 'cancelled').slice(0, 2)}
+        onRoll={can('attendance.take') ? (id) => push({ name: 'roll', meetingId: id }) : undefined}
+      />
 
       {!s ? (
         <>
@@ -97,16 +91,7 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
             </Card>
           )}
 
-          {s.nextMeeting ? (
-            <NextMeetingHero
-              meeting={s.nextMeeting}
-              onRoll={
-                can('attendance.take')
-                  ? () => push({ name: 'roll', meetingId: s.nextMeeting!.id })
-                  : undefined
-              }
-            />
-          ) : (
+          {!s.nextMeeting && (
             <Card>
               <EmptyState
                 icon={<IconCalendar size={26} />}
@@ -196,49 +181,5 @@ export function QuickAction({
         {label}
       </span>
     </Card>
-  );
-}
-
-function NextMeetingHero({ meeting, onRoll }: { meeting: MeetingRow; onRoll?: () => void }) {
-  const t = useT();
-  const f = useFmt();
-  const { push } = useNav();
-  const open = canRollNow(meeting);
-  return (
-    <HeroCard>
-      <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
-        {t.overview.nextMeeting}
-      </div>
-      <button
-        type="button"
-        onClick={() => push({ name: 'meeting', meetingId: meeting.id })}
-        className="block w-full text-left"
-      >
-        <div className="flex items-center gap-3.5">
-          <DateBadge {...f.dateBadge(meeting.startsAt)} onBrand />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[21px] font-bold leading-tight">{meeting.title}</div>
-            <div className="text-[15px] text-white/85">
-              {f.relativeDay(meeting.startsAt)} · {f.timeRange(meeting.startsAt, meeting.endsAt)}
-            </div>
-          </div>
-        </div>
-        <MeetingHeroLines meeting={meeting} />
-      </button>
-      {onRoll && (
-        <div className="mt-4">
-          {open ? (
-            <Button variant="white" onClick={onRoll}>
-              {t.overview.startRoll}
-            </Button>
-          ) : (
-            <p className="flex items-center gap-2 rounded-2xl bg-white/15 px-3 py-2.5 text-[14px] text-white/90">
-              <IconClock size={16} className="shrink-0" />
-              {t.overview.rollOpensSoon}
-            </p>
-          )}
-        </div>
-      )}
-    </HeroCard>
   );
 }

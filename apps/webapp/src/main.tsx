@@ -2,12 +2,14 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from './lib/api';
+import { watchForNewVersion } from './lib/freshness';
 import { initTelegram, isInsideTelegram } from './lib/telegram';
 import { App } from './App';
 import './index.css';
 import './fonts.css';
 
 initTelegram();
+watchForNewVersion();
 
 const queryClient = new QueryClient({
   defaultOptions: {

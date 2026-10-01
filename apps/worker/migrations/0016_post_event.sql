@@ -1,0 +1,1 @@
+ALTER TABLE `announcements` ADD `event_id` integer;

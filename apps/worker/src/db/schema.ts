@@ -222,6 +222,9 @@ export const meetings = sqliteTable(
     /** Who buys food / spends the budget. */
     snackUserId: integer('snack_user_id').references(() => users.id),
     budgetCents: integer('budget_cents'),
+    /** When the leader / snack person was last sent a message about this meeting. */
+    leaderNotifiedAt: text('leader_notified_at'),
+    snackNotifiedAt: text('snack_notified_at'),
     /** The schedule slot it was made for; stays put when the meeting is moved. */
     slotAt: text('slot_at'),
     rollTakenBy: integer('roll_taken_by'),
@@ -233,6 +236,26 @@ export const meetings = sqliteTable(
     // Makes schedule → meeting generation idempotent, even after a meeting is moved.
     uniqueIndex('meetings_schedule_slot').on(t.scheduleId, t.slotAt),
     check('meetings_status', sql`${t.status} IN ('scheduled', 'done', 'cancelled')`),
+  ],
+);
+
+/**
+ * Who a meeting is for, when it isn't for the whole ministry. No rows = everyone.
+ * Only these people see the meeting and are on its roll call.
+ */
+export const meetingAudience = sqliteTable(
+  'meeting_audience',
+  {
+    meetingId: integer('meeting_id')
+      .notNull()
+      .references(() => meetings.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+  },
+  (t) => [
+    primaryKey({ columns: [t.meetingId, t.userId] }),
+    index('meeting_audience_user').on(t.userId),
   ],
 );
 
@@ -316,6 +339,8 @@ export const announcements = sqliteTable(
     recipients: integer('recipients').notNull().default(0),
     /** Pinned posts come first in the ministry's feed. */
     pinnedAt: text('pinned_at'),
+    /** The event this post announces (written when the event was created). */
+    eventId: integer('event_id'),
     editedAt: text('edited_at'),
     /** PostDesign JSON: cover, type, colour, fonts; NULL = defaults. */
     design: text('design'),

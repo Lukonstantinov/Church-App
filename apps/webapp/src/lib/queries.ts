@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   UpdateAnnouncementInput,
+  NotifyMeetingInput,
   ContactRow,
   MeetingDetail,
   MeetingPerson,
@@ -317,11 +318,21 @@ export function useMeetingPeople(id: number, enabled: boolean) {
   });
 }
 
+/** Send the leader or snack person their bot message (with the meeting notes). */
+export function useNotifyMeeting() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({ id, ...input }: NotifyMeetingInput & { id: number }) =>
+      apiFetch<{ sent: boolean }>(`/meetings/${id}/notify`, { method: 'POST', ...json(input) }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useUpdateMeeting() {
   const invalidate = useInvalidateAll();
   return useMutation({
     mutationFn: ({ id, ...input }: UpdateMeetingInput & { id: number }) =>
-      apiFetch<MeetingRow & { notified: string[] }>(`/meetings/${id}`, {
+      apiFetch<MeetingRow>(`/meetings/${id}`, {
         method: 'PATCH',
         ...json(input),
       }),

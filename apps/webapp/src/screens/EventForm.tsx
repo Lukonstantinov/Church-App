@@ -187,7 +187,9 @@ function EventFormBody({ groupId, event }: { groupId: number; event?: EventDetai
           const when = `${f.weekdayDayMonth(created.startsAt)} · ${f.time(created.startsAt)}`;
           const head = t.events.announce(created.title, when, created.location);
           const body = created.description ? `${head}\n\n${created.description}` : head;
-          await announce.mutateAsync(body.slice(0, 2000)).catch(() => undefined);
+          await announce
+            .mutateAsync({ text: body.slice(0, 2000), eventId: created.id })
+            .catch(() => undefined);
         }
         haptic.success();
         toast(t.events.created);

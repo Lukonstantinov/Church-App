@@ -21,6 +21,7 @@ import {
   announcementComments,
   announcements,
   designTemplates,
+  events,
   groups,
   media,
   memberships,
@@ -55,6 +56,13 @@ async function assertContent(
   const refs = referencedIds(input);
   for (const id of refs.media) await assertGroupMedia(db, groupId, id);
   for (const id of refs.files) await assertGroupFile(db, groupId, id);
+  if (input.eventId) {
+    const ev = await db.query.events.findFirst({
+      columns: { id: true },
+      where: and(eq(events.id, input.eventId), eq(events.groupId, groupId)),
+    });
+    if (!ev) throw new HTTPException(400, { message: 'invalid_event' });
+  }
   if (input.templateId) {
     const tpl = await db.query.designTemplates.findFirst({
       columns: { id: true },

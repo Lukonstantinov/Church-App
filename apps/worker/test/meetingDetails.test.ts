@@ -10,6 +10,8 @@ import {
   type MeetingDetail,
   type MeetingRow,
   type MemberRow,
+  type MyAttendanceResponse,
+  type RollResponse,
   type ScheduleRow,
   type TransactionPage,
 } from '@church/shared';
@@ -91,9 +93,25 @@ describe('meeting details', () => {
       json: { date, startTime: '19:00', durationMin: 120, title: 'Молодёжка' },
     });
 
-    const assigned = await patch(meeting.id, { leaderUserId: leadId });
-    expect(((await assigned.json()) as { notified: string[] }).notified).toEqual(['leader']);
-    expect(await sentTo(lead.id, 'Вы ведёте встречу')).toBeDefined();
+    // Choosing the leader sends nothing; the message goes when asked, with the notes.
+    expect((await patch(meeting.id, { leaderUserId: leadId })).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(
+      calls.some((c) => c.body.chat_id === lead.id && String(c.body.text).includes('Вы ведёте')),
+    ).toBe(false);
+    const sent = await apiJson<{ sent: boolean }>(`/api/meetings/${meeting.id}/notify`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { role: 'leader', notes: 'Тема про веру, начни с молитвы' },
+    });
+    expect(sent.sent).toBe(true);
+    const msg = await sentTo(lead.id, 'Вы ведёте встречу');
+    expect(String(msg!.body.text)).toContain('начни с молитвы');
+    const afterNotify = await apiJson<MeetingDetail>(`/api/meetings/${meeting.id}`, {
+      user: ADMIN,
+    });
+    expect(afterNotify.notes).toBe('Тема про веру, начни с молитвы');
+    expect(afterNotify.leaderNotifiedAt).not.toBeNull();
 
     // The leader may fill in place, topic, type and snacks, but not move or reassign.
     const own = await apiJson<MeetingDetail>(`/api/meetings/${meeting.id}`, { user: lead });
@@ -104,7 +122,26 @@ describe('meeting details', () => {
       lead,
     );
     expect(filled.status).toBe(200);
+    expect(
+      (
+        await api(`/api/meetings/${meeting.id}/notify`, {
+          method: 'POST',
+          user: lead,
+          json: { role: 'snack' },
+        })
+      ).status,
+    ).toBe(200);
     expect(await sentTo(snack.id, '15,00')).toBeDefined();
+    // Only managers message the leader.
+    expect(
+      (
+        await api(`/api/meetings/${meeting.id}/notify`, {
+          method: 'POST',
+          user: lead,
+          json: { role: 'leader' },
+        })
+      ).status,
+    ).toBe(403);
     expect((await patch(meeting.id, { leaderUserId: snackId }, lead)).status).toBe(403);
     expect((await patch(meeting.id, { date }, lead)).status).toBe(403);
     expect((await patch(meeting.id, { topic: 'x' }, plain)).status).toBe(403);
@@ -223,5 +260,57 @@ describe('contacts and event covers', () => {
     expect(e.design).toMatchObject({ banner: true, titleFont: 'pacifico' });
     expect(e.look).toMatchObject({ brandColor: 'forest', textColor: 'light' });
     expect(e.look!.pattern!.value).toBe('🌳');
+  });
+});
+
+describe('meetings for chosen people', () => {
+  it('only the chosen see the meeting and are on its roll call', async () => {
+    const g = await createEnv('Только для своих');
+    const inv = fakeUser('Приглашённый');
+    const out = fakeUser('Невидимый');
+    const invId = await join(inv, g);
+    await join(out, g);
+    const date = addDays(localDate(new Date(), TZ), 1);
+    const m = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, startTime: '18:00', title: 'Команда', audience: [invId] },
+    });
+    expect(m.audience).toEqual([invId]);
+    expect((await api(`/api/meetings/${m.id}`, { user: inv })).status).toBe(200);
+    expect((await api(`/api/meetings/${m.id}`, { user: out })).status).toBe(404);
+
+    const mine = async (u: FakeTgUser) =>
+      (await apiJson<MyAttendanceResponse>('/api/me/attendance', { user: u })).groups.find(
+        (x) => x.groupId === g.id,
+      )!.nextMeeting;
+    expect((await mine(inv))?.id).toBe(m.id);
+    expect(await mine(out)).toBeNull();
+
+    // Roll call: only the chosen person (the meeting is tomorrow, so move it to now).
+    await env.DB.prepare('UPDATE meetings SET starts_at = ? WHERE id = ?')
+      .bind(new Date(Date.now() - 600_000).toISOString(), m.id)
+      .run();
+    const roll = await apiJson<RollResponse>(`/api/meetings/${m.id}/roll`, { user: ADMIN });
+    expect(roll.roster.map((r) => r.userId)).toEqual([invId]);
+
+    // Back to everyone.
+    await apiJson(`/api/meetings/${m.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { audience: null },
+    });
+    expect((await api(`/api/meetings/${m.id}`, { user: out })).status).toBe(200);
+    const outsider = fakeUser('Не в служении');
+    expect(
+      (
+        await api(`/api/groups/${g.id}/meetings`, {
+          method: 'POST',
+          user: ADMIN,
+          json: { date, startTime: '18:00', title: 'x', audience: [99999] },
+        })
+      ).status,
+    ).toBe(400);
+    void outsider;
   });
 });

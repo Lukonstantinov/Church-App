@@ -232,6 +232,11 @@ describe('rich posts', () => {
 
     row = (await feedOf(g.id, m)).find((p) => p.id === id)!;
     expect(block(row, 'poll').results).toEqual({ counts: [1, 1, 1], mine: [1], voters: 2 });
+    // Leaders (the author here) also see who chose what.
+    const lead = (await feedOf(g.id, ADMIN)).find((p) => p.id === id)!;
+    const who = block(lead, 'poll').results.who!;
+    expect(who[1]!.map((p) => p.firstName)).toEqual(['Голосующий']);
+    expect(who[0]!).toHaveLength(1);
     expect(block(row, 'quiz')).toMatchObject({ correct: 1, explanation: 'Мк 3:14' });
     expect(block(row, 'quiz').results).toMatchObject({ counts: [1, 0], mine: [0], voters: 1 });
 

@@ -319,6 +319,11 @@ export interface MeetingRow {
   /** Who buys food / spends the meeting budget. */
   snackPerson: MeetingPerson | null;
   budgetCents: number | null;
+  /** Who the meeting is for; null = the whole ministry. */
+  audience: number[] | null;
+  /** When the leader / snack person was last messaged (nothing is sent automatically). */
+  leaderNotifiedAt: string | null;
+  snackNotifiedAt: string | null;
   /** Counts are filled for meetings that have a saved roll call. */
   counts: Record<AttendanceStatus, number>;
 }
@@ -329,6 +334,8 @@ export const createMeetingSchema = z.object({
   startTime: time,
   durationMin: duration.default(120),
   title: name,
+  /** Only these people (user ids); omitted or empty = everyone in the ministry. */
+  audience: z.array(z.number().int().positive()).max(500).optional(),
 });
 export type CreateMeetingInput = z.input<typeof createMeetingSchema>;
 
@@ -346,6 +353,8 @@ export const updateMeetingSchema = z.object({
   leaderUserId: z.number().int().positive().nullable().optional(),
   snackUserId: z.number().int().positive().nullable().optional(),
   budgetCents: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  /** null = everyone again. */
+  audience: z.array(z.number().int().positive()).max(500).nullable().optional(),
 });
 export type UpdateMeetingInput = z.input<typeof updateMeetingSchema>;
 
@@ -373,6 +382,13 @@ export interface MeetingDetail extends MeetingRow {
   /** Default budget per meeting in this ministry (cents). */
   defaultBudgetCents: number;
 }
+
+/** Send the leader or snack person a bot message, with the meeting notes (saved too). */
+export const notifyMeetingSchema = z.object({
+  role: z.enum(['leader', 'snack']),
+  notes: optionalText(500).optional(),
+});
+export type NotifyMeetingInput = z.input<typeof notifyMeetingSchema>;
 
 export interface RollEntry {
   userId: number;
@@ -460,6 +476,8 @@ const hexColor = z.string().regex(/^#[0-9a-f]{6}$/i, '#rrggbb');
 
 /** A post in a ministry's feed: text, optionally a headline, photos and a tint (a poster). */
 const announcementFields = z.object({
+  /** The event this post announces. */
+  eventId: z.number().int().positive().nullish(),
   title: z
     .string()
     .trim()
@@ -516,6 +534,7 @@ export interface AnnouncementRow {
   photos: { id: number; url: string }[];
   tint: { color: string; strength: number } | null;
   templateId: number | null;
+  eventId: number | null;
   /** Cover, type, fonts and colour choices (null = defaults). */
   design: PostDesign | null;
   /** Content after the text: pictures, tables, files, polls, quizzes. */

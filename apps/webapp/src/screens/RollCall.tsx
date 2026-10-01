@@ -18,15 +18,7 @@ import {
 import { Sheet, SheetOption } from '../components/Sheet';
 import { StatusChip, StatusDot, StatusIcon, useStatusLabel } from '../components/Status';
 import { useToast } from '../components/Toast';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorState,
-  Loading,
-  ProgressBar,
-  Segmented,
-} from '../components/ui';
+import { Button, Card, EmptyState, ErrorState, Loading, ProgressBar, Pill } from '../components/ui';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
@@ -70,7 +62,7 @@ function RollEditor({
   const [marks, setMarks] = useState<Marks>(initial.marks);
   const [guests, setGuests] = useState(initial.guests);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'todo'>('all');
+  const [filter, setFilter] = useState<'all' | 'todo' | 'present' | 'absent'>('all');
   const [menuFor, setMenuFor] = useState<RollEntry | null>(null);
 
   const dirty = useMemo(() => {
@@ -105,7 +97,10 @@ function RollEditor({
 
   const q = query.trim().toLowerCase();
   const visible = roster.filter((r) => {
-    if (filter === 'todo' && marks[r.userId]) return false;
+    const mark = marks[r.userId];
+    if (filter === 'todo' && mark) return false;
+    if (filter === 'present' && mark !== 'present' && mark !== 'late') return false;
+    if (filter === 'absent' && mark !== 'absent' && mark !== 'excused') return false;
     if (q && !displayName(r).toLowerCase().includes(q)) return false;
     return true;
   });
@@ -212,7 +207,7 @@ function RollEditor({
           </Card>
         )}
 
-        {total > 6 && !cancelled && (
+        {total > 0 && !cancelled && (
           <div className="flex flex-col gap-2">
             <label className="glass flex min-h-[46px] items-center gap-2 rounded-2xl px-3 shadow-card">
               <IconSearch size={18} className="text-hint" />
@@ -224,16 +219,22 @@ function RollEditor({
                 enterKeyHint="search"
               />
             </label>
-            {interactive && (
-              <Segmented
-                value={filter}
-                onChange={setFilter}
-                options={[
-                  { key: 'all', label: t.roll.filterAll(total) },
-                  { key: 'todo', label: t.roll.filterTodo(unmarked) },
-                ]}
-              />
-            )}
+            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+              {(
+                [
+                  ['all', t.roll.filterAll(total)],
+                  ['todo', t.roll.filterTodo(unmarked)],
+                  ['present', t.roll.filterPresent(attended)],
+                  ['absent', t.roll.filterAbsent(marked - attended)],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key} className="shrink-0">
+                  <Pill selected={filter === key} onClick={() => setFilter(key)}>
+                    {label}
+                  </Pill>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

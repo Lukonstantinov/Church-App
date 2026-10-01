@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import {
   fontFamily,
+  type MeetingRow,
   type AnnouncementRow,
   type EventSummary,
   type GroupSummary,
@@ -12,7 +13,10 @@ import { useEvents, useFeed } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 import { EventCard, EventCover } from './EventCard';
 import { UnreadBadges } from './FeedEntry';
-import { IconMegaphone, IconPlus, IconUserPlus, IconUsers } from './icons';
+import { IconClock, IconMegaphone, IconPlus, IconUserPlus, IconUsers } from './icons';
+import { MeetingHeroLines } from '../screens/MeetingScreen';
+import { canRollNow } from '../screens/Overview';
+import { Button, DateBadge, HeroCard } from './ui';
 import { PosterCard, PosterMedia, hasCover } from './Poster';
 
 export interface HomeAction {
@@ -100,28 +104,62 @@ export function useHomeActions(
   return actions;
 }
 
-type Item = { kind: 'post'; post: AnnouncementRow } | { kind: 'event'; event: EventSummary };
+/** What a meeting tile needs (manager rows and a member's next meeting both fit). */
+export type MeetingTileData = Pick<
+  MeetingRow,
+  'id' | 'title' | 'startsAt' | 'endsAt' | 'location' | 'topic' | 'kind' | 'leader'
+> &
+  Partial<Pick<MeetingRow, 'status'>>;
+
+type Item =
+  | { kind: 'meeting'; meeting: MeetingTileData }
+  | { kind: 'post'; post: AnnouncementRow }
+  | { kind: 'event'; event: EventSummary };
+
+/** The automatic post written when an event was created repeats the event tile. */
+const echoesEvent = (p: AnnouncementRow, events: EventSummary[]) =>
+  p.eventId
+    ? events.some((e) => e.id === p.eventId)
+    : events.some((e) => (p.text.split('\n')[0] ?? '').includes(e.title));
 
 /**
  * What opens a ministry: pinned posts and coming events as small tiles, two per row
  * (tap to expand one to full width), then the newest post.
  */
-export function HomeHighlights({ g }: { g: GroupSummary }) {
+export function HomeHighlights({
+  g,
+  meetings = [],
+  onRoll,
+}: {
+  g: GroupSummary;
+  /** Coming regular meetings (the person's next one, or the next few for leaders). */
+  meetings?: MeetingTileData[];
+  /** Leaders: open the roll call of a meeting. */
+  onRoll?: (meetingId: number) => void;
+}) {
   const t = useT();
   const { push } = useNav();
   const feed = useFeed(g.id);
   const events = useEvents(g.id, 'upcoming');
   const [open, setOpen] = useState<string | null>(null);
   const first = feed.data?.pages[0] ?? [];
+  const shownEvents = (events.data ?? []).filter((e) => e.status !== 'cancelled').slice(0, 6);
   const items: Item[] = [
-    ...first.filter((p) => p.pinned).map((post) => ({ kind: 'post' as const, post })),
-    ...(events.data ?? [])
-      .filter((e) => e.status !== 'cancelled')
-      .slice(0, 6)
-      .map((event) => ({ kind: 'event' as const, event })),
+    ...meetings
+      .filter((m) => m.status !== 'cancelled')
+      .map((meeting) => ({ kind: 'meeting' as const, meeting })),
+    ...first
+      .filter((p) => p.pinned && !echoesEvent(p, shownEvents))
+      .map((post) => ({ kind: 'post' as const, post })),
+    ...shownEvents.map((event) => ({ kind: 'event' as const, event })),
   ];
-  const latest = first.find((p) => !p.pinned);
-  const keyOf = (i: Item) => (i.kind === 'post' ? `p${i.post.id}` : `e${i.event.id}`);
+  const latest = first.find((p) => !p.pinned && !echoesEvent(p, shownEvents));
+  const keyOf = (i: Item) =>
+    i.kind === 'post'
+      ? `p${i.post.id}`
+      : i.kind === 'event'
+        ? `e${i.event.id}`
+        : `m${i.meeting.id}`;
   const openPost = (id: number) => push({ name: 'post', groupId: g.id, postId: id });
   const openEvent = (id: number) => push({ name: 'event', eventId: id });
 
@@ -143,7 +181,9 @@ export function HomeHighlights({ g }: { g: GroupSummary }) {
               if (expanded)
                 return (
                   <div key={k} className="col-span-2 flex flex-col gap-1.5">
-                    {item.kind === 'post' ? (
+                    {item.kind === 'meeting' ? (
+                      <MeetingExpanded meeting={item.meeting} onRoll={onRoll} />
+                    ) : item.kind === 'post' ? (
                       <PosterCard post={item.post} onOpen={() => openPost(item.post.id)} />
                     ) : (
                       <EventCard e={item.event} onClick={() => openEvent(item.event.id)} />
@@ -157,7 +197,9 @@ export function HomeHighlights({ g }: { g: GroupSummary }) {
                     </button>
                   </div>
                 );
-              return item.kind === 'post' ? (
+              return item.kind === 'meeting' ? (
+                <MeetingTile key={k} m={item.meeting} onToggle={toggle} />
+              ) : item.kind === 'post' ? (
                 <PostTile key={k} post={item.post} onToggle={toggle} />
               ) : (
                 <EventTile key={k} e={item.event} onToggle={toggle} />
@@ -243,5 +285,83 @@ function EventTile({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
         </span>
       </div>
     </Tile>
+  );
+}
+
+function MeetingTile({ m, onToggle }: { m: MeetingTileData; onToggle: () => void }) {
+  const t = useT();
+  const f = useFmt();
+  return (
+    <Tile onToggle={onToggle}>
+      <div className="brand-gradient flex aspect-[16/10] flex-col justify-between p-2.5 text-white">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-white/80">
+          {t.meetings.details}
+        </span>
+        <div className="flex items-end gap-2">
+          <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
+          {m.leader && (
+            <span className="mb-1 truncate rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--brand)]">
+              🎤 {m.leader.firstName}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-col gap-0.5 p-2.5">
+        <span className="truncate text-[14px] font-semibold">{m.title}</span>
+        <span className="truncate text-[12px] text-hint">
+          {f.relativeDay(m.startsAt)} · {f.time(m.startsAt)}
+        </span>
+      </div>
+    </Tile>
+  );
+}
+
+/** A meeting tile opened: when, topic, place and leader, with the way in (and the roll). */
+function MeetingExpanded({
+  meeting: m,
+  onRoll,
+}: {
+  meeting: MeetingTileData;
+  onRoll?: (id: number) => void;
+}) {
+  const t = useT();
+  const f = useFmt();
+  const { push } = useNav();
+  const rollable = onRoll && canRollNow({ status: m.status ?? 'scheduled', startsAt: m.startsAt });
+  return (
+    <HeroCard>
+      <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
+        {t.overview.nextMeeting}
+      </div>
+      <div className="flex items-center gap-3.5">
+        <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[21px] font-bold leading-tight">{m.title}</div>
+          <div className="text-[15px] text-white/85">
+            {f.relativeDay(m.startsAt)} · {f.timeRange(m.startsAt, m.endsAt)}
+          </div>
+        </div>
+      </div>
+      <MeetingHeroLines meeting={m} />
+      <div className="mt-4 flex flex-col gap-2">
+        {rollable && (
+          <Button variant="white" onClick={() => onRoll!(m.id)}>
+            {t.overview.startRoll}
+          </Button>
+        )}
+        <button
+          type="button"
+          onClick={() => push({ name: 'meeting', meetingId: m.id })}
+          className="rounded-2xl bg-white/18 px-3 py-2.5 text-[15px] font-semibold active:scale-[0.98]"
+        >
+          {t.overview.openMeeting}
+        </button>
+        {onRoll && !rollable && (
+          <p className="flex items-center gap-2 text-[13px] text-white/85">
+            <IconClock size={15} /> {t.overview.rollOpensSoon}
+          </p>
+        )}
+      </div>
+    </HeroCard>
   );
 }

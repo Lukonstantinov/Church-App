@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, asc, desc, eq, gte, isNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
 import {
   createMeetingSchema,
   createScheduleSchema,
   saveRollSchema,
+  notifyMeetingSchema,
   updateMeetingSchema,
   updateScheduleSchema,
   zonedToUtc,
@@ -22,6 +23,7 @@ import {
   meetings,
   memberships,
   groups,
+  meetingAudience,
   transactions,
   users,
   type Meeting,
@@ -34,7 +36,9 @@ import { appUrlFor, botApi } from '../lib/telegram';
 import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
 import {
+  audienceOf,
   editWindow,
+  meetingIsFor,
   generateMeetings,
   groupStats,
   memberAttendance,
@@ -150,6 +154,7 @@ groupMeetingRoutes.post('/:id/meetings', async (c) => {
       endsAt: endsAt.toISOString(),
     })
     .returning();
+  if (input.audience?.length) await setAudience(db, group.id, row!.id, input.audience);
   await audit(db, {
     actorUserId: user.id,
     action: 'meeting_created',
@@ -277,6 +282,31 @@ async function assertActiveMember(db: AuthVariables['db'], groupId: number, user
   if (!row) throw new HTTPException(400, { message: 'not_a_member' });
 }
 
+/** Replaces who a meeting is for (empty = everyone). Everyone listed must be an active member. */
+async function setAudience(
+  db: AuthVariables['db'],
+  groupId: number,
+  meetingId: number,
+  userIds: number[],
+) {
+  const ids = [...new Set(userIds)];
+  if (ids.length) {
+    const ok = await db
+      .select({ userId: memberships.userId })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.groupId, groupId),
+          eq(memberships.status, 'active'),
+          inArray(memberships.userId, ids),
+        ),
+      );
+    if (ok.length !== ids.length) throw new HTTPException(400, { message: 'not_a_member' });
+  }
+  await db.delete(meetingAudience).where(eq(meetingAudience.meetingId, meetingId));
+  for (const userId of ids) await db.insert(meetingAudience).values({ meetingId, userId });
+}
+
 /**
  * One meeting. Members see when, where, the topic and who leads; attendance and
  * expenses only go to people with those rights.
@@ -288,6 +318,9 @@ meetingRoutes.get('/:id', async (c) => {
   if (!meeting) throw new HTTPException(404, { message: 'not_found' });
   const a = await meetingAccess(db, user, meeting);
   if (!a.member) throw new HTTPException(404, { message: 'not_found' });
+  // A meeting for chosen people is hidden from everyone else (managers see all).
+  if (!a.edit && !meetingIsFor(await audienceOf(db, [meeting.id]), meeting.id, user.id))
+    throw new HTTPException(404, { message: 'not_found' });
   const group = (await db.query.groups.findFirst({ where: eq(groups.id, meeting.groupId) }))!;
   const [row] = await toMeetingRows(db, [meeting]);
   const seeRoll = a.roll || a.edit;
@@ -395,6 +428,7 @@ meetingRoutes.patch('/:id', async (c) => {
     'durationMin',
     'leaderUserId',
     'budgetCents',
+    'audience',
   ] as const;
   if (!a.manage && managerOnly.some((k) => input[k] !== undefined))
     throw new HTTPException(403, { message: 'forbidden' });
@@ -403,6 +437,8 @@ meetingRoutes.patch('/:id', async (c) => {
   }
   if (input.leaderUserId) await assertActiveMember(db, meeting.groupId, input.leaderUserId);
   if (input.snackUserId) await assertActiveMember(db, meeting.groupId, input.snackUserId);
+  if (input.audience !== undefined)
+    await setAudience(db, meeting.groupId, meeting.id, input.audience ?? []);
 
   const patch: Partial<typeof meetings.$inferInsert> = {};
   if (input.status !== undefined && meeting.status !== 'done') patch.status = input.status;
@@ -411,8 +447,15 @@ meetingRoutes.patch('/:id', async (c) => {
   if (input.location !== undefined) patch.location = input.location;
   if (input.topic !== undefined) patch.topic = input.topic;
   if (input.kind !== undefined) patch.kind = input.kind;
-  if (input.leaderUserId !== undefined) patch.leaderUserId = input.leaderUserId;
-  if (input.snackUserId !== undefined) patch.snackUserId = input.snackUserId;
+  // A new person hasn't been told yet; the message is sent separately, when chosen.
+  if (input.leaderUserId !== undefined && input.leaderUserId !== meeting.leaderUserId) {
+    patch.leaderUserId = input.leaderUserId;
+    patch.leaderNotifiedAt = null;
+  }
+  if (input.snackUserId !== undefined && input.snackUserId !== meeting.snackUserId) {
+    patch.snackUserId = input.snackUserId;
+    patch.snackNotifiedAt = null;
+  }
   if (input.budgetCents !== undefined) patch.budgetCents = input.budgetCents;
   if (input.date || input.startTime || input.durationMin) {
     const { timezone } = await getChurch(db);
@@ -451,36 +494,55 @@ meetingRoutes.patch('/:id', async (c) => {
   }
   const updated = (await db.query.meetings.findFirst({ where: eq(meetings.id, meeting.id) }))!;
 
-  // Newly assigned people hear about it from the bot.
-  const group = (await db.query.groups.findFirst({ where: eq(groups.id, meeting.groupId) }))!;
-  const budgetCents = updated.budgetCents ?? group.meetingBudgetCents;
-  const fallbackUrl = appUrlFor(c.env, c.req.url);
-  const notified: string[] = [];
-  for (const [role, id, before] of [
-    ['leader', input.leaderUserId, meeting.leaderUserId],
-    ['snack', input.snackUserId, meeting.snackUserId],
-  ] as const) {
-    if (id && id !== before) {
-      const sent = await notifyMeetingRole(db, {
-        meeting: updated,
-        groupName: group.name,
-        userId: id,
-        role,
-        budgetCents,
-        envAppUrl: c.env.APP_URL,
-        fallbackUrl,
-      });
-      if (sent) notified.push(role);
-    }
+  return c.json((await toMeetingRows(db, [updated]))[0]);
+});
+
+/**
+ * Message the meeting's leader (managers) or snack person (managers and the leader),
+ * with the meeting notes — which are saved on the meeting at the same time.
+ */
+meetingRoutes.post('/:id/notify', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, idParam(c)) });
+  if (!meeting) throw new HTTPException(404, { message: 'not_found' });
+  const a = await meetingAccess(db, user, meeting);
+  const input = await parseBody(c, notifyMeetingSchema);
+  if (input.role === 'leader' ? !a.manage : !a.edit)
+    throw new HTTPException(a.member ? 403 : 404, { message: 'forbidden' });
+  const userId = input.role === 'leader' ? meeting.leaderUserId : meeting.snackUserId;
+  if (!userId) throw new HTTPException(409, { message: 'nobody_assigned' });
+  if (input.notes !== undefined) {
+    await db.update(meetings).set({ notes: input.notes }).where(eq(meetings.id, meeting.id));
   }
-  if (notified.length) {
+  const updated = (await db.query.meetings.findFirst({ where: eq(meetings.id, meeting.id) }))!;
+  const group = (await db.query.groups.findFirst({ where: eq(groups.id, meeting.groupId) }))!;
+  const sent = await notifyMeetingRole(db, {
+    meeting: updated,
+    groupName: group.name,
+    userId,
+    role: input.role,
+    budgetCents: updated.budgetCents ?? group.meetingBudgetCents,
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+    notes: updated.notes,
+  });
+  if (sent) {
+    await db
+      .update(meetings)
+      .set(
+        input.role === 'leader'
+          ? { leaderNotifiedAt: new Date().toISOString() }
+          : { snackNotifiedAt: new Date().toISOString() },
+      )
+      .where(eq(meetings.id, meeting.id));
     c.executionCtx.waitUntil(
       drainOutbox(db, botApi(c.env), { limit: 10 }).catch((err) =>
         console.error('meeting drain', err),
       ),
     );
   }
-  return c.json({ ...(await toMeetingRows(db, [updated]))[0], notified });
+  return c.json({ sent });
 });
 
 async function loadRollMeeting(c: { get: (k: 'db' | 'user') => unknown }, id: number) {

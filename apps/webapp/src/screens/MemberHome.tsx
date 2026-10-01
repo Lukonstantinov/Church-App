@@ -78,7 +78,13 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
       {env && active.length > 0 && (
         <>
           <HomeActionRow actions={actions} />
-          <HomeHighlights g={env} />
+          <HomeHighlights
+            g={env}
+            meetings={(() => {
+              const next = att.data?.groups.find((x) => x.groupId === env.id)?.nextMeeting;
+              return next ? [next] : [];
+            })()}
+          />
         </>
       )}
 
@@ -99,7 +105,7 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
 
       {inScope(att.data?.groups)?.map((g) => (
         <div key={g.groupId} className="flex flex-col gap-4">
-          {g.nextMeeting ? (
+          {env ? null : g.nextMeeting ? (
             <HeroCard>
               <button
                 type="button"
@@ -134,7 +140,7 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
         </div>
       ))}
 
-      {(inScope(events.data) ?? []).length > 0 && (
+      {!env && (inScope(events.data) ?? []).length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
             {t.events.upcomingOnHome}

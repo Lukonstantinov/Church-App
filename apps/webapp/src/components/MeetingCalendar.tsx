@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import type { MeetingRow } from '@church/shared';
+import type { MeetingPerson, MeetingRow } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useMeetingPeople, useUpdateMeeting } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 import { IconChevronRight } from './icons';
+import { NotifySheet } from './NotifySheet';
 import { PersonPicker } from './PersonPicker';
 import { useToast } from './Toast';
 import { Card } from './ui';
@@ -24,6 +25,12 @@ export function MeetingCalendar({ meetings }: { meetings: MeetingRow[] }) {
   const today = f.todayInput();
   const [month, setMonth] = useState(today.slice(0, 7));
   const [selected, setSelected] = useState<MeetingRow | null>(null);
+  // After choosing a leader: offer to write notes and send them a message.
+  const [notifyFor, setNotifyFor] = useState<{
+    meetingId: number;
+    person: MeetingPerson;
+    notes: string | null;
+  } | null>(null);
   const people = useMeetingPeople(selected?.id ?? 0, selected !== null);
 
   const byDay = new Map<string, MeetingRow[]>();
@@ -48,9 +55,11 @@ export function MeetingCalendar({ meetings }: { meetings: MeetingRow[] }) {
   async function assign(id: number | null) {
     if (!selected) return;
     try {
-      const res = await update.mutateAsync({ id: selected.id, leaderUserId: id });
+      await update.mutateAsync({ id: selected.id, leaderUserId: id });
       haptic.success();
-      toast(res.notified.length ? t.meetings.notified : t.common.saved);
+      toast(t.meetings.assigned);
+      const person = people.data?.find((p) => p.id === id);
+      if (person) setNotifyFor({ meetingId: selected.id, person, notes: selected.notes });
     } catch {
       toast(t.common.saveFailed, 'error');
     }
@@ -136,6 +145,15 @@ export function MeetingCalendar({ meetings }: { meetings: MeetingRow[] }) {
         onClose={() => setSelected(null)}
         onPick={(id) => void assign(id)}
       />
+      {notifyFor && (
+        <NotifySheet
+          meetingId={notifyFor.meetingId}
+          role="leader"
+          person={notifyFor.person}
+          notes={notifyFor.notes}
+          onClose={() => setNotifyFor(null)}
+        />
+      )}
     </Card>
   );
 }

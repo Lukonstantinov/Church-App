@@ -22,6 +22,7 @@ import type { Db } from '../db/client';
 import {
   attendance,
   groups,
+  meetingAudience,
   meetingSchedules,
   meetings,
   memberships,
@@ -117,10 +118,16 @@ export async function toMeetingRows(db: Db, list: Meeting[]): Promise<MeetingRow
       counts.set(r.meetingId, c);
     }
   }
-  const people = await meetingPeople(
-    db,
-    list.flatMap((m) => [m.leaderUserId, m.snackUserId]),
-  );
+  const [people, audience] = await Promise.all([
+    meetingPeople(
+      db,
+      list.flatMap((m) => [m.leaderUserId, m.snackUserId]),
+    ),
+    audienceOf(
+      db,
+      list.map((m) => m.id),
+    ),
+  ]);
   return list.map((m) => ({
     id: m.id,
     groupId: m.groupId,
@@ -138,9 +145,29 @@ export async function toMeetingRows(db: Db, list: Meeting[]): Promise<MeetingRow
     leader: (m.leaderUserId && people.get(m.leaderUserId)) || null,
     snackPerson: (m.snackUserId && people.get(m.snackUserId)) || null,
     budgetCents: m.budgetCents,
+    audience: audience.get(m.id) ?? null,
+    leaderNotifiedAt: m.leaderNotifiedAt,
+    snackNotifiedAt: m.snackNotifiedAt,
     counts: counts.get(m.id) ?? emptyCounts(),
   }));
 }
+
+/** Who each meeting is for (only meetings that aren't for everyone appear). */
+export async function audienceOf(db: Db, meetingIds: number[]): Promise<Map<number, number[]>> {
+  const out = new Map<number, number[]>();
+  for (let i = 0; i < meetingIds.length; i += 90) {
+    const rows = await db
+      .select()
+      .from(meetingAudience)
+      .where(inArray(meetingAudience.meetingId, meetingIds.slice(i, i + 90)));
+    for (const r of rows) out.set(r.meetingId, [...(out.get(r.meetingId) ?? []), r.userId]);
+  }
+  return out;
+}
+
+/** Whether a person may see a meeting (it's for everyone, or they are on its list). */
+export const meetingIsFor = (audience: Map<number, number[]>, meetingId: number, userId: number) =>
+  !audience.has(meetingId) || audience.get(meetingId)!.includes(userId);
 
 export const meetingKind = (v: string | null): MeetingKind | null =>
   (MEETING_KINDS as readonly string[]).includes(v ?? '') ? (v as MeetingKind) : null;
@@ -194,8 +221,11 @@ export async function rosterFor(db: Db, meeting: Meeting, timezone: string): Pro
   ]);
   const markBy = new Map(marks.map((m) => [m.userId, m.status]));
 
+  // A meeting for chosen people has only them on its roll call.
+  const chosen = (await audienceOf(db, [meeting.id])).get(meeting.id);
   const eligible = new Map<number, typeof users.$inferSelect>();
   for (const { u, joinedAt } of members) {
+    if (chosen && !chosen.includes(u.id)) continue;
     if (!joinedAt || joinedAt < meetingDayEnd) eligible.set(u.id, u);
   }
   const missing = marks.map((m) => m.userId).filter((id) => !eligible.has(id));
@@ -352,7 +382,10 @@ export async function memberAttendance(
   }
 
   // Held meetings since joining (or with a record), newest first; unmarked = absent.
+  // Meetings for other chosen people don't count.
+  const heldAudience = await audienceOf(db, ids);
   const timeline = held
+    .filter((m) => marks.has(m.id) || meetingIsFor(heldAudience, m.id, userId))
     .filter((m) => marks.has(m.id) || !joinedDay || m.startsAt >= joinedDay)
     .map((m) => ({
       meetingId: m.id,
@@ -362,7 +395,7 @@ export async function memberAttendance(
   const statuses = timeline.map((t) => t.status);
   const rate = attendanceRate(statuses);
 
-  const next = await db
+  const coming = await db
     .select()
     .from(meetings)
     .where(
@@ -373,7 +406,13 @@ export async function memberAttendance(
       ),
     )
     .orderBy(asc(meetings.startsAt))
-    .limit(1);
+    .limit(10);
+  // The next meeting this person is invited to.
+  const comingAudience = await audienceOf(
+    db,
+    coming.map((m) => m.id),
+  );
+  const next = coming.filter((m) => meetingIsFor(comingAudience, m.id, userId)).slice(0, 1);
 
   return {
     groupId,

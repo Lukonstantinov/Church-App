@@ -105,6 +105,7 @@ export async function createAnnouncement(
       groupId: group.id,
       authorId: author.id,
       ...contentColumns(input),
+      eventId: input.eventId ?? null,
       recipients: reachable.length,
     })
     .returning();
@@ -249,6 +250,37 @@ async function toRows(
         ).map((v) => [`${v.announcementId}:${v.blockId}`, Number(v.n)]),
       )
     : new Map<string, number>();
+  // Names behind each vote, for posts the viewer may edit (leaders see who chose what).
+  const editable = rows
+    .filter((r) => r.author?.id === viewer.id || canModerate(r.a.groupId))
+    .map((r) => r.a.id);
+  const named =
+    hasPolls && editable.length
+      ? await db
+          .select({
+            announcementId: pollVotes.announcementId,
+            blockId: pollVotes.blockId,
+            option: pollVotes.option,
+            id: users.id,
+            firstName: users.firstName,
+            lastName: users.lastName,
+          })
+          .from(pollVotes)
+          .innerJoin(users, eq(users.id, pollVotes.userId))
+          .where(inArray(pollVotes.announcementId, editable))
+          .orderBy(users.firstName)
+      : [];
+  const whoFor = (announcementId: number, blockId: string, options: number) => {
+    const who = Array.from(
+      { length: options },
+      () => [] as { id: number; firstName: string; lastName: string | null }[],
+    );
+    for (const v of named) {
+      if (v.announcementId === announcementId && v.blockId === blockId && v.option < options)
+        who[v.option]!.push({ id: v.id, firstName: v.firstName, lastName: v.lastName });
+    }
+    return who;
+  };
   const resultsFor = (announcementId: number, blockId: string, options: number) => {
     const counts = Array<number>(options).fill(0);
     const mine: number[] = [];
@@ -287,9 +319,18 @@ async function toRows(
               };
             }
             case 'poll':
-              return { ...b, results: resultsFor(a.id, b.id, b.options.length) };
+              return {
+                ...b,
+                results: {
+                  ...resultsFor(a.id, b.id, b.options.length),
+                  ...(canEdit ? { who: whoFor(a.id, b.id, b.options.length) } : {}),
+                },
+              };
             case 'quiz': {
-              const results = resultsFor(a.id, b.id, b.options.length);
+              const results = {
+                ...resultsFor(a.id, b.id, b.options.length),
+                ...(canEdit ? { who: whoFor(a.id, b.id, b.options.length) } : {}),
+              };
               const reveal = results.mine.length > 0 || canEdit;
               return {
                 id: b.id,
@@ -323,6 +364,7 @@ async function toRows(
         tint:
           a.tintColor !== null ? { color: a.tintColor, strength: a.tintStrength ?? 0.35 } : null,
         templateId: a.templateId,
+        eventId: a.eventId,
         design,
         blocks,
         look,

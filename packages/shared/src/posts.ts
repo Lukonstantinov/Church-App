@@ -200,6 +200,8 @@ export interface VoteResults {
   /** People who answered. */
   voters: number;
   mine: number[];
+  /** Who chose each option (same order as the options) — only for leaders. */
+  who?: { id: number; firstName: string; lastName: string | null }[][];
 }
 
 /** Blocks as the app receives them: media resolved to URLs, polls with results. */

@@ -218,7 +218,7 @@ function MeetingRowView({
           {f.timeRange(m.startsAt, m.endsAt)}
           {m.location ? ` · ${m.location}` : ''}
         </div>
-        {(m.leader || m.topic || m.kind) && (
+        {(m.leader || m.topic || m.kind || m.audience) && (
           <div className="mt-1 flex min-w-0 items-center gap-1.5">
             {m.leader && (
               <span className="brand-gradient shrink-0 rounded-full px-2 py-0.5 text-[12px] font-bold text-white">
@@ -227,6 +227,11 @@ function MeetingRowView({
             )}
             {m.kind && <span className="shrink-0 text-[13px]">{KIND_EMOJI[m.kind]}</span>}
             {m.topic && <span className="truncate text-[13px] italic text-hint">{m.topic}</span>}
+            {m.audience && (
+              <span className="shrink-0 rounded-full bg-hairline px-2 py-0.5 text-[12px] font-semibold text-hint">
+                🔒 {m.audience.length}
+              </span>
+            )}
           </div>
         )}
       </div>

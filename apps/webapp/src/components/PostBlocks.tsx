@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react';
-import type { PostBlockView } from '@church/shared';
+import { displayName, type PostBlockView, type VoteResults } from '@church/shared';
 import { useT } from '../lib/i18n';
 import { useVote } from '../lib/queries';
 import { haptic, openTelegramLink } from '../lib/telegram';
@@ -262,6 +262,7 @@ function PollView({ postId, groupId, poll }: { postId: number; groupId: number; 
               </button>
             );
           })}
+      <Voters options={poll.options} who={poll.results.who} />
       <div className="flex items-center justify-between gap-2 text-[13px] text-hint">
         <span>{t.feed.votes(poll.results.voters)}</span>
         {voted ? (
@@ -347,8 +348,40 @@ function QuizView({ postId, groupId, quiz }: { postId: number; groupId: number; 
         </div>
       )}
       {answered && (
-        <div className="text-[13px] text-hint">{t.feed.answered(quiz.results.voters)}</div>
+        <div className="text-[13px] text-hint">
+          {t.feed.answered(quiz.results.voters)}
+          <Voters options={quiz.options} who={quiz.results.who} />
+        </div>
       )}
+    </div>
+  );
+}
+
+/** For leaders: who chose each option, opened on demand. */
+function Voters({ options, who }: { options: string[]; who?: VoteResults['who'] }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  if (!who) return null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="self-start text-[13px] font-semibold text-link"
+      >
+        {open ? `▴ ${t.feed.hideVoters}` : `▾ ${t.feed.whoVoted}`}
+      </button>
+      {open &&
+        options.map((o, i) => (
+          <div key={i} className="rounded-xl bg-[var(--color-section)] px-3 py-2 text-[13px]">
+            <div className="font-semibold">
+              {o} · {who[i]?.length ?? 0}
+            </div>
+            <div className="text-hint">
+              {who[i]?.length ? who[i]!.map((p) => displayName(p)).join(', ') : t.feed.noVotes}
+            </div>
+          </div>
+        ))}
     </div>
   );
 }
