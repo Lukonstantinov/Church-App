@@ -1,0 +1,1 @@
+ALTER TABLE `groups` ADD `default_location` text DEFAULT 'Šeškinės 22A' NOT NULL;

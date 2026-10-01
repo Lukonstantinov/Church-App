@@ -35,6 +35,8 @@ export type Route =
       meetingId?: number;
     }
   | { name: 'meeting'; meetingId: number }
+  /** The person's own job on a meeting (leader / snack), not the manager view. */
+  | { name: 'task'; meetingId: number }
   | { name: 'contacts'; groupId: number }
   | { name: 'event'; eventId: number }
   | { name: 'eventForm'; groupId: number; eventId?: number; date?: string }

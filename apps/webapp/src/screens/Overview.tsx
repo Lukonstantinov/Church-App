@@ -8,7 +8,7 @@ import { useT } from '../lib/i18n';
 import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
 import { useGroupStats, useMe, useUpcoming } from '../lib/queries';
-import { AssignmentCards } from '../components/Assignments';
+import { useTasks } from '../components/Assignments';
 import { HomeActionRow, HomeHighlights, useHomeActions } from '../components/HomeSections';
 
 const HOUR = 3_600_000;
@@ -28,7 +28,9 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
   // Requests only matter to people who can approve them.
   const pending = s && can('people.manage') ? s.pendingCount : 0;
   const upcoming = useUpcoming(active.id);
-  const actions = useHomeActions(active, me.data?.church.brandColor ?? 'blue', can);
+  const tasks = useTasks(active.id);
+  const base = useHomeActions(active, me.data?.church.brandColor ?? 'blue', can);
+  const actions = tasks.action ? [tasks.action, ...base] : base;
 
   return (
     <Screen tabs>
@@ -38,8 +40,8 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
         subtitle={t.common.members(active.activeCount)}
       />
 
-      <AssignmentCards groupId={active.id} />
       <HomeActionRow actions={actions} />
+      {tasks.panel}
       <HomeHighlights
         g={active}
         meetings={(upcoming.data ?? []).filter((m) => m.status !== 'cancelled').slice(0, 2)}

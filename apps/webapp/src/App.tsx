@@ -23,6 +23,7 @@ import { MemberScreen } from './screens/MemberScreen';
 import { NewMeeting } from './screens/NewMeeting';
 import { Contacts } from './screens/Contacts';
 import { MeetingScreen } from './screens/MeetingScreen';
+import { TaskScreen } from './screens/TaskScreen';
 import { NewTransaction } from './screens/NewTransaction';
 import { EventForm } from './screens/EventForm';
 import { EventScreen } from './screens/EventScreen';
@@ -93,6 +94,8 @@ function Router({ me }: { me: MeResponse }) {
       return <Contacts key={route.groupId} groupId={route.groupId} />;
     case 'meeting':
       return <MeetingScreen key={route.meetingId} meetingId={route.meetingId} />;
+    case 'task':
+      return <TaskScreen key={route.meetingId} meetingId={route.meetingId} />;
     case 'event':
       return <EventScreen key={route.eventId} eventId={route.eventId} />;
     case 'eventForm':
@@ -140,7 +143,7 @@ function Router({ me }: { me: MeResponse }) {
 function initialRoute(me: MeResponse): Route | undefined {
   const params = new URLSearchParams(window.location.search);
   const meeting = Number(params.get('meeting'));
-  if (Number.isSafeInteger(meeting) && meeting > 0) return { name: 'meeting', meetingId: meeting };
+  if (Number.isSafeInteger(meeting) && meeting > 0) return { name: 'task', meetingId: meeting };
   const raw = params.get('roll');
   const id = Number(raw);
   if (!raw || !Number.isSafeInteger(id) || id <= 0 || !canTakeRoll(me)) return undefined;

@@ -432,6 +432,7 @@ meetingRoutes.get('/:id', async (c) => {
     guestCount: seeRoll ? row!.guestCount : 0,
     budgetCents: a.money || a.edit ? row!.budgetCents : null,
     groupName: group.name,
+    defaultLocation: group.defaultLocation,
     canEdit: a.edit,
     canManage: a.manage,
     myRole:

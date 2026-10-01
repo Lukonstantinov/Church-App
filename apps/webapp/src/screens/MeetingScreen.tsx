@@ -94,7 +94,7 @@ export function MeetingScreen({ meetingId }: { meetingId: number }) {
   return <MeetingView key={q.data.id} m={q.data} />;
 }
 
-function MeetingView({ m }: { m: MeetingDetail }) {
+export function MeetingView({ m }: { m: MeetingDetail }) {
   const t = useT();
   const f = useFmt();
   const money = useMoney();

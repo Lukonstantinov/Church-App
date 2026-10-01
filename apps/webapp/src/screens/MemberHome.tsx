@@ -1,5 +1,5 @@
 import { displayName, type GroupSummary, type MeResponse } from '@church/shared';
-import { AssignmentCards } from '../components/Assignments';
+import { useTasks } from '../components/Assignments';
 import { HomeActionRow, HomeHighlights, useHomeActions } from '../components/HomeSections';
 import { PosterCard } from '../components/Poster';
 import { useEnv } from '../lib/env';
@@ -34,11 +34,13 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
   const f = useFmt();
   const { user } = me;
   const { env, can } = useEnv();
-  const actions = useHomeActions(
+  const tasks = useTasks(env?.id);
+  const base = useHomeActions(
     env ?? ({ id: 0, unreadPosts: 0, unreadComments: 0 } as GroupSummary),
     me.church.brandColor,
     can,
   );
+  const actions = tasks.action ? [tasks.action, ...base] : base;
   // Inside one ministry: only its data.
   const memberships =
     groupId === undefined ? me.memberships : me.memberships.filter((m) => m.groupId === groupId);
@@ -78,8 +80,8 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
 
       {env && active.length > 0 && (
         <>
-          <AssignmentCards groupId={env.id} />
           <HomeActionRow actions={actions} />
+          {tasks.panel}
           <HomeHighlights
             g={env}
             meetings={(() => {

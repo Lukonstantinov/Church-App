@@ -52,6 +52,7 @@ function Form({ g }: { g: GroupDetail }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(g.name);
   const [description, setDescription] = useState(g.description ?? '');
+  const [place, setPlace] = useState(g.defaultLocation);
   const [chatUrl, setChatUrl] = useState(g.managedChat ? '' : (g.chatUrl ?? ''));
   const chatOk = !chatUrl.trim() || CHAT_RE.test(chatUrl.trim());
   const churchTheme = me.data?.church.brandColor ?? 'blue';
@@ -84,6 +85,7 @@ function Form({ g }: { g: GroupDetail }) {
     const ok = await patchNow({
       name: name.trim(),
       description,
+      defaultLocation: place.trim(),
       ...(g.managedChat ? {} : { chatUrl: chatUrl.trim() || null }),
     });
     if (ok) {
@@ -172,6 +174,9 @@ function Form({ g }: { g: GroupDetail }) {
 
       <Section>
         <TextField label={t.events.name} value={name} onChange={setName} />
+      </Section>
+      <Section title={t.meetings.defaultPlace} footer={t.meetings.defaultPlaceHint}>
+        <TextField label={t.meetings.taskPlace} value={place} onChange={setPlace} maxLength={120} />
       </Section>
       <Section title={t.events.description}>
         <TextArea value={description} onChange={setDescription} maxLength={300} rows={3} />

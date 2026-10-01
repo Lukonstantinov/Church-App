@@ -127,6 +127,8 @@ export interface GroupDetail extends GroupSummary {
   canManage: boolean;
   /** The group's Telegram chat, if linked. */
   chatUrl: string | null;
+  /** Usual place of the ministry's meetings. */
+  defaultLocation: string;
   /** Chat managed by the bot (members-only): its title; null when not linked. */
   managedChat: { title: string | null; pending: boolean } | null;
 }
@@ -161,6 +163,8 @@ export const updateGroupSchema = z.object({
   name: name.optional(),
   description: optionalText(300).optional(),
   chatUrl: chatUrlSchema.optional(),
+  /** Usual place of the ministry's meetings (empty = none). */
+  defaultLocation: z.string().trim().max(120).optional(),
 });
 export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 
@@ -384,6 +388,8 @@ export interface MeetingDetail extends MeetingRow {
     | null;
   /** Default budget per meeting in this ministry (cents). */
   defaultBudgetCents: number;
+  /** Usual place of this ministry's meetings, prefilled for the leader. */
+  defaultLocation: string;
   /** Which job the viewer was given on this meeting (null = none), and if they agreed. */
   myRole: 'leader' | 'snack' | null;
   myAcceptedAt: string | null;

@@ -99,6 +99,8 @@ export const groups = sqliteTable('groups', {
   badgeColor: text('badge_color'),
   /** Default food/expense budget per meeting, in cents. */
   meetingBudgetCents: integer('meeting_budget_cents').notNull().default(1500),
+  /** Where this ministry's meetings usually are; prefilled when the leader fills in the place. */
+  defaultLocation: text('default_location').notNull().default('Šeškinės 22A'),
   /** Photo behind the ministry card (BackdropConfig JSON), NULL = colours only. */
   backdrop: text('backdrop'),
   archivedAt: text('archived_at'),

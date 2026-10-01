@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { displayName, type AssignmentRow } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
@@ -5,25 +6,46 @@ import { useNav } from '../lib/nav';
 import { useAnswerMeeting, useAssignments } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
 import { KIND_EMOJI } from '../screens/MeetingScreen';
+import type { HomeAction } from './HomeSections';
 import { useMoney } from './money';
 import { useToast } from './Toast';
 
+/** A job needs the person when they haven't agreed, or (the leader) something is still empty. */
+const needsAttention = (a: AssignmentRow) => !a.acceptedAt || a.missing.length > 0;
+
 /**
- * "Assigned to you": the meetings the person leads or buys snacks for, what is still
- * to fill in, and the way to agree, decline or open them. Opens from the bot's button
- * too, but is always here on the home screen.
+ * "Assigned to you" folded into one icon: a "Tasks" shortcut with a red counter of what
+ * needs the person. Tap it and the cards unfold below; fold them and it is the icon again.
+ * `action` goes into the home shortcut row, `panel` below it.
  */
-export function AssignmentCards({ groupId }: { groupId?: number }) {
+export function useTasks(groupId?: number) {
   const t = useT();
   const q = useAssignments();
+  const [open, setOpen] = useState(false);
   const list = (q.data ?? []).filter((a) => groupId === undefined || a.groupId === groupId);
-  if (list.length === 0) return null;
-  return (
-    <section>
-      <h2 className="mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-        🎤 {t.meetings.myJobs}
-      </h2>
-      <div className="flex flex-col gap-2.5">
+  const count = list.filter(needsAttention).length;
+  const toggle = () => setOpen((v) => !v);
+  const action: HomeAction | null =
+    list.length === 0
+      ? null
+      : {
+          key: 'tasks',
+          icon: <span className="text-[17px] leading-none">{open ? '▴' : '📋'}</span>,
+          label: t.meetings.tasks,
+          onClick: toggle,
+          badge:
+            count > 0 ? (
+              <span className="min-w-[22px] rounded-full bg-[#ef4444] px-1.5 text-center text-[12px] font-bold leading-[22px] text-white ring-2 ring-white/90">
+                {count > 99 ? '99+' : count}
+              </span>
+            ) : undefined,
+        };
+  const panel =
+    open && list.length > 0 ? (
+      <section className="flex flex-col gap-2.5">
+        <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+          🎤 {t.meetings.myJobs}
+        </h2>
         {list.map((a) => (
           <AssignmentCard
             key={`${a.meetingId}:${a.role}`}
@@ -31,8 +53,39 @@ export function AssignmentCards({ groupId }: { groupId?: number }) {
             showGroup={groupId === undefined}
           />
         ))}
+        <button
+          type="button"
+          onClick={toggle}
+          className="self-center rounded-full bg-hairline px-3 py-1 text-[13px] font-semibold"
+        >
+          ▴ {t.overview.collapse}
+        </button>
+      </section>
+    ) : null;
+  return { action, panel };
+}
+
+/** The same folded tasks for screens without a shortcut row (the main page): a small pill. */
+export function TasksPill() {
+  const { action, panel } = useTasks();
+  if (!action) return null;
+  return (
+    <>
+      <div>
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="glass relative inline-flex items-center gap-2 rounded-full py-1.5 pl-2 pr-4 text-[14px] font-semibold shadow-card active:scale-95"
+        >
+          <span className="brand-gradient flex h-8 w-8 items-center justify-center rounded-full text-white">
+            {action.icon}
+          </span>
+          {action.label}
+          {action.badge && <span className="ml-0.5">{action.badge}</span>}
+        </button>
       </div>
-    </section>
+      {panel}
+    </>
   );
 }
 
@@ -43,7 +96,7 @@ function AssignmentCard({ a, showGroup }: { a: AssignmentRow; showGroup: boolean
   const toast = useToast();
   const { push } = useNav();
   const answer = useAnswerMeeting();
-  const open = () => push({ name: 'meeting', meetingId: a.meetingId });
+  const open = () => push({ name: 'task', meetingId: a.meetingId });
   const leader = a.role === 'leader';
   const missingLabel = {
     location: t.meetings.needLocation,

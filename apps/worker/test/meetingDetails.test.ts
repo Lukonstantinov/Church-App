@@ -613,3 +613,30 @@ describe('message templates', () => {
     ).toEqual([]);
   });
 });
+
+describe('default meeting place', () => {
+  it('is Šeškinės 22A, shown on the meeting, and changeable in the ministry settings', async () => {
+    const g = await createEnv('Место по умолчанию');
+    const date = addDays(localDate(new Date(), TZ), 5);
+    const meeting = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, startTime: '19:00', durationMin: 120, title: 'Вечер' },
+    });
+    const seen = (user = ADMIN) => apiJson<MeetingDetail>(`/api/meetings/${meeting.id}`, { user });
+    expect(await seen()).toMatchObject({ defaultLocation: 'Šeškinės 22A', location: null });
+    expect(
+      (
+        await api(`/api/groups/${g.id}`, {
+          method: 'PATCH',
+          user: ADMIN,
+          json: { defaultLocation: 'Зал церкви' },
+        })
+      ).status,
+    ).toBe(200);
+    expect((await seen()).defaultLocation).toBe('Зал церкви');
+    expect(
+      (await apiJson<GroupDetail>(`/api/groups/${g.id}`, { user: ADMIN })).defaultLocation,
+    ).toBe('Зал церкви');
+  });
+});

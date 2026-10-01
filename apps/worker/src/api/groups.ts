@@ -211,6 +211,7 @@ groupRoutes.get('/:id', async (c) => {
     ...summary!,
     canManage: perms.size > 0,
     chatUrl: group.chatUrl,
+    defaultLocation: group.defaultLocation,
     managedChat: group.tgChatId
       ? { title: group.tgChatTitle, pending: group.chatLinkCode !== null }
       : null,
