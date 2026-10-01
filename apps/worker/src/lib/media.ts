@@ -132,3 +132,24 @@ export async function assertGroupMedia(db: Db, groupId: number, mediaId: number)
   });
   if (!row) throw new HTTPException(400, { message: 'invalid_media' });
 }
+
+/** Signed URL for a post attachment (separate namespace from images). */
+export async function signedFileUrl(secret: string, id: number, now = Date.now()): Promise<string> {
+  const exp = (Math.floor(now / 1000 / DAY_S) + 2) * DAY_S;
+  return `/media/f/${id}?e=${exp}&s=${await hmacHex(secret, `file:${id}.${exp}`)}`;
+}
+
+export async function verifyFileSignature(
+  secret: string,
+  id: number,
+  exp: number,
+  sig: string,
+  now = Date.now(),
+): Promise<boolean> {
+  if (!Number.isSafeInteger(exp) || exp * 1000 < now) return false;
+  const expected = await hmacHex(secret, `file:${id}.${exp}`);
+  if (expected.length !== sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0;
+}

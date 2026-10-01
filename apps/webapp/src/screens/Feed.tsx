@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { displayName } from '@church/shared';
+import { displayName, fontFamily } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { IconMegaphone, IconPlus, IconSend } from '../components/icons';
-import { PostMenu, PosterCard, PosterMedia, Reactions } from '../components/Poster';
+import {
+  KindBadge,
+  PostMenu,
+  PosterCard,
+  PosterMedia,
+  Reactions,
+  hasCover,
+} from '../components/Poster';
+import { PostBlocks } from '../components/PostBlocks';
+import { RichText } from '../components/RichText';
 import { useToast } from '../components/Toast';
 import { PhotoViewer } from '../components/TreasurySheets';
 import { Button, Card, EmptyState, Loading, Screen, Skeleton, Title } from '../components/ui';
@@ -117,12 +126,13 @@ export function PostScreen({ groupId, postId }: { groupId: number; postId: numbe
   return (
     <Screen>
       <article className="glass -mx-1 overflow-hidden rounded-[var(--radius-card)] shadow-card">
-        {(post.photos.length > 0 || post.title) && (
+        {hasCover(post) && (
           <PosterMedia
             title={post.title}
             photos={post.photos.slice(0, 1)}
             tint={post.tint}
             look={post.look}
+            design={post.design}
             onPhoto={() => post.photos[0] && setViewing(post.photos[0].url)}
             tall
           />
@@ -143,6 +153,7 @@ export function PostScreen({ groupId, postId }: { groupId: number; postId: numbe
         )}
         <div className="flex flex-col gap-3 p-4">
           <div className="flex items-center gap-2 text-[13px] text-hint">
+            {!hasCover(post) && <KindBadge kind={post.design?.kind} />}
             {post.pinned && <span className="shrink-0">📌</span>}
             <span className="min-w-0 flex-1">
               {post.author ? `${displayName(post.author)} · ` : ''}
@@ -151,7 +162,20 @@ export function PostScreen({ groupId, postId }: { groupId: number; postId: numbe
             </span>
             <PostMenu post={post} onDeleted={back} />
           </div>
-          <p className="whitespace-pre-line text-[17px] leading-relaxed">{post.text}</p>
+          {post.text && (
+            <RichText
+              text={post.text}
+              className="text-[17px] leading-relaxed"
+              style={{ fontFamily: fontFamily(post.design?.bodyFont) }}
+            />
+          )}
+          <PostBlocks
+            postId={post.id}
+            groupId={groupId}
+            blocks={post.blocks}
+            bodyStyle={{ fontFamily: fontFamily(post.design?.bodyFont) }}
+            onImage={setViewing}
+          />
           <Reactions post={post} />
         </div>
       </article>
@@ -185,7 +209,11 @@ export function PostScreen({ groupId, postId }: { groupId: number; postId: numbe
                     {displayName(c.author)}
                   </div>
                 )}
-                <div className="whitespace-pre-line text-[15px] leading-snug">{c.text}</div>
+                <RichText
+                  text={c.text}
+                  className="text-[15px] leading-snug"
+                  linkClassName={c.mine ? 'font-semibold text-white' : 'font-medium text-link'}
+                />
                 <div
                   className={`mt-0.5 flex items-center gap-2 text-[11px] ${c.mine ? 'text-white/75' : 'text-hint'}`}
                 >

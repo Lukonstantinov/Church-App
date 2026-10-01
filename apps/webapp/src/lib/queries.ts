@@ -483,6 +483,33 @@ export function useEditPost(groupId: number) {
   });
 }
 
+export function useVote(groupId: number) {
+  const changed = useFeedChanged(groupId);
+  return useMutation({
+    mutationFn: ({
+      postId,
+      blockId,
+      options,
+    }: {
+      postId: number;
+      blockId: string;
+      options: number[];
+    }) => apiFetch(`/announcements/${postId}/vote`, send('POST', { blockId, options })),
+    onSuccess: changed,
+  });
+}
+
+/** Attach a document to a post (raw upload; the name decides its type). */
+export function useUploadFile(groupId: number) {
+  return useMutation({
+    mutationFn: (file: File) =>
+      apiFetch<{ id: number; name: string; bytes: number; mime: string; url: string }>(
+        `/groups/${groupId}/files?name=${encodeURIComponent(file.name)}`,
+        { method: 'POST', body: file, headers: { 'content-type': 'application/octet-stream' } },
+      ),
+  });
+}
+
 export function usePinPost(groupId: number) {
   const changed = useFeedChanged(groupId);
   return useMutation({

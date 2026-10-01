@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
+  customType,
   index,
   integer,
   primaryKey,
@@ -9,6 +10,13 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
+
+/** Raw bytes in a BLOB column (D1 binds ArrayBuffers and returns them for BLOBs). */
+const bytesColumn = customType<{ data: Uint8Array; driverData: ArrayBuffer | number[] }>({
+  dataType: () => 'blob',
+  toDriver: (v) => v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength) as ArrayBuffer,
+  fromDriver: (v) => (Array.isArray(v) ? Uint8Array.from(v) : new Uint8Array(v)),
+});
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
 const createdAt = () => text('created_at').notNull().default(now);
@@ -296,6 +304,10 @@ export const announcements = sqliteTable(
     /** Pinned posts come first in the ministry's feed. */
     pinnedAt: text('pinned_at'),
     editedAt: text('edited_at'),
+    /** PostDesign JSON: cover, type, colour, fonts; NULL = defaults. */
+    design: text('design'),
+    /** PostBlock[] JSON: pictures, tables, files, polls, quizzes after the text. */
+    blocks: text('blocks'),
     deletedAt: text('deleted_at'),
     createdAt: createdAt(),
   },
@@ -576,4 +588,50 @@ export const postReads = sqliteTable(
     lastCommentId: integer('last_comment_id').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.userId, t.announcementId] })],
+);
+
+/** Answers to polls and quizzes inside posts (one row per chosen option). */
+export const pollVotes = sqliteTable(
+  'poll_votes',
+  {
+    announcementId: integer('announcement_id')
+      .notNull()
+      .references(() => announcements.id),
+    blockId: text('block_id').notNull(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    option: integer('option').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.announcementId, t.blockId, t.userId, t.option] })],
+);
+
+/**
+ * Documents attached to posts (PDF, office files, screenshots). Stored in D1 as raw
+ * bytes split into parts under the 2 MB row limit, so no payment card is needed.
+ */
+export const files = sqliteTable('files', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  groupId: integer('group_id')
+    .notNull()
+    .references(() => groups.id),
+  name: text('name').notNull(),
+  mime: text('mime').notNull(),
+  bytes: integer('bytes').notNull(),
+  parts: integer('parts').notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: createdAt(),
+});
+
+export const fileParts = sqliteTable(
+  'file_parts',
+  {
+    fileId: integer('file_id')
+      .notNull()
+      .references(() => files.id),
+    idx: integer('idx').notNull(),
+    data: bytesColumn('data').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.fileId, t.idx] })],
 );

@@ -23,7 +23,13 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules,
   },
   {
-    files: ['scripts/**/*.{ts,mjs}', '*.js', '**/vitest.config.ts', '**/drizzle.config.ts'],
+    files: [
+      'scripts/**/*.{ts,mjs}',
+      '**/scripts/**/*.mjs',
+      '*.js',
+      '**/vitest.config.ts',
+      '**/drizzle.config.ts',
+    ],
     languageOptions: { globals: globals.node },
   },
 );

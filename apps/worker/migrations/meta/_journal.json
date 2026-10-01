@@ -85,6 +85,13 @@
       "when": 1790812131575,
       "tag": "0011_post_edits_colours",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1790813906796,
+      "tag": "0012_rich_posts",
+      "breakpoints": true
     }
   ]
 }

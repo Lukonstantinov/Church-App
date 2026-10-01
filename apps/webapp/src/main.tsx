@@ -5,6 +5,7 @@ import { ApiError } from './lib/api';
 import { initTelegram, isInsideTelegram } from './lib/telegram';
 import { App } from './App';
 import './index.css';
+import './fonts.css';
 
 initTelegram();
 

@@ -5,6 +5,9 @@ import {
   commentSchema,
   pinSchema,
   updateAnnouncementSchema,
+  voteSchema,
+  readPostBlocks,
+  type UpdateAnnouncementInput,
   createAnnouncementSchema,
   reactionSchema,
   templateInputSchema,
@@ -21,23 +24,45 @@ import {
   groups,
   media,
   memberships,
+  pollVotes,
 } from '../db/schema';
 import { accessIn, assertCan, assertCanViewGroup, groupsWithPermission } from '../lib/access';
+import { assertGroupFile, storeFile } from '../lib/files';
 import {
+  contentColumns,
   createAnnouncement,
+  referencedIds,
   listAnnouncements,
   listComments,
   toggleReaction,
 } from '../lib/announcements';
 import { audit } from '../lib/audit';
 import { getAppUrl } from '../lib/church';
-import { assertGroupMedia, signedMediaUrl } from '../lib/media';
+import { assertGroupMedia, signedFileUrl, signedMediaUrl } from '../lib/media';
 import { markPostRead } from '../lib/feed';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi } from '../lib/telegram';
 import { idParam, parseBody } from './util';
 
 type App = { Bindings: Env; Variables: AuthVariables };
+
+/** Everything a post refers to must belong to its ministry (templates are church-wide). */
+async function assertContent(
+  db: AuthVariables['db'],
+  groupId: number,
+  input: UpdateAnnouncementInput,
+) {
+  const refs = referencedIds(input);
+  for (const id of refs.media) await assertGroupMedia(db, groupId, id);
+  for (const id of refs.files) await assertGroupFile(db, groupId, id);
+  if (input.templateId) {
+    const tpl = await db.query.designTemplates.findFirst({
+      columns: { id: true },
+      where: eq(designTemplates.id, input.templateId),
+    });
+    if (!tpl) throw new HTTPException(400, { message: 'invalid_template' });
+  }
+}
 
 /** /api/groups/:id/announcements — the ministry's feed. */
 export const groupAnnouncementRoutes = new Hono<App>();
@@ -65,14 +90,7 @@ groupAnnouncementRoutes.post('/:id/announcements', async (c) => {
   const user = c.get('user');
   const group = await assertCan(db, user, idParam(c), 'announce');
   const input = await parseBody(c, createAnnouncementSchema);
-  for (const id of input.mediaIds) await assertGroupMedia(db, group.id, id);
-  if (input.templateId) {
-    const tpl = await db.query.designTemplates.findFirst({
-      columns: { id: true },
-      where: eq(designTemplates.id, input.templateId),
-    });
-    if (!tpl) throw new HTTPException(400, { message: 'invalid_template' });
-  }
+  await assertContent(db, group.id, input);
   const appUrl = (await getAppUrl(db, c.env.APP_URL)) ?? appUrlFor(c.env, c.req.url);
   const { row: _row, ...result } = await createAnnouncement(db, {
     group,
@@ -90,6 +108,28 @@ groupAnnouncementRoutes.post('/:id/announcements', async (c) => {
     );
   }
   return c.json(result, 201);
+});
+
+/** Attach a document (PDF, office file, screenshot) to a post: raw body, ?name=file.pdf */
+groupAnnouncementRoutes.post('/:id/files', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const group = await assertCan(db, user, idParam(c), 'announce');
+  const row = await storeFile(db, c.req, {
+    groupId: group.id,
+    name: c.req.query('name') ?? '',
+    userId: user.id,
+  });
+  return c.json(
+    {
+      id: row.id,
+      name: row.name,
+      bytes: row.bytes,
+      mime: row.mime,
+      url: await signedFileUrl(c.env.WEBHOOK_SECRET, row.id),
+    },
+    201,
+  );
 });
 
 /** /api/me/announcements — recent posts from all the user's ministries (member home). */
@@ -161,25 +201,10 @@ announcementRoutes.patch('/:id', async (c) => {
   if (post.authorId !== user.id && !moderate)
     throw new HTTPException(403, { message: 'forbidden' });
   const input = await parseBody(c, updateAnnouncementSchema);
-  for (const id of input.mediaIds) await assertGroupMedia(db, post.groupId, id);
-  if (input.templateId) {
-    const tpl = await db.query.designTemplates.findFirst({
-      columns: { id: true },
-      where: eq(designTemplates.id, input.templateId),
-    });
-    if (!tpl) throw new HTTPException(400, { message: 'invalid_template' });
-  }
+  await assertContent(db, post.groupId, input);
   await db
     .update(announcements)
-    .set({
-      title: input.title ?? null,
-      text: input.text,
-      mediaIds: input.mediaIds.length ? input.mediaIds : null,
-      tintColor: input.tintColor ?? null,
-      tintStrength: input.tintStrength ?? null,
-      templateId: input.templateId ?? null,
-      editedAt: new Date().toISOString(),
-    })
+    .set({ ...contentColumns(input), editedAt: new Date().toISOString() })
     .where(eq(announcements.id, post.id));
   await audit(db, {
     actorUserId: user.id,
@@ -189,6 +214,40 @@ announcementRoutes.patch('/:id', async (c) => {
     groupId: post.groupId,
     data: { announcementId: post.id },
   });
+  return c.json({ ok: true });
+});
+
+/**
+ * Answer a poll (changeable; several options when it allows) or a quiz (one answer,
+ * final). Members of the ministry only.
+ */
+announcementRoutes.post('/:id/vote', async (c) => {
+  const { db, user, post } = await loadPost(c, idParam(c));
+  const { blockId, options } = await parseBody(c, voteSchema);
+  const block = readPostBlocks(post.blocks).find((b) => b.id === blockId);
+  if (!block || (block.type !== 'poll' && block.type !== 'quiz'))
+    throw new HTTPException(404, { message: 'not_found' });
+  const chosen = [...new Set(options)];
+  if (chosen.some((o) => o >= block.options.length))
+    throw new HTTPException(400, { message: 'invalid_option' });
+  if ((block.type === 'quiz' || !block.multiple) && chosen.length !== 1)
+    throw new HTTPException(400, { message: 'one_option' });
+  const mine = and(
+    eq(pollVotes.announcementId, post.id),
+    eq(pollVotes.blockId, blockId),
+    eq(pollVotes.userId, user.id),
+  );
+  if (block.type === 'quiz') {
+    const answered = await db.query.pollVotes.findFirst({ where: mine });
+    if (answered) throw new HTTPException(409, { message: 'already_answered' });
+  } else {
+    await db.delete(pollVotes).where(mine);
+  }
+  for (const option of chosen) {
+    await db
+      .insert(pollVotes)
+      .values({ announcementId: post.id, blockId, userId: user.id, option });
+  }
   return c.json({ ok: true });
 });
 

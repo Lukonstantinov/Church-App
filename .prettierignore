@@ -3,3 +3,4 @@ dist
 .wrangler
 apps/worker/migrations/meta
 apps/worker/worker-configuration.d.ts
+apps/webapp/src/fonts.css

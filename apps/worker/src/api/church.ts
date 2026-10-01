@@ -8,7 +8,14 @@ import { getDb } from '../db/client';
 import { churchSettings, groups, media, users } from '../db/schema';
 import { audit } from '../lib/audit';
 import { getChurch, isValidTimezone } from '../lib/church';
-import { fromBase64, readImageUpload, toBase64, verifyMediaSignature } from '../lib/media';
+import { fileStream } from '../lib/files';
+import {
+  fromBase64,
+  readImageUpload,
+  toBase64,
+  verifyFileSignature,
+  verifyMediaSignature,
+} from '../lib/media';
 import { loadMe } from '../lib/users';
 import { parseBody } from './util';
 
@@ -138,5 +145,30 @@ mediaRoutes.get('/g/:id/logo', async (c) => {
       ? 'public, max-age=31536000, immutable'
       : 'public, max-age=300',
     'X-Content-Type-Options': 'nosniff',
+  });
+});
+
+/** GET /media/f/:id?e=&s= — a post attachment behind a signed URL, streamed in parts. */
+mediaRoutes.get('/f/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  const exp = Number(c.req.query('e'));
+  const sig = c.req.query('s') ?? '';
+  if (!Number.isSafeInteger(id) || id <= 0) return c.body(null, 404);
+  if (!(await verifyFileSignature(c.env.WEBHOOK_SECRET, id, exp, sig))) return c.body(null, 403);
+  const file = await fileStream(getDb(c.env.DB), id);
+  if (!file) return c.body(null, 404);
+  const { meta, body } = file;
+  // PDFs and pictures open in the viewer; other documents download.
+  const inline = meta.mime === 'application/pdf' || meta.mime.startsWith('image/');
+  const ascii = meta.name.replace(/[^\x20-\x7e]/g, '_');
+  return new Response(body, {
+    headers: {
+      'Content-Type': meta.mime,
+      'Content-Length': String(meta.bytes),
+      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(meta.name)}`,
+      'Cache-Control': 'private, max-age=86400, immutable',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': 'sandbox',
+    },
   });
 });

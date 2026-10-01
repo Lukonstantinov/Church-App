@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import {
+  POST_KINDS,
   REACTIONS,
   displayName,
+  fontFamily,
   resolveBrand,
   type AnnouncementRow,
+  type PostDesign,
   type PosterLook,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
@@ -15,6 +18,37 @@ import { IconEdit, IconMegaphone, IconMore, IconTrash } from './icons';
 import { Sheet, SheetOption } from './Sheet';
 import { useToast } from './Toast';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
+import { PostBlocks } from './PostBlocks';
+import { RichText } from './RichText';
+
+const TITLE_SIZE = { s: 'text-[20px]', m: 'text-[25px]', l: 'text-[31px]', xl: 'text-[39px]' };
+const TITLE_POS = {
+  top: 'top-0 pt-12',
+  center: 'inset-y-0 flex flex-col justify-center',
+  bottom: 'bottom-0',
+};
+
+/** Whether a post shows its cover: photos, a headline or the banner (on by default). */
+export const hasCover = (p: Pick<AnnouncementRow, 'photos' | 'title' | 'design'>) =>
+  p.photos.length > 0 || !!p.title || (p.design?.banner ?? true);
+
+/** The post type as a small label (emoji and name). */
+export function KindBadge({ kind, onCover }: { kind: PostDesign['kind']; onCover?: boolean }) {
+  const t = useT();
+  if (!kind) return null;
+  const k = POST_KINDS[kind];
+  const theme = resolveBrand(k.color);
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold ${
+        onCover ? 'bg-black/35 text-white backdrop-blur' : 'text-white'
+      }`}
+      style={onCover ? undefined : { background: theme.light }}
+    >
+      {k.emoji} {t.feed.kinds[kind]}
+    </span>
+  );
+}
 
 /**
  * The picture part of a post: a collage of up to four photos (with "+N" for more), a
@@ -26,6 +60,7 @@ export function PosterMedia({
   photos,
   tint,
   look,
+  design,
   onPhoto,
   tall,
 }: {
@@ -33,11 +68,12 @@ export function PosterMedia({
   photos: { id: number; url: string }[];
   tint: { color: string; strength: number } | null;
   look: PosterLook | null;
+  design?: PostDesign | null;
   onPhoto?: (index: number) => void;
   tall?: boolean;
 }) {
   const me = useMe();
-  if (photos.length === 0 && !title) return null;
+  if (!hasCover({ photos, title, design: design ?? null })) return null;
   const theme = resolveBrand(look?.brandColor ?? me.data?.church.brandColor);
   const on = onBrandStyle(
     look?.textColor ?? 'auto',
@@ -91,7 +127,7 @@ export function PosterMedia({
 
   return (
     <div
-      className={`relative w-full overflow-hidden ${photos.length ? (tall ? 'aspect-[4/5]' : 'aspect-[4/3]') : 'aspect-[16/9]'}`}
+      className={`relative w-full overflow-hidden ${photos.length ? (tall ? 'aspect-[4/5]' : 'aspect-[4/3]') : title ? 'aspect-[16/9]' : 'aspect-[3/1]'}`}
       style={
         photos.length
           ? undefined
@@ -122,16 +158,28 @@ export function PosterMedia({
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent"
         />
       )}
+      {design?.kind && (
+        <span className="pointer-events-none absolute left-3 top-3">
+          <KindBadge kind={design.kind} onCover />
+        </span>
+      )}
       {title && (
         <div
-          className={`pointer-events-none absolute inset-x-0 bottom-0 p-4 ${on.className}`}
+          className={`pointer-events-none absolute inset-x-0 p-4 ${TITLE_POS[design?.titlePos ?? 'bottom']} ${
+            design?.align === 'center' ? 'text-center' : ''
+          } ${on.className}`}
           style={
             photos.length
               ? { ...on.style, color: look?.textColor === 'dark' ? on.style.color : '#fff' }
               : on.style
           }
         >
-          <div className="text-[24px] font-extrabold leading-tight tracking-tight">{title}</div>
+          <div
+            className={`${TITLE_SIZE[design?.titleSize ?? 'm']} font-extrabold leading-tight tracking-tight`}
+            style={{ fontFamily: fontFamily(design?.titleFont) }}
+          >
+            {title}
+          </div>
         </div>
       )}
     </div>
@@ -271,7 +319,8 @@ export function PosterCard({
 }) {
   const t = useT();
   const f = useFmt();
-  const hasPoster = post.photos.length > 0 || !!post.title;
+  const hasPoster = hasCover(post);
+  const bodyFont = fontFamily(post.design?.bodyFont);
   return (
     <article
       className={`glass overflow-hidden rounded-[var(--radius-card)] shadow-card ${post.pinned ? 'ring-2 ring-[var(--brand)]/45' : ''}`}
@@ -285,6 +334,7 @@ export function PosterCard({
           photos={post.photos}
           tint={post.tint}
           look={post.look}
+          design={post.design}
           onPhoto={onOpen}
         />
       )}
@@ -295,6 +345,7 @@ export function PosterCard({
               <IconMegaphone size={15} />
             </span>
           )}
+          {!hasPoster && <KindBadge kind={post.design?.kind} />}
           {post.pinned && (
             <span className="shrink-0 rounded-full bg-brand/15 px-2 py-0.5 text-[12px] font-bold text-accent">
               📌 {t.feed.pinnedPost}
@@ -308,7 +359,14 @@ export function PosterCard({
           {post.editedAt && <span className="shrink-0 italic">{t.feed.edited}</span>}
           <PostMenu post={post} />
         </div>
-        <p className="line-clamp-4 whitespace-pre-line text-[16px] leading-relaxed">{post.text}</p>
+        {post.text && (
+          <RichText
+            text={post.text}
+            className="line-clamp-4 text-[16px] leading-relaxed"
+            style={{ fontFamily: bodyFont }}
+          />
+        )}
+        <PostBlocks postId={post.id} groupId={post.groupId} blocks={post.blocks} compact />
         <div className="flex items-center justify-between gap-2">
           <Reactions post={post} />
           <span className="flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-hint">

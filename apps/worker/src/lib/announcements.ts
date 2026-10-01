@@ -5,7 +5,12 @@ import {
   messages,
   readBackdrop,
   readPattern,
+  readPostBlocks,
+  readPostDesign,
   type AnnouncementResult,
+  type PostBlock,
+  type PostBlockView,
+  type UpdateAnnouncementInput,
   type AnnouncementRow,
   type CommentRow,
   type CreateAnnouncementInput,
@@ -19,6 +24,7 @@ import {
   designTemplates,
   groups,
   memberships,
+  pollVotes,
   users,
   type Group,
   type User,
@@ -28,10 +34,40 @@ import { churchDefaultLocale, localeOf } from './church';
 import { groupLogoUrl } from './groups';
 import { unreadByPost } from './feed';
 import { escapeHtml } from './html';
-import { signedMediaUrl } from './media';
+import { filesById } from './files';
+import { signedFileUrl, signedMediaUrl } from './media';
 import { enqueue } from './outbox';
 
 type AnnouncementDbRow = typeof announcements.$inferSelect;
+
+/** The stored columns for a post's content (shared by publishing and editing). */
+export function contentColumns(input: UpdateAnnouncementInput) {
+  const blocks = input.blocks ?? [];
+  return {
+    title: input.title ?? null,
+    text: input.text ?? '',
+    mediaIds: input.mediaIds?.length ? input.mediaIds : null,
+    tintColor: input.tintColor ?? null,
+    tintStrength: input.tintStrength ?? null,
+    templateId: input.templateId ?? null,
+    design: input.design ? JSON.stringify(input.design) : null,
+    blocks: blocks.length ? JSON.stringify(blocks) : null,
+  };
+}
+
+/** Media and files a post refers to (photos, pictures in the text, attachments). */
+export function referencedIds(input: UpdateAnnouncementInput) {
+  const blocks = (input.blocks ?? []) as PostBlock[];
+  const media = [...(input.mediaIds ?? [])];
+  const fileIds: number[] = [];
+  for (const b of blocks) {
+    if (b.type === 'image') media.push(b.mediaId);
+    if (b.type === 'file') fileIds.push(b.fileId);
+  }
+  const backdrop = input.design?.custom?.backdrop;
+  if (backdrop) media.push(backdrop.mediaId);
+  return { media: [...new Set(media)], files: [...new Set(fileIds)] };
+}
 
 /**
  * Saves a post (text, or a poster with headline, photos and tint) and, unless told
@@ -71,12 +107,7 @@ export async function createAnnouncement(
     .values({
       groupId: group.id,
       authorId: author.id,
-      title: input.title ?? null,
-      text: input.text,
-      mediaIds: input.mediaIds?.length ? input.mediaIds : null,
-      tintColor: input.tintColor ?? null,
-      tintStrength: input.tintStrength ?? null,
-      templateId: input.templateId ?? null,
+      ...contentColumns(input),
       recipients: reachable.length,
     })
     .returning();
@@ -91,12 +122,21 @@ export async function createAnnouncement(
 
   const fallback = await churchDefaultLocale(db);
   const head = row!.title ? `<b>${escapeHtml(row!.title)}</b>\n` : '';
-  const body = `📢 <b>${escapeHtml(group.name)}</b>\n\n${head}${escapeHtml(row!.text)}\n\n— ${escapeHtml(displayName(author))}`;
+  const blocks = readPostBlocks(row!.blocks);
+  const fullText = [row!.text, ...blocks.flatMap((b) => (b.type === 'text' ? [b.text] : []))]
+    .filter(Boolean)
+    .join('\n\n');
+  const hasExtras = blocks.some((b) => b.type !== 'text');
+  const bodyFor = (extras: string) =>
+    `📢 <b>${escapeHtml(group.name)}</b>\n\n${head}${escapeHtml(fullText)}${
+      hasExtras ? `\n\n<i>${escapeHtml(extras)}</i>` : ''
+    }\n\n— ${escapeHtml(displayName(author))}`;
   const firstPhoto = row!.mediaIds?.[0];
   const photoUrl =
     firstPhoto && appUrl ? `${appUrl}${await signedMediaUrl(args.secret, firstPhoto)}` : null;
   for (const m of reachable) {
     const t = messages(localeOf(m, fallback));
+    const body = bodyFor(t.bot.postHasExtras);
     const reply_markup = appUrl ? new InlineKeyboard().webApp(t.bot.openApp, appUrl) : undefined;
     // Photo captions are limited to 1024 characters; longer posts go as a text message.
     const asPhoto = photoUrl && body.length <= 1024;
@@ -149,7 +189,14 @@ async function toRows(
   const templateIds = [
     ...new Set(rows.map((r) => r.a.templateId).filter((x): x is number => x !== null)),
   ];
-  const [reactions, comments, templates, unread] = await Promise.all([
+  const blocksBy = new Map(rows.map((r) => [r.a.id, readPostBlocks(r.a.blocks)]));
+  const fileIds = [...blocksBy.values()].flatMap((bs) =>
+    bs.flatMap((b) => (b.type === 'file' ? [b.fileId] : [])),
+  );
+  const hasPolls = [...blocksBy.values()].some((bs) =>
+    bs.some((b) => b.type === 'poll' || b.type === 'quiz'),
+  );
+  const [reactions, comments, templates, unread, votes, fileMeta] = await Promise.all([
     db
       .select({
         announcementId: announcementReactions.announcementId,
@@ -174,32 +221,127 @@ async function toRows(
       ? db.select().from(designTemplates).where(inArray(designTemplates.id, templateIds))
       : Promise.resolve([]),
     unreadByPost(db, viewer.id, ids),
+    hasPolls
+      ? db
+          .select({
+            announcementId: pollVotes.announcementId,
+            blockId: pollVotes.blockId,
+            option: pollVotes.option,
+            n: sql<number>`count(*)`,
+            mine: sql<number>`sum(case when ${pollVotes.userId} = ${viewer.id} then 1 else 0 end)`,
+          })
+          .from(pollVotes)
+          .where(inArray(pollVotes.announcementId, ids))
+          .groupBy(pollVotes.announcementId, pollVotes.blockId, pollVotes.option)
+      : Promise.resolve([]),
+    filesById(db, fileIds),
   ]);
+  // Distinct voters per poll (a person may pick several options).
+  const votersBy = hasPolls
+    ? new Map(
+        (
+          await db
+            .select({
+              announcementId: pollVotes.announcementId,
+              blockId: pollVotes.blockId,
+              n: sql<number>`count(distinct ${pollVotes.userId})`,
+            })
+            .from(pollVotes)
+            .where(inArray(pollVotes.announcementId, ids))
+            .groupBy(pollVotes.announcementId, pollVotes.blockId)
+        ).map((v) => [`${v.announcementId}:${v.blockId}`, Number(v.n)]),
+      )
+    : new Map<string, number>();
+  const resultsFor = (announcementId: number, blockId: string, options: number) => {
+    const counts = Array<number>(options).fill(0);
+    const mine: number[] = [];
+    for (const v of votes) {
+      if (v.announcementId !== announcementId || v.blockId !== blockId) continue;
+      if (v.option < options) counts[v.option] = Number(v.n);
+      if (Number(v.mine) > 0) mine.push(v.option);
+    }
+    return { counts, mine, voters: votersBy.get(`${announcementId}:${blockId}`) ?? 0 };
+  };
   const templateBy = new Map(templates.map((tpl) => [tpl.id, tpl]));
   const commentsBy = new Map(comments.map((c) => [c.announcementId, Number(c.n)]));
 
   return Promise.all(
     rows.map(async ({ a, groupName, groupBrand, author }) => {
       const tpl = a.templateId ? templateBy.get(a.templateId) : undefined;
-      const backdrop = readBackdrop(tpl ? tpl.backdrop : groupBrand.backdrop);
+      const design = readPostDesign(a.design);
+      const custom = !tpl ? design?.custom : null;
+      const backdrop = design?.noBackdrop
+        ? null
+        : custom
+          ? custom.backdrop
+          : readBackdrop(tpl ? tpl.backdrop : groupBrand.backdrop);
       const backdropUrl = backdrop ? await signedMediaUrl(secret, backdrop.mediaId) : null;
-      const look: PosterLook = tpl
+      const base: PosterLook = custom
         ? {
-            brandColor: tpl.brandColor,
-            pattern: readPattern(tpl.pattern),
-            textColor: tpl.textColor,
-            logoUrl: tpl.logoMediaId ? await signedMediaUrl(secret, tpl.logoMediaId) : null,
-            backdrop,
-            backdropUrl,
-          }
-        : {
             brandColor: groupBrand.brandColor,
-            pattern: readPattern(groupBrand.pattern),
-            textColor: groupBrand.textColor,
+            pattern: custom.pattern,
+            textColor: custom.textColor,
             logoUrl: groupLogoUrl(groupBrand),
             backdrop,
             backdropUrl,
-          };
+          }
+        : tpl
+          ? {
+              brandColor: tpl.brandColor,
+              pattern: readPattern(tpl.pattern),
+              textColor: tpl.textColor,
+              logoUrl: tpl.logoMediaId ? await signedMediaUrl(secret, tpl.logoMediaId) : null,
+              backdrop,
+              backdropUrl,
+            }
+          : {
+              brandColor: groupBrand.brandColor,
+              pattern: readPattern(groupBrand.pattern),
+              textColor: groupBrand.textColor,
+              logoUrl: groupLogoUrl(groupBrand),
+              backdrop,
+              backdropUrl,
+            };
+      const look = design?.brandColor ? { ...base, brandColor: design.brandColor } : base;
+      const canEdit = author?.id === viewer.id || canModerate(a.groupId);
+      const blocks: PostBlockView[] = await Promise.all(
+        (blocksBy.get(a.id) ?? []).map(async (b): Promise<PostBlockView> => {
+          switch (b.type) {
+            case 'image':
+              return {
+                ...b,
+                caption: b.caption ?? null,
+                url: await signedMediaUrl(secret, b.mediaId),
+              };
+            case 'file': {
+              const f = fileMeta.get(b.fileId);
+              return {
+                ...b,
+                url: await signedFileUrl(secret, b.fileId),
+                bytes: f?.bytes ?? 0,
+                mime: f?.mime ?? 'application/octet-stream',
+              };
+            }
+            case 'poll':
+              return { ...b, results: resultsFor(a.id, b.id, b.options.length) };
+            case 'quiz': {
+              const results = resultsFor(a.id, b.id, b.options.length);
+              const reveal = results.mine.length > 0 || canEdit;
+              return {
+                id: b.id,
+                type: 'quiz',
+                question: b.question,
+                options: b.options,
+                correct: reveal ? b.correct : null,
+                explanation: reveal ? (b.explanation ?? null) : null,
+                results: reveal ? results : { counts: b.options.map(() => 0), mine: [], voters: 0 },
+              };
+            }
+            default:
+              return b;
+          }
+        }),
+      );
       return {
         id: a.id,
         groupId: a.groupId,
@@ -217,6 +359,8 @@ async function toRows(
         tint:
           a.tintColor !== null ? { color: a.tintColor, strength: a.tintStrength ?? 0.35 } : null,
         templateId: a.templateId,
+        design,
+        blocks,
         look,
         reactions: reactions
           .filter((r) => r.announcementId === a.id)
@@ -226,7 +370,7 @@ async function toRows(
         pinned: a.pinnedAt !== null,
         editedAt: a.editedAt,
         canPin: canModerate(a.groupId),
-        canEdit: author?.id === viewer.id || canModerate(a.groupId),
+        canEdit,
         canDelete: author?.id === viewer.id || canModerate(a.groupId),
       };
     }),

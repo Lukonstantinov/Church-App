@@ -12,6 +12,7 @@ import {
 } from './brand';
 import type { Permission } from './permissions';
 import { chatUrlSchema } from './events';
+import { postBlocksSchema, postDesignSchema, type PostBlockView, type PostDesign } from './posts';
 import { LOCALES, type Locale } from './i18n/locales';
 
 /** Roles within a single group. Church-wide admin is a separate flag on the user. */
@@ -385,25 +386,34 @@ export interface MyAttendanceResponse {
 const hexColor = z.string().regex(/^#[0-9a-f]{6}$/i, '#rrggbb');
 
 /** A post in a ministry's feed: text, optionally a headline, photos and a tint (a poster). */
-export const createAnnouncementSchema = z.object({
+const announcementFields = z.object({
   title: z
     .string()
     .trim()
     .max(120)
     .nullish()
     .transform((v) => (v ? v : null)),
-  text: z.string().trim().min(1).max(4000),
+  text: z.string().trim().max(4000).default(''),
   mediaIds: z.array(z.number().int().positive()).max(10).default([]),
   tintColor: hexColor.nullish(),
   tintStrength: z.number().min(0).max(0.9).nullish(),
   templateId: z.number().int().positive().nullish(),
-  /** Also send it to members in Telegram (default). */
-  notify: z.boolean().default(true),
+  design: postDesignSchema.nullish(),
+  blocks: postBlocksSchema,
 });
+const hasContent = (p: { title: string | null; text: string; blocks: unknown[] }) =>
+  p.text.length > 0 || !!p.title || p.blocks.length > 0;
+
+export const createAnnouncementSchema = announcementFields
+  .extend({
+    /** Also send it to members in Telegram (default). */
+    notify: z.boolean().default(true),
+  })
+  .refine(hasContent, 'empty');
 export type CreateAnnouncementInput = z.input<typeof createAnnouncementSchema>;
 
 /** Editing a post changes its content only; nobody is notified again. */
-export const updateAnnouncementSchema = createAnnouncementSchema.omit({ notify: true });
+export const updateAnnouncementSchema = announcementFields.refine(hasContent, 'empty');
 export type UpdateAnnouncementInput = z.input<typeof updateAnnouncementSchema>;
 
 export const REACTIONS = ['👍', '❤️', '🙏', '🔥', '😂', '🎉'] as const;
@@ -433,6 +443,10 @@ export interface AnnouncementRow {
   photos: { id: number; url: string }[];
   tint: { color: string; strength: number } | null;
   templateId: number | null;
+  /** Cover, type, fonts and colour choices (null = defaults). */
+  design: PostDesign | null;
+  /** Content after the text: pictures, tables, files, polls, quizzes. */
+  blocks: PostBlockView[];
   /** Background for posters without photos (a template or the ministry's own look). */
   look: PosterLook | null;
   reactions: { emoji: string; count: number; mine: boolean }[];
