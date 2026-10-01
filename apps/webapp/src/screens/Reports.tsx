@@ -9,7 +9,6 @@ import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import {
   fetchAttendanceExport,
-  fetchDues,
   fetchTreasuryExport,
   sendDocumentToChat,
   useGroup,
@@ -50,15 +49,12 @@ export function Reports({ groupId }: { groupId: number }) {
       let blob: Blob;
       let name: string;
       if (kind === 'treasury') {
-        const [data, dues] = await Promise.all([
-          fetchTreasuryExport(groupId, year),
-          fetchDues(groupId, year).catch(() => null),
-        ]);
+        const data = await fetchTreasuryExport(groupId, year);
         name = t.reports.fileTreasury(data.groupName, year);
         blob =
           format === 'xlsx'
-            ? await reports.treasuryXlsx(ctx, data, dues)
-            : await reports.treasuryPdf(ctx, data, dues);
+            ? await reports.treasuryXlsx(ctx, data, null)
+            : await reports.treasuryPdf(ctx, data, null);
       } else {
         const data = await fetchAttendanceExport(groupId, year);
         name = t.reports.fileAttendance(data.groupName, year);

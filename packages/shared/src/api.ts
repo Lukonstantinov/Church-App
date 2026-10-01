@@ -279,6 +279,17 @@ export const updateScheduleSchema = z.object({
 });
 export type UpdateScheduleInput = z.input<typeof updateScheduleSchema>;
 
+/** Kinds of youth meeting (optional label). */
+export const MEETING_KINDS = ['prayer', 'worship', 'outside', 'guest', 'prophetic'] as const;
+export type MeetingKind = (typeof MEETING_KINDS)[number];
+
+export interface MeetingPerson {
+  id: number;
+  firstName: string;
+  lastName: string | null;
+  username: string | null;
+}
+
 export interface MeetingRow {
   id: number;
   groupId: number;
@@ -290,6 +301,14 @@ export interface MeetingRow {
   guestCount: number;
   notes: string | null;
   rollTakenAt: string | null;
+  location: string | null;
+  topic: string | null;
+  kind: MeetingKind | null;
+  /** Who leads this meeting. */
+  leader: MeetingPerson | null;
+  /** Who buys food / spends the meeting budget. */
+  snackPerson: MeetingPerson | null;
+  budgetCents: number | null;
   /** Counts are filled for meetings that have a saved roll call. */
   counts: Record<AttendanceStatus, number>;
 }
@@ -307,8 +326,43 @@ export const updateMeetingSchema = z.object({
   status: z.enum(['scheduled', 'cancelled']).optional(),
   title: name.optional(),
   notes: optionalText(500).optional(),
+  /** Move the meeting (local date and time in the church time zone). */
+  date: date.optional(),
+  startTime: time.optional(),
+  durationMin: duration.optional(),
+  location: optionalText(120).optional(),
+  topic: optionalText(200).optional(),
+  kind: z.enum(MEETING_KINDS).nullable().optional(),
+  leaderUserId: z.number().int().positive().nullable().optional(),
+  snackUserId: z.number().int().positive().nullable().optional(),
+  budgetCents: z.number().int().min(0).max(1_000_000).nullable().optional(),
 });
 export type UpdateMeetingInput = z.input<typeof updateMeetingSchema>;
+
+/** A meeting opened on its own: what everyone sees, plus attendance and money for those allowed. */
+export interface MeetingDetail extends MeetingRow {
+  groupName: string;
+  /** May change the meeting (managers, or its leader for place/topic/snacks). */
+  canEdit: boolean;
+  /** May change everything incl. leader and time. */
+  canManage: boolean;
+  /** Attendance (names) for people who take the roll; null otherwise. */
+  attendance:
+    { userId: number; firstName: string; lastName: string | null; present: boolean }[] | null;
+  /** Expenses linked to this meeting, for people who see the money; null otherwise. */
+  expenses:
+    | {
+        id: number;
+        amountCents: number;
+        note: string | null;
+        category: string | null;
+        occurredOn: string;
+        member: { id: number; firstName: string; lastName: string | null } | null;
+      }[]
+    | null;
+  /** Default budget per meeting in this ministry (cents). */
+  defaultBudgetCents: number;
+}
 
 export interface RollEntry {
   userId: number;
@@ -374,7 +428,16 @@ export interface MemberAttendance {
   streak: number;
   /** Newest first, up to 8. */
   recent: RecentMark[];
-  nextMeeting: { id: number; title: string; startsAt: string; endsAt: string } | null;
+  nextMeeting: {
+    id: number;
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    location: string | null;
+    topic: string | null;
+    kind: MeetingKind | null;
+    leader: MeetingPerson | null;
+  } | null;
 }
 
 export interface MyAttendanceResponse {

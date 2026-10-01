@@ -255,6 +255,87 @@ export async function treasuryXlsx(
   });
 }
 
+/** The cash book as filtered on screen: one sheet with the entries and a total line. */
+export async function ledgerXlsx(
+  ctx: ReportCtx,
+  title: string,
+  filterLine: string,
+  rows: TransactionRow[],
+): Promise<Blob> {
+  const { t } = ctx;
+  const ExcelJS = await excel();
+  const wb = new ExcelJS.Workbook();
+  const money = `#,##0.00 [$${ctx.currency === 'EUR' ? '€' : ctx.currency}]`;
+  const e = wb.addWorksheet(t.reports.entries, { views: [{ state: 'frozen', ySplit: 4 }] });
+  e.columns = [
+    { width: 12 },
+    { width: 18 },
+    { width: 18 },
+    { width: 22 },
+    { width: 24 },
+    { width: 32 },
+    { width: 13 },
+    { width: 13 },
+  ];
+  e.addRow([title]).font = { bold: true, size: 14 };
+  e.addRow([filterLine]).font = { color: { argb: 'FF888888' } };
+  e.addRow([]);
+  const head = e.addRow([
+    t.reports.colDate,
+    t.reports.colKind,
+    t.reports.colCategory,
+    t.reports.colWho,
+    t.treasury.meeting,
+    t.reports.colNote,
+    t.reports.colIn,
+    t.reports.colOut,
+  ]);
+  head.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  head.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(ctx.brandHex) } };
+  for (const tx of rows) {
+    const x = entryText(ctx, tx);
+    const out = isOutgoing(tx.kind);
+    const [y, m, d] = tx.occurredOn.split('-').map(Number) as [number, number, number];
+    const row = e.addRow([
+      new Date(Date.UTC(y, m - 1, d)),
+      x.kind,
+      x.category,
+      x.who,
+      tx.meeting ? `${tx.meeting.title} · ${ctx.f.dayMonth(tx.meeting.startsAt)}` : '',
+      x.note,
+      out ? null : cents(tx.amountCents),
+      out ? cents(tx.amountCents) : null,
+    ] as Cell[]);
+    row.getCell(1).numFmt = 'dd.mm.yyyy';
+    row.getCell(7).numFmt = money;
+    row.getCell(8).numFmt = money;
+    row.getCell(7).font = { color: { argb: 'FF15803D' } };
+    row.getCell(8).font = { color: { argb: 'FFB91C1C' } };
+  }
+  if (rows.length) {
+    const first = 5;
+    const last = rows.length + 4;
+    const r = e.addRow([
+      t.reports.colTotal,
+      '',
+      '',
+      '',
+      '',
+      '',
+      { formula: `SUM(G${first}:G${last})` },
+      { formula: `SUM(H${first}:H${last})` },
+    ]);
+    r.font = { bold: true };
+    r.getCell(7).numFmt = money;
+    r.getCell(8).numFmt = money;
+  }
+  e.autoFilter = { from: 'A4', to: 'H4' };
+  const buf = await wb.xlsx.writeBuffer();
+  return new Blob([buf], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
 const STATUSES: AttendanceStatus[] = ['present', 'late', 'excused', 'absent'];
 
 function attendanceStats(statuses: (AttendanceStatus | null)[]) {

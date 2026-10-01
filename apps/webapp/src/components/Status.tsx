@@ -59,7 +59,7 @@ export function StatusDot({ status, title }: { status: AttendanceStatus | null; 
 /** Key for the history strip: the same icons, spelled out. */
 export function StatusLegend() {
   const label = useStatusLabel();
-  const items: AttendanceStatus[] = ['present', 'late', 'excused', 'absent'];
+  const items: AttendanceStatus[] = ['present', 'absent'];
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-hint">
       {items.map((s) => (

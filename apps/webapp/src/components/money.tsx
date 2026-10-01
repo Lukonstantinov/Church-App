@@ -44,8 +44,9 @@ export function categoryLabel(t: Messages, category: string | null): string {
 }
 
 const KIND_STYLE: Record<TransactionKind, { tone: string; icon: ReactNode }> = {
-  income: { tone: 'bg-present/15 text-present', icon: <IconArrowDown size={18} /> },
-  expense: { tone: 'bg-absent/13 text-absent', icon: <IconArrowUp size={18} /> },
+  // Money coming in points up (green); money going out points down (red).
+  income: { tone: 'bg-present/15 text-present', icon: <IconArrowUp size={18} /> },
+  expense: { tone: 'bg-absent/13 text-absent', icon: <IconArrowDown size={18} /> },
   donation: { tone: 'bg-late/15 text-late', icon: <IconHeart size={18} /> },
   dues: { tone: 'bg-brand/14 text-accent', icon: <IconCoins size={18} /> },
   event_payment: { tone: 'bg-brand/14 text-accent', icon: <IconCalendar size={18} /> },
@@ -178,7 +179,10 @@ export function TxRow({ tx, onClick }: { tx: LedgerEntry; onClick: () => void })
         <div className="truncate text-[16px] font-medium">{text.title}</div>
         <div className="flex items-center gap-1 truncate text-[13px] text-hint">
           {tx.receiptUrl && <IconReceipt size={13} className="shrink-0" />}
-          <span className="truncate">{text.subtitle}</span>
+          <span className="truncate">
+            {text.subtitle}
+            {tx.meeting ? ` · 📅 ${tx.meeting.title}` : ''}
+          </span>
         </div>
       </div>
       <Amount kind={tx.kind} cents={tx.amountCents} className="text-[16px]" />

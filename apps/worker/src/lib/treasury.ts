@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, like, lt, or, sql, gte } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, like, lt, lte, or, sql, gte } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
 import {
   addMonths,
@@ -18,6 +18,7 @@ import {
 import type { Db } from '../db/client';
 import {
   groups,
+  meetings,
   memberships,
   transactions,
   users,
@@ -50,6 +51,16 @@ export async function toTransactionRows(
     db,
     rows.flatMap((r) => [r.memberUserId, r.createdBy]),
   );
+  const meetingIds = [...new Set(rows.flatMap((r) => (r.meetingId ? [r.meetingId] : [])))];
+  const meetingBy = new Map(
+    (meetingIds.length
+      ? await db
+          .select({ id: meetings.id, title: meetings.title, startsAt: meetings.startsAt })
+          .from(meetings)
+          .where(inArray(meetings.id, meetingIds))
+      : []
+    ).map((m) => [m.id, m]),
+  );
   return Promise.all(
     rows.map(async (r) => ({
       id: r.id,
@@ -62,6 +73,7 @@ export async function toTransactionRows(
       note: r.note,
       member: r.memberUserId ? (byId.get(r.memberUserId) ?? null) : null,
       eventId: r.eventId,
+      meeting: r.meetingId ? (meetingBy.get(r.meetingId) ?? null) : null,
       receiptMediaId: r.receiptMediaId,
       receiptUrl: r.receiptMediaId ? await signedMediaUrl(secret, r.receiptMediaId) : null,
       createdBy: r.createdBy ? (byId.get(r.createdBy) ?? null) : null,
@@ -82,9 +94,41 @@ export async function listTransactions(
     before?: string | null;
     eventId?: number;
     memberUserId?: number;
+    meetingId?: number;
+    /** Local dates "YYYY-MM-DD", inclusive. */
+    from?: string;
+    to?: string;
+    /** Matches the person's name (donor, payer) or the note. */
+    q?: string;
+    /** Everything at once (for a file), not a page. */
+    all?: boolean;
   },
 ): Promise<TransactionPage> {
   const conds = [eq(transactions.groupId, groupId), live];
+  if (opts.meetingId !== undefined) conds.push(eq(transactions.meetingId, opts.meetingId));
+  if (opts.from) conds.push(gte(transactions.occurredOn, opts.from));
+  if (opts.to) conds.push(lte(transactions.occurredOn, opts.to));
+  const q = opts.q?.trim().toLocaleLowerCase();
+  if (q) {
+    // SQLite can't lower-case Cyrillic, so names are matched here and notes both ways.
+    const named = await db
+      .selectDistinct({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+      .from(transactions)
+      .innerJoin(users, eq(users.id, transactions.memberUserId))
+      .where(eq(transactions.groupId, groupId));
+    const ids = named
+      .filter((u) => `${u.firstName} ${u.lastName ?? ''}`.toLocaleLowerCase().includes(q))
+      .map((u) => u.id);
+    const cap = q.charAt(0).toLocaleUpperCase() + q.slice(1);
+    conds.push(
+      or(
+        ids.length ? inArray(transactions.memberUserId, ids) : undefined,
+        like(transactions.note, `%${q}%`),
+        like(transactions.note, `%${cap}%`),
+        like(transactions.category, `%${q}%`),
+      )!,
+    );
+  }
   if (opts.kinds?.length) conds.push(inArray(transactions.kind, opts.kinds));
   if (opts.eventId !== undefined) conds.push(eq(transactions.eventId, opts.eventId));
   if (opts.memberUserId !== undefined) conds.push(eq(transactions.memberUserId, opts.memberUserId));
@@ -105,12 +149,12 @@ export async function listTransactions(
     .from(transactions)
     .where(and(...conds))
     .orderBy(desc(transactions.occurredOn), desc(transactions.id))
-    .limit(PAGE + 1);
-  const page = rows.slice(0, PAGE);
+    .limit(opts.all ? 5000 : PAGE + 1);
+  const page = opts.all ? rows : rows.slice(0, PAGE);
   const last = page[page.length - 1];
   return {
     items: await toTransactionRows(db, secret, page),
-    nextCursor: rows.length > PAGE && last ? `${last.occurredOn}|${last.id}` : null,
+    nextCursor: !opts.all && rows.length > PAGE && last ? `${last.occurredOn}|${last.id}` : null,
   };
 }
 
@@ -252,6 +296,7 @@ export async function treasurySummary(db: Db, group: Group): Promise<TreasurySum
     currency: church.currency,
     monthlyFeeCents: fee,
     membersSeeTreasury: group.membersSeeTreasury,
+    meetingBudgetCents: group.meetingBudgetCents,
     balanceCents: balance,
     month: series[series.length - 1]!,
     series,

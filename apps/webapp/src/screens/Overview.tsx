@@ -26,6 +26,7 @@ import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
 import { useGroupStats, useMe } from '../lib/queries';
 import { FeedHighlights } from '../components/FeedEntry';
+import { MeetingHeroLines } from './MeetingScreen';
 
 const HOUR = 3_600_000;
 
@@ -197,18 +198,29 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
   );
 }
 
+const TONES = {
+  good: 'linear-gradient(145deg, #22c55e, #15803d)',
+  bad: 'linear-gradient(145deg, #f87171, #b91c1c)',
+};
+
 export function QuickAction({
   icon,
   label,
   onClick,
+  tone,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
+  /** Green (money in) or red (money out) instead of the theme colour. */
+  tone?: keyof typeof TONES;
 }) {
   return (
     <Card onClick={onClick} className="flex flex-col items-center gap-2 px-2 py-3.5 text-center">
-      <span className="brand-gradient flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-cta">
+      <span
+        className={`flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-cta ${tone ? '' : 'brand-gradient'}`}
+        style={tone ? { background: TONES[tone] } : undefined}
+      >
         {icon}
       </span>
       <span className="line-clamp-2 w-full text-center text-[13px] font-semibold leading-tight break-words hyphens-auto">
@@ -221,21 +233,29 @@ export function QuickAction({
 function NextMeetingHero({ meeting, onRoll }: { meeting: MeetingRow; onRoll?: () => void }) {
   const t = useT();
   const f = useFmt();
+  const { push } = useNav();
   const open = canRollNow(meeting);
   return (
     <HeroCard>
       <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
         {t.overview.nextMeeting}
       </div>
-      <div className="flex items-center gap-3.5">
-        <DateBadge {...f.dateBadge(meeting.startsAt)} onBrand />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[21px] font-bold leading-tight">{meeting.title}</div>
-          <div className="text-[15px] text-white/85">
-            {f.relativeDay(meeting.startsAt)} · {f.timeRange(meeting.startsAt, meeting.endsAt)}
+      <button
+        type="button"
+        onClick={() => push({ name: 'meeting', meetingId: meeting.id })}
+        className="block w-full text-left"
+      >
+        <div className="flex items-center gap-3.5">
+          <DateBadge {...f.dateBadge(meeting.startsAt)} onBrand />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[21px] font-bold leading-tight">{meeting.title}</div>
+            <div className="text-[15px] text-white/85">
+              {f.relativeDay(meeting.startsAt)} · {f.timeRange(meeting.startsAt, meeting.endsAt)}
+            </div>
           </div>
         </div>
-      </div>
+        <MeetingHeroLines meeting={meeting} />
+      </button>
       {onRoll && (
         <div className="mt-4">
           {open ? (

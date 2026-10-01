@@ -13,7 +13,7 @@ import {
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
-import { groups, memberships, transactions } from '../db/schema';
+import { groups, meetings, memberships, transactions } from '../db/schema';
 import { assertCan } from '../lib/access';
 import { audit } from '../lib/audit';
 import { assertGroupMedia, readImageUpload, signedMediaUrl, storeMedia } from '../lib/media';
@@ -62,11 +62,17 @@ groupTreasuryRoutes.get('/:id/transactions', async (c) => {
   const kinds = (c.req.query('kind') ?? '')
     .split(',')
     .filter((k): k is TransactionKind => (TRANSACTION_KINDS as readonly string[]).includes(k));
+  const day = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
   return c.json(
     await listTransactions(db, c.env.WEBHOOK_SECRET, group.id, {
       kinds,
       before: c.req.query('before') ?? null,
       memberUserId: Number(c.req.query('member')) || undefined,
+      meetingId: Number(c.req.query('meeting')) || undefined,
+      from: day(c.req.query('from')),
+      to: day(c.req.query('to')),
+      q: c.req.query('q')?.slice(0, 60) || undefined,
+      all: c.req.query('all') === '1',
     }),
   );
 });
@@ -86,6 +92,13 @@ groupTreasuryRoutes.post('/:id/transactions', async (c) => {
   const input = await parseBody(c, createTransactionSchema);
   if (input.memberUserId) await assertMemberOf(db, group.id, input.memberUserId);
   if (input.receiptMediaId) await assertGroupMedia(db, group.id, input.receiptMediaId);
+  if (input.meetingId) {
+    const m = await db.query.meetings.findFirst({
+      columns: { id: true },
+      where: and(eq(meetings.id, input.meetingId), eq(meetings.groupId, group.id)),
+    });
+    if (!m) throw new HTTPException(400, { message: 'invalid_meeting' });
+  }
   const [row] = await db
     .insert(transactions)
     .values({
@@ -97,6 +110,7 @@ groupTreasuryRoutes.post('/:id/transactions', async (c) => {
       note: input.note,
       memberUserId: input.kind === 'donation' ? (input.memberUserId ?? null) : null,
       receiptMediaId: input.receiptMediaId ?? null,
+      meetingId: input.meetingId ?? null,
       createdBy: user.id,
     })
     .returning();

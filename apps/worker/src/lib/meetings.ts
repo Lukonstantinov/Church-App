@@ -11,6 +11,9 @@ import {
   type AttendanceStatus,
   type AttendancePoint,
   type GroupStats,
+  MEETING_KINDS,
+  type MeetingKind,
+  type MeetingPerson,
   type MeetingRow,
   type MemberAttendance,
   type RollEntry,
@@ -45,7 +48,8 @@ export async function generateMeetings(
   timezone: string,
   {
     now = new Date(),
-    horizonDays = 28,
+    // Far enough ahead to plan who leads each meeting.
+    horizonDays = 91,
     groupId,
   }: { now?: Date; horizonDays?: number; groupId?: number } = {},
 ): Promise<number> {
@@ -79,6 +83,7 @@ export async function generateMeetings(
             title: schedule.title,
             startsAt: startsAt.toISOString(),
             endsAt: endsAt.toISOString(),
+            slotAt: startsAt.toISOString(),
           })
           .onConflictDoNothing(),
       );
@@ -112,6 +117,10 @@ export async function toMeetingRows(db: Db, list: Meeting[]): Promise<MeetingRow
       counts.set(r.meetingId, c);
     }
   }
+  const people = await meetingPeople(
+    db,
+    list.flatMap((m) => [m.leaderUserId, m.snackUserId]),
+  );
   return list.map((m) => ({
     id: m.id,
     groupId: m.groupId,
@@ -123,8 +132,36 @@ export async function toMeetingRows(db: Db, list: Meeting[]): Promise<MeetingRow
     guestCount: m.guestCount,
     notes: m.notes,
     rollTakenAt: m.rollTakenAt,
+    location: m.location,
+    topic: m.topic,
+    kind: meetingKind(m.kind),
+    leader: (m.leaderUserId && people.get(m.leaderUserId)) || null,
+    snackPerson: (m.snackUserId && people.get(m.snackUserId)) || null,
+    budgetCents: m.budgetCents,
     counts: counts.get(m.id) ?? emptyCounts(),
   }));
+}
+
+export const meetingKind = (v: string | null): MeetingKind | null =>
+  (MEETING_KINDS as readonly string[]).includes(v ?? '') ? (v as MeetingKind) : null;
+
+/** Name and username of the people a set of meetings refers to. */
+export async function meetingPeople(
+  db: Db,
+  ids: (number | null)[],
+): Promise<Map<number, MeetingPerson>> {
+  const unique = [...new Set(ids.filter((x): x is number => x !== null))];
+  if (unique.length === 0) return new Map();
+  const rows = await db
+    .select({
+      id: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      username: users.username,
+    })
+    .from(users)
+    .where(inArray(users.id, unique));
+  return new Map(rows.map((r) => [r.id, r]));
 }
 
 // ---------- roll-call roster ----------
@@ -347,7 +384,18 @@ export async function memberAttendance(
     streak: absenceStreak(statuses),
     recent: timeline.slice(0, 8),
     nextMeeting: next[0]
-      ? { id: next[0].id, title: next[0].title, startsAt: next[0].startsAt, endsAt: next[0].endsAt }
+      ? {
+          id: next[0].id,
+          title: next[0].title,
+          startsAt: next[0].startsAt,
+          endsAt: next[0].endsAt,
+          location: next[0].location,
+          topic: next[0].topic,
+          kind: meetingKind(next[0].kind),
+          leader: next[0].leaderUserId
+            ? ((await meetingPeople(db, [next[0].leaderUserId])).get(next[0].leaderUserId) ?? null)
+            : null,
+        }
       : null,
   };
 }

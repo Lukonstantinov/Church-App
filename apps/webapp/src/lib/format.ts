@@ -113,6 +113,16 @@ export function makeFormatters(locale: Locale, tz: string, t: Messages = message
     },
     /** Local "YYYY-MM-DD" for date inputs. */
     todayInput: (now = new Date()) => ymd(now),
+    /** Local "YYYY-MM-DD" of an instant. */
+    dateInput: (iso: string) => ymd(new Date(iso)),
+    /** Local "HH:MM" (24 h) of an instant, for time inputs. */
+    timeInput: (iso: string) =>
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).format(new Date(iso)),
   };
 }
 

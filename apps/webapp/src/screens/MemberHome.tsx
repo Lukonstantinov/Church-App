@@ -4,7 +4,6 @@ import { PosterCard } from '../components/Poster';
 import { useEnv } from '../lib/env';
 import { AttendanceSummary } from '../components/AttendanceSummary';
 import { Avatar } from '../components/Avatar';
-import { MyDuesCard } from '../components/MyDuesCard';
 import { BrandHeader } from '../components/BrandHeader';
 import { GroupDot } from '../components/GroupSwitcher';
 import { IconCalendar, IconTelegram, IconUsers } from '../components/icons';
@@ -22,9 +21,10 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useMyAnnouncements, useMyAttendance, useMyEvents, useMyFinance } from '../lib/queries';
+import { useMyAnnouncements, useMyAttendance, useMyEvents } from '../lib/queries';
 import { openTelegramLink } from '../lib/telegram';
 import { EventCard } from '../components/EventCard';
+import { MeetingHeroLines } from './MeetingScreen';
 
 /** Regular members: their next meeting, own attendance and announcements. */
 export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }) {
@@ -42,7 +42,6 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
     groupId === undefined ? list : list?.filter((x) => x.groupId === groupId);
   const att = useMyAttendance(active.length > 0);
   const news = useMyAnnouncements(active.length > 0 && !env);
-  const finance = useMyFinance(active.length > 0);
   const events = useMyEvents(active.length > 0);
   const chats = active.filter((m) => m.chatUrl);
 
@@ -92,21 +91,28 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
         <div key={g.groupId} className="flex flex-col gap-4">
           {g.nextMeeting ? (
             <HeroCard>
-              <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
-                {t.home.nextMeetingIn(g.groupName)}
-              </div>
-              <div className="flex items-center gap-3.5">
-                <DateBadge {...f.dateBadge(g.nextMeeting.startsAt)} onBrand />
-                <div className="min-w-0">
-                  <div className="truncate text-[21px] font-bold leading-tight">
-                    {g.nextMeeting.title}
-                  </div>
-                  <div className="text-[15px] text-white/85">
-                    {f.relativeDay(g.nextMeeting.startsAt)} ·{' '}
-                    {f.timeRange(g.nextMeeting.startsAt, g.nextMeeting.endsAt)}
+              <button
+                type="button"
+                onClick={() => push({ name: 'meeting', meetingId: g.nextMeeting!.id })}
+                className="block w-full text-left"
+              >
+                <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
+                  {t.home.nextMeetingIn(g.groupName)}
+                </div>
+                <div className="flex items-center gap-3.5">
+                  <DateBadge {...f.dateBadge(g.nextMeeting.startsAt)} onBrand />
+                  <div className="min-w-0">
+                    <div className="truncate text-[21px] font-bold leading-tight">
+                      {g.nextMeeting.title}
+                    </div>
+                    <div className="text-[15px] text-white/85">
+                      {f.relativeDay(g.nextMeeting.startsAt)} ·{' '}
+                      {f.timeRange(g.nextMeeting.startsAt, g.nextMeeting.endsAt)}
+                    </div>
                   </div>
                 </div>
-              </div>
+                <MeetingHeroLines meeting={g.nextMeeting} />
+              </button>
             </HeroCard>
           ) : (
             <Card className="flex items-center gap-3 p-4 text-[14px] text-hint">
@@ -151,10 +157,6 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
           ))}
         </Section>
       )}
-
-      {inScope(finance.data)?.map((g) => (
-        <MyDuesCard key={g.groupId} g={g} showGroup={active.length > 1} />
-      ))}
 
       {!env && (inScope(news.data) ?? []).length > 0 && (
         <section className="flex flex-col gap-3">

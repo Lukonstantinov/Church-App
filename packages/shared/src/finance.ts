@@ -53,6 +53,8 @@ export const createTransactionSchema = z.object({
   /** Donor (donations) — optional: anonymous when omitted. */
   memberUserId: z.number().int().positive().nullish(),
   receiptMediaId: z.number().int().positive().nullish(),
+  /** The meeting this expense or income was for. */
+  meetingId: z.number().int().positive().nullish(),
 });
 export type CreateTransactionInput = z.input<typeof createTransactionSchema>;
 
@@ -75,6 +77,8 @@ export type PayDuesInput = z.input<typeof payDuesSchema>;
 export const treasurySettingsSchema = z.object({
   monthlyFeeCents: z.number().int().min(0).max(100_000).optional(),
   membersSeeTreasury: z.boolean().optional(),
+  /** Default budget for food/expenses per meeting. */
+  meetingBudgetCents: z.number().int().min(0).max(1_000_000).optional(),
 });
 export type TreasurySettingsInput = z.input<typeof treasurySettingsSchema>;
 
@@ -101,6 +105,7 @@ export interface TransactionRow {
   note: string | null;
   member: PersonRef | null;
   eventId: number | null;
+  meeting: { id: number; title: string; startsAt: string } | null;
   /** Signed, short-lived URL of the receipt photo. */
   receiptUrl: string | null;
   receiptMediaId: number | null;
@@ -126,6 +131,7 @@ export interface TreasurySummary {
   currency: string;
   monthlyFeeCents: number;
   membersSeeTreasury: boolean;
+  meetingBudgetCents: number;
   balanceCents: number;
   /** Current month in the church time zone. */
   month: MonthFlow;

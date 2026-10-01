@@ -22,7 +22,6 @@ import {
   Screen,
   Section,
   TextField,
-  Toggle,
 } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
@@ -121,17 +120,6 @@ export function MemberScreen({ userId }: { userId: number }) {
           ) : (
             <ActionRow onClick={startEdit}>{t.common.edit}</ActionRow>
           )}
-        </Section>
-      )}
-
-      {permissions.canEditProfile && (
-        <Section footer={t.member.guardianConsentHint}>
-          <Toggle
-            label={t.member.guardianConsent}
-            checked={user.guardianConsentAt !== null}
-            disabled={updateUser.isPending}
-            onChange={(v) => void updateUser.mutateAsync({ guardianConsent: v })}
-          />
         </Section>
       )}
 

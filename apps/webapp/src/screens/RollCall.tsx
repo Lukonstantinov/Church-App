@@ -36,7 +36,8 @@ import { confirmDialog, haptic } from '../lib/telegram';
 
 type Marks = Record<number, AttendanceStatus | null>;
 
-const OPTIONS: AttendanceStatus[] = ['present', 'late', 'excused', 'absent'];
+// Roll call marks only present or absent.
+const OPTIONS: AttendanceStatus[] = ['present', 'absent'];
 /** Loads the roll; the editor below then owns all local edits. */
 export function RollCall({ meetingId }: { meetingId: number }) {
   const roll = useRoll(meetingId);

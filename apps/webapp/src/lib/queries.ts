@@ -1,6 +1,8 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   UpdateAnnouncementInput,
+  MeetingDetail,
+  MeetingPerson,
   AddOfflineMemberInput,
   AnnouncementResult,
   AnnouncementRow,
@@ -128,7 +130,7 @@ export function useGroupStats(groupId: number | null) {
 export function useUpcoming(groupId: number | null) {
   return useQuery({
     queryKey: keys.upcoming(groupId ?? 0),
-    queryFn: () => apiFetch<MeetingRow[]>(`/groups/${groupId}/meetings?limit=30`),
+    queryFn: () => apiFetch<MeetingRow[]>(`/groups/${groupId}/meetings?limit=100`),
     enabled: groupId !== null,
   });
 }
@@ -175,6 +177,7 @@ function useInvalidateAll() {
       qc.invalidateQueries({ queryKey: ['users'] }),
       qc.invalidateQueries({ queryKey: keys.me }),
       qc.invalidateQueries({ queryKey: ['meetings'] }),
+      qc.invalidateQueries({ queryKey: ['meeting'] }),
     ]);
 }
 
@@ -289,11 +292,30 @@ export function useCreateMeeting(groupId: number) {
   });
 }
 
+export function useMeeting(id: number) {
+  return useQuery({
+    queryKey: ['meeting', id],
+    queryFn: () => apiFetch<MeetingDetail>(`/meetings/${id}`),
+  });
+}
+
+/** Members to pick a meeting's leader or snack person from. */
+export function useMeetingPeople(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['meeting', id, 'people'],
+    queryFn: () => apiFetch<MeetingPerson[]>(`/meetings/${id}/people`),
+    enabled,
+  });
+}
+
 export function useUpdateMeeting() {
   const invalidate = useInvalidateAll();
   return useMutation({
     mutationFn: ({ id, ...input }: UpdateMeetingInput & { id: number }) =>
-      apiFetch<MeetingRow>(`/meetings/${id}`, { method: 'PATCH', ...json(input) }),
+      apiFetch<MeetingRow & { notified: string[] }>(`/meetings/${id}`, {
+        method: 'PATCH',
+        ...json(input),
+      }),
     onSuccess: invalidate,
   });
 }
@@ -583,15 +605,34 @@ export function useTreasury(groupId: number) {
 }
 
 /** Cash-book entries, newest first; `filter` is a comma list of kinds ("" = all). */
+export interface LedgerFilter {
+  member?: number;
+  meeting?: number;
+  from?: string;
+  to?: string;
+  q?: string;
+}
+
+const ledgerQuery = (f: LedgerFilter) =>
+  Object.entries(f)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => `&${k}=${encodeURIComponent(String(v))}`)
+    .join('');
+
+/** Every entry matching a filter (for the downloadable sheet). */
+export const fetchAllTransactions = (groupId: number, kinds: string, f: LedgerFilter) =>
+  apiFetch<TransactionPage>(`/groups/${groupId}/transactions?kind=${kinds}${ledgerQuery(f)}&all=1`);
+
 export function useTransactions(
   groupId: number,
   filter: string,
-  opts: { member?: number; enabled?: boolean } = {},
+  opts: LedgerFilter & { enabled?: boolean } = {},
 ) {
-  const extra = opts.member ? `&member=${opts.member}` : '';
+  const { enabled, ...rest } = opts;
+  const extra = ledgerQuery(rest);
   return useInfiniteQuery({
     queryKey: keys.transactions(groupId, `${filter}${extra}`),
-    enabled: opts.enabled ?? true,
+    enabled: enabled ?? true,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) =>
       apiFetch<TransactionPage>(

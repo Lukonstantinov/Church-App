@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import type { GroupSummary, MeetingRow } from '@church/shared';
+import { displayName, type GroupSummary, type MeetingRow } from '@church/shared';
+import { MeetingCalendar } from '../components/MeetingCalendar';
+import { KIND_EMOJI } from './MeetingScreen';
 import { GroupSwitcher } from '../components/GroupSwitcher';
-import { IconCalendar, IconClock, IconPlus, IconRepeat, IconX } from '../components/icons';
-import { Sheet, SheetOption } from '../components/Sheet';
-import { useToast } from '../components/Toast';
+import { IconCalendar, IconClock, IconPlus, IconRepeat } from '../components/icons';
 import {
   Badge,
   Button,
@@ -18,8 +18,7 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useEvents, usePast, useUpcoming, useUpdateMeeting } from '../lib/queries';
-import { confirmDialog, haptic } from '../lib/telegram';
+import { useEvents, usePast, useUpcoming } from '../lib/queries';
 import { canRollNow } from './Overview';
 import { storage } from '../lib/storage';
 import { useEnv } from '../lib/env';
@@ -42,7 +41,6 @@ export function Meetings({ groups, active }: { groups: GroupSummary[]; active: G
     storage.set(KIND_KEY, k);
   };
   const [limit, setLimit] = useState(20);
-  const [sheetFor, setSheetFor] = useState<MeetingRow | null>(null);
 
   const upcoming = useUpcoming(active.id);
   const past = usePast(active.id, limit, view === 'past');
@@ -107,15 +105,21 @@ export function Meetings({ groups, active }: { groups: GroupSummary[]; active: G
               </EmptyState>
             </Card>
           ) : (
-            <MeetingList
-              meetings={list.data ?? []}
-              past={view === 'past'}
-              onOpen={(m) =>
-                view === 'past' && m.status !== 'cancelled'
-                  ? can('attendance.take') && push({ name: 'roll', meetingId: m.id })
-                  : (can('attendance.take') || can('meetings.manage')) && setSheetFor(m)
-              }
-            />
+            <>
+              {view === 'upcoming' && can('meetings.manage') && (
+                <section>
+                  <h2 className="mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+                    {t.meetings.calendar}
+                  </h2>
+                  <MeetingCalendar meetings={list.data ?? []} />
+                </section>
+              )}
+              <MeetingList
+                meetings={list.data ?? []}
+                past={view === 'past'}
+                onOpen={(m) => push({ name: 'meeting', meetingId: m.id })}
+              />
+            </>
           )}
 
           {view === 'past' && (past.data?.length ?? 0) >= limit && (
@@ -142,8 +146,6 @@ export function Meetings({ groups, active }: { groups: GroupSummary[]; active: G
           <EventsPanel groupId={active.id} view={view} />
         </>
       )}
-
-      <MeetingSheet meeting={sheetFor} onClose={() => setSheetFor(null)} />
     </Screen>
   );
 }
@@ -214,9 +216,23 @@ function MeetingRowView({
         <div className="truncate text-[13px] text-hint">
           {!past && `${f.relativeDay(m.startsAt)} · `}
           {f.timeRange(m.startsAt, m.endsAt)}
+          {m.location ? ` · ${m.location}` : ''}
         </div>
+        {(m.leader || m.topic || m.kind) && (
+          <div className="mt-1 flex min-w-0 items-center gap-1.5">
+            {m.leader && (
+              <span className="brand-gradient shrink-0 rounded-full px-2 py-0.5 text-[12px] font-bold text-white">
+                🎤 {displayName(m.leader)}
+              </span>
+            )}
+            {m.kind && <span className="shrink-0 text-[13px]">{KIND_EMOJI[m.kind]}</span>}
+            {m.topic && <span className="truncate text-[13px] italic text-hint">{m.topic}</span>}
+          </div>
+        )}
       </div>
-      <div className="flex w-[112px] shrink-0 flex-col items-end gap-1 whitespace-nowrap">
+      <div
+        className={`flex shrink-0 flex-col items-end gap-1 whitespace-nowrap ${m.status === 'done' ? 'w-[96px]' : ''}`}
+      >
         {cancelled ? (
           <Badge tone="hint">{t.meetings.cancelled}</Badge>
         ) : m.status === 'done' ? (
@@ -237,66 +253,6 @@ function MeetingRowView({
         ) : null}
       </div>
     </button>
-  );
-}
-
-/** Actions for a meeting that isn't ready for (or doesn't need) a roll call. */
-function MeetingSheet({ meeting, onClose }: { meeting: MeetingRow | null; onClose: () => void }) {
-  const { push } = useNav();
-  const t = useT();
-  const f = useFmt();
-  const update = useUpdateMeeting();
-  const toast = useToast();
-  if (!meeting) return null;
-  const cancelled = meeting.status === 'cancelled';
-  const rollable = canRollNow(meeting);
-
-  async function setStatus(status: 'scheduled' | 'cancelled') {
-    if (status === 'cancelled' && !(await confirmDialog(t.meetings.cancelConfirm))) return;
-    try {
-      await update.mutateAsync({ id: meeting!.id, status });
-      haptic.success();
-      toast(status === 'cancelled' ? t.meetings.cancelledToast : t.meetings.restoredToast);
-      onClose();
-    } catch {
-      toast(t.common.saveFailed, 'error');
-    }
-  }
-
-  return (
-    <Sheet open onClose={onClose} title={meeting.title}>
-      <p className="px-5 pb-2 text-[14px] text-hint">
-        {f.relativeDay(meeting.startsAt)} · {f.timeRange(meeting.startsAt, meeting.endsAt)}
-      </p>
-      {!cancelled && (
-        <SheetOption
-          icon={<IconCalendar size={20} />}
-          label={t.meetings.openRoll}
-          hint={rollable ? undefined : t.meetings.opensHourBefore}
-          disabled={!rollable}
-          onClick={() => {
-            onClose();
-            push({ name: 'roll', meetingId: meeting.id });
-          }}
-        />
-      )}
-      {cancelled ? (
-        <SheetOption
-          icon={<IconRepeat size={20} />}
-          label={t.meetings.restore}
-          onClick={() => void setStatus('scheduled')}
-        />
-      ) : (
-        <SheetOption
-          tone="destructive"
-          icon={<IconX size={20} />}
-          label={t.meetings.cancelMeeting}
-          hint={t.meetings.cancelHint}
-          onClick={() => void setStatus('cancelled')}
-        />
-      )}
-      <SheetOption label={t.common.close} onClick={onClose} />
-    </Sheet>
   );
 }
 

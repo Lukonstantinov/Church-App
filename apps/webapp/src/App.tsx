@@ -21,6 +21,7 @@ import { ManagerShell } from './screens/ManagerShell';
 import { MemberHome } from './screens/MemberHome';
 import { MemberScreen } from './screens/MemberScreen';
 import { NewMeeting } from './screens/NewMeeting';
+import { MeetingScreen } from './screens/MeetingScreen';
 import { NewTransaction } from './screens/NewTransaction';
 import { EventForm } from './screens/EventForm';
 import { EventScreen } from './screens/EventScreen';
@@ -84,7 +85,11 @@ function Router({ me }: { me: MeResponse }) {
     case 'settings':
       return me.user.isAdmin ? <ChurchSettings /> : null;
     case 'newTransaction':
-      return <NewTransaction groupId={route.groupId} kind={route.kind} />;
+      return (
+        <NewTransaction groupId={route.groupId} kind={route.kind} meetingId={route.meetingId} />
+      );
+    case 'meeting':
+      return <MeetingScreen key={route.meetingId} meetingId={route.meetingId} />;
     case 'event':
       return <EventScreen key={route.eventId} eventId={route.eventId} />;
     case 'eventForm':
@@ -120,9 +125,15 @@ function Router({ me }: { me: MeResponse }) {
   }
 }
 
-/** `?roll=<id>` (from the bot's reminder button) opens that roll call directly. */
+/**
+ * Bot buttons open a screen directly: `?roll=<id>` the roll call, `?meeting=<id>` a
+ * meeting (sent to the person who leads it or buys snacks).
+ */
 function initialRoute(me: MeResponse): Route | undefined {
-  const raw = new URLSearchParams(window.location.search).get('roll');
+  const params = new URLSearchParams(window.location.search);
+  const meeting = Number(params.get('meeting'));
+  if (Number.isSafeInteger(meeting) && meeting > 0) return { name: 'meeting', meetingId: meeting };
+  const raw = params.get('roll');
   const id = Number(raw);
   if (!raw || !Number.isSafeInteger(id) || id <= 0 || !canTakeRoll(me)) return undefined;
   return { name: 'roll', meetingId: id };

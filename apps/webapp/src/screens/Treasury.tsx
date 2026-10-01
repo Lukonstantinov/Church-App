@@ -1,19 +1,22 @@
-import { useState } from 'react';
-import { displayName, type GroupSummary, type TreasurySummary } from '@church/shared';
-import { Avatar } from '../components/Avatar';
+import { useEffect, useState } from 'react';
+import {
+  displayName,
+  parseAmount,
+  resolveBrand,
+  type GroupSummary,
+  type TreasurySummary,
+} from '@church/shared';
 import { GroupSwitcher } from '../components/GroupSwitcher';
 import {
   IconArrowDown,
   IconArrowUp,
   IconChart,
-  IconChevronRight,
-  IconCoins,
   IconHeart,
+  IconSearch,
   IconWallet,
+  IconX,
 } from '../components/icons';
 import {
-  DuesLegend,
-  DuesStrip,
   FlowBars,
   HBars,
   TxRow,
@@ -22,7 +25,7 @@ import {
   useMoney,
   type LedgerEntry,
 } from '../components/money';
-import { FeeSheet, MemberDuesSheet, TransactionSheet } from '../components/TreasurySheets';
+import { TransactionSheet } from '../components/TreasurySheets';
 import { useToast } from '../components/Toast';
 import {
   Button,
@@ -30,8 +33,6 @@ import {
   EmptyState,
   HeroCard,
   Pill,
-  ProgressBar,
-  Row,
   Screen,
   Section,
   Segmented,
@@ -43,10 +44,19 @@ import { useT } from '../lib/i18n';
 import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
 import { storage } from '../lib/storage';
-import { useDues, useTransactions, useTreasury, useTreasurySettings } from '../lib/queries';
+import {
+  fetchAllTransactions,
+  sendDocumentToChat,
+  useMe,
+  useTransactions,
+  useTreasury,
+  useTreasurySettings,
+  type LedgerFilter,
+} from '../lib/queries';
+import { haptic } from '../lib/telegram';
 import { QuickAction } from './Overview';
 
-type Seg = 'dues' | 'ledger' | 'stats';
+type Seg = 'ledger' | 'stats';
 const SEG_KEY = 'church.treasurySeg';
 
 /** Group treasury: balance, monthly dues sheet, cash book and statistics. */
@@ -57,7 +67,7 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
   const summary = useTreasury(active.id);
   const [seg, setSegState] = useState<Seg>(() => {
     const saved = storage.get(SEG_KEY);
-    return saved === 'ledger' || saved === 'stats' ? saved : 'dues';
+    return saved === 'stats' ? 'stats' : 'ledger';
   });
   const setSeg = (s: Seg) => {
     setSegState(s);
@@ -83,12 +93,14 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
       {can('money.manage') && (
         <div className="grid grid-cols-3 gap-3">
           <QuickAction
-            icon={<IconArrowDown size={22} />}
+            icon={<IconArrowUp size={22} />}
+            tone="good"
             label={t.treasury.income}
             onClick={() => push({ name: 'newTransaction', groupId: active.id, kind: 'income' })}
           />
           <QuickAction
-            icon={<IconArrowUp size={22} />}
+            icon={<IconArrowDown size={22} />}
+            tone="bad"
             label={t.treasury.expense}
             onClick={() => push({ name: 'newTransaction', groupId: active.id, kind: 'expense' })}
           />
@@ -102,7 +114,6 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
 
       <Segmented
         options={[
-          { key: 'dues', label: t.treasury.segDues },
           { key: 'ledger', label: t.treasury.segLedger },
           { key: 'stats', label: t.treasury.segStats },
         ]}
@@ -110,8 +121,9 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
         onChange={setSeg}
       />
 
-      {seg === 'dues' && <DuesPanel groupId={active.id} summary={s} />}
-      {seg === 'ledger' && <LedgerPanel key={active.id} groupId={active.id} />}
+      {seg === 'ledger' && (
+        <LedgerPanel key={active.id} groupId={active.id} groupName={active.name} summary={s} />
+      )}
       {seg === 'stats' && (s ? <StatsPanel s={s} /> : <Skeleton className="h-56 w-full" />)}
     </Screen>
   );
@@ -144,194 +156,57 @@ function BalanceHero({ s, onReports }: { s: TreasurySummary; onReports?: () => v
         {t.treasury.monthFlow(f.periodLong(s.month.month))}
       </div>
       <div className="mt-1.5 flex gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/18 px-3 py-1.5 text-[15px] font-semibold tabular-nums">
-          <IconArrowDown size={15} /> {money(s.month.incomeCents)}
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#22c55e]/35 px-3 py-1.5 text-[15px] font-semibold tabular-nums">
+          <IconArrowUp size={15} /> {money(s.month.incomeCents)}
         </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/18 px-3 py-1.5 text-[15px] font-semibold tabular-nums">
-          <IconArrowUp size={15} /> {money(s.month.expenseCents)}
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ef4444]/35 px-3 py-1.5 text-[15px] font-semibold tabular-nums">
+          <IconArrowDown size={15} /> {money(s.month.expenseCents)}
         </span>
       </div>
     </HeroCard>
   );
 }
 
-function DuesPanel({ groupId, summary }: { groupId: number; summary?: TreasurySummary }) {
-  const t = useT();
-  const { can } = useEnv();
-  const f = useFmt();
-  const money = useMoney();
-  const toast = useToast();
-  const thisYear = Number((summary?.dues.period ?? f.todayInput()).slice(0, 4));
-  const [year, setYear] = useState(thisYear);
-  const sheet = useDues(groupId, year);
-  const settings = useTreasurySettings(groupId);
-  const [openUser, setOpenUser] = useState<number | null>(null);
-  const [feeOpen, setFeeOpen] = useState(false);
-  const d = summary?.dues;
-  const fee = summary?.monthlyFeeCents ?? 0;
-
-  async function saveFee(cents: number) {
-    try {
-      await settings.mutateAsync({ monthlyFeeCents: cents });
-      setFeeOpen(false);
-      toast(t.common.saved);
-    } catch {
-      toast(t.common.saveFailed, 'error');
-    }
-  }
-
-  return (
-    <>
-      {d && fee > 0 && (
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/12 text-accent">
-              <IconCoins size={20} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] text-hint">
-                {t.treasury.duesMonth(f.periodLong(d.period))}
-              </div>
-              <div className="text-[19px] font-semibold">
-                {t.treasury.duesPaidOf(d.paid, d.payers)}
-              </div>
-            </div>
-            <div className="text-right text-[13px] text-hint">
-              {t.treasury.collected(money(d.collectedCents))}
-            </div>
-          </div>
-          <div className="mt-3">
-            <ProgressBar value={d.paid} max={d.payers} />
-          </div>
-        </Card>
-      )}
-
-      {can('money.manage') && (
-        <Section>
-          <Row
-            title={t.treasury.feePerMonth}
-            after={summary ? (fee > 0 ? money(fee) : t.treasury.feeOff) : '…'}
-            onClick={() => setFeeOpen(true)}
-          />
-          <Toggle
-            label={t.treasury.membersSee}
-            checked={summary?.membersSeeTreasury ?? false}
-            disabled={!summary || settings.isPending}
-            onChange={(v) => settings.mutate({ membersSeeTreasury: v })}
-          />
-        </Section>
-      )}
-
-      <section>
-        <div className="mb-2 flex items-center justify-between px-1">
-          <button
-            type="button"
-            aria-label="previous year"
-            className="glass flex h-9 w-9 items-center justify-center rounded-full"
-            onClick={() => setYear((y) => y - 1)}
-          >
-            <IconChevronRight size={18} className="rotate-180" />
-          </button>
-          <span className="text-[17px] font-semibold tabular-nums">{year}</span>
-          <button
-            type="button"
-            aria-label="next year"
-            disabled={year >= thisYear + 1}
-            className="glass flex h-9 w-9 items-center justify-center rounded-full disabled:opacity-40"
-            onClick={() => setYear((y) => y + 1)}
-          >
-            <IconChevronRight size={18} />
-          </button>
-        </div>
-        {sheet.isPending ? (
-          <Skeleton className="h-64 w-full" />
-        ) : !sheet.data || sheet.data.rows.length === 0 ? (
-          <Card>
-            <EmptyState title={t.treasury.noMembers} />
-          </Card>
-        ) : (
-          <>
-            <div className="glass overflow-hidden rounded-[var(--radius-card)] shadow-card">
-              {sheet.data.rows.map((r) => (
-                <button
-                  key={r.member.id}
-                  type="button"
-                  onClick={() => can('money.manage') && setOpenUser(r.member.id)}
-                  className="flex min-h-[64px] w-full items-center gap-3 border-b border-hairline px-4 py-2.5 text-left last:border-b-0 active:bg-hairline"
-                >
-                  <Avatar
-                    id={r.member.id}
-                    firstName={r.member.firstName}
-                    lastName={r.member.lastName}
-                    size={38}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-[16px] font-medium">
-                        {displayName(r.member)}
-                      </span>
-                      <span
-                        className={`shrink-0 text-[12px] font-semibold ${
-                          r.exempt ? 'text-hint' : r.owedMonths > 0 ? 'text-absent' : 'text-present'
-                        }`}
-                      >
-                        {r.exempt
-                          ? t.treasury.exempt
-                          : r.owedMonths > 0
-                            ? t.treasury.owes(r.owedMonths)
-                            : t.treasury.allPaid}
-                      </span>
-                    </div>
-                    <div className="mt-1.5">
-                      <DuesStrip cells={r.cells} />
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <div className="mt-2.5 px-2">
-              <DuesLegend />
-            </div>
-          </>
-        )}
-      </section>
-
-      {sheet.data && (
-        <MemberDuesSheet
-          groupId={groupId}
-          sheet={sheet.data}
-          userId={openUser}
-          onClose={() => setOpenUser(null)}
-        />
-      )}
-      <FeeSheet
-        open={feeOpen}
-        feeCents={fee}
-        saving={settings.isPending}
-        onClose={() => setFeeOpen(false)}
-        onSave={(c) => void saveFee(c)}
-      />
-    </>
-  );
-}
-
 const FILTERS = {
   all: '',
-  income: 'income,event_payment',
+  income: 'income,event_payment,dues',
   expense: 'expense,event_expense',
-  dues: 'dues',
   donation: 'donation',
 } as const;
 type Filter = keyof typeof FILTERS;
 
-function LedgerPanel({ groupId }: { groupId: number }) {
+/** Cash book with filters (type, name, dates) and a download of just what is shown. */
+function LedgerPanel({
+  groupId,
+  groupName,
+  summary,
+}: {
+  groupId: number;
+  groupName: string;
+  summary?: TreasurySummary;
+}) {
   const t = useT();
   const { can } = useEnv();
   const f = useFmt();
+  const toast = useToast();
+  const me = useMe();
+  const settings = useTreasurySettings(groupId);
   const [filter, setFilter] = useState<Filter>('all');
-  const q = useTransactions(groupId, FILTERS[filter]);
+  const [q, setQ] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [showDates, setShowDates] = useState(false);
+  const [sending, setSending] = useState(false);
+  const search = useDebounced(q.trim(), 350);
+  const opts: LedgerFilter = {
+    q: search || undefined,
+    from: from || undefined,
+    to: to || undefined,
+  };
+  const query = useTransactions(groupId, FILTERS[filter], opts);
   const [open, setOpen] = useState<LedgerEntry | null>(null);
-  const items = mergeDues(q.data?.pages.flatMap((p) => p.items) ?? []);
+  const items = mergeDues(query.data?.pages.flatMap((p) => p.items) ?? []);
+  const filtered = filter !== 'all' || !!search || !!from || !!to;
 
   const byMonth: [string, LedgerEntry[]][] = [];
   for (const tx of items) {
@@ -339,6 +214,42 @@ function LedgerPanel({ groupId }: { groupId: number }) {
     const last = byMonth[byMonth.length - 1];
     if (last && last[0] === m) last[1].push(tx);
     else byMonth.push([m, [tx]]);
+  }
+
+  async function download() {
+    if (!me.data) return;
+    setSending(true);
+    try {
+      const all = await fetchAllTransactions(groupId, FILTERS[filter], opts);
+      const { ledgerXlsx } = await import('../lib/reports');
+      const parts = [
+        t.treasury.filters[filter],
+        search && `«${search}»`,
+        (from || to) && `${from ? f.dayMonth(from) : '…'} – ${to ? f.dayMonth(to) : '…'}`,
+      ].filter(Boolean);
+      const blob = await ledgerXlsx(
+        {
+          t,
+          f,
+          currency: summary?.currency ?? 'EUR',
+          brandHex: resolveBrand(me.data.church.brandColor).light,
+        },
+        t.treasury.ledgerFile(groupName),
+        parts.join(' · '),
+        all.items,
+      );
+      const name = `${t.treasury.ledgerFile(groupName)} ${f.todayInput()}`
+        .replace(/[^\p{L}\p{N} ._()«»–—-]/gu, '')
+        .slice(0, 75);
+      await sendDocumentToChat(blob, `${name}.xlsx`);
+      haptic.success();
+      toast(t.treasury.downloadSent);
+    } catch {
+      haptic.error();
+      toast(t.reports.failed, 'error');
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -351,14 +262,79 @@ function LedgerPanel({ groupId }: { groupId: number }) {
             </Pill>
           </div>
         ))}
+        <div className="shrink-0">
+          <Pill selected={showDates || !!from || !!to} onClick={() => setShowDates((v) => !v)}>
+            📅 {t.treasury.dates}
+          </Pill>
+        </div>
       </div>
 
-      {q.isPending ? (
+      <div className="flex flex-col gap-2">
+        <label className="glass flex items-center gap-2 rounded-2xl px-3.5 py-2.5 shadow-card">
+          <IconSearch size={18} className="shrink-0 text-hint" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t.treasury.search}
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-hint"
+          />
+          {q && (
+            <button type="button" aria-label="clear" onClick={() => setQ('')}>
+              <IconX size={16} className="text-hint" />
+            </button>
+          )}
+        </label>
+        {(showDates || from || to) && (
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                [t.treasury.dateFrom, from, setFrom],
+                [t.treasury.dateTo, to, setTo],
+              ] as const
+            ).map(([label, value, set]) => (
+              <label
+                key={label}
+                className="glass flex flex-col rounded-2xl px-3.5 py-2 shadow-card"
+              >
+                <span className="text-[12px] text-hint">{label}</span>
+                <input
+                  type="date"
+                  value={value}
+                  onChange={(e) => set(e.target.value)}
+                  className="bg-transparent text-[16px] outline-none"
+                />
+              </label>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <Button small variant="secondary" disabled={sending} onClick={() => void download()}>
+            <IconArrowDown size={16} /> {sending ? t.common.saving : t.treasury.download}
+          </Button>
+          {filtered && (
+            <Button
+              small
+              variant="glass"
+              onClick={() => {
+                setFilter('all');
+                setQ('');
+                setFrom('');
+                setTo('');
+              }}
+            >
+              {t.treasury.clearFilters}
+            </Button>
+          )}
+        </div>
+        <p className="px-1 text-[12px] text-hint">{t.treasury.downloadHint}</p>
+      </div>
+
+      {query.isPending ? (
         <Skeleton className="h-64 w-full" />
       ) : items.length === 0 ? (
         <Card>
           <EmptyState icon={<IconWallet size={26} />} title={t.treasury.empty}>
-            {t.treasury.emptyText}
+            {filtered ? undefined : t.treasury.emptyText}
           </EmptyState>
         </Card>
       ) : (
@@ -370,18 +346,74 @@ function LedgerPanel({ groupId }: { groupId: number }) {
           </Section>
         ))
       )}
-      {q.hasNextPage && (
+      {query.hasNextPage && (
         <Button
           variant="glass"
-          onClick={() => void q.fetchNextPage()}
-          disabled={q.isFetchingNextPage}
+          onClick={() => void query.fetchNextPage()}
+          disabled={query.isFetchingNextPage}
         >
           {t.treasury.loadMore}
         </Button>
       )}
+
+      {can('money.manage') && summary && (
+        <Section footer={t.treasury.meetingBudgetHint}>
+          <MoneyInputRow
+            label={t.treasury.meetingBudget}
+            cents={summary.meetingBudgetCents}
+            onSave={(c) => settings.mutate({ meetingBudgetCents: c })}
+          />
+          <Toggle
+            label={t.treasury.membersSee}
+            checked={summary.membersSeeTreasury}
+            disabled={settings.isPending}
+            onChange={(v) => settings.mutate({ membersSeeTreasury: v })}
+          />
+        </Section>
+      )}
       <TransactionSheet tx={open} groupId={groupId} onClose={() => setOpen(null)} />
     </>
   );
+}
+
+/** A money amount edited in place; saved when the field loses focus. */
+export function MoneyInputRow({
+  label,
+  cents,
+  onSave,
+}: {
+  label: string;
+  cents: number;
+  onSave: (cents: number) => void;
+}) {
+  const money = useMoney();
+  const [value, setValue] = useState((cents / 100).toFixed(2));
+  return (
+    <label className="flex min-h-[52px] items-center gap-3 border-b border-hairline px-4 last:border-b-0">
+      <span className="flex-1 text-[16px]">{label}</span>
+      <input
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => {
+          const c = parseAmount(value);
+          if (c !== null && c !== cents) onSave(c);
+          else setValue((cents / 100).toFixed(2));
+        }}
+        className="w-24 rounded-lg bg-hairline px-2 py-1.5 text-right text-[16px] tabular-nums outline-none"
+      />
+      <span className="text-[15px] text-hint">{money.symbol}</span>
+    </label>
+  );
+}
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return v;
 }
 
 function StatsPanel({ s }: { s: TreasurySummary }) {

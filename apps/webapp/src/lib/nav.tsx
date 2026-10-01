@@ -28,7 +28,13 @@ export type Route =
   | { name: 'newPost'; groupId: number }
   | { name: 'editPost'; groupId: number; postId: number }
   | { name: 'telemetry' }
-  | { name: 'newTransaction'; groupId: number; kind: 'income' | 'expense' | 'donation' }
+  | {
+      name: 'newTransaction';
+      groupId: number;
+      kind: 'income' | 'expense' | 'donation';
+      meetingId?: number;
+    }
+  | { name: 'meeting'; meetingId: number }
   | { name: 'event'; eventId: number }
   | { name: 'eventForm'; groupId: number; eventId?: number }
   | { name: 'groupSettings'; groupId: number }

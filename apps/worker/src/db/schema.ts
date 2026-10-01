@@ -97,6 +97,8 @@ export const groups = sqliteTable('groups', {
   animation: text('animation').notNull().default('rise'),
   /** Colour of the "new posts" counter on the ministry card; NULL = the theme colour. */
   badgeColor: text('badge_color'),
+  /** Default food/expense budget per meeting, in cents. */
+  meetingBudgetCents: integer('meeting_budget_cents').notNull().default(1500),
   /** Photo behind the ministry card (BackdropConfig JSON), NULL = colours only. */
   backdrop: text('backdrop'),
   archivedAt: text('archived_at'),
@@ -211,14 +213,25 @@ export const meetings = sqliteTable(
       .default('scheduled'),
     guestCount: integer('guest_count').notNull().default(0),
     notes: text('notes'),
+    location: text('location'),
+    topic: text('topic'),
+    /** MEETING_KINDS: prayer, worship, outside, guest, prophetic. */
+    kind: text('kind'),
+    /** Who leads this meeting (assigned ahead, gets a bot message). */
+    leaderUserId: integer('leader_user_id').references(() => users.id),
+    /** Who buys food / spends the budget. */
+    snackUserId: integer('snack_user_id').references(() => users.id),
+    budgetCents: integer('budget_cents'),
+    /** The schedule slot it was made for; stays put when the meeting is moved. */
+    slotAt: text('slot_at'),
     rollTakenBy: integer('roll_taken_by'),
     rollTakenAt: text('roll_taken_at'),
     createdAt: createdAt(),
   },
   (t) => [
     index('meetings_group_starts').on(t.groupId, t.startsAt),
-    // Makes schedule → meeting generation idempotent.
-    uniqueIndex('meetings_schedule_starts').on(t.scheduleId, t.startsAt),
+    // Makes schedule → meeting generation idempotent, even after a meeting is moved.
+    uniqueIndex('meetings_schedule_slot').on(t.scheduleId, t.slotAt),
     check('meetings_status', sql`${t.status} IN ('scheduled', 'done', 'cancelled')`),
   ],
 );
@@ -364,6 +377,7 @@ export const transactions = sqliteTable(
     category: text('category'),
     note: text('note'),
     eventId: integer('event_id'),
+    meetingId: integer('meeting_id'),
     receiptMediaId: integer('receipt_media_id').references(() => media.id),
     createdBy: integer('created_by').references(() => users.id),
     createdAt: createdAt(),
@@ -374,6 +388,7 @@ export const transactions = sqliteTable(
     index('transactions_group_date').on(t.groupId, t.occurredOn),
     index('transactions_member').on(t.memberUserId),
     index('transactions_event').on(t.eventId),
+    index('transactions_meeting').on(t.meetingId),
     check('transactions_amount', sql`${t.amountCents} > 0`),
     check(
       'transactions_kind',

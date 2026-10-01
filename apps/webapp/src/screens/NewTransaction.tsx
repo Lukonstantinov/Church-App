@@ -16,12 +16,20 @@ import { Button, Pill, Row, Screen, Section, Segmented, TextField, Title } from 
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useCreateTransaction, useGroup, useMembers } from '../lib/queries';
+import { useCreateTransaction, useGroup, useMembers, usePast, useUpcoming } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 
 type Kind = 'income' | 'expense' | 'donation';
 
-export function NewTransaction({ groupId, kind: initialKind }: { groupId: number; kind: Kind }) {
+export function NewTransaction({
+  groupId,
+  kind: initialKind,
+  meetingId: initialMeeting,
+}: {
+  groupId: number;
+  kind: Kind;
+  meetingId?: number;
+}) {
   const t = useT();
   const f = useFmt();
   const money = useMoney();
@@ -39,6 +47,11 @@ export function NewTransaction({ groupId, kind: initialKind }: { groupId: number
   const [pickDonor, setPickDonor] = useState(false);
   const [receipt, setReceipt] = useState<{ id: number; url: string } | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
+  const [meetingId, setMeetingId] = useState<number | null>(initialMeeting ?? null);
+  // Recent and coming meetings, to say which one an expense was for.
+  const past = usePast(groupId, 12);
+  const upcoming = useUpcoming(groupId);
+  const meetingChoices = [...(upcoming.data ?? []).slice(0, 4).reverse(), ...(past.data ?? [])];
 
   const cents = parseAmount(amount);
   const categories = kind === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
@@ -57,6 +70,7 @@ export function NewTransaction({ groupId, kind: initialKind }: { groupId: number
         note,
         memberUserId: kind === 'donation' ? (donor?.userId ?? null) : null,
         receiptMediaId: receipt?.id ?? null,
+        meetingId: kind === 'donation' ? null : meetingId,
       });
       haptic.success();
       toast(t.treasury.recorded);
@@ -148,6 +162,23 @@ export function NewTransaction({ groupId, kind: initialKind }: { groupId: number
       <Section>
         <TextField label={t.treasury.date} type="date" value={date} onChange={setDate} />
         <TextField label={t.treasury.note} value={note} onChange={setNote} maxLength={300} />
+        {kind !== 'donation' && (
+          <label className="flex min-h-[52px] items-center gap-3 px-4">
+            <span className="text-[16px]">{t.treasury.meeting}</span>
+            <select
+              value={meetingId ?? ''}
+              onChange={(e) => setMeetingId(e.target.value ? Number(e.target.value) : null)}
+              className="min-w-0 flex-1 truncate bg-transparent text-right text-[16px] text-hint outline-none"
+            >
+              <option value="">{t.treasury.noMeeting}</option>
+              {meetingChoices.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.title} · {f.dayMonth(m.startsAt)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </Section>
 
       <section className="flex flex-col gap-2">
