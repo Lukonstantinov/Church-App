@@ -2,6 +2,7 @@ import type { EventSummary } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { IconCheck, IconMapPin, IconUsers } from './icons';
+import { PosterMedia } from './Poster';
 import { useMoney } from './money';
 import { Badge, DateBadge } from './ui';
 
@@ -15,6 +16,36 @@ export function useEventWhen() {
       ? `${start}–${f.time(e.endsAt)}`
       : `${f.dayMonth(e.startsAt)} – ${f.dayMonth(e.endsAt)}`;
   };
+}
+
+/**
+ * An event's cover: its photo, or (when the event has a cover design) the designed
+ * banner with the title, like a post. Nothing when neither is set.
+ */
+export function EventCover({
+  e,
+  className = 'aspect-[16/7]',
+  compact,
+}: {
+  e: Pick<EventSummary, 'coverUrl' | 'design' | 'look' | 'title'>;
+  className?: string;
+  compact?: boolean;
+}) {
+  if (e.coverUrl)
+    return (
+      <img src={e.coverUrl} alt="" className={`w-full object-cover ${className}`} loading="lazy" />
+    );
+  if (!e.design?.banner) return null;
+  return (
+    <PosterMedia
+      title={e.title}
+      photos={[]}
+      tint={null}
+      look={e.look}
+      design={e.design}
+      compact={compact}
+    />
+  );
 }
 
 /** Event list card: cover (or brand tile), date, title, place, quick facts. */
@@ -38,9 +69,7 @@ export function EventCard({
       onClick={onClick}
       className={`glass block w-full overflow-hidden rounded-[var(--radius-card)] text-left shadow-card transition active:scale-[0.99] ${cancelled ? 'opacity-60' : ''}`}
     >
-      {e.coverUrl && (
-        <img src={e.coverUrl} alt="" className="aspect-[16/7] w-full object-cover" loading="lazy" />
-      )}
+      <EventCover e={e} />
       <div className="flex items-start gap-3 p-4">
         <DateBadge {...f.dateBadge(e.startsAt)} muted={cancelled} />
         <div className="min-w-0 flex-1">

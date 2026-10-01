@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   UpdateAnnouncementInput,
+  ContactRow,
   MeetingDetail,
   MeetingPerson,
   AddOfflineMemberInput,
@@ -289,6 +290,14 @@ export function useCreateMeeting(groupId: number) {
     mutationFn: (input: CreateMeetingInput) =>
       apiFetch<MeetingRow>(`/groups/${groupId}/meetings`, { method: 'POST', ...json(input) }),
     onSuccess: invalidate,
+  });
+}
+
+/** Everyone active in the ministry with their position (any member may see it). */
+export function useContacts(groupId: number) {
+  return useQuery({
+    queryKey: ['groups', groupId, 'contacts'],
+    queryFn: () => apiFetch<ContactRow[]>(`/groups/${groupId}/contacts`),
   });
 }
 

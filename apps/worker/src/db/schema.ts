@@ -426,6 +426,9 @@ export const events = sqliteTable(
     chatUrl: text('chat_url'),
     /** Pinned to the top of the main page, for the whole church. */
     pinnedAt: text('pinned_at'),
+    /** Cover design (PostDesign JSON) when there is no cover photo, like posts. */
+    design: text('design'),
+    templateId: integer('template_id'),
     status: text('status', { enum: ['scheduled', 'cancelled'] })
       .notNull()
       .default('scheduled'),

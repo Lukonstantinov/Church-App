@@ -10,10 +10,18 @@ import {
   rsvpSchema,
   setRolesSchema,
   updateEventSchema,
+  type PostDesign,
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
-import { eventPhotos, events, groups, memberships, transactions } from '../db/schema';
+import {
+  designTemplates,
+  eventPhotos,
+  events,
+  groups,
+  memberships,
+  transactions,
+} from '../db/schema';
 import { assertCan, assertCanViewGroup } from '../lib/access';
 import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
@@ -31,6 +39,24 @@ import { assertGroupMedia } from '../lib/media';
 import { idParam, parseBody } from './util';
 
 type App = { Bindings: Env; Variables: AuthVariables };
+
+/** A cover's own photo must be the ministry's; a template must exist. */
+async function assertDesign(
+  db: AuthVariables['db'],
+  groupId: number,
+  design: PostDesign | null | undefined,
+  templateId: number | null | undefined,
+) {
+  const photo = design?.custom?.backdrop?.mediaId;
+  if (photo) await assertGroupMedia(db, groupId, photo);
+  if (templateId) {
+    const tpl = await db.query.designTemplates.findFirst({
+      columns: { id: true },
+      where: eq(designTemplates.id, templateId),
+    });
+    if (!tpl) throw new HTTPException(400, { message: 'invalid_template' });
+  }
+}
 
 /** /api/groups/:id/events */
 export const groupEventRoutes = new Hono<App>();
@@ -51,6 +77,7 @@ groupEventRoutes.post('/:id/events', async (c) => {
   const { timezone } = await getChurch(db);
   const times = eventTimes(input, timezone);
   if (input.coverMediaId) await assertGroupMedia(db, group.id, input.coverMediaId);
+  await assertDesign(db, group.id, input.design, input.templateId);
   const [row] = await db
     .insert(events)
     .values({
@@ -60,6 +87,8 @@ groupEventRoutes.post('/:id/events', async (c) => {
       ...times,
       location: input.location,
       coverMediaId: input.coverMediaId ?? null,
+      design: input.design ? JSON.stringify(input.design) : null,
+      templateId: input.templateId ?? null,
       hasGallery: input.features.gallery,
       hasRsvp: input.features.rsvp,
       hasDuties: input.features.duties || input.roles.length > 0,
@@ -117,6 +146,12 @@ eventRoutes.patch('/:id', async (c) => {
   if (input.status !== undefined) patch.status = input.status;
   if (input.pinned !== undefined) patch.pinnedAt = input.pinned ? new Date().toISOString() : null;
   if (input.priceCents !== undefined) patch.priceCents = input.priceCents;
+  if (input.design !== undefined || input.templateId !== undefined) {
+    await assertDesign(db, event.groupId, input.design, input.templateId);
+    if (input.design !== undefined)
+      patch.design = input.design ? JSON.stringify(input.design) : null;
+    if (input.templateId !== undefined) patch.templateId = input.templateId;
+  }
   if (input.coverMediaId !== undefined) {
     if (input.coverMediaId) await assertGroupMedia(db, event.groupId, input.coverMediaId);
     patch.coverMediaId = input.coverMediaId;

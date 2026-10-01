@@ -1,3 +1,4 @@
+import { EventCover } from '../components/EventCard';
 import { useRef, useState } from 'react';
 import {
   displayName,
@@ -110,6 +111,13 @@ function EventBody({ e }: { e: EventDetail }) {
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 p-5 text-white">{header}</div>
         </div>
+      ) : e.design?.banner ? (
+        <>
+          <div className="-mx-1 overflow-hidden rounded-[var(--radius-card)] shadow-card">
+            <EventCover e={e} />
+          </div>
+          <HeroCard>{header}</HeroCard>
+        </>
       ) : (
         <HeroCard>{header}</HeroCard>
       )}

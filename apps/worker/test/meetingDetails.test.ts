@@ -3,6 +3,9 @@ import { env } from 'cloudflare:workers';
 import {
   addDays,
   localDate,
+  DEFAULT_PATTERN,
+  type ContactRow,
+  type EventSummary,
   type GroupDetail,
   type MeetingDetail,
   type MeetingRow,
@@ -178,5 +181,47 @@ describe('meeting details', () => {
     expect(after).toHaveLength(before.length);
     const again = after.find((m) => m.id === first.id)!;
     expect(localDate(again.startsAt, TZ)).toBe(moved);
+  });
+});
+
+describe('contacts and event covers', () => {
+  it('members see each other with positions; event covers carry a design', async () => {
+    const g = await createEnv('Контакты');
+    const m = fakeUser('Контакт');
+    await join(m, g);
+    const list = await apiJson<ContactRow[]>(`/api/groups/${g.id}/contacts`, { user: m });
+    expect(list.find((c) => c.firstName === 'Контакт')).toMatchObject({ offline: false });
+    expect(list.every((c) => 'positionName' in c)).toBe(true);
+    expect(
+      (await api(`/api/groups/${g.id}/contacts`, { user: fakeUser('Посторонний') })).status,
+    ).toBe(404);
+
+    const date = addDays(localDate(new Date(), TZ), 5);
+    const created = await apiJson<EventSummary>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'Пикник',
+        date,
+        startTime: '12:00',
+        design: {
+          banner: true,
+          brandColor: 'forest',
+          titleFont: 'pacifico',
+          custom: {
+            pattern: { ...DEFAULT_PATTERN, value: '🌳' },
+            backdrop: null,
+            textColor: 'light',
+          },
+        },
+      },
+    });
+    const list2 = await apiJson<EventSummary[]>(`/api/groups/${g.id}/events?scope=upcoming`, {
+      user: m,
+    });
+    const e = list2.find((x) => x.id === created.id)!;
+    expect(e.design).toMatchObject({ banner: true, titleFont: 'pacifico' });
+    expect(e.look).toMatchObject({ brandColor: 'forest', textColor: 'light' });
+    expect(e.look!.pattern!.value).toBe('🌳');
   });
 });

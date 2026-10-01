@@ -3,8 +3,6 @@ import { InlineKeyboard } from 'grammy';
 import {
   displayName,
   messages,
-  readBackdrop,
-  readPattern,
   readPostBlocks,
   readPostDesign,
   type AnnouncementResult,
@@ -14,7 +12,6 @@ import {
   type AnnouncementRow,
   type CommentRow,
   type CreateAnnouncementInput,
-  type PosterLook,
 } from '@church/shared';
 import type { Db } from '../db/client';
 import {
@@ -31,7 +28,7 @@ import {
 } from '../db/schema';
 import { audit } from './audit';
 import { churchDefaultLocale, localeOf } from './church';
-import { groupLogoUrl } from './groups';
+import { posterLook } from './looks';
 import { unreadByPost } from './feed';
 import { escapeHtml } from './html';
 import { filesById } from './files';
@@ -269,40 +266,7 @@ async function toRows(
     rows.map(async ({ a, groupName, groupBrand, author }) => {
       const tpl = a.templateId ? templateBy.get(a.templateId) : undefined;
       const design = readPostDesign(a.design);
-      const custom = !tpl ? design?.custom : null;
-      const backdrop = design?.noBackdrop
-        ? null
-        : custom
-          ? custom.backdrop
-          : readBackdrop(tpl ? tpl.backdrop : groupBrand.backdrop);
-      const backdropUrl = backdrop ? await signedMediaUrl(secret, backdrop.mediaId) : null;
-      const base: PosterLook = custom
-        ? {
-            brandColor: groupBrand.brandColor,
-            pattern: custom.pattern,
-            textColor: custom.textColor,
-            logoUrl: groupLogoUrl(groupBrand),
-            backdrop,
-            backdropUrl,
-          }
-        : tpl
-          ? {
-              brandColor: tpl.brandColor,
-              pattern: readPattern(tpl.pattern),
-              textColor: tpl.textColor,
-              logoUrl: tpl.logoMediaId ? await signedMediaUrl(secret, tpl.logoMediaId) : null,
-              backdrop,
-              backdropUrl,
-            }
-          : {
-              brandColor: groupBrand.brandColor,
-              pattern: readPattern(groupBrand.pattern),
-              textColor: groupBrand.textColor,
-              logoUrl: groupLogoUrl(groupBrand),
-              backdrop,
-              backdropUrl,
-            };
-      const look = design?.brandColor ? { ...base, brandColor: design.brandColor } : base;
+      const look = await posterLook(secret, groupBrand, design, tpl);
       const canEdit = author?.id === viewer.id || canModerate(a.groupId);
       const blocks: PostBlockView[] = await Promise.all(
         (blocksBy.get(a.id) ?? []).map(async (b): Promise<PostBlockView> => {

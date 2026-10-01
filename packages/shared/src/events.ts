@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import type { PosterLook } from './api';
+import { postDesignSchema, type PostDesign } from './posts';
 import type { PersonRef, TransactionRow } from './finance';
 
 /** Optional sections of an event, switched on when creating or later when editing. */
@@ -57,6 +59,9 @@ export const createEventSchema = z.object({
   endTime: time.nullish(),
   location: optionalText(120),
   coverMediaId: z.number().int().positive().nullish(),
+  /** Cover design when there is no cover photo (same choices as posts). */
+  design: postDesignSchema.nullish(),
+  templateId: z.number().int().positive().nullish(),
   features: featuresSchema.default({ gallery: false, rsvp: false, duties: false, cost: false }),
   priceCents: z.number().int().min(0).max(10_000_000).nullish(),
   chatUrl: chatUrlSchema,
@@ -73,6 +78,8 @@ export const updateEventSchema = z.object({
   endTime: time.nullish(),
   location: optionalText(120).optional(),
   coverMediaId: z.number().int().positive().nullable().optional(),
+  design: postDesignSchema.nullable().optional(),
+  templateId: z.number().int().positive().nullable().optional(),
   features: featuresSchema.partial().optional(),
   priceCents: z.number().int().min(0).max(10_000_000).nullable().optional(),
   chatUrl: chatUrlSchema.optional(),
@@ -126,6 +133,10 @@ export interface EventSummary {
   pinned: boolean;
   /** The ministry's colours, for cards shown outside it (pinned on the main page). */
   brandColor: string | null;
+  design: PostDesign | null;
+  templateId: number | null;
+  /** The cover's look when there is no cover photo. */
+  look: PosterLook | null;
   myRsvp: RsvpStatus | null;
   /** Duty names the requester is assigned to. */
   myRoles: string[];

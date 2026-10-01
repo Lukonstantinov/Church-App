@@ -1,14 +1,7 @@
 import type { GroupSummary, MeetingRow } from '@church/shared';
 import { AttendanceChart } from '../components/AttendanceChart';
 import { GroupSwitcher } from '../components/GroupSwitcher';
-import {
-  IconCalendar,
-  IconClock,
-  IconMegaphone,
-  IconPlus,
-  IconUserPlus,
-  IconUsers,
-} from '../components/icons';
+import { IconCalendar, IconClock, IconUsers } from '../components/icons';
 import {
   Badge,
   Button,
@@ -25,7 +18,7 @@ import { useT } from '../lib/i18n';
 import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
 import { useGroupStats, useMe } from '../lib/queries';
-import { FeedHighlights } from '../components/FeedEntry';
+import { HomeActionRow, HomeHighlights, useHomeActions } from '../components/HomeSections';
 import { MeetingHeroLines } from './MeetingScreen';
 
 const HOUR = 3_600_000;
@@ -44,6 +37,7 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
   const s = stats.data;
   // Requests only matter to people who can approve them.
   const pending = s && can('people.manage') ? s.pendingCount : 0;
+  const actions = useHomeActions(active, me.data?.church.brandColor ?? 'blue', can);
 
   return (
     <Screen tabs>
@@ -53,7 +47,8 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
         subtitle={t.common.members(active.activeCount)}
       />
 
-      <FeedHighlights g={active} fallbackTheme={me.data?.church.brandColor ?? 'blue'} />
+      <HomeActionRow actions={actions} />
+      <HomeHighlights g={active} />
 
       {!s ? (
         <>
@@ -127,32 +122,6 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
                 {t.overview.noMeetingsText}
               </EmptyState>
             </Card>
-          )}
-
-          {(can('announce') || can('meetings.manage') || can('people.manage')) && (
-            <div className="grid grid-cols-3 gap-3">
-              {can('announce') && (
-                <QuickAction
-                  icon={<IconMegaphone size={22} />}
-                  label={t.overview.quickAnnounce}
-                  onClick={() => push({ name: 'newPost', groupId: active.id })}
-                />
-              )}
-              {can('meetings.manage') && (
-                <QuickAction
-                  icon={<IconPlus size={22} />}
-                  label={t.overview.quickMeeting}
-                  onClick={() => push({ name: 'newMeeting', groupId: active.id })}
-                />
-              )}
-              {can('people.manage') && (
-                <QuickAction
-                  icon={<IconUserPlus size={22} />}
-                  label={t.overview.quickInvite}
-                  onClick={() => push({ name: 'addPerson', groupId: active.id })}
-                />
-              )}
-            </div>
           )}
 
           <div className="flex gap-3">

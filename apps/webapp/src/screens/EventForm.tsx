@@ -1,5 +1,14 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { parseAmount, type EventDetail, type EventFeatures } from '@church/shared';
+import { parseAmount, type EventDetail, type EventFeatures, type PostDesign } from '@church/shared';
+import {
+  CoverLookControls,
+  TitleStyleControls,
+  coverPayload,
+  initCover,
+  useCoverLook,
+  type CoverState,
+} from '../components/CoverDesigner';
+import { PosterMedia } from '../components/Poster';
 import { Sheet } from '../components/Sheet';
 import {
   IconCalendar,
@@ -107,6 +116,13 @@ function EventFormBody({ groupId, event }: { groupId: number; event?: EventDetai
     })) ?? [],
   );
   const [notify, setNotify] = useState(true);
+  // Without a cover photo the event shows a designed cover, like posts.
+  const [look, setLook] = useState<CoverState>(() =>
+    initCover(event?.design, event?.templateId, event?.look, true),
+  );
+  const coverLook = useCoverLook(look, group.data);
+  const setDesign = (patch: Partial<PostDesign>) =>
+    setLook((c) => ({ ...c, design: { ...c.design, ...patch } }));
   const [rolePicker, setRolePicker] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -153,6 +169,7 @@ function EventFormBody({ groupId, event }: { groupId: number; event?: EventDetai
       endDate: hasEnd ? endDate : null,
       endTime: hasEnd ? endTime : null,
       coverMediaId: cover?.id ?? null,
+      ...coverPayload(look, coverLook.templateId),
       features,
       priceCents: features.cost ? priceCents : null,
       chatUrl: chatUrl.trim() || null,
@@ -216,6 +233,26 @@ function EventFormBody({ groupId, event }: { groupId: number; event?: EventDetai
             </button>
           </div>
         </div>
+      ) : look.design.banner ? (
+        <div className="glass-strong sticky top-0 z-10 -mx-4 rounded-b-[26px] px-4 pb-3 pt-3">
+          <div className="relative overflow-hidden rounded-[var(--radius-card)] shadow-card">
+            <PosterMedia
+              title={title.trim() || t.events.name}
+              photos={[]}
+              tint={null}
+              look={coverLook.look}
+              design={look.design}
+            />
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              disabled={upload.isPending}
+              className="absolute right-2 top-2 flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[13px] font-semibold text-white backdrop-blur"
+            >
+              <IconCamera size={16} /> {upload.isPending ? t.treasury.uploading : t.events.addCover}
+            </button>
+          </div>
+        </div>
       ) : (
         <button
           type="button"
@@ -230,6 +267,22 @@ function EventFormBody({ groupId, event }: { groupId: number; event?: EventDetai
             {upload.isPending ? t.treasury.uploading : t.events.addCover}
           </span>
         </button>
+      )}
+
+      {!cover && (
+        <Section title={t.events.coverLook} footer={t.events.coverLookHint}>
+          <Toggle
+            label={t.feed.showCover}
+            checked={look.design.banner}
+            onChange={(v) => setDesign({ banner: v })}
+          />
+          {look.design.banner && (
+            <div className="flex flex-col gap-5 border-t border-hairline p-4">
+              <CoverLookControls state={look} onChange={setLook} g={group.data} groupId={groupId} />
+              <TitleStyleControls design={look.design} set={setDesign} />
+            </div>
+          )}
+        </Section>
       )}
 
       <Section>

@@ -186,6 +186,16 @@ export interface MemberRow {
   recentPercent: number | null;
 }
 
+/** Someone in the ministry, for the contacts list (tap to write in Telegram). */
+export interface ContactRow {
+  id: number;
+  firstName: string;
+  lastName: string | null;
+  username: string | null;
+  positionName: string | null;
+  offline: boolean;
+}
+
 export interface MemberDetail {
   user: {
     id: number;

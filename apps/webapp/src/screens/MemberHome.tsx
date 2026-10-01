@@ -1,5 +1,5 @@
-import { displayName, type MeResponse } from '@church/shared';
-import { FeedHighlights } from '../components/FeedEntry';
+import { displayName, type GroupSummary, type MeResponse } from '@church/shared';
+import { HomeActionRow, HomeHighlights, useHomeActions } from '../components/HomeSections';
 import { PosterCard } from '../components/Poster';
 import { useEnv } from '../lib/env';
 import { AttendanceSummary } from '../components/AttendanceSummary';
@@ -32,7 +32,12 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
   const t = useT();
   const f = useFmt();
   const { user } = me;
-  const { env } = useEnv();
+  const { env, can } = useEnv();
+  const actions = useHomeActions(
+    env ?? ({ id: 0, unreadPosts: 0, unreadComments: 0 } as GroupSummary),
+    me.church.brandColor,
+    can,
+  );
   // Inside one ministry: only its data.
   const memberships =
     groupId === undefined ? me.memberships : me.memberships.filter((m) => m.groupId === groupId);
@@ -70,7 +75,12 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
         </Section>
       )}
 
-      {env && active.length > 0 && <FeedHighlights g={env} fallbackTheme={me.church.brandColor} />}
+      {env && active.length > 0 && (
+        <>
+          <HomeActionRow actions={actions} />
+          <HomeHighlights g={env} />
+        </>
+      )}
 
       {active.length === 0 && pending.length === 0 && (
         <Card>

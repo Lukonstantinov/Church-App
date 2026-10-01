@@ -20,6 +20,7 @@ import {
   type GroupRole,
   type GroupSummary,
   type MemberRow,
+  type ContactRow,
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
@@ -531,6 +532,32 @@ groupRoutes.delete('/:id/chat', async (c) => {
   const group = await assertCan(db, c.get('user'), idParam(c), 'settings');
   await unlinkChat(botApi(c.env), db, group);
   return c.json({ ok: true });
+});
+
+/** Everyone active in the ministry with their position: members may see and write to each other. */
+groupRoutes.get('/:id/contacts', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const group = await assertCanViewGroup(db, user, idParam(c));
+  const rows = await db
+    .select({
+      id: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      username: users.username,
+      telegramId: users.telegramId,
+      positionName: positions.name,
+    })
+    .from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .leftJoin(positions, eq(positions.id, memberships.positionId))
+    .where(and(eq(memberships.groupId, group.id), eq(memberships.status, 'active')))
+    .orderBy(users.firstName);
+  const list: ContactRow[] = rows.map(({ telegramId, ...r }) => ({
+    ...r,
+    offline: telegramId === null,
+  }));
+  return c.json(list);
 });
 
 /** Opening the feed: everything in it counts as seen. */

@@ -21,6 +21,7 @@ import { ManagerShell } from './screens/ManagerShell';
 import { MemberHome } from './screens/MemberHome';
 import { MemberScreen } from './screens/MemberScreen';
 import { NewMeeting } from './screens/NewMeeting';
+import { Contacts } from './screens/Contacts';
 import { MeetingScreen } from './screens/MeetingScreen';
 import { NewTransaction } from './screens/NewTransaction';
 import { EventForm } from './screens/EventForm';
@@ -88,6 +89,8 @@ function Router({ me }: { me: MeResponse }) {
       return (
         <NewTransaction groupId={route.groupId} kind={route.kind} meetingId={route.meetingId} />
       );
+    case 'contacts':
+      return <Contacts key={route.groupId} groupId={route.groupId} />;
     case 'meeting':
       return <MeetingScreen key={route.meetingId} meetingId={route.meetingId} />;
     case 'event':

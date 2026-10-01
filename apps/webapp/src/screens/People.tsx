@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { displayName, type GroupSummary, type MemberRow } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { GroupSwitcher } from '../components/GroupSwitcher';
-import { IconSearch, IconUserPlus, IconUsers } from '../components/icons';
+import { IconSearch, IconTelegram, IconUserPlus, IconUsers } from '../components/icons';
 import { LinkShare } from '../components/LinkShare';
 import { PercentChip } from '../components/Status';
 import { useToast } from '../components/Toast';
@@ -21,12 +21,14 @@ import { useEnv } from '../lib/env';
 import { useNav } from '../lib/nav';
 import {
   useGroup,
+  useMemberDetail,
   useMembers,
   usePositions,
   useRotateInvite,
   useUpdateMembership,
 } from '../lib/queries';
-import { confirmDialog, haptic } from '../lib/telegram';
+import { confirmDialog, haptic, openTelegramLink } from '../lib/telegram';
+import { useFmt } from '../lib/format';
 
 export function People({ groups, active }: { groups: GroupSummary[]; active: GroupSummary }) {
   const { push } = useNav();
@@ -37,6 +39,7 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
   const update = useUpdateMembership();
   const rotate = useRotateInvite();
   const [query, setQuery] = useState('');
+  const [openId, setOpenId] = useState<number | null>(null);
 
   const { can } = useEnv();
   const positions = usePositions(active.id);
@@ -72,23 +75,33 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
   }
 
   const row = (m: MemberRow) => (
-    <button
-      key={m.membershipId}
-      type="button"
-      onClick={() => push({ name: 'member', userId: m.userId })}
-      className="flex min-h-[62px] w-full items-center gap-3 border-b border-hairline px-3 py-2 text-left last:border-b-0 active:bg-hairline"
-    >
-      <Avatar id={m.userId} firstName={m.firstName} lastName={m.lastName} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[17px] font-medium">{displayName(m)}</div>
-        <div className="flex items-center gap-1.5 text-[13px] text-hint">
-          {m.username ? `@${m.username}` : m.offline ? t.common.offline : null}
-          {!m.offline && !m.isReachable && <Badge tone="danger">{t.common.unreachable}</Badge>}
+    <div key={m.membershipId} className="border-b border-hairline last:border-b-0">
+      <button
+        type="button"
+        onClick={() => {
+          haptic.tap();
+          setOpenId((id) => (id === m.membershipId ? null : m.membershipId));
+        }}
+        aria-expanded={openId === m.membershipId}
+        className="flex min-h-[62px] w-full items-center gap-3 px-3 py-2 text-left active:bg-hairline"
+      >
+        <Avatar id={m.userId} firstName={m.firstName} lastName={m.lastName} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[17px] font-medium">{displayName(m)}</div>
+          <div className="flex items-center gap-1.5 text-[13px] text-hint">
+            {m.username ? `@${m.username}` : m.offline ? t.common.offline : null}
+            {!m.offline && !m.isReachable && <Badge tone="danger">{t.common.unreachable}</Badge>}
+          </div>
         </div>
-      </div>
-      <PercentChip percent={m.recentPercent} />
-      <Chevron />
-    </button>
+        <PercentChip percent={m.recentPercent} />
+        <span className={`transition-transform ${openId === m.membershipId ? 'rotate-90' : ''}`}>
+          <Chevron />
+        </span>
+      </button>
+      {openId === m.membershipId && (
+        <PersonDetails m={m} onProfile={() => push({ name: 'member', userId: m.userId })} />
+      )}
+    </div>
   );
 
   return (
@@ -194,5 +207,72 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
         </Section>
       )}
     </Screen>
+  );
+}
+
+/** A member's row opened in place: attendance, where they serve, contact and profile. */
+function PersonDetails({ m, onProfile }: { m: MemberRow; onProfile: () => void }) {
+  const t = useT();
+  const f = useFmt();
+  const detail = useMemberDetail(m.userId);
+  const d = detail.data;
+  const serving = (d?.memberships ?? []).filter((x) => x.status === 'active');
+  return (
+    <div className="flex flex-col gap-3 bg-hairline/40 px-4 pb-4 pt-2">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-[var(--color-section)] p-2.5">
+          <div className="text-[12px] text-hint">{t.people.attendanceRate}</div>
+          <div className="text-[20px] font-bold tabular-nums">
+            {m.recentPercent === null ? '—' : `${m.recentPercent}%`}
+          </div>
+        </div>
+        <div className="rounded-xl bg-[var(--color-section)] p-2.5">
+          <div className="text-[12px] text-hint">{t.people.joined}</div>
+          <div className="text-[15px] font-semibold">
+            {m.joinedAt ? f.dayMonth(m.joinedAt) : '—'}
+          </div>
+        </div>
+      </div>
+      {detail.isPending ? (
+        <Skeleton className="h-10 w-full" />
+      ) : (
+        serving.length > 0 && (
+          <div>
+            <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-hint">
+              {t.people.serves}
+            </div>
+            <div className="flex flex-col gap-1">
+              {serving.map((x) => {
+                const att = d?.attendance.find((a) => a.groupId === x.groupId);
+                return (
+                  <div
+                    key={x.groupId}
+                    className="flex items-center justify-between gap-2 rounded-xl bg-[var(--color-section)] px-3 py-2 text-[14px]"
+                  >
+                    <span className="min-w-0 truncate font-medium">{x.groupName}</span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {x.positionName && <Badge>{x.positionName}</Badge>}
+                      {att && att.percent !== null && (
+                        <span className="text-[13px] tabular-nums text-hint">{att.percent}%</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )
+      )}
+      <div className="flex gap-2">
+        {m.username && (
+          <Button small onClick={() => openTelegramLink(`https://t.me/${m.username}`)}>
+            <IconTelegram size={16} /> {t.people.write}
+          </Button>
+        )}
+        <Button small variant="glass" onClick={onProfile}>
+          {t.people.profile}
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -63,6 +63,7 @@ export function PosterMedia({
   design,
   onPhoto,
   tall,
+  compact,
 }: {
   title: string | null;
   photos: { id: number; url: string }[];
@@ -71,6 +72,8 @@ export function PosterMedia({
   design?: PostDesign | null;
   onPhoto?: (index: number) => void;
   tall?: boolean;
+  /** Small tiles: smaller headline and padding. */
+  compact?: boolean;
 }) {
   const me = useMe();
   if (!hasCover({ photos, title, design: design ?? null })) return null;
@@ -165,7 +168,7 @@ export function PosterMedia({
       )}
       {title && (
         <div
-          className={`pointer-events-none absolute inset-x-0 p-4 ${TITLE_POS[design?.titlePos ?? 'bottom']} ${
+          className={`pointer-events-none absolute inset-x-0 ${compact ? 'p-2.5' : 'p-4'} ${TITLE_POS[design?.titlePos ?? 'bottom']} ${
             design?.align === 'center' ? 'text-center' : ''
           } ${on.className}`}
           style={
@@ -175,7 +178,7 @@ export function PosterMedia({
           }
         >
           <div
-            className={`${TITLE_SIZE[design?.titleSize ?? 'm']} font-extrabold leading-tight tracking-tight`}
+            className={`${compact ? 'line-clamp-3 text-[15px]' : TITLE_SIZE[design?.titleSize ?? 'm']} font-extrabold leading-tight tracking-tight`}
             style={{ fontFamily: fontFamily(design?.titleFont) }}
           >
             {title}

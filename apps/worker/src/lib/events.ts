@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'dr
 import { HTTPException } from 'hono/http-exception';
 import {
   zonedToUtc,
+  readPostDesign,
   type EventDetail,
   type EventFinance,
   type EventRole,
@@ -25,6 +26,7 @@ import {
   type User,
 } from '../db/schema';
 import { accessIn, can } from './access';
+import { posterLook, lookSources } from './looks';
 import { signedMediaUrl } from './media';
 import { toTransactionRows } from './treasury';
 
@@ -178,25 +180,38 @@ async function summarize(
   ]);
   const goingBy = new Map(going.map((g) => [g.eventId, Number(g.n)]));
   const mineBy = new Map(mine.map((m) => [m.eventId, m.status]));
+  const { brandOf, templateOf } = await lookSources(
+    db,
+    rows.map((r) => r.groupId),
+    rows.map((r) => r.templateId),
+  );
   return Promise.all(
-    rows.map(async (e) => ({
-      id: e.id,
-      groupId: e.groupId,
-      groupName: e.groupName,
-      title: e.title,
-      startsAt: e.startsAt,
-      endsAt: e.endsAt,
-      location: e.location,
-      coverUrl: e.coverMediaId ? await signedMediaUrl(secret, e.coverMediaId) : null,
-      features: features(e),
-      priceCents: e.priceCents,
-      status: e.status,
-      goingCount: goingBy.get(e.id) ?? 0,
-      pinned: e.pinnedAt !== null,
-      brandColor: e.groupBrand ?? null,
-      myRsvp: mineBy.get(e.id) ?? null,
-      myRoles: myRoles.filter((r) => r.eventId === e.id).map((r) => r.name),
-    })),
+    rows.map(async (e) => {
+      const design = readPostDesign(e.design);
+      const brand = brandOf.get(e.groupId);
+      const tpl = e.templateId ? templateOf.get(e.templateId) : undefined;
+      return {
+        id: e.id,
+        groupId: e.groupId,
+        groupName: e.groupName,
+        title: e.title,
+        startsAt: e.startsAt,
+        endsAt: e.endsAt,
+        location: e.location,
+        coverUrl: e.coverMediaId ? await signedMediaUrl(secret, e.coverMediaId) : null,
+        features: features(e),
+        priceCents: e.priceCents,
+        status: e.status,
+        goingCount: goingBy.get(e.id) ?? 0,
+        pinned: e.pinnedAt !== null,
+        brandColor: e.groupBrand ?? null,
+        myRsvp: mineBy.get(e.id) ?? null,
+        myRoles: myRoles.filter((r) => r.eventId === e.id).map((r) => r.name),
+        design,
+        templateId: e.templateId,
+        look: brand ? await posterLook(secret, brand, design, tpl) : null,
+      };
+    }),
   );
 }
 

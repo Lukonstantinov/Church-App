@@ -2,14 +2,10 @@ import { useRef, useState } from 'react';
 import {
   POST_KINDS,
   POST_KIND_KEYS,
-  TEXT_ALIGNS,
-  TITLE_POSITIONS,
-  TITLE_SIZES,
   fontFamily,
   type AnnouncementRow,
   type PostDesign,
   type PostKind,
-  type PosterLook,
 } from '@church/shared';
 import {
   BLOCK_ICONS,
@@ -21,11 +17,18 @@ import {
   useBlockUploads,
   type DraftBlock,
 } from '../components/BlockEditor';
+import {
+  CoverLookControls,
+  TitleStyleControls,
+  coverPayload,
+  initCover,
+  useCoverLook,
+  type CoverState,
+} from '../components/CoverDesigner';
 import { FontPicker } from '../components/FontPicker';
 import { IconImage, IconSend, IconX } from '../components/icons';
-import { Group, LookControls, Pill, type LookValue } from '../components/LookControls';
+import { Pill } from '../components/LookControls';
 import { PosterMedia } from '../components/Poster';
-import { ThemePicker } from '../components/ThemePicker';
 import { useToast } from '../components/Toast';
 import {
   Button,
@@ -45,7 +48,6 @@ import {
   useFeed,
   useGroup,
   useSendAnnouncement,
-  useTemplates,
   useUploadMedia,
 } from '../lib/queries';
 import { haptic } from '../lib/telegram';
@@ -69,9 +71,6 @@ export function PostEditor({ groupId, postId }: { groupId: number; postId?: numb
   return post ? <PostForm groupId={groupId} post={post} /> : <Loading />;
 }
 
-/** Where the cover's look comes from. */
-type Source = { kind: 'ministry' } | { kind: 'own' } | { kind: 'template'; id: number };
-
 /**
  * Type, cover (ministry look with its own colour, an own look with the full designer,
  * or a template), headline fonts and placement, text, photos, and content blocks.
@@ -81,12 +80,10 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
   const toast = useToast();
   const { replace } = useNav();
   const group = useGroup(groupId);
-  const templates = useTemplates();
   const upload = useUploadMedia(groupId, 'event');
   const publish = useSendAnnouncement(groupId);
   const save = useEditPost(groupId);
   const fileInput = useRef<HTMLInputElement>(null);
-  const d = post?.design;
   const [title, setTitle] = useState(post?.title ?? '');
   const [text, setText] = useState(post?.text ?? '');
   const [photos, setPhotos] = useState<{ id: number; url: string }[]>(post?.photos ?? []);
@@ -94,73 +91,21 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
     post ? (post.tint?.color ?? null) : '#000000',
   );
   const [tintStrength, setTintStrength] = useState(post?.tint?.strength ?? 0.35);
-  const [source, setSource] = useState<Source>(
-    post?.templateId
-      ? { kind: 'template', id: post.templateId }
-      : d?.custom
-        ? { kind: 'own' }
-        : { kind: 'ministry' },
+  const [cover, setCover] = useState<CoverState>(() =>
+    initCover(post?.design, post?.templateId, post?.look, true),
   );
-  const [design, setDesign] = useState<PostDesign>({
-    banner: d?.banner ?? true,
-    kind: d?.kind ?? null,
-    brandColor: d?.brandColor ?? null,
-    noBackdrop: d?.noBackdrop ?? false,
-    titleFont: d?.titleFont ?? null,
-    bodyFont: d?.bodyFont ?? null,
-    titleSize: d?.titleSize ?? 'm',
-    titlePos: d?.titlePos ?? 'bottom',
-    align: d?.align ?? 'left',
-  });
-  const [own, setOwn] = useState<LookValue>({
-    pattern: d?.custom?.pattern ?? null,
-    textColor: d?.custom?.textColor ?? 'auto',
-    backdrop: d?.custom?.backdrop ?? null,
-    backdropUrl: d?.custom ? (post?.look?.backdropUrl ?? null) : null,
-  });
+  const design = cover.design;
   const [blocks, setBlocks] = useState<DraftBlock[]>(post?.blocks.map(toDraft) ?? []);
   const [notify, setNotify] = useState(true);
   const [uploading, setUploading] = useState<[number, number] | null>(null);
   const addBlock = (b: DraftBlock) => setBlocks((list) => [...list, b]);
   const uploads = useBlockUploads(groupId, addBlock);
   const pending = publish.isPending || save.isPending;
-  const set = (patch: Partial<PostDesign>) => setDesign((x) => ({ ...x, ...patch }));
+  const set = (patch: Partial<PostDesign>) =>
+    setCover((c) => ({ ...c, design: { ...c.design, ...patch } }));
 
   const g = group.data;
-  const tpl = source.kind === 'template' ? templates.data?.find((x) => x.id === source.id) : null;
-  const base: PosterLook | null = tpl
-    ? {
-        brandColor: tpl.brandColor,
-        pattern: tpl.pattern,
-        textColor: tpl.textColor,
-        logoUrl: tpl.logoUrl,
-        backdrop: tpl.backdrop,
-        backdropUrl: tpl.backdropUrl,
-      }
-    : g
-      ? source.kind === 'own'
-        ? {
-            brandColor: g.brandColor,
-            pattern: own.pattern,
-            textColor: own.textColor,
-            logoUrl: g.logoUrl,
-            backdrop: own.backdrop,
-            backdropUrl: own.backdropUrl,
-          }
-        : {
-            brandColor: g.brandColor,
-            pattern: g.pattern,
-            textColor: g.textColor,
-            logoUrl: g.logoUrl,
-            backdrop: g.backdrop,
-            backdropUrl: g.backdropUrl,
-          }
-      : null;
-  const look: PosterLook | null = base && {
-    ...base,
-    brandColor: design.brandColor ?? base.brandColor,
-    ...(design.noBackdrop ? { backdrop: null, backdropUrl: null } : {}),
-  };
+  const { look, templateId } = useCoverLook(cover, g);
   const coverShown = photos.length > 0 || design.banner;
 
   function pickKind(kind: PostKind | null) {
@@ -198,14 +143,7 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
       mediaIds: photos.map((p) => p.id),
       tintColor: photos.length && tintColor ? tintColor : null,
       tintStrength: photos.length && tintColor ? tintStrength : null,
-      templateId: tpl?.id ?? null,
-      design: {
-        ...design,
-        custom:
-          source.kind === 'own'
-            ? { pattern: own.pattern, backdrop: own.backdrop, textColor: own.textColor }
-            : null,
-      },
+      ...coverPayload(cover, templateId),
       blocks: blockInput,
     };
     try {
@@ -268,50 +206,8 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
           onChange={(v) => set({ banner: v })}
         />
         {coverShown && (
-          <div className="flex flex-col gap-5 border-t border-hairline p-4">
-            <Group title={t.env.look}>
-              <div className="flex flex-wrap gap-2">
-                <Pill
-                  on={source.kind === 'ministry'}
-                  onClick={() => setSource({ kind: 'ministry' })}
-                  label={t.feed.ministryLook}
-                />
-                <Pill
-                  on={source.kind === 'own'}
-                  onClick={() => setSource({ kind: 'own' })}
-                  label={t.feed.ownLook}
-                />
-                {(templates.data ?? []).map((x) => (
-                  <Pill
-                    key={x.id}
-                    on={source.kind === 'template' && source.id === x.id}
-                    onClick={() => setSource({ kind: 'template', id: x.id })}
-                    label={x.name}
-                  />
-                ))}
-              </div>
-            </Group>
-            <Group title={t.feed.postColor}>
-              <ThemePicker
-                value={design.brandColor ?? null}
-                onChange={(v) => set({ brandColor: v as PostDesign['brandColor'] })}
-                inherit={
-                  g
-                    ? { label: g.name, theme: base?.brandColor ?? g.brandColor ?? 'blue' }
-                    : undefined
-                }
-              />
-            </Group>
-            {source.kind !== 'own' && base?.backdrop && (
-              <Toggle
-                label={t.feed.ministryPhoto}
-                checked={!design.noBackdrop}
-                onChange={(v) => set({ noBackdrop: !v })}
-              />
-            )}
-            {source.kind === 'own' && g && (
-              <LookControls value={own} onChange={setOwn} groupId={groupId} logoUrl={g.logoUrl} />
-            )}
+          <div className="border-t border-hairline p-4">
+            <CoverLookControls state={cover} onChange={setCover} g={g} groupId={groupId} />
           </div>
         )}
       </Section>
@@ -319,48 +215,8 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
       <Section title={t.feed.headline}>
         <TextField label={t.feed.headline} value={title} onChange={setTitle} maxLength={120} />
         {title.trim() && (
-          <div className="flex flex-col gap-4 border-t border-hairline p-4">
-            <FontPicker
-              label={t.feed.titleFont}
-              value={design.titleFont}
-              onChange={(v) => set({ titleFont: v })}
-            />
-            <Group title={t.feed.size}>
-              <div className="flex flex-wrap gap-2">
-                {TITLE_SIZES.map((s) => (
-                  <Pill
-                    key={s}
-                    on={design.titleSize === s}
-                    onClick={() => set({ titleSize: s })}
-                    label={s.toUpperCase()}
-                  />
-                ))}
-              </div>
-            </Group>
-            <Group title={t.feed.position}>
-              <div className="flex flex-wrap gap-2">
-                {TITLE_POSITIONS.map((p) => (
-                  <Pill
-                    key={p}
-                    on={design.titlePos === p}
-                    onClick={() => set({ titlePos: p })}
-                    label={t.feed.positions[p]}
-                  />
-                ))}
-              </div>
-            </Group>
-            <Group title={t.feed.align}>
-              <div className="flex flex-wrap gap-2">
-                {TEXT_ALIGNS.map((a) => (
-                  <Pill
-                    key={a}
-                    on={design.align === a}
-                    onClick={() => set({ align: a })}
-                    label={t.feed.aligns[a]}
-                  />
-                ))}
-              </div>
-            </Group>
+          <div className="border-t border-hairline p-4">
+            <TitleStyleControls design={design} set={set} />
           </div>
         )}
       </Section>

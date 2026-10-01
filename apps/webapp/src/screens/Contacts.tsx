@@ -1,0 +1,70 @@
+import { useState } from 'react';
+import { displayName } from '@church/shared';
+import { Avatar } from '../components/Avatar';
+import { IconSearch, IconTelegram } from '../components/icons';
+import { useToast } from '../components/Toast';
+import { Badge, Screen, Skeleton, Title } from '../components/ui';
+import { useT } from '../lib/i18n';
+import { useContacts, useGroup } from '../lib/queries';
+import { haptic, openTelegramLink } from '../lib/telegram';
+
+/** Everyone in the ministry with their position; tapping someone opens a Telegram chat. */
+export function Contacts({ groupId }: { groupId: number }) {
+  const t = useT();
+  const toast = useToast();
+  const group = useGroup(groupId);
+  const contacts = useContacts(groupId);
+  const [q, setQ] = useState('');
+  const needle = q.trim().toLocaleLowerCase();
+  const list = (contacts.data ?? []).filter(
+    (c) =>
+      !needle ||
+      `${displayName(c)} ${c.username ?? ''} ${c.positionName ?? ''}`
+        .toLocaleLowerCase()
+        .includes(needle),
+  );
+
+  return (
+    <Screen>
+      <Title subtitle={group.data?.name}>{t.people.contactsTitle}</Title>
+      <label className="glass flex items-center gap-2 rounded-2xl px-3.5 py-2.5 shadow-card">
+        <IconSearch size={18} className="shrink-0 text-hint" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={t.people.search}
+          className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-hint"
+        />
+      </label>
+      <p className="-mt-2 px-2 text-[13px] text-hint">{t.people.contactsHint}</p>
+      {contacts.isPending ? (
+        <Skeleton className="h-64 w-full" />
+      ) : (
+        <div className="glass overflow-hidden rounded-[var(--radius-card)] shadow-card">
+          {list.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                haptic.tap();
+                if (c.username) openTelegramLink(`https://t.me/${c.username}`);
+                else toast(c.offline ? t.people.offline : t.people.noUsername, 'error');
+              }}
+              className="flex min-h-[60px] w-full items-center gap-3 border-b border-hairline px-4 py-2 text-left last:border-b-0 active:bg-hairline"
+            >
+              <Avatar id={c.id} firstName={c.firstName} lastName={c.lastName} size={40} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[16px] font-medium">{displayName(c)}</span>
+                <span className="block truncate text-[13px] text-hint">
+                  {c.username ? `@${c.username}` : c.offline ? t.people.offline : '—'}
+                </span>
+              </span>
+              {c.positionName && <Badge>{c.positionName}</Badge>}
+              {c.username && <IconTelegram size={20} className="shrink-0 text-link" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </Screen>
+  );
+}

@@ -35,6 +35,7 @@ export type Route =
       meetingId?: number;
     }
   | { name: 'meeting'; meetingId: number }
+  | { name: 'contacts'; groupId: number }
   | { name: 'event'; eventId: number }
   | { name: 'eventForm'; groupId: number; eventId?: number }
   | { name: 'groupSettings'; groupId: number }

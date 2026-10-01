@@ -1,8 +1,6 @@
 import { resolveBrand, type GroupSummary } from '@church/shared';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useFeed } from '../lib/queries';
-import { PosterCard } from './Poster';
 import { IconMegaphone } from './icons';
 import { Card, Chevron } from './ui';
 
@@ -53,34 +51,5 @@ export function FeedEntry({ g, fallbackTheme }: { g: GroupSummary; fallbackTheme
       <UnreadBadges g={g} fallbackTheme={fallbackTheme} />
       <Chevron />
     </Card>
-  );
-}
-
-/** What opens a ministry: pinned posts, then the newest post, then the feed row. */
-export function FeedHighlights({ g, fallbackTheme }: { g: GroupSummary; fallbackTheme: string }) {
-  const t = useT();
-  const { push } = useNav();
-  const feed = useFeed(g.id);
-  const first = feed.data?.pages[0] ?? [];
-  const pinned = first.filter((p) => p.pinned);
-  const latest = first.find((p) => !p.pinned);
-  const open = (postId: number) => push({ name: 'post', groupId: g.id, postId });
-  return (
-    <div className="flex flex-col gap-3">
-      {pinned.map((p) => (
-        <PosterCard key={p.id} post={p} onOpen={() => open(p.id)} />
-      ))}
-      {latest && (
-        <>
-          {pinned.length > 0 && (
-            <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-              {t.feed.latest}
-            </h2>
-          )}
-          <PosterCard post={latest} onOpen={() => open(latest.id)} />
-        </>
-      )}
-      <FeedEntry g={g} fallbackTheme={fallbackTheme} />
-    </div>
   );
 }
