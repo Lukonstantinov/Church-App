@@ -2,7 +2,14 @@ import { useState, type ReactNode } from 'react';
 import { displayName, LOCALE_NAMES, type GroupSummary } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { BrandHeader, LanguageSheet } from '../components/BrandHeader';
-import { IconChart, IconGlobe, IconHome, IconSettings, IconUsers } from '../components/icons';
+import {
+  IconBell,
+  IconChart,
+  IconGlobe,
+  IconHome,
+  IconSettings,
+  IconUsers,
+} from '../components/icons';
 import { Badge, Row, Screen, Section } from '../components/ui';
 import { useEnv } from '../lib/env';
 import { useI18n } from '../lib/i18n';
@@ -53,7 +60,7 @@ export function More({ groups }: { groups: GroupSummary[] }) {
         />
       </Section>
 
-      {env && (can('settings') || can('positions') || can('reports')) && (
+      {env && (can('settings') || can('positions') || can('reports') || can('events.manage')) && (
         <Section title={env.name}>
           {can('settings') && (
             <Row
@@ -61,6 +68,14 @@ export function More({ groups }: { groups: GroupSummary[] }) {
               title={t.env.settings}
               subtitle={`${t.env.theme} · ${t.env.logo} · ${t.groups.chatTitle}`}
               onClick={() => push({ name: 'groupSettings', groupId: env.id })}
+            />
+          )}
+          {can('events.manage') && (
+            <Row
+              before={iconTile(<IconBell size={19} />)}
+              title={t.events.remindTitle}
+              subtitle={t.events.remindEntry}
+              onClick={() => push({ name: 'reminders', groupId: env.id })}
             />
           )}
           {can('positions') && (

@@ -10,6 +10,7 @@ import { useT } from '../lib/i18n';
 import {
   fetchNotifyText,
   useDeleteMessageTemplate,
+  useMe,
   useMessageTemplates,
   useNotifyMeeting,
   useSaveMessageTemplate,
@@ -45,6 +46,7 @@ export function NotifySheet({
   const t = useT();
   const toast = useToast();
   const notify = useNotifyMeeting();
+  const me = useMe();
   const upload = useUploadMedia(meeting.groupId, 'event');
   const poster = useRef<HTMLDivElement>(null);
   const [notes, setNotes] = useState(meeting.notes ?? '');
@@ -206,6 +208,11 @@ export function NotifySheet({
             className={field}
           />
         </div>
+        {me.data && (
+          <p className="-mt-1 text-[12px] text-hint">
+            {t.meetings.signatureHint} <i>{t.bot.sentBy(displayName(me.data.user))}</i>
+          </p>
+        )}
         {naming === null ? (
           <button
             type="button"

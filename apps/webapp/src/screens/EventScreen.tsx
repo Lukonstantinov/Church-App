@@ -1,3 +1,4 @@
+import { CountdownBadge, CountdownOnCover, hasCountdown } from '../components/Countdown';
 import { EventCover } from '../components/EventCard';
 import { useRef, useState } from 'react';
 import {
@@ -110,16 +111,25 @@ function EventBody({ e }: { e: EventDetail }) {
           <img src={e.coverUrl} alt="" className="aspect-[4/3] w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 p-5 text-white">{header}</div>
+          <CountdownOnCover e={e} />
         </div>
       ) : e.design?.banner ? (
         <>
-          <div className="-mx-1 overflow-hidden rounded-[var(--radius-card)] shadow-card">
+          <div className="relative -mx-1 overflow-hidden rounded-[var(--radius-card)] shadow-card">
             <EventCover e={e} />
+            <CountdownOnCover e={e} />
           </div>
           <HeroCard>{header}</HeroCard>
         </>
       ) : (
-        <HeroCard>{header}</HeroCard>
+        <HeroCard>
+          {hasCountdown(e) && (
+            <div className="mb-3">
+              <CountdownBadge startsAt={e.startsAt} design={e.design} />
+            </div>
+          )}
+          {header}
+        </HeroCard>
       )}
 
       {(e.canManage || e.chatUrl) && (

@@ -118,6 +118,8 @@ export async function notifyMeetingRole(
     role: Role;
     text: string;
     posterUrl?: string | null;
+    /** Who composed and sent it; shown to the recipient under the message. */
+    senderName?: string | null;
     envAppUrl?: string;
     fallbackUrl: string | null;
   },
@@ -128,7 +130,10 @@ export async function notifyMeetingRole(
   const t = messages(locale);
   // The first line is the headline.
   const [first, ...rest] = escapeHtml(args.text).split('\n');
-  const html = [`<b>${first}</b>`, ...rest].join('\n');
+  const signature = args.senderName
+    ? `\n\n<i>${escapeHtml(t.bot.sentBy(args.senderName))}</i>`
+    : '';
+  const html = `${[`<b>${first}</b>`, ...rest].join('\n')}${signature}`;
   const appUrl = ((await getAppUrl(db, args.envAppUrl)) ?? args.fallbackUrl)?.replace(/\/+$/, '');
   const code = `${args.meeting.id}:${args.role === 'leader' ? 'l' : 's'}`;
   const keyboard = new InlineKeyboard()

@@ -128,6 +128,11 @@ export const ru = {
     cameOf: (a: number, b: number) => `пришли ${a} из ${b}`,
   },
   meetings: {
+    dayShort: 'д',
+    countdownSize: 'Размер счётчика',
+    countdownColor: 'Цвет счётчика',
+    countdownAuto: 'Огонь',
+    signatureHint: 'В конце сообщения добавится подпись:',
     taskTitle: 'Моя задача',
     taskPlace: 'Место встречи',
     taskTopic: 'Тема встречи',
@@ -547,6 +552,19 @@ export const ru = {
     exemptNote: 'Вы освобождены от взносов',
   },
   events: {
+    remindTitle: 'Напоминания о событиях',
+    remindEntry: 'Отправить напоминание всем или выбранным',
+    remindPick: 'Выберите событие',
+    remindNone: 'Нет предстоящих событий',
+    remindText: 'Текст напоминания',
+    remindSend: 'Отправить напоминание',
+    remindEveryone: 'Всем в служении',
+    remindSent: (n: number) => `Отправлено: ${n}`,
+    remindNobody: 'Некому отправить: никто не запускал бота',
+    remindAutoTitle: 'Автонапоминание о событиях',
+    remindAutoHint: 'Бот сам напомнит всем в служении о предстоящем событии.',
+    remindAutoOff: 'Не напоминать автоматически',
+    remindAutoHours: (h: number) => (h % 24 === 0 ? `за ${h / 24} дн.` : `за ${h} ч`),
     coverLook: 'Обложка без фото',
     coverLookHint: 'Если нет фото обложки, показываются цвета, узор и заголовок — как у постов.',
     tabMeetings: 'Встречи',
@@ -1043,6 +1061,10 @@ export const ru = {
       `🎤 <b>Вы ведёте встречу</b>\n«${titleHtml}» · ${groupHtml}\n${date}\n\nОткройте встречу и выберите место, тему и кто купит снеки (бюджет ${budget}). Потом сообщите лидеру.`,
     meetingSnack: (titleHtml: string, groupHtml: string, date: string, budget: string) =>
       `🍕 <b>Вы отвечаете за снеки</b>\n«${titleHtml}» · ${groupHtml}\n${date}\n\nМожно потратить до <b>${budget}</b>. Сохраните чек — расход внесут в кассу этой встречи.`,
+    sentBy: (name: string) => `Отправил(а): ${name}`,
+    eventReminder: (titleHtml: string, when: string, placeHtml: string | null) =>
+      `⏰ <b>Напоминание</b>\n«${titleHtml}»\n${when}${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
+    eventButton: 'Открыть событие',
     meetingButton: 'Открыть встречу',
     postHasExtras: '📎 В посте есть вложения, опрос или таблица — откройте приложение',
     chatLinked: (ministry: string) =>

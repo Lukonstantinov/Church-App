@@ -6,6 +6,8 @@ import {
   type MeResponse,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
+import { CountdownBadge, hasCountdown } from '../components/Countdown';
+import { LookTop } from '../components/LookTop';
 import { TasksPill } from '../components/Assignments';
 import { BrandHeader } from '../components/BrandHeader';
 import { BackdropLayer, PatternLayer, onBrandStyle } from '../components/PatternLayer';
@@ -216,25 +218,41 @@ function PinnedEventCard({
   onClick: () => void;
 }) {
   const when = useEventWhen();
-  const theme = resolveBrand(e.brandColor ?? fallbackTheme);
+  const groups = useGroups();
+  // The event's own look, else its ministry's (colour, pattern, photo).
+  const look = e.look ?? groups.data?.find((g) => g.id === e.groupId) ?? null;
   return (
     <button
       type="button"
       onClick={onClick}
-      className="relative flex h-[150px] w-[78%] max-w-[320px] shrink-0 snap-start flex-col justify-end overflow-hidden rounded-[24px] p-4 text-left text-white shadow-cta transition active:scale-[0.98]"
-      style={{ background: `linear-gradient(145deg, ${theme.light}, ${theme.partner})` }}
+      className="block h-[150px] w-[78%] max-w-[320px] shrink-0 snap-start overflow-hidden rounded-[24px] text-left shadow-cta transition active:scale-[0.98]"
     >
-      {e.coverUrl && (
-        <>
-          <img src={e.coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-          <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
-        </>
-      )}
-      <span className="relative text-[12px] font-bold uppercase tracking-wider text-white/80">
-        {e.groupName}
-      </span>
-      <span className="relative line-clamp-2 text-[19px] font-bold leading-tight">{e.title}</span>
-      <span className="relative text-[13px] text-white/85">{when(e)}</span>
+      <LookTop look={look} fallbackColor={e.brandColor ?? fallbackTheme} className="h-full p-4">
+        {e.coverUrl && (
+          <>
+            <img
+              src={e.coverUrl}
+              alt=""
+              className="absolute inset-0 -z-0 h-full w-full object-cover"
+            />
+            <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+          </>
+        )}
+        {hasCountdown(e) ? (
+          <span className="self-start">
+            <CountdownBadge startsAt={e.startsAt} design={e.design} />
+          </span>
+        ) : (
+          <span />
+        )}
+        <span className="relative flex flex-col">
+          <span className="text-[12px] font-bold uppercase tracking-wider opacity-80">
+            {e.groupName}
+          </span>
+          <span className="line-clamp-2 text-[19px] font-bold leading-tight">{e.title}</span>
+          <span className="text-[13px] opacity-85">{when(e)}</span>
+        </span>
+      </LookTop>
     </button>
   );
 }

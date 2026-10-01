@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { GroupDetail } from '@church/shared';
 import { IconImage, IconTelegram, IconTrash } from '../components/icons';
 import { PatternDesigner } from '../components/PatternDesigner';
+import { Pill } from '../components/LookControls';
 import { ThemePicker } from '../components/ThemePicker';
 import { useToast } from '../components/Toast';
 import {
@@ -177,6 +178,23 @@ function Form({ g }: { g: GroupDetail }) {
       </Section>
       <Section title={t.meetings.defaultPlace} footer={t.meetings.defaultPlaceHint}>
         <TextField label={t.meetings.taskPlace} value={place} onChange={setPlace} maxLength={120} />
+      </Section>
+      <Section title={t.events.remindAutoTitle} footer={t.events.remindAutoHint}>
+        <div className="flex flex-wrap gap-2 p-3">
+          <Pill
+            on={g.eventReminderHours === null}
+            onClick={() => void patchNow({ eventReminderHours: null })}
+            label={t.events.remindAutoOff}
+          />
+          {[3, 24, 48, 72].map((h) => (
+            <Pill
+              key={h}
+              on={g.eventReminderHours === h}
+              onClick={() => void patchNow({ eventReminderHours: h })}
+              label={t.events.remindAutoHours(h)}
+            />
+          ))}
+        </div>
       </Section>
       <Section title={t.events.description}>
         <TextArea value={description} onChange={setDescription} maxLength={300} rows={3} />

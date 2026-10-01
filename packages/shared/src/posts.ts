@@ -110,6 +110,12 @@ export const postDesignSchema = z.object({
   titleSize: z.enum(TITLE_SIZES).optional(),
   titlePos: z.enum(TITLE_POSITIONS).optional(),
   align: z.enum(TEXT_ALIGNS).optional(),
+  /** Events: size and colour of the countdown badge (colour null = flame gradient). */
+  countdownSize: z.enum(['s', 'm', 'l']).optional(),
+  countdownColor: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/i)
+    .nullish(),
 });
 export type PostDesign = z.infer<typeof postDesignSchema>;
 export type PostDesignInput = z.input<typeof postDesignSchema>;

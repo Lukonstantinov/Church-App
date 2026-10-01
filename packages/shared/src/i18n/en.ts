@@ -123,6 +123,11 @@ export const en: Messages = {
     cameOf: (a: number, b: number) => `${a} of ${b} came`,
   },
   meetings: {
+    dayShort: 'd',
+    countdownSize: 'Counter size',
+    countdownColor: 'Counter colour',
+    countdownAuto: 'Flame',
+    signatureHint: 'A signature is added at the end:',
     taskTitle: 'My task',
     taskPlace: 'Place',
     taskTopic: 'Topic',
@@ -537,6 +542,19 @@ export const en: Messages = {
     exemptNote: 'You are exempt from dues',
   },
   events: {
+    remindTitle: 'Event reminders',
+    remindEntry: 'Remind everyone or chosen people',
+    remindPick: 'Choose an event',
+    remindNone: 'No upcoming events',
+    remindText: 'Reminder text',
+    remindSend: 'Send reminder',
+    remindEveryone: 'Everyone in the ministry',
+    remindSent: (n: number) => `Sent: ${n}`,
+    remindNobody: 'Nobody to send to: nobody has started the bot',
+    remindAutoTitle: 'Automatic event reminder',
+    remindAutoHint: 'The bot reminds everyone in the ministry about an upcoming event.',
+    remindAutoOff: 'Don’t remind automatically',
+    remindAutoHours: (h: number) => (h % 24 === 0 ? `${h / 24} d before` : `${h} h before`),
     coverLook: 'Cover without a photo',
     coverLookHint:
       'Without a cover photo the event shows colours, a pattern and its title — like posts.',
@@ -1021,6 +1039,10 @@ export const en: Messages = {
       `🎤 <b>You are leading a meeting</b>\n“${titleHtml}” · ${groupHtml}\n${date}\n\nOpen the meeting and choose the place, the topic and who buys snacks (budget ${budget}). Then let the leader know.`,
     meetingSnack: (titleHtml: string, groupHtml: string, date: string, budget: string) =>
       `🍕 <b>You are buying snacks</b>\n“${titleHtml}” · ${groupHtml}\n${date}\n\nYou can spend up to <b>${budget}</b>. Keep the receipt — the expense goes into this meeting’s treasury.`,
+    sentBy: (name: string) => `Sent by ${name}`,
+    eventReminder: (titleHtml: string, when: string, placeHtml: string | null) =>
+      `⏰ <b>Reminder</b>\n“${titleHtml}”\n${when}${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
+    eventButton: 'Open event',
     meetingButton: 'Open the meeting',
     postHasExtras: '📎 This post has attachments, a poll or a table — open the app',
     chatLinked: (ministry: string) =>

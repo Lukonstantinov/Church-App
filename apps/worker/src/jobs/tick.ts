@@ -1,9 +1,10 @@
-import { and, eq, gte, lt } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, isNull, lt, lte } from 'drizzle-orm';
 import { InlineKeyboard } from 'grammy';
 import { DAY_MS, HOUR_MS, INTL_LOCALE, messages, type Locale } from '@church/shared';
 import type { Env } from '../env';
 import { getDb, type Db } from '../db/client';
-import { groups, jobRuns, meetings, outbox } from '../db/schema';
+import { events, groups, jobRuns, meetings, outbox } from '../db/schema';
+import { sendEventReminder } from '../lib/eventReminder';
 import { getAppUrl, getChurch } from '../lib/church';
 import { escapeHtml } from '../lib/html';
 import { generateMeetings } from '../lib/meetings';
@@ -31,6 +32,7 @@ export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
 
   await generateMeetings(db, church.timezone, { now });
   await remindMissingRollCalls(db, env, church.timezone, now);
+  await remindUpcomingEvents(db, env, now);
 
   if (await claim(db, 'housekeeping', 'all', now.toISOString().slice(0, 10))) {
     const cutoff = new Date(now.getTime() - 7 * DAY_MS).toISOString();
@@ -82,6 +84,51 @@ export async function remindMissingRollCalls(db: Db, env: Env, timezone: string,
         method: 'sendMessage',
         payload: { chat_id: r.chatId, text, parse_mode: 'HTML', reply_markup },
         dedupeKey: `roll:${meeting.id}:${r.chatId}`,
+      });
+    }
+  }
+}
+
+/**
+ * Ministries can ask the bot to remind everyone about an event a set number of hours
+ * ahead. Each event is reminded once, at the first hourly run inside that window; events
+ * made less than an hour earlier wait so a new event isn't announced twice at once.
+ */
+export async function remindUpcomingEvents(db: Db, env: Env, now: Date) {
+  const rules = await db
+    .select({ id: groups.id, hours: groups.eventReminderHours })
+    .from(groups)
+    .where(isNotNull(groups.eventReminderHours));
+  const appUrl = await getAppUrl(db, env.APP_URL);
+  for (const rule of rules) {
+    const until = new Date(now.getTime() + rule.hours! * HOUR_MS).toISOString();
+    const due = await db
+      .select()
+      .from(events)
+      .where(
+        and(
+          eq(events.groupId, rule.id),
+          eq(events.status, 'scheduled'),
+          isNull(events.remindedAt),
+          gte(events.startsAt, now.toISOString()),
+          lte(events.startsAt, until),
+          lte(events.createdAt, new Date(now.getTime() - HOUR_MS).toISOString()),
+        ),
+      );
+    for (const event of due) {
+      // Mark first, so a failure while queueing never sends it twice.
+      const claimed = await db
+        .update(events)
+        .set({ remindedAt: now.toISOString() })
+        .where(and(eq(events.id, event.id), isNull(events.remindedAt)))
+        .returning({ id: events.id });
+      if (claimed.length === 0) continue;
+      await sendEventReminder(db, {
+        event,
+        group: { id: rule.id },
+        fallbackUrl: appUrl,
+        envAppUrl: env.APP_URL,
+        dedupe: 'auto',
       });
     }
   }

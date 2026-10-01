@@ -11,11 +11,19 @@ import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import { useEvents, useFeed } from '../lib/queries';
 import { haptic } from '../lib/telegram';
-import { CountdownBar } from './Countdown';
+import { CountdownOnCover } from './Countdown';
 import { EventCard, EventCover } from './EventCard';
 import { CalendarTile, GroupCalendar, calendarOnHome, setCalendarOnHome } from './GroupCalendar';
 import { UnreadBadges } from './FeedEntry';
-import { IconClock, IconEdit, IconMegaphone, IconPlus, IconUserPlus, IconUsers } from './icons';
+import {
+  IconCalendar,
+  IconClock,
+  IconEdit,
+  IconMegaphone,
+  IconPlus,
+  IconUserPlus,
+  IconUsers,
+} from './icons';
 import { MeetingHeroLines } from '../screens/MeetingScreen';
 import { canRollNow } from '../screens/Overview';
 import { Button, DateBadge, HeroCard } from './ui';
@@ -295,23 +303,28 @@ function EventTile({ e, g, onToggle }: { e: EventSummary; g: GroupSummary; onTog
   return (
     <Tile onToggle={onToggle}>
       {cover ? (
-        <div className="pointer-events-none">
+        <div className="pointer-events-none relative">
           <EventCover e={e} className="aspect-[16/10]" compact />
+          <CountdownOnCover e={e} compact />
         </div>
       ) : (
-        <LookTop
-          look={e.look ?? g}
-          className="flex aspect-[16/10] items-center justify-center text-[28px]"
-        >
-          <span className="m-auto">📅</span>
-        </LookTop>
+        <div className="relative">
+          <LookTop
+            look={e.look ?? g}
+            className="flex aspect-[16/10] items-center justify-center text-[28px]"
+          >
+            <span className="m-auto">
+              <IconCalendar size={30} />
+            </span>
+          </LookTop>
+          <CountdownOnCover e={e} compact />
+        </div>
       )}
       <div className="flex flex-col gap-0.5 p-2.5">
         <span className="truncate text-[14px] font-semibold">{e.title}</span>
         <span className="truncate text-[12px] text-hint">
           {f.weekdayDayMonth(e.startsAt)} · {f.time(e.startsAt)}
         </span>
-        <CountdownBar e={e} compact />
       </div>
     </Tile>
   );

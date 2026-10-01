@@ -8,6 +8,8 @@ import {
   useCoverLook,
   type CoverState,
 } from '../components/CoverDesigner';
+import { COUNTDOWN_COLORS, COUNTDOWN_SIZES, CountdownBadge } from '../components/Countdown';
+import { Pill } from '../components/LookControls';
 import { PosterMedia } from '../components/Poster';
 import { Sheet } from '../components/Sheet';
 import {
@@ -352,6 +354,55 @@ function EventFormBody({
           checked={countdown}
           onChange={setCountdown}
         />
+        {countdown && (
+          <div className="flex flex-col gap-3.5 px-4 pb-4 pt-1">
+            <div className="flex min-h-[44px] items-center">
+              <CountdownBadge
+                startsAt={new Date(`${date}T${startTime || '00:00'}`).toISOString()}
+                design={look.design}
+              />
+            </div>
+            <div>
+              <div className="mb-2 text-[13px] text-hint">{t.meetings.countdownSize}</div>
+              <div className="flex gap-2">
+                {COUNTDOWN_SIZES.map((sz) => (
+                  <Pill
+                    key={sz}
+                    on={(look.design.countdownSize ?? 'm') === sz}
+                    onClick={() =>
+                      setLook({ ...look, design: { ...look.design, countdownSize: sz } })
+                    }
+                    label={sz.toUpperCase()}
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="mb-2 text-[13px] text-hint">{t.meetings.countdownColor}</div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                {[null, ...COUNTDOWN_COLORS].map((c) => {
+                  const on = (look.design.countdownColor ?? null) === c;
+                  return (
+                    <button
+                      key={c ?? 'auto'}
+                      type="button"
+                      aria-label={c ?? t.meetings.countdownAuto}
+                      onClick={() =>
+                        setLook({ ...look, design: { ...look.design, countdownColor: c } })
+                      }
+                      className={`h-8 w-8 rounded-full ring-1 ring-black/10 transition active:scale-90 ${
+                        on ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
+                      }`}
+                      style={{
+                        background: c ?? 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </Section>
 
       <section>

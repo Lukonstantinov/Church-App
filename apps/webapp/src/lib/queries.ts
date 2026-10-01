@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  RemindEventInput,
   MessageTemplateInput,
   MessageTemplateRow,
   AnswerMeetingInput,
@@ -855,6 +856,18 @@ export function useEvents(groupId: number, scope: 'upcoming' | 'past', enabled =
     queryKey: keys.events(groupId, scope),
     queryFn: () => apiFetch<EventSummary[]>(`/groups/${groupId}/events?scope=${scope}`),
     enabled,
+  });
+}
+
+/** The default reminder text of an event (plain text to edit). */
+export const fetchReminderText = (eventId: number) =>
+  apiFetch<{ text: string }>(`/events/${eventId}/reminder-text`);
+
+/** Remind everyone in the ministry, or chosen people, about an event. */
+export function useRemindEvent() {
+  return useMutation({
+    mutationFn: ({ id, ...input }: RemindEventInput & { id: number }) =>
+      apiFetch<{ sent: number }>(`/events/${id}/remind`, send('POST', input)),
   });
 }
 

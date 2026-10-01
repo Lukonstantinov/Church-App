@@ -6,6 +6,7 @@ import {
   createScheduleSchema,
   saveRollSchema,
   addDays,
+  displayName,
   answerMeetingSchema,
   calendarNoteSchema,
   localDate,
@@ -751,6 +752,7 @@ meetingRoutes.post('/:id/notify', async (c) => {
     userId,
     role: input.role,
     text,
+    senderName: displayName(user),
     posterUrl: input.posterMediaId
       ? await signedMediaUrl(c.env.WEBHOOK_SECRET, input.posterMediaId)
       : null,

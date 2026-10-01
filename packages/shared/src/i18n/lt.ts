@@ -125,6 +125,11 @@ export const lt: Messages = {
     cameOf: (a: number, b: number) => `atėjo ${a} iš ${b}`,
   },
   meetings: {
+    dayShort: 'd',
+    countdownSize: 'Skaitiklio dydis',
+    countdownColor: 'Skaitiklio spalva',
+    countdownAuto: 'Liepsna',
+    signatureHint: 'Žinutės pabaigoje bus pridėtas parašas:',
     taskTitle: 'Mano užduotis',
     taskPlace: 'Vieta',
     taskTopic: 'Tema',
@@ -543,6 +548,19 @@ export const lt: Messages = {
     exemptNote: 'Jūs atleisti nuo nario mokesčio',
   },
   events: {
+    remindTitle: 'Renginių priminimai',
+    remindEntry: 'Priminti visiems arba pasirinktiems',
+    remindPick: 'Pasirinkite renginį',
+    remindNone: 'Artimų renginių nėra',
+    remindText: 'Priminimo tekstas',
+    remindSend: 'Siųsti priminimą',
+    remindEveryone: 'Visi tarnystėje',
+    remindSent: (n: number) => `Išsiųsta: ${n}`,
+    remindNobody: 'Nėra kam siųsti: niekas nepaleido boto',
+    remindAutoTitle: 'Automatinis renginio priminimas',
+    remindAutoHint: 'Botas pats primins visiems tarnystėje apie artėjantį renginį.',
+    remindAutoOff: 'Nepriminti automatiškai',
+    remindAutoHours: (h: number) => (h % 24 === 0 ? `prieš ${h / 24} d.` : `prieš ${h} val.`),
     coverLook: 'Viršelis be nuotraukos',
     coverLookHint: 'Be viršelio nuotraukos rodomos spalvos, raštas ir pavadinimas — kaip įrašuose.',
     tabMeetings: 'Susitikimai',
@@ -1043,6 +1061,10 @@ export const lt: Messages = {
       `🎤 <b>Jūs vedate susitikimą</b>\n„${titleHtml}“ · ${groupHtml}\n${date}\n\nAtidarykite susitikimą ir pasirinkite vietą, temą ir kas nupirks užkandžių (biudžetas ${budget}). Tada praneškite lyderiui.`,
     meetingSnack: (titleHtml: string, groupHtml: string, date: string, budget: string) =>
       `🍕 <b>Jūs perkate užkandžius</b>\n„${titleHtml}“ · ${groupHtml}\n${date}\n\nGalite išleisti iki <b>${budget}</b>. Išsaugokite čekį — išlaidos bus įrašytos į šio susitikimo kasą.`,
+    sentBy: (name: string) => `Išsiuntė ${name}`,
+    eventReminder: (titleHtml: string, when: string, placeHtml: string | null) =>
+      `⏰ <b>Priminimas</b>\n„${titleHtml}“\n${when}${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
+    eventButton: 'Atidaryti renginį',
     meetingButton: 'Atidaryti susitikimą',
     postHasExtras: '📎 Įraše yra priedų, apklausa ar lentelė — atidarykite programėlę',
     chatLinked: (ministry: string) =>

@@ -7,6 +7,7 @@ import {
   eventExpenseSchema,
   eventPaymentSchema,
   localDate,
+  remindEventSchema,
   rsvpSchema,
   setRolesSchema,
   updateEventSchema,
@@ -35,7 +36,12 @@ import {
   setRoles,
   setRsvp,
 } from '../lib/events';
+import { defaultReminderText, sendEventReminder } from '../lib/eventReminder';
 import { assertGroupMedia } from '../lib/media';
+import { drainOutbox } from '../lib/outbox';
+import { appUrlFor, botApi } from '../lib/telegram';
+import { displayName } from '@church/shared';
+import { churchDefaultLocale, localeOf } from '../lib/church';
 import { idParam, parseBody } from './util';
 
 type App = { Bindings: Env; Variables: AuthVariables };
@@ -135,6 +141,48 @@ async function managed(c: { get: (k: 'db' | 'user') => unknown }, id: number) {
   if (!canManage) throw new HTTPException(403, { message: 'forbidden' });
   return { db, user, event };
 }
+
+/** The default reminder text, in the sender's language, to read and change before sending. */
+eventRoutes.get('/:id/reminder-text', async (c) => {
+  const { db, user, event } = await managed(c, idParam(c));
+  const locale = localeOf(user, await churchDefaultLocale(db));
+  return c.json({ text: await defaultReminderText(db, event, locale) });
+});
+
+/**
+ * Remind the ministry (or only chosen people) about this event. Leaders with the right to
+ * manage events (church admins and developers included). The text goes as edited, with
+ * who sent it.
+ */
+eventRoutes.post('/:id/remind', async (c) => {
+  const { db, user, event } = await managed(c, idParam(c));
+  if (event.status === 'cancelled') throw new HTTPException(409, { message: 'cancelled' });
+  const input = await parseBody(c, remindEventSchema);
+  const sent = await sendEventReminder(db, {
+    event,
+    group: { id: event.groupId },
+    text: input.text,
+    userIds: input.userIds,
+    senderName: displayName(user),
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+  });
+  if (sent > 0)
+    c.executionCtx.waitUntil(
+      drainOutbox(db, botApi(c.env), { limit: 100 }).catch((err) =>
+        console.error('reminder drain', err),
+      ),
+    );
+  await audit(db, {
+    actorUserId: user.id,
+    action: 'event_reminder_sent',
+    entity: 'event',
+    entityId: event.id,
+    groupId: event.groupId,
+    data: { sent, chosen: input.userIds?.length ?? null },
+  });
+  return c.json({ sent });
+});
 
 eventRoutes.patch('/:id', async (c) => {
   const { db, user, event } = await managed(c, idParam(c));

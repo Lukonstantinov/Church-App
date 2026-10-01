@@ -14,10 +14,13 @@ export function AudiencePicker({
   groupId,
   value,
   onChange,
+  hint,
 }: {
   groupId: number;
   value: number[] | null;
   onChange: (v: number[] | null) => void;
+  /** Replaces the meeting wording under the chips ('' = none). */
+  hint?: string;
 }) {
   const t = useT();
   const contacts = useContacts(groupId);
@@ -41,7 +44,9 @@ export function AudiencePicker({
       </div>
       {value !== null && (
         <>
-          <p className="text-[13px] text-hint">{t.meetings.audienceHint}</p>
+          {(hint ?? t.meetings.audienceHint) && (
+            <p className="text-[13px] text-hint">{hint ?? t.meetings.audienceHint}</p>
+          )}
           {contacts.isPending ? (
             <Skeleton className="h-32 w-full" />
           ) : (

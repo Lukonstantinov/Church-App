@@ -129,6 +129,7 @@ export interface GroupDetail extends GroupSummary {
   chatUrl: string | null;
   /** Usual place of the ministry's meetings. */
   defaultLocation: string;
+  eventReminderHours: number | null;
   /** Chat managed by the bot (members-only): its title; null when not linked. */
   managedChat: { title: string | null; pending: boolean } | null;
 }
@@ -165,6 +166,8 @@ export const updateGroupSchema = z.object({
   chatUrl: chatUrlSchema.optional(),
   /** Usual place of the ministry's meetings (empty = none). */
   defaultLocation: z.string().trim().max(120).optional(),
+  /** Remind everyone this many hours before an event (null = don't). */
+  eventReminderHours: z.number().int().min(1).max(168).nullable().optional(),
 });
 export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 
@@ -394,6 +397,14 @@ export interface MeetingDetail extends MeetingRow {
   myRole: 'leader' | 'snack' | null;
   myAcceptedAt: string | null;
 }
+
+/** Send an event reminder now: the text (edited or default) to everyone or chosen people. */
+export const remindEventSchema = z.object({
+  text: z.string().trim().min(1).max(3000).optional(),
+  /** Only these people (user ids); omitted or null = everyone in the ministry. */
+  userIds: z.array(z.number().int().positive()).max(500).nullish(),
+});
+export type RemindEventInput = z.input<typeof remindEventSchema>;
 
 /** Placeholders a saved message wording may contain; each is filled in per meeting. */
 export const MESSAGE_PLACEHOLDERS = ['title', 'group', 'date', 'budget', 'name', 'notes'] as const;

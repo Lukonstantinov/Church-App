@@ -101,6 +101,8 @@ export const groups = sqliteTable('groups', {
   meetingBudgetCents: integer('meeting_budget_cents').notNull().default(1500),
   /** Where this ministry's meetings usually are; prefilled when the leader fills in the place. */
   defaultLocation: text('default_location').notNull().default('Šeškinės 22A'),
+  /** Automatic reminder to everyone this many hours before an event (null = off). */
+  eventReminderHours: integer('event_reminder_hours'),
   /** Photo behind the ministry card (BackdropConfig JSON), NULL = colours only. */
   backdrop: text('backdrop'),
   archivedAt: text('archived_at'),
@@ -463,6 +465,8 @@ export const events = sqliteTable(
     design: text('design'),
     /** Show a "🔥 N days left" countdown on the ministry home. */
     countdown: integer('countdown', { mode: 'boolean' }).notNull().default(false),
+    /** When the automatic reminder went out (null = not yet). */
+    remindedAt: text('reminded_at'),
     templateId: integer('template_id'),
     status: text('status', { enum: ['scheduled', 'cancelled'] })
       .notNull()

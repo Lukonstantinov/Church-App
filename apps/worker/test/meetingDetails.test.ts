@@ -16,7 +16,12 @@ import {
   type TransactionPage,
 } from '@church/shared';
 import { getDb } from '../src/db/client';
+import { eq } from 'drizzle-orm';
+import { events } from '../src/db/schema';
+import { remindUpcomingEvents } from '../src/jobs/tick';
 import { generateMeetings } from '../src/lib/meetings';
+import { drainOutbox } from '../src/lib/outbox';
+import { botApi } from '../src/lib/telegram';
 import {
   ADMIN,
   api,
@@ -638,5 +643,118 @@ describe('default meeting place', () => {
     expect(
       (await apiJson<GroupDetail>(`/api/groups/${g.id}`, { user: ADMIN })).defaultLocation,
     ).toBe('Зал церкви');
+  });
+});
+
+describe('event reminders and the sender line', () => {
+  it('leaders remind everyone or chosen people; the message says who sent it', async () => {
+    const g = await createEnv('Напоминания');
+    const a = fakeUser('Первый');
+    const b = fakeUser('Второй');
+    await join(a, g);
+    const bId = await join(b, g);
+    const date = addDays(localDate(new Date(), TZ), 5);
+    const event = await apiJson<EventSummary>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'Лагерь', date, startTime: '10:00', location: 'Лес' },
+    });
+
+    const def = await apiJson<{ text: string }>(`/api/events/${event.id}/reminder-text`, {
+      user: ADMIN,
+    });
+    expect(def.text).toContain('Лагерь');
+    expect(def.text).not.toContain('<b>');
+
+    // Members can't send reminders.
+    expect(
+      (await api(`/api/events/${event.id}/remind`, { method: 'POST', user: a, json: {} })).status,
+    ).toBe(403);
+
+    // To chosen people only: the signature and the way to the event are there.
+    calls.length = 0;
+    const some = await apiJson<{ sent: number }>(`/api/events/${event.id}/remind`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { text: 'Не забудьте про лагерь!\nВозьмите куртки', userIds: [bId] },
+    });
+    expect(some.sent).toBe(1);
+    const msg = await sentTo(b.id, 'Не забудьте про лагерь');
+    expect(String(msg!.body.text)).toContain('<b>Не забудьте про лагерь!</b>');
+    expect(String(msg!.body.text)).toContain('Отправил(а):');
+    expect(JSON.stringify(msg!.body.reply_markup)).toContain(`?event=${event.id}`);
+    expect(calls.some((c) => c.method === 'sendMessage' && c.body.chat_id === a.id)).toBe(false);
+
+    // To everyone with the default text.
+    const all = await apiJson<{ sent: number }>(`/api/events/${event.id}/remind`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {},
+    });
+    expect(all.sent).toBeGreaterThanOrEqual(2);
+    expect(await sentTo(a.id, 'Напоминание')).toBeDefined();
+  });
+
+  it('the meeting message to the leader also carries "Отправил(а)"', async () => {
+    const g = await createEnv('Подпись');
+    const lead = fakeUser('Подписанный');
+    const leadId = await join(lead, g);
+    const date = addDays(localDate(new Date(), TZ), 4);
+    const m = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, startTime: '19:00', durationMin: 120, title: 'Вечер' },
+    });
+    await patch(m.id, { leaderUserId: leadId });
+    await api(`/api/meetings/${m.id}/notify`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { role: 'leader' },
+    });
+    expect(String((await sentTo(lead.id, 'Вы ведёте встречу'))!.body.text)).toContain(
+      'Отправил(а): Админ',
+    );
+  });
+
+  it('the group rule reminds once, ahead of an event that is not brand new', async () => {
+    const g = await createEnv('Автонапоминание');
+    const a = fakeUser('Автополучатель');
+    await join(a, g);
+    expect(
+      (
+        await api(`/api/groups/${g.id}`, {
+          method: 'PATCH',
+          user: ADMIN,
+          json: { eventReminderHours: 48 },
+        })
+      ).status,
+    ).toBe(200);
+    const date = addDays(localDate(new Date(), TZ), 1);
+    const event = await apiJson<EventSummary>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'Завтрашнее', date, startTime: '23:00' },
+    });
+    const db = getDb(env.DB);
+    // Brand new: left alone this hour.
+    await remindUpcomingEvents(db, env as never, new Date());
+    expect(
+      calls.some((c) => c.body.chat_id === a.id && String(c.body.text).includes('Завтрашнее')),
+    ).toBe(false);
+    await db
+      .update(events)
+      .set({ createdAt: new Date(Date.now() - 3 * 3600_000).toISOString() })
+      .where(eq(events.id, event.id));
+    await remindUpcomingEvents(db, env as never, new Date());
+    await remindUpcomingEvents(db, env as never, new Date());
+    await drainOutbox(db, botApi(env as never), { limit: 100 });
+    const hits = calls.filter(
+      (c) =>
+        c.method === 'sendMessage' &&
+        c.body.chat_id === a.id &&
+        String(c.body.text).includes('Завтрашнее'),
+    );
+    expect(hits).toHaveLength(1);
+    expect(String(hits[0]!.body.text)).not.toContain('Отправил(а)');
   });
 });

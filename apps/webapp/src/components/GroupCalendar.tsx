@@ -22,7 +22,7 @@ import {
 } from '../lib/queries';
 import { storage } from '../lib/storage';
 import { confirmDialog, haptic } from '../lib/telegram';
-import { CountdownBar, daysUntil } from './Countdown';
+import { CountdownBadge, daysUntil, hasCountdown } from './Countdown';
 import { IconCheck, IconChevronRight, IconClock, IconMic } from './icons';
 import { NotifySheet } from './NotifySheet';
 import { PersonPicker } from './PersonPicker';
@@ -424,7 +424,13 @@ function DaySheet({
                     </span>
                     <span className="shrink-0 text-[13px] text-hint">{f.time(e.startsAt)}</span>
                   </span>
-                  <CountdownBar e={e} />
+                  {hasCountdown(e) && (
+                    <CountdownBadge
+                      startsAt={e.startsAt}
+                      design={e.design}
+                      className="self-start"
+                    />
+                  )}
                 </button>
               ))}
               {d.notes.map((n) => (

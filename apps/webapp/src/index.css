@@ -318,3 +318,26 @@ body::before {
     animation: none !important;
   }
 }
+
+/* The flame in the event countdown. */
+@keyframes flame {
+  0%,
+  100% {
+    transform: scale(1) rotate(-4deg);
+    filter: drop-shadow(0 0 2px rgba(255, 140, 0, 0.7));
+  }
+  50% {
+    transform: scale(1.22) rotate(4deg) translateY(-1px);
+    filter: drop-shadow(0 0 6px rgba(255, 90, 0, 0.95));
+  }
+}
+.flame {
+  display: inline-block;
+  animation: flame 0.9s ease-in-out infinite;
+  transform-origin: 50% 85%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flame {
+    animation: none;
+  }
+}

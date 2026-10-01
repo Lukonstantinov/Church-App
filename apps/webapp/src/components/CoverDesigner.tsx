@@ -45,6 +45,8 @@ export function initCover(
       titleSize: d?.titleSize ?? 'm',
       titlePos: d?.titlePos ?? 'bottom',
       align: d?.align ?? 'left',
+      countdownSize: d?.countdownSize ?? 'm',
+      countdownColor: d?.countdownColor ?? null,
     },
     own: {
       pattern: d?.custom?.pattern ?? null,

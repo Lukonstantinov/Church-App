@@ -39,6 +39,7 @@ export type Route =
   | { name: 'task'; meetingId: number }
   | { name: 'contacts'; groupId: number }
   | { name: 'event'; eventId: number }
+  | { name: 'reminders'; groupId: number }
   | { name: 'eventForm'; groupId: number; eventId?: number; date?: string }
   | { name: 'groupSettings'; groupId: number }
   | { name: 'reports'; groupId: number }

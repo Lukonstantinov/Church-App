@@ -1,6 +1,6 @@
 import type { EventSummary } from '@church/shared';
 import { useFmt } from '../lib/format';
-import { CountdownBar } from './Countdown';
+import { CountdownBadge, CountdownOnCover, hasCountdown } from './Countdown';
 import { useT } from '../lib/i18n';
 import { IconCheck, IconMapPin, IconUsers } from './icons';
 import { PosterMedia } from './Poster';
@@ -70,7 +70,18 @@ export function EventCard({
       onClick={onClick}
       className={`glass block w-full overflow-hidden rounded-[var(--radius-card)] text-left shadow-card transition active:scale-[0.99] ${cancelled ? 'opacity-60' : ''}`}
     >
-      <EventCover e={e} />
+      {e.coverUrl || e.design?.banner ? (
+        <div className="relative">
+          <EventCover e={e} />
+          <CountdownOnCover e={e} />
+        </div>
+      ) : (
+        hasCountdown(e) && (
+          <div className="px-4 pt-3">
+            <CountdownBadge startsAt={e.startsAt} design={e.design} />
+          </div>
+        )
+      )}
       <div className="flex items-start gap-3 p-4">
         <DateBadge {...f.dateBadge(e.startsAt)} muted={cancelled} />
         <div className="min-w-0 flex-1">
@@ -90,11 +101,6 @@ export function EventCard({
             <div className="mt-0.5 flex items-center gap-1 truncate text-[14px] text-hint">
               <IconMapPin size={14} className="shrink-0" />
               <span className="truncate">{e.location}</span>
-            </div>
-          )}
-          {e.countdown && (
-            <div className="mt-2">
-              <CountdownBar e={e} />
             </div>
           )}
           <div className="mt-2 flex flex-wrap gap-1.5">
