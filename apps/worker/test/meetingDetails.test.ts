@@ -463,3 +463,88 @@ describe('message preview, answers and the calendar', () => {
     expect((await apiJson<Cal>(`/api/groups/${g.id}/calendar`, { user: ADMIN })).notes).toEqual([]);
   });
 });
+
+describe('assigned jobs window', () => {
+  it('lists what the person must fill in; answering keeps the way into the meeting', async () => {
+    const g = await createEnv('Мои назначения');
+    const lead = fakeUser('Назначенный');
+    const snack = fakeUser('Перекусный');
+    const leadId = await join(lead, g);
+    const snackId = await join(snack, g);
+    const date = addDays(localDate(new Date(), TZ), 4);
+    const meeting = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, startTime: '19:00', durationMin: 120, title: 'Вечер' },
+    });
+    await patch(meeting.id, { leaderUserId: leadId, snackUserId: snackId });
+
+    type Job = {
+      meetingId: number;
+      role: string;
+      missing: string[];
+      acceptedAt: string | null;
+      budgetCents: number;
+    };
+    const mine = await apiJson<Job[]>('/api/me/assignments', { user: lead });
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({
+      meetingId: meeting.id,
+      role: 'leader',
+      missing: ['location', 'topic'],
+      acceptedAt: null,
+    });
+    const theirs = await apiJson<Job[]>('/api/me/assignments', { user: snack });
+    expect(theirs[0]).toMatchObject({ role: 'snack', missing: [], budgetCents: 1500 });
+    expect(await apiJson<Job[]>('/api/me/assignments', { user: fakeUser('Никто') })).toEqual([]);
+
+    // Once filled in, nothing is missing.
+    await patch(meeting.id, { location: 'Зал', topic: 'Вера' }, lead);
+    expect((await apiJson<Job[]>('/api/me/assignments', { user: lead }))[0]!.missing).toEqual([]);
+
+    // The meeting says what the viewer has to answer.
+    expect(
+      await apiJson<MeetingDetail>(`/api/meetings/${meeting.id}`, { user: lead }),
+    ).toMatchObject({ myRole: 'leader', myAcceptedAt: null });
+
+    // Agree in the app (someone else can't answer for them).
+    expect(
+      (
+        await api(`/api/meetings/${meeting.id}/answer`, {
+          method: 'POST',
+          user: snack,
+          json: { role: 'leader', agree: true },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await api(`/api/meetings/${meeting.id}/answer`, {
+          method: 'POST',
+          user: lead,
+          json: { role: 'leader', agree: true },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await apiJson<Job[]>('/api/me/assignments', { user: lead }))[0]!.acceptedAt,
+    ).not.toBeNull();
+
+    // In the bot: agreeing leaves "Open meeting" under the message and in the reply.
+    await apiJson(`/api/meetings/${meeting.id}/notify`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { role: 'snack' },
+    });
+    calls.length = 0;
+    await pressButton(snack, `ma:y:${meeting.id}:s`);
+    const kept = calls.find((c) => c.method === 'editMessageReplyMarkup');
+    expect(JSON.stringify(kept?.body.reply_markup)).toContain(`?meeting=${meeting.id}`);
+    const reply = calls.find((c) => c.method === 'sendMessage' && c.body.chat_id === snack.id);
+    expect(JSON.stringify(reply?.body.reply_markup)).toContain(`?meeting=${meeting.id}`);
+
+    // "Can't" removes the buttons, frees the job and it leaves their list.
+    await pressButton(lead, `ma:n:${meeting.id}:l`);
+    expect(await apiJson<Job[]>('/api/me/assignments', { user: lead })).toEqual([]);
+  });
+});

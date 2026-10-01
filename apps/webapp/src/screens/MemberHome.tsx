@@ -1,4 +1,5 @@
 import { displayName, type GroupSummary, type MeResponse } from '@church/shared';
+import { AssignmentCards } from '../components/Assignments';
 import { HomeActionRow, HomeHighlights, useHomeActions } from '../components/HomeSections';
 import { PosterCard } from '../components/Poster';
 import { useEnv } from '../lib/env';
@@ -77,6 +78,7 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
 
       {env && active.length > 0 && (
         <>
+          <AssignmentCards groupId={env.id} />
           <HomeActionRow actions={actions} />
           <HomeHighlights
             g={env}

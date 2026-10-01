@@ -5,6 +5,7 @@ import {
   type AnnouncementRow,
   type EventSummary,
   type GroupSummary,
+  type PosterLook,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
@@ -19,6 +20,7 @@ import { IconClock, IconMegaphone, IconPlus, IconUserPlus, IconUsers } from './i
 import { MeetingHeroLines } from '../screens/MeetingScreen';
 import { canRollNow } from '../screens/Overview';
 import { Button, DateBadge, HeroCard } from './ui';
+import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { PosterCard, PosterMedia, hasCover } from './Poster';
 
 export interface HomeAction {
@@ -222,11 +224,11 @@ export function HomeHighlights({
               return item.kind === 'calendar' ? (
                 <CalendarTile key={k} g={g} onToggle={toggle} />
               ) : item.kind === 'meeting' ? (
-                <MeetingTile key={k} m={item.meeting} onToggle={toggle} />
+                <MeetingTile key={k} m={item.meeting} g={g} onToggle={toggle} />
               ) : item.kind === 'post' ? (
                 <PostTile key={k} post={item.post} onToggle={toggle} />
               ) : (
-                <EventTile key={k} e={item.event} onToggle={toggle} />
+                <EventTile key={k} e={item.event} g={g} onToggle={toggle} />
               );
             })}
           </div>
@@ -288,7 +290,30 @@ function PostTile({ post, onToggle }: { post: AnnouncementRow; onToggle: () => v
   );
 }
 
-function EventTile({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
+/** The ministry's look (pattern, photo, text colour) as the tile's coloured top. */
+function LookTop({
+  look,
+  className,
+  children,
+}: {
+  look: Pick<PosterLook, 'pattern' | 'logoUrl' | 'backdrop' | 'backdropUrl' | 'textColor'> | null;
+  className: string;
+  children: ReactNode;
+}) {
+  const on = onBrandStyle(look?.textColor, !!(look?.pattern || look?.backdropUrl));
+  return (
+    <div
+      className={`brand-gradient relative overflow-hidden ${on.className} ${className}`}
+      style={on.style}
+    >
+      <PatternLayer pattern={look?.pattern} logoUrl={look?.logoUrl} />
+      <BackdropLayer backdrop={look?.backdrop} url={look?.backdropUrl} />
+      <div className="relative flex min-h-full flex-1 flex-col justify-between">{children}</div>
+    </div>
+  );
+}
+
+function EventTile({ e, g, onToggle }: { e: EventSummary; g: GroupSummary; onToggle: () => void }) {
   const f = useFmt();
   const cover = e.coverUrl || e.design?.banner;
   return (
@@ -298,9 +323,12 @@ function EventTile({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
           <EventCover e={e} className="aspect-[16/10]" compact />
         </div>
       ) : (
-        <div className="brand-gradient flex aspect-[16/10] items-center justify-center text-[28px]">
-          📅
-        </div>
+        <LookTop
+          look={e.look ?? g}
+          className="flex aspect-[16/10] items-center justify-center text-[28px]"
+        >
+          <span className="m-auto">📅</span>
+        </LookTop>
       )}
       <div className="flex flex-col gap-0.5 p-2.5">
         <span className="truncate text-[14px] font-semibold">{e.title}</span>
@@ -313,13 +341,21 @@ function EventTile({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
   );
 }
 
-function MeetingTile({ m, onToggle }: { m: MeetingTileData; onToggle: () => void }) {
+function MeetingTile({
+  m,
+  g,
+  onToggle,
+}: {
+  m: MeetingTileData;
+  g: GroupSummary;
+  onToggle: () => void;
+}) {
   const t = useT();
   const f = useFmt();
   return (
     <Tile onToggle={onToggle}>
-      <div className="brand-gradient flex aspect-[16/10] flex-col justify-between p-2.5 text-white">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-white/80">
+      <LookTop look={g} className="flex aspect-[16/10] flex-col p-2.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
           {t.meetings.details}
         </span>
         <div className="flex items-end gap-2">
@@ -330,7 +366,7 @@ function MeetingTile({ m, onToggle }: { m: MeetingTileData; onToggle: () => void
             </span>
           )}
         </div>
-      </div>
+      </LookTop>
       <div className="flex flex-col gap-0.5 p-2.5">
         <span className="truncate text-[14px] font-semibold">{m.title}</span>
         <span className="truncate text-[12px] text-hint">

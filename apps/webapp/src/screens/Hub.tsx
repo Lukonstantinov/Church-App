@@ -6,6 +6,7 @@ import {
   type MeResponse,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
+import { AssignmentCards } from '../components/Assignments';
 import { BrandHeader } from '../components/BrandHeader';
 import { BackdropLayer, PatternLayer, onBrandStyle } from '../components/PatternLayer';
 import { UnreadBadges } from '../components/FeedEntry';
@@ -30,6 +31,8 @@ export function Hub({ me }: { me: MeResponse }) {
   return (
     <Screen>
       <BrandHeader title={t.env.hubTitle} subtitle={t.env.hubSubtitle(list.length)} />
+
+      <AssignmentCards />
 
       {(pinned.data ?? []).length > 0 && (
         <section>

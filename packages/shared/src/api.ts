@@ -384,6 +384,38 @@ export interface MeetingDetail extends MeetingRow {
     | null;
   /** Default budget per meeting in this ministry (cents). */
   defaultBudgetCents: number;
+  /** Which job the viewer was given on this meeting (null = none), and if they agreed. */
+  myRole: 'leader' | 'snack' | null;
+  myAcceptedAt: string | null;
+}
+
+/** "Agree" / "Can't" for a meeting job, from the app (the bot buttons do the same). */
+export const answerMeetingSchema = z.object({
+  role: z.enum(['leader', 'snack']),
+  agree: z.boolean(),
+});
+export type AnswerMeetingInput = z.input<typeof answerMeetingSchema>;
+
+/** A meeting the person was given a job on, with what is still to be filled in. */
+export interface AssignmentRow {
+  meetingId: number;
+  groupId: number;
+  groupName: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  role: 'leader' | 'snack';
+  topic: string | null;
+  location: string | null;
+  kind: MeetingKind | null;
+  leader: MeetingPerson | null;
+  snackPerson: MeetingPerson | null;
+  budgetCents: number;
+  notes: string | null;
+  /** Pressed "Agree" (or the leader/manager hasn't asked yet and it's just assigned). */
+  acceptedAt: string | null;
+  /** Things the leader still has to fill in. */
+  missing: ('location' | 'topic' | 'snack')[];
 }
 
 /** Send the leader or snack person a bot message, with the meeting notes (saved too). */

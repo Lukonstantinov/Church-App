@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, asc, desc, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm';
 import {
   createMeetingSchema,
   createScheduleSchema,
   saveRollSchema,
   addDays,
+  answerMeetingSchema,
   calendarNoteSchema,
   localDate,
   notifyMeetingSchema,
@@ -13,6 +14,7 @@ import {
   updateMeetingSchema,
   updateScheduleSchema,
   zonedToUtc,
+  type AssignmentRow,
   type MeetingDetail,
   type MeetingRow,
   type MyAttendanceResponse,
@@ -36,7 +38,7 @@ import {
 } from '../db/schema';
 import { accessIn, assertCan, assertCanViewGroup, can } from '../lib/access';
 import { listEvents } from '../lib/events';
-import { defaultMeetingText, notifyMeetingRole } from '../lib/meetingNotify';
+import { answerMeetingRole, defaultMeetingText, notifyMeetingRole } from '../lib/meetingNotify';
 import { assertGroupMedia, signedMediaUrl } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi } from '../lib/telegram';
@@ -48,6 +50,7 @@ import {
   meetingIsFor,
   generateMeetings,
   groupStats,
+  meetingPeople,
   memberAttendance,
   rosterFor,
   toMeetingRows,
@@ -422,6 +425,18 @@ meetingRoutes.get('/:id', async (c) => {
     groupName: group.name,
     canEdit: a.edit,
     canManage: a.manage,
+    myRole:
+      meeting.leaderUserId === user.id
+        ? 'leader'
+        : meeting.snackUserId === user.id
+          ? 'snack'
+          : null,
+    myAcceptedAt:
+      meeting.leaderUserId === user.id
+        ? meeting.leaderAcceptedAt
+        : meeting.snackUserId === user.id
+          ? meeting.snackAcceptedAt
+          : null,
     attendance: seeRoll
       ? (
           await db
@@ -765,6 +780,82 @@ meetingRoutes.put('/:id/roll', async (c) => {
 
   const updated = await db.query.meetings.findFirst({ where: eq(meetings.id, meeting.id) });
   return c.json((await toMeetingRows(db, [updated!]))[0] as MeetingRow);
+});
+
+/** The assigned person answers "Agree" / "Can't" in the app (as with the bot buttons). */
+meetingRoutes.post('/:id/answer', async (c) => {
+  const input = await parseBody(c, answerMeetingSchema);
+  const db = c.get('db');
+  const api = botApi(c.env);
+  const result = await answerMeetingRole(db, api, {
+    meetingId: idParam(c),
+    role: input.role,
+    agree: input.agree,
+    user: c.get('user'),
+  });
+  if (result === 'not_yours') throw new HTTPException(403, { message: 'not_yours' });
+  return c.json({ ok: true });
+});
+
+// ---------- /api/me/assignments ----------
+
+export const myAssignmentRoutes = new Hono<App>();
+
+/** Coming meetings where the person leads or buys the snacks, soonest first. */
+myAssignmentRoutes.get('/', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  // A meeting that started a few hours ago is still "now".
+  const since = new Date(Date.now() - 4 * 3600_000).toISOString();
+  const rows = await db
+    .select({ m: meetings, group: groups })
+    .from(meetings)
+    .innerJoin(groups, eq(groups.id, meetings.groupId))
+    .where(
+      and(
+        eq(meetings.status, 'scheduled'),
+        gte(meetings.startsAt, since),
+        or(eq(meetings.leaderUserId, user.id), eq(meetings.snackUserId, user.id)),
+      ),
+    )
+    .orderBy(asc(meetings.startsAt))
+    .limit(20);
+  const people = await meetingPeople(
+    db,
+    rows.flatMap(({ m }) => [m.leaderUserId, m.snackUserId]),
+  );
+  const out: AssignmentRow[] = [];
+  for (const { m, group } of rows) {
+    for (const role of ['leader', 'snack'] as const) {
+      if ((role === 'leader' ? m.leaderUserId : m.snackUserId) !== user.id) continue;
+      out.push({
+        meetingId: m.id,
+        groupId: m.groupId,
+        groupName: group.name,
+        title: m.title,
+        startsAt: m.startsAt,
+        endsAt: m.endsAt,
+        role,
+        topic: m.topic,
+        location: m.location,
+        kind: m.kind as AssignmentRow['kind'],
+        leader: m.leaderUserId ? (people.get(m.leaderUserId) ?? null) : null,
+        snackPerson: m.snackUserId ? (people.get(m.snackUserId) ?? null) : null,
+        budgetCents: m.budgetCents ?? group.meetingBudgetCents,
+        notes: m.notes,
+        acceptedAt: role === 'leader' ? m.leaderAcceptedAt : m.snackAcceptedAt,
+        missing:
+          role === 'leader'
+            ? [
+                ...(m.location ? [] : (['location'] as const)),
+                ...(m.topic ? [] : (['topic'] as const)),
+                ...(m.snackUserId ? [] : (['snack'] as const)),
+              ]
+            : [],
+      });
+    }
+  }
+  return c.json(out);
 });
 
 // ---------- /api/me/attendance ----------

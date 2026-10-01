@@ -31,7 +31,13 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useGroup, useMeeting, useMeetingPeople, useUpdateMeeting } from '../lib/queries';
+import {
+  useAnswerMeeting,
+  useGroup,
+  useMeeting,
+  useMeetingPeople,
+  useUpdateMeeting,
+} from '../lib/queries';
 import { confirmDialog, haptic, openTelegramLink } from '../lib/telegram';
 import { canRollNow } from './Overview';
 
@@ -97,7 +103,10 @@ function MeetingView({ m }: { m: MeetingDetail }) {
   const update = useUpdateMeeting();
   // The assigned leader lands straight in the form while the place or topic is missing.
   const [editing, setEditing] = useState(
-    m.canEdit && !m.canManage && m.status === 'scheduled' && (!m.topic || !m.location),
+    m.canEdit &&
+      !m.canManage &&
+      m.status === 'scheduled' &&
+      (!m.topic || !m.location || !m.snackPerson),
   );
   const group = useGroup(m.groupId);
   const [picker, setPicker] = useState<'leader' | 'snack' | null>(null);
@@ -159,6 +168,8 @@ function MeetingView({ m }: { m: MeetingDetail }) {
           </div>
         )}
       </HeroCard>
+
+      {m.myRole && !m.myAcceptedAt && !cancelled && <AnswerCard meetingId={m.id} role={m.myRole} />}
 
       <LeaderCard
         person={m.leader}
@@ -368,6 +379,39 @@ function MeetingView({ m }: { m: MeetingDetail }) {
         />
       )}
     </Screen>
+  );
+}
+
+/** Shown to the person who was given a job on this meeting until they answer. */
+function AnswerCard({ meetingId, role }: { meetingId: number; role: 'leader' | 'snack' }) {
+  const t = useT();
+  const toast = useToast();
+  const answer = useAnswerMeeting();
+  const { back } = useNav();
+  async function reply(agree: boolean) {
+    if (!agree && !(await confirmDialog(t.meetings.cantAsk))) return;
+    try {
+      await answer.mutateAsync({ id: meetingId, role, agree });
+      haptic.success();
+      toast(agree ? t.meetings.confirmed : t.meetings.declinedToast);
+      if (!agree) back();
+    } catch {
+      haptic.error();
+      toast(t.common.actionFailed, 'error');
+    }
+  }
+  return (
+    <Card className="flex flex-col gap-3 p-4">
+      <p className="text-[14px]">{t.meetings.answerHint}</p>
+      <div className="flex gap-2">
+        <Button small disabled={answer.isPending} onClick={() => void reply(true)}>
+          {t.meetings.agreeBtn}
+        </Button>
+        <Button small variant="glass" disabled={answer.isPending} onClick={() => void reply(false)}>
+          {t.meetings.cantBtn}
+        </Button>
+      </div>
+    </Card>
   );
 }
 

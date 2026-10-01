@@ -1,5 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  AnswerMeetingInput,
+  AssignmentRow,
   UpdateAnnouncementInput,
   CalendarData,
   CalendarNoteInput,
@@ -354,6 +356,23 @@ export const fetchNotifyText = (meetingId: number, role: 'leader' | 'snack', not
   );
 
 /** Send the leader or snack person their bot message (with the meeting notes). */
+/** Meetings the person leads or buys snacks for, with what is still to fill in. */
+export function useAssignments() {
+  return useQuery({
+    queryKey: ['me', 'assignments'],
+    queryFn: () => apiFetch<AssignmentRow[]>('/me/assignments'),
+  });
+}
+
+export function useAnswerMeeting() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({ id, ...input }: AnswerMeetingInput & { id: number }) =>
+      apiFetch<{ ok: true }>(`/meetings/${id}/answer`, { method: 'POST', ...json(input) }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useNotifyMeeting() {
   const invalidate = useInvalidateAll();
   return useMutation({

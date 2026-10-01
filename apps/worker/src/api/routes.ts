@@ -15,6 +15,7 @@ import {
   calendarNoteRoutes,
   groupMeetingRoutes,
   meetingRoutes,
+  myAssignmentRoutes,
   myAttendanceRoutes,
   scheduleRoutes,
 } from './meetings';
@@ -58,5 +59,6 @@ apiRoutes.route('/schedules', scheduleRoutes);
 apiRoutes.route('/meetings', meetingRoutes);
 apiRoutes.route('/calendar-notes', calendarNoteRoutes);
 apiRoutes.route('/me/attendance', myAttendanceRoutes);
+apiRoutes.route('/me/assignments', myAssignmentRoutes);
 apiRoutes.route('/memberships', membershipRoutes);
 apiRoutes.route('/users', userRoutes);

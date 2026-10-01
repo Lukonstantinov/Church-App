@@ -162,23 +162,30 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     await announceJoinDecision(ctx.api, db, result, ctx.dbUser, appUrl);
   });
 
-  // "Agree" / "Can't" under a meeting assignment.
+  // "Agree" / "Can't" under a meeting assignment. The way into the meeting stays.
   pm.callbackQuery(/^ma:([yn]):(\d+):([ls])$/, async (ctx) => {
     const agree = ctx.match[1] === 'y';
+    const meetingId = Number(ctx.match[2]);
     const result = await answerMeetingRole(db, ctx.api, {
-      meetingId: Number(ctx.match[2]),
+      meetingId,
       role: ctx.match[3] === 'l' ? 'leader' : 'snack',
       agree,
       user: ctx.dbUser,
     });
-    await ctx.editMessageReplyMarkup().catch(() => undefined);
     if (result === 'not_yours') {
+      await ctx.editMessageReplyMarkup().catch(() => undefined);
       await ctx.answerCallbackQuery({ text: ctx.t.bot.meetingNotYours, show_alert: true });
       return;
     }
+    const meetingUrl = `${appUrl.replace(/\/+$/, '')}/?meeting=${meetingId}`;
+    const openMeeting = new InlineKeyboard().webApp(ctx.t.bot.meetingButton, meetingUrl);
+    // Agreed: keep "Open meeting" under the message. Can't: the job is gone, so no buttons.
+    await ctx
+      .editMessageReplyMarkup(agree ? { reply_markup: openMeeting } : undefined)
+      .catch(() => undefined);
     await ctx.answerCallbackQuery();
     await ctx.reply(agree ? ctx.t.bot.meetingAgreed : ctx.t.bot.meetingDeclined, {
-      reply_markup: openAppKeyboard(ctx.t),
+      reply_markup: agree ? openMeeting : openAppKeyboard(ctx.t),
     });
   });
 
