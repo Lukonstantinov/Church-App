@@ -123,6 +123,12 @@ export const en: Messages = {
     cameOf: (a: number, b: number) => `${a} of ${b} came`,
   },
   meetings: {
+    templates: 'Templates',
+    defaultTemplate: 'Standard',
+    saveTemplate: '💾 Save as template',
+    templateName: 'Template name',
+    templateSaved: 'Template saved: the date, title, budget and name fill in by themselves',
+    deleteTemplate: 'Delete this template?',
     cantAsk: 'Really can’t? We’ll tell whoever assigned you.',
     myJobs: 'Assigned to you',
     youLeadShort: 'You lead',

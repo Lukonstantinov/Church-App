@@ -29,31 +29,81 @@ async function wording(db: Db, meeting: Meeting, locale: Locale, budgetCents: nu
 
 const stripTags = (html: string) => html.replace(/<[^>]+>/g, '');
 
+type TextArgs = {
+  meeting: Meeting;
+  groupName: string;
+  userId: number;
+  role: Role;
+  budgetCents: number;
+  notes?: string | null;
+};
+
+/** What the placeholders stand for on this meeting, for this recipient. */
+async function valuesFor(db: Db, args: TextArgs) {
+  const person = await db.query.users.findFirst({ where: eq(users.id, args.userId) });
+  const locale = localeOf(person ?? null, await churchDefaultLocale(db));
+  const { date, budget } = await wording(db, args.meeting, locale, args.budgetCents);
+  return {
+    locale,
+    values: {
+      title: args.meeting.title,
+      group: args.groupName,
+      date,
+      budget,
+      name: person?.firstName ?? '',
+    },
+  };
+}
+
 /**
  * The default message for the leader or snack person, as plain text the sender can
  * edit before sending. The meeting notes go at the end.
  */
-export async function defaultMeetingText(
-  db: Db,
-  args: {
-    meeting: Meeting;
-    groupName: string;
-    userId: number;
-    role: Role;
-    budgetCents: number;
-    notes?: string | null;
-  },
-): Promise<string> {
-  const person = await db.query.users.findFirst({ where: eq(users.id, args.userId) });
-  const locale = localeOf(person ?? null, await churchDefaultLocale(db));
+export async function defaultMeetingText(db: Db, args: TextArgs): Promise<string> {
+  const { locale, values } = await valuesFor(db, args);
   const t = messages(locale);
-  const { date, budget } = await wording(db, args.meeting, locale, args.budgetCents);
   const base =
     args.role === 'leader'
-      ? t.bot.meetingLeader(args.meeting.title, args.groupName, date, budget)
-      : t.bot.meetingSnack(args.meeting.title, args.groupName, date, budget);
+      ? t.bot.meetingLeader(values.title, values.group, values.date, values.budget)
+      : t.bot.meetingSnack(values.title, values.group, values.date, values.budget);
   const text = stripTags(base);
   return args.notes ? `${text}\n\n📝 ${args.notes}` : text;
+}
+
+const tokenOf = (key: string) => `{${key}}`;
+
+/** A saved wording filled in for a meeting; notes are added at the end unless placed with {notes}. */
+export async function fillTemplate(db: Db, template: string, args: TextArgs): Promise<string> {
+  const { values } = await valuesFor(db, args);
+  const all: Record<string, string> = { ...values, notes: args.notes ?? '' };
+  let text = template.replace(
+    /\{(title|group|date|budget|name|notes)\}/g,
+    (_, k: string) => all[k]!,
+  );
+  if (args.notes && !template.includes(tokenOf('notes'))) text = `${text}\n\n📝 ${args.notes}`;
+  return text.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * The reverse: a message as the sender sees it becomes a wording by turning this
+ * meeting's own title, ministry, date, amount, name and notes back into placeholders,
+ * so the saved text stays valid for other meetings and people.
+ */
+export async function toTemplate(db: Db, text: string, args: TextArgs): Promise<string> {
+  const { values } = await valuesFor(db, args);
+  let out = text.trim();
+  if (args.notes) {
+    const tail = `\n\n📝 ${args.notes}`;
+    out = out.endsWith(tail)
+      ? out.slice(0, -tail.length)
+      : out.split(args.notes).join(tokenOf('notes'));
+  }
+  // Longest values first, so a short value inside a longer one doesn't break it.
+  const pairs = Object.entries(values)
+    .filter(([, v]) => v.length > 0)
+    .sort((x, y) => y[1].length - x[1].length);
+  for (const [key, value] of pairs) out = out.split(value).join(tokenOf(key));
+  return out;
 }
 
 /**

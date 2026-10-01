@@ -1,5 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  MessageTemplateInput,
+  MessageTemplateRow,
   AnswerMeetingInput,
   AssignmentRow,
   UpdateAnnouncementInput,
@@ -349,11 +351,48 @@ export function useDeleteNote(groupId: number) {
   });
 }
 
-/** The default message for a meeting's leader or snack person (plain text to edit). */
-export const fetchNotifyText = (meetingId: number, role: 'leader' | 'snack', notes: string) =>
+/** The message for a meeting's leader or snack person (plain text to edit): the default, or a saved wording. */
+export const fetchNotifyText = (
+  meetingId: number,
+  role: 'leader' | 'snack',
+  notes: string,
+  templateId?: number,
+) =>
   apiFetch<{ text: string }>(
-    `/meetings/${meetingId}/notify-text?role=${role}&notes=${encodeURIComponent(notes)}`,
+    `/meetings/${meetingId}/notify-text?role=${role}&notes=${encodeURIComponent(notes)}${
+      templateId ? `&template=${templateId}` : ''
+    }`,
   );
+
+/** Saved message wordings of the meeting's ministry. */
+export function useMessageTemplates(meetingId: number) {
+  return useQuery({
+    queryKey: ['meetings', meetingId, 'message-templates'],
+    queryFn: () => apiFetch<MessageTemplateRow[]>(`/meetings/${meetingId}/message-templates`),
+  });
+}
+
+export function useSaveMessageTemplate(meetingId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MessageTemplateInput) =>
+      apiFetch<MessageTemplateRow>(`/meetings/${meetingId}/message-templates`, {
+        method: 'POST',
+        ...json(input),
+      }),
+    onSuccess: () =>
+      void qc.invalidateQueries({ queryKey: ['meetings', meetingId, 'message-templates'] }),
+  });
+}
+
+export function useDeleteMessageTemplate(meetingId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiFetch(`/message-templates/${id}`, { method: 'DELETE' }),
+    onSuccess: () =>
+      void qc.invalidateQueries({ queryKey: ['meetings', meetingId, 'message-templates'] }),
+  });
+}
 
 /** Send the leader or snack person their bot message (with the meeting notes). */
 /** Meetings the person leads or buys snacks for, with what is still to fill in. */

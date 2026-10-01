@@ -15,6 +15,7 @@ import {
   calendarNoteRoutes,
   groupMeetingRoutes,
   meetingRoutes,
+  messageTemplateRoutes,
   myAssignmentRoutes,
   myAttendanceRoutes,
   scheduleRoutes,
@@ -58,6 +59,7 @@ apiRoutes.route('/transactions', transactionRoutes);
 apiRoutes.route('/schedules', scheduleRoutes);
 apiRoutes.route('/meetings', meetingRoutes);
 apiRoutes.route('/calendar-notes', calendarNoteRoutes);
+apiRoutes.route('/message-templates', messageTemplateRoutes);
 apiRoutes.route('/me/attendance', myAttendanceRoutes);
 apiRoutes.route('/me/assignments', myAssignmentRoutes);
 apiRoutes.route('/memberships', membershipRoutes);

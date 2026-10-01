@@ -704,3 +704,23 @@ export const calendarNotes = sqliteTable(
   },
   (t) => [index('calendar_notes_group_date').on(t.groupId, t.date)],
 );
+
+/**
+ * Saved wording for the message to a meeting's leader or snack person. The text keeps
+ * placeholders ({title} {group} {date} {budget} {name} {notes}) that are filled in per meeting.
+ */
+export const messageTemplates = sqliteTable(
+  'message_templates',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    role: text('role', { enum: ['leader', 'snack'] }).notNull(),
+    name: text('name').notNull(),
+    text: text('text').notNull(),
+    createdBy: integer('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index('message_templates_group').on(t.groupId, t.role)],
+);

@@ -128,6 +128,12 @@ export const ru = {
     cameOf: (a: number, b: number) => `пришли ${a} из ${b}`,
   },
   meetings: {
+    templates: 'Шаблоны',
+    defaultTemplate: 'Стандартный',
+    saveTemplate: '💾 Сохранить как шаблон',
+    templateName: 'Название шаблона',
+    templateSaved: 'Шаблон сохранён: дата, название, бюджет и имя подставятся сами',
+    deleteTemplate: 'Удалить этот шаблон?',
     cantAsk: 'Точно не сможете? Мы сообщим тому, кто вас назначил.',
     myJobs: 'Вам назначено',
     youLeadShort: 'Вы ведёте',

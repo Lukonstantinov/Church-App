@@ -134,6 +134,13 @@
       "when": 1790880350956,
       "tag": "0018_calendar_agree",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1790882427229,
+      "tag": "0019_message_templates",
+      "breakpoints": true
     }
   ]
 }

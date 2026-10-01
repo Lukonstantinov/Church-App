@@ -9,6 +9,7 @@ import {
   answerMeetingSchema,
   calendarNoteSchema,
   localDate,
+  messageTemplateSchema,
   notifyMeetingSchema,
   type CalendarData,
   updateMeetingSchema,
@@ -16,6 +17,7 @@ import {
   zonedToUtc,
   type AssignmentRow,
   type MeetingDetail,
+  type MessageTemplateRow,
   type MeetingRow,
   type MyAttendanceResponse,
   type RollResponse,
@@ -31,6 +33,7 @@ import {
   calendarNotes,
   groups,
   meetingAudience,
+  messageTemplates,
   transactions,
   users,
   type Meeting,
@@ -38,7 +41,13 @@ import {
 } from '../db/schema';
 import { accessIn, assertCan, assertCanViewGroup, can } from '../lib/access';
 import { listEvents } from '../lib/events';
-import { answerMeetingRole, defaultMeetingText, notifyMeetingRole } from '../lib/meetingNotify';
+import {
+  answerMeetingRole,
+  defaultMeetingText,
+  fillTemplate,
+  notifyMeetingRole,
+  toTemplate,
+} from '../lib/meetingNotify';
 import { assertGroupMedia, signedMediaUrl } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi } from '../lib/telegram';
@@ -623,21 +632,95 @@ async function notifyTarget(
   return { db, user, meeting, group, userId };
 }
 
-/** The default message, so the sender can read and edit it before sending. */
+/**
+ * The message to read and edit before sending: the default wording, or a saved one
+ * (`template=<id>`) filled in for this meeting.
+ */
 meetingRoutes.get('/:id/notify-text', async (c) => {
   const role = c.req.query('role') === 'snack' ? 'snack' : 'leader';
   const { db, meeting, group, userId } = await notifyTarget(c, idParam(c), role);
   const notes = c.req.query('notes');
-  return c.json({
-    text: await defaultMeetingText(db, {
-      meeting,
-      groupName: group.name,
-      userId,
-      role,
-      budgetCents: meeting.budgetCents ?? group.meetingBudgetCents,
-      notes: notes === undefined ? meeting.notes : notes || null,
-    }),
+  const args = {
+    meeting,
+    groupName: group.name,
+    userId,
+    role,
+    budgetCents: meeting.budgetCents ?? group.meetingBudgetCents,
+    notes: notes === undefined ? meeting.notes : notes || null,
+  } as const;
+  const templateId = Number(c.req.query('template'));
+  if (Number.isSafeInteger(templateId) && templateId > 0) {
+    const saved = await db.query.messageTemplates.findFirst({
+      where: and(
+        eq(messageTemplates.id, templateId),
+        eq(messageTemplates.groupId, meeting.groupId),
+        eq(messageTemplates.role, role),
+      ),
+    });
+    if (!saved) throw new HTTPException(404, { message: 'not_found' });
+    return c.json({ text: await fillTemplate(db, saved.text, args) });
+  }
+  return c.json({ text: await defaultMeetingText(db, args) });
+});
+
+/** Saved wordings for this ministry (for the send box). */
+meetingRoutes.get('/:id/message-templates', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, idParam(c)) });
+  if (!meeting) throw new HTTPException(404, { message: 'not_found' });
+  const a = await meetingAccess(db, user, meeting);
+  if (!a.edit) throw new HTTPException(a.member ? 403 : 404, { message: 'forbidden' });
+  const rows = await db
+    .select()
+    .from(messageTemplates)
+    .where(eq(messageTemplates.groupId, meeting.groupId))
+    .orderBy(asc(messageTemplates.name));
+  const out: MessageTemplateRow[] = rows.map((r) => ({
+    id: r.id,
+    role: r.role,
+    name: r.name,
+    text: r.text,
+    canDelete: a.manage || r.createdBy === user.id,
+  }));
+  return c.json(out);
+});
+
+/**
+ * Save the message the sender is looking at as a new wording. The meeting's own values
+ * (title, ministry, date, amount, name, notes) become placeholders again.
+ */
+meetingRoutes.post('/:id/message-templates', async (c) => {
+  const input = await parseBody(c, messageTemplateSchema);
+  const { db, user, meeting, group, userId } = await notifyTarget(c, idParam(c), input.role);
+  const text = await toTemplate(db, input.text, {
+    meeting,
+    groupName: group.name,
+    userId,
+    role: input.role,
+    budgetCents: meeting.budgetCents ?? group.meetingBudgetCents,
+    notes: meeting.notes,
   });
+  const [row] = await db
+    .insert(messageTemplates)
+    .values({
+      groupId: meeting.groupId,
+      role: input.role,
+      name: input.name,
+      text,
+      createdBy: user.id,
+    })
+    .returning();
+  return c.json(
+    {
+      id: row!.id,
+      role: row!.role,
+      name: row!.name,
+      text: row!.text,
+      canDelete: true,
+    } satisfies MessageTemplateRow,
+    201,
+  );
 });
 
 /**
@@ -794,6 +877,23 @@ meetingRoutes.post('/:id/answer', async (c) => {
     user: c.get('user'),
   });
   if (result === 'not_yours') throw new HTTPException(403, { message: 'not_yours' });
+  return c.json({ ok: true });
+});
+
+/** Remove a saved wording (managers, or the one who saved it). */
+export const messageTemplateRoutes = new Hono<App>();
+
+messageTemplateRoutes.delete('/:id', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const row = await db.query.messageTemplates.findFirst({
+    where: eq(messageTemplates.id, idParam(c)),
+  });
+  if (!row) throw new HTTPException(404, { message: 'not_found' });
+  const access = await accessIn(db, user, row.groupId);
+  if (row.createdBy !== user.id && !access.perms.has('meetings.manage'))
+    throw new HTTPException(403, { message: 'forbidden' });
+  await db.delete(messageTemplates).where(eq(messageTemplates.id, row.id));
   return c.json({ ok: true });
 });
 

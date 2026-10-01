@@ -125,6 +125,12 @@ export const lt: Messages = {
     cameOf: (a: number, b: number) => `atėjo ${a} iš ${b}`,
   },
   meetings: {
+    templates: 'Šablonai',
+    defaultTemplate: 'Standartinis',
+    saveTemplate: '💾 Išsaugoti kaip šabloną',
+    templateName: 'Šablono pavadinimas',
+    templateSaved: 'Šablonas išsaugotas: data, pavadinimas, biudžetas ir vardas įsijungs patys',
+    deleteTemplate: 'Ištrinti šį šabloną?',
     cantAsk: 'Tikrai negalite? Pranešime tam, kas jus paskyrė.',
     myJobs: 'Jums paskirta',
     youLeadShort: 'Jūs vedate',

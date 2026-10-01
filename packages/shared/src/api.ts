@@ -389,6 +389,26 @@ export interface MeetingDetail extends MeetingRow {
   myAcceptedAt: string | null;
 }
 
+/** Placeholders a saved message wording may contain; each is filled in per meeting. */
+export const MESSAGE_PLACEHOLDERS = ['title', 'group', 'date', 'budget', 'name', 'notes'] as const;
+
+export const messageTemplateSchema = z.object({
+  role: z.enum(['leader', 'snack']),
+  name: z.string().trim().min(1).max(60),
+  /** The message as shown to the sender; the server turns the meeting's own values back into placeholders. */
+  text: z.string().trim().min(1).max(3000),
+});
+export type MessageTemplateInput = z.input<typeof messageTemplateSchema>;
+
+export interface MessageTemplateRow {
+  id: number;
+  role: 'leader' | 'snack';
+  name: string;
+  /** With placeholders, e.g. "{name}, you lead «{title}» on {date}". */
+  text: string;
+  canDelete: boolean;
+}
+
 /** "Agree" / "Can't" for a meeting job, from the app (the bot buttons do the same). */
 export const answerMeetingSchema = z.object({
   role: z.enum(['leader', 'snack']),

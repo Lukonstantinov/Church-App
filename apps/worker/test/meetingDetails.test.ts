@@ -548,3 +548,68 @@ describe('assigned jobs window', () => {
     expect(await apiJson<Job[]>('/api/me/assignments', { user: lead })).toEqual([]);
   });
 });
+
+describe('message templates', () => {
+  it('saves only the wording: this meeting’s values become placeholders for the next one', async () => {
+    const g = await createEnv('Шаблоны сообщений');
+    const lead = fakeUser('Ведущая');
+    const leadId = await join(lead, g);
+    const d1 = addDays(localDate(new Date(), TZ), 3);
+    const d2 = addDays(localDate(new Date(), TZ), 9);
+    const make = (date: string, title: string) =>
+      apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+        method: 'POST',
+        user: ADMIN,
+        json: { date, startTime: '19:00', durationMin: 120, title },
+      });
+    const m1 = await make(d1, 'Молодёжка');
+    const m2 = await make(d2, 'Вечер хвалы');
+    await patch(m1.id, { leaderUserId: leadId });
+    await patch(m2.id, { leaderUserId: leadId });
+
+    // The text the sender sees for meeting 1, with their own wording added.
+    const shown = (
+      await apiJson<{ text: string }>(`/api/meetings/${m1.id}/notify-text?role=leader`, {
+        user: ADMIN,
+      })
+    ).text;
+    const edited = `Привет, Ведущая! Ждём тебя на «Молодёжка» — ${shown.split('\n')[2]}. Бюджет ${/бюджет (.+?)\)/.exec(shown)![1]}`;
+    const saved = await apiJson<{ id: number; text: string }>(
+      `/api/meetings/${m1.id}/message-templates`,
+      { method: 'POST', user: ADMIN, json: { role: 'leader', name: 'Тёплое', text: edited } },
+    );
+    expect(saved.text).toContain('{name}');
+    expect(saved.text).toContain('«{title}»');
+    expect(saved.text).toContain('{date}');
+    expect(saved.text).toContain('{budget}');
+    expect(saved.text).not.toContain('Молодёжка');
+
+    // Used on another meeting it fills in that meeting's values (and its notes at the end).
+    const filled = (
+      await apiJson<{ text: string }>(
+        `/api/meetings/${m2.id}/notify-text?role=leader&template=${saved.id}&notes=${encodeURIComponent('Гитара')}`,
+        { user: ADMIN },
+      )
+    ).text;
+    expect(filled).toContain('Привет, Ведущая!');
+    expect(filled).toContain('«Вечер хвалы»');
+    expect(filled).not.toContain('{');
+    expect(filled.endsWith('📝 Гитара')).toBe(true);
+
+    // Listed for the ministry; the one who saved it or a manager may delete it.
+    const list = await apiJson<{ id: number; canDelete: boolean }[]>(
+      `/api/meetings/${m2.id}/message-templates`,
+      { user: lead },
+    );
+    expect(list).toEqual([expect.objectContaining({ id: saved.id, canDelete: false })]);
+    expect(
+      (await api(`/api/message-templates/${saved.id}`, { method: 'DELETE', user: lead })).status,
+    ).toBe(403);
+    expect(
+      (await api(`/api/message-templates/${saved.id}`, { method: 'DELETE', user: ADMIN })).status,
+    ).toBe(200);
+    expect(
+      await apiJson<unknown[]>(`/api/meetings/${m2.id}/message-templates`, { user: ADMIN }),
+    ).toEqual([]);
+  });
+});

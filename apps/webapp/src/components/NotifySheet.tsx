@@ -7,12 +7,19 @@ import {
   type MeetingRow,
 } from '@church/shared';
 import { useT } from '../lib/i18n';
-import { fetchNotifyText, useNotifyMeeting, useUploadMedia } from '../lib/queries';
-import { haptic } from '../lib/telegram';
+import {
+  fetchNotifyText,
+  useDeleteMessageTemplate,
+  useMessageTemplates,
+  useNotifyMeeting,
+  useSaveMessageTemplate,
+  useUploadMedia,
+} from '../lib/queries';
+import { confirmDialog, haptic } from '../lib/telegram';
 import { MeetingPoster } from './MeetingPoster';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
-import { Button, Toggle } from './ui';
+import { Button, TextField, Toggle } from './ui';
 
 type Role = 'leader' | 'snack';
 
@@ -45,9 +52,17 @@ export function NotifySheet({
   const [withPoster, setWithPoster] = useState(true);
   const [busy, setBusy] = useState<'poster' | 'send' | null>(null);
 
-  const loadDefault = (n: string) => {
+  const templates = useMessageTemplates(meeting.id);
+  const saveTemplate = useSaveMessageTemplate(meeting.id);
+  const deleteTemplate = useDeleteMessageTemplate(meeting.id);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [naming, setNaming] = useState<string | null>(null);
+  const mine = (templates.data ?? []).filter((x) => x.role === role);
+
+  const loadDefault = (n: string, templateId?: number) => {
     setLoading(true);
-    fetchNotifyText(meeting.id, role, n)
+    setPicked(templateId ?? null);
+    fetchNotifyText(meeting.id, role, n, templateId)
       .then((r) => setText(r.text))
       .catch(() => undefined)
       .finally(() => setLoading(false));
@@ -84,6 +99,31 @@ export function NotifySheet({
     if (!blob || blob.size > MEDIA_MAX_BYTES) return null;
     const media = await upload.mutateAsync(blob);
     return media.id;
+  }
+
+  async function saveAsTemplate() {
+    const name = naming?.trim();
+    if (!name || !text.trim()) return;
+    try {
+      const row = await saveTemplate.mutateAsync({ role, name, text });
+      haptic.success();
+      toast(t.meetings.templateSaved);
+      setNaming(null);
+      setPicked(row.id);
+    } catch {
+      haptic.error();
+      toast(t.common.saveFailed, 'error');
+    }
+  }
+
+  async function removeTemplate(id: number) {
+    if (!(await confirmDialog(t.meetings.deleteTemplate))) return;
+    try {
+      await deleteTemplate.mutateAsync(id);
+      if (picked === id) setPicked(null);
+    } catch {
+      toast(t.common.actionFailed, 'error');
+    }
   }
 
   async function send() {
@@ -138,6 +178,24 @@ export function NotifySheet({
               {t.meetings.resetText}
             </button>
           </div>
+          {mine.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[12px] text-hint">{t.meetings.templates}:</span>
+              <TemplateChip on={picked === null} onClick={() => loadDefault(notes.trim())}>
+                {t.meetings.defaultTemplate}
+              </TemplateChip>
+              {mine.map((x) => (
+                <TemplateChip
+                  key={x.id}
+                  on={picked === x.id}
+                  onClick={() => loadDefault(notes.trim(), x.id)}
+                  onRemove={x.canDelete ? () => void removeTemplate(x.id) : undefined}
+                >
+                  {x.name}
+                </TemplateChip>
+              ))}
+            </div>
+          )}
           <textarea
             value={loading ? '…' : text}
             onChange={(e) => setText(e.target.value)}
@@ -147,6 +205,34 @@ export function NotifySheet({
             className={field}
           />
         </div>
+        {naming === null ? (
+          <button
+            type="button"
+            disabled={loading || !text.trim()}
+            onClick={() => setNaming('')}
+            className="self-start text-[13px] font-semibold text-link disabled:opacity-50"
+          >
+            {t.meetings.saveTemplate}
+          </button>
+        ) : (
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1 rounded-xl bg-hairline px-3 pb-1.5 pt-1">
+              <TextField
+                label={t.meetings.templateName}
+                value={naming}
+                onChange={setNaming}
+                maxLength={60}
+              />
+            </div>
+            <Button
+              small
+              disabled={!naming.trim() || saveTemplate.isPending}
+              onClick={() => void saveAsTemplate()}
+            >
+              {t.common.save}
+            </Button>
+          </div>
+        )}
         {group && (
           <div className="overflow-hidden rounded-2xl ring-1 ring-hairline">
             <div className="px-1">
@@ -181,5 +267,39 @@ export function NotifySheet({
         </Button>
       </div>
     </Sheet>
+  );
+}
+
+function TemplateChip({
+  on,
+  onClick,
+  onRemove,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  onRemove?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={`inline-flex max-w-full items-center overflow-hidden rounded-full text-[13px] font-semibold ${
+        on ? 'brand-gradient text-white' : 'bg-hairline'
+      }`}
+    >
+      <button type="button" onClick={onClick} className="max-w-[160px] truncate px-3 py-1.5">
+        {children}
+      </button>
+      {onRemove && (
+        <button
+          type="button"
+          aria-label="delete"
+          onClick={onRemove}
+          className="py-1.5 pl-0.5 pr-2.5 opacity-70"
+        >
+          ✕
+        </button>
+      )}
+    </span>
   );
 }
