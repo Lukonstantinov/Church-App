@@ -573,6 +573,22 @@ export const en: Messages = {
     exemptNote: 'You are exempt from dues',
   },
   events: {
+    chatEventTitle: 'Event chat',
+    chatInApp: 'Chat in the app',
+    chatInAppHint: 'The ministry’s members can see it. Write right here.',
+    chatWrite: 'Write a message…',
+    chatEmpty: 'Nothing yet — write first.',
+    chatSend: 'Send',
+    chatTelegram: 'Telegram chat',
+    chatTelegramCreate: 'Create a Telegram chat',
+    chatTelegramSteps:
+      '1. Tap the button — Telegram offers to create a new group or pick an existing one.\n2. Choose the group and confirm: the bot becomes its admin.\n3. Done: people at the event get an “Open chat” button. The bot lets in only those who serve, are going or run the event.',
+    chatTelegramManaged: (title: string) => `Linked: ${title}`,
+    chatTelegramDisconnect: 'Disconnect chat',
+    chatTelegramDisconnectConfirm:
+      'Disconnect the Telegram chat from the event? The invite link stops working.',
+    chatTelegramOpen: 'Open the chat in Telegram',
+    chatDeleteMessage: 'Delete the message?',
     remindTitleShort: 'Remind',
     remindServing: 'Those who serve',
     remindGoing: 'Those who are going',
@@ -1095,6 +1111,10 @@ export const en: Messages = {
     eventDuty: (titleHtml: string, when: string, dutiesHtml: string) =>
       `🛠 <b>You have a duty at an event</b>\n“${titleHtml}”\n${when}\n\n${dutiesHtml}`,
     postRepeat: '🔁 Reminder about this post',
+    eventChatLinked: (title: string) =>
+      `✅ The chat is linked to the event “${title}”.\nPeople who serve at it, are going or run it can join with the “Open chat” button in the event. I approve the request myself.`,
+    eventChatJoinDenied: (title: string) =>
+      `This chat is for those who serve at “${title}”, are going to it or run it. Mark “Going” in the app and ask to join again.`,
     meetingButton: 'Open the meeting',
     postHasExtras: '📎 This post has attachments, a poll or a table — open the app',
     chatLinked: (ministry: string) =>

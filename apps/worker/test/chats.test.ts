@@ -211,3 +211,108 @@ describe('ministry look and deletion', () => {
     expect(back.map((x) => x.id)).toContain(g.id);
   });
 });
+
+describe('an event’s own chats', () => {
+  it('a Telegram chat only lets in people who serve, are going, or manage; the app chat is for members', async () => {
+    const calls = mockTelegram();
+    const g = await createEnv('Чат события');
+    const server = fakeUser('Служит');
+    const goer = fakeUser('Идёт');
+    const onlyMember = fakeUser('Просто член');
+    const stranger = fakeUser('Посторонний');
+    const serverRow = await join(server, g);
+    await join(goer, g);
+    await join(onlyMember, g);
+    const date = new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10);
+    const ev = await apiJson<{ id: number }>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'Лагерь',
+        date,
+        startTime: '10:00',
+        features: { rsvp: true, duties: true },
+        roles: [{ name: 'Кухня', userIds: [serverRow.userId] }],
+      },
+    });
+    await api(`/api/events/${ev.id}/rsvp`, {
+      method: 'PUT',
+      user: goer,
+      json: { status: 'going' },
+    });
+
+    // Only people who manage events get the link.
+    expect(
+      (await api(`/api/events/${ev.id}/chat/link`, { method: 'POST', user: server })).status,
+    ).toBe(403);
+    const { url } = await apiJson<{ url: string }>(`/api/events/${ev.id}/chat/link`, {
+      method: 'POST',
+      user: ADMIN,
+    });
+    expect(url).toContain('&admin=invite_users+restrict_members');
+    const code = new URL(url).searchParams.get('startgroup')!;
+    expect(code.startsWith('e_')).toBe(true);
+
+    const chat = newChat('Лагерь — чат');
+    await sendGroupCommand(server, chat, `/start ${code}`); // no right: nothing happens
+    expect(callsTo(calls, 'createChatInviteLink')).toHaveLength(0);
+    await sendGroupCommand(ADMIN, chat, `/start ${code}`);
+    expect(callsTo(calls, 'createChatInviteLink', chat.id)).toHaveLength(1);
+    const detail = await apiJson<{ chatUrl: string; managedChat: { title: string } }>(
+      `/api/events/${ev.id}`,
+      { user: onlyMember },
+    );
+    expect(detail.chatUrl).toBe(`https://t.me/+inv${chat.id}`);
+    expect(detail.managedChat.title).toBe('Лагерь — чат');
+
+    await sendJoinRequest(server, chat);
+    await sendJoinRequest(goer, chat);
+    expect(callsTo(calls, 'approveChatJoinRequest', chat.id)).toHaveLength(2);
+    await sendJoinRequest(onlyMember, chat);
+    await sendJoinRequest(stranger, chat);
+    expect(callsTo(calls, 'declineChatJoinRequest', chat.id)).toHaveLength(2);
+    expect(String(callsTo(calls, 'sendMessage', onlyMember.id).at(-1)!.body.text)).toContain(
+      'Лагерь',
+    );
+
+    // Disconnecting revokes the link.
+    expect((await api(`/api/events/${ev.id}/chat`, { method: 'DELETE', user: ADMIN })).status).toBe(
+      200,
+    );
+    expect(callsTo(calls, 'leaveChat', chat.id)).toHaveLength(1);
+    expect(
+      (await apiJson<{ chatUrl: string | null }>(`/api/events/${ev.id}`, { user: ADMIN })).chatUrl,
+    ).toBeNull();
+
+    // The in-app chat: members write and read; others don't; authors and managers delete.
+    type Msg = { id: number; text: string; mine: boolean; canDelete: boolean };
+    const posted = await apiJson<Msg>(`/api/events/${ev.id}/chat`, {
+      method: 'POST',
+      user: onlyMember,
+      json: { text: 'Кто берёт палатки?' },
+    });
+    expect(posted).toMatchObject({ text: 'Кто берёт палатки?', mine: true });
+    expect(
+      (
+        await api(`/api/events/${ev.id}/chat`, {
+          method: 'POST',
+          user: stranger,
+          json: { text: 'x' },
+        })
+      ).status,
+    ).toBe(404);
+    const seenByServer = await apiJson<Msg[]>(`/api/events/${ev.id}/chat`, { user: server });
+    expect(seenByServer).toEqual([
+      expect.objectContaining({ text: 'Кто берёт палатки?', mine: false, canDelete: false }),
+    ]);
+    expect(
+      (await api(`/api/events/${ev.id}/chat/${posted.id}`, { method: 'DELETE', user: server }))
+        .status,
+    ).toBe(403);
+    expect(
+      (await api(`/api/events/${ev.id}/chat/${posted.id}`, { method: 'DELETE', user: ADMIN }))
+        .status,
+    ).toBe(200);
+    expect(await apiJson<Msg[]>(`/api/events/${ev.id}/chat`, { user: server })).toEqual([]);
+  });
+});

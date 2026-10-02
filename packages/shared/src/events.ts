@@ -175,7 +175,23 @@ export interface EventFinance {
   expenses: TransactionRow[];
 }
 
+/** A message in an event's in-app chat. */
+export interface EventChatMessage {
+  id: number;
+  user: { id: number; firstName: string; lastName: string | null };
+  text: string;
+  createdAt: string;
+  mine: boolean;
+  /** The author, or someone who manages the event, may delete it. */
+  canDelete: boolean;
+}
+
+export const eventChatMessageSchema = z.object({ text: z.string().trim().min(1).max(1000) });
+export type EventChatMessageInput = z.input<typeof eventChatMessageSchema>;
+
 export interface EventDetail extends EventSummary {
+  /** A Telegram chat managed by the bot (title; pending = bot not yet an admin there). */
+  managedChat: { title: string | null; pending: boolean } | null;
   description: string | null;
   chatUrl: string | null;
   coverMediaId: number | null;

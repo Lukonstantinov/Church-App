@@ -17,6 +17,11 @@ import {
 import { can } from '../lib/access';
 import { claimProfile } from '../lib/claim';
 import { completeChatLink, handleJoinRequest, retryPendingLink } from '../lib/chats';
+import {
+  completeEventChatLink,
+  handleEventJoinRequest,
+  retryPendingEventLink,
+} from '../lib/eventChats';
 import { answerMeetingRole } from '../lib/meetingNotify';
 
 export interface BotDeps {
@@ -39,6 +44,26 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
 
   groupChat.command('start', async (ctx) => {
     const payload = ctx.match.trim();
+    if (payload.startsWith(DEEP_LINK.eventChat) && ctx.from && !ctx.from.is_bot) {
+      const by = await upsertTelegramUser(db, ctx.from, admins);
+      const t = messages(localeOf(by, churchLocale));
+      const { result, event } = await completeEventChatLink(ctx.api, db, {
+        code: payload.slice(DEEP_LINK.eventChat.length),
+        chatId: ctx.chat.id,
+        chatTitle: ctx.chat.title,
+        by,
+      });
+      await ctx.reply(
+        result === 'linked'
+          ? t.bot.eventChatLinked(event!.title)
+          : result === 'need_admin'
+            ? t.bot.chatNeedAdmin
+            : result === 'forbidden'
+              ? t.bot.chatLinkForbidden
+              : t.bot.chatLinkInvalid,
+      );
+      return;
+    }
     if (!payload.startsWith(DEEP_LINK.chat) || !ctx.from || ctx.from.is_bot) return;
     const by = await upsertTelegramUser(db, ctx.from, admins);
     const t = messages(localeOf(by, churchLocale));
@@ -67,15 +92,17 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     const group = await retryPendingLink(ctx.api, db, chat.id, chat.title);
     if (group)
       await ctx.api.sendMessage(chat.id, messages(churchLocale).bot.chatLinked(group.name));
+    const event = group ? null : await retryPendingEventLink(ctx.api, db, chat.id, chat.title);
+    if (event)
+      await ctx.api.sendMessage(chat.id, messages(churchLocale).bot.eventChatLinked(event.title));
   });
 
   bot.on('chat_join_request', async (ctx) => {
     const req = ctx.chatJoinRequest;
-    await handleJoinRequest(ctx.api, db, {
-      chatId: req.chat.id,
-      telegramId: req.from.id,
-      userChatId: req.user_chat_id,
-    });
+    const args = { chatId: req.chat.id, telegramId: req.from.id, userChatId: req.user_chat_id };
+    // A ministry's chat, else an event's.
+    if ((await handleJoinRequest(ctx.api, db, args)) === 'unknown_chat')
+      await handleEventJoinRequest(ctx.api, db, args);
   });
 
   // Private chats with the bot.

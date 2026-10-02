@@ -579,6 +579,22 @@ export const lt: Messages = {
     exemptNote: 'Jūs atleisti nuo nario mokesčio',
   },
   events: {
+    chatEventTitle: 'Renginio pokalbis',
+    chatInApp: 'Pokalbis programoje',
+    chatInAppHint: 'Jį mato tarnystės nariai. Rašykite čia pat.',
+    chatWrite: 'Parašykite žinutę…',
+    chatEmpty: 'Kol kas tuščia — parašykite pirmi.',
+    chatSend: 'Siųsti',
+    chatTelegram: 'Telegram pokalbis',
+    chatTelegramCreate: 'Sukurti Telegram pokalbį',
+    chatTelegramSteps:
+      '1. Paspauskite mygtuką — Telegram pasiūlys sukurti naują grupę arba pasirinkti esamą.\n2. Pasirinkite grupę ir patvirtinkite: botas taps jos administratoriumi.\n3. Baigta: renginio dalyviai gaus mygtuką „Atidaryti pokalbį“. Botas įleidžia tik tuos, kas tarnauja, eina ar veda renginį.',
+    chatTelegramManaged: (title: string) => `Prijungta: ${title}`,
+    chatTelegramDisconnect: 'Atjungti pokalbį',
+    chatTelegramDisconnectConfirm:
+      'Atjungti Telegram pokalbį nuo renginio? Kvietimo nuoroda nustos veikti.',
+    chatTelegramOpen: 'Atidaryti pokalbį Telegram',
+    chatDeleteMessage: 'Ištrinti žinutę?',
     remindTitleShort: 'Priminti',
     remindServing: 'Tarnaujantys',
     remindGoing: 'Einantys',
@@ -1117,6 +1133,10 @@ export const lt: Messages = {
     eventDuty: (titleHtml: string, when: string, dutiesHtml: string) =>
       `🛠 <b>Jums paskirta tarnystė renginyje</b>\n„${titleHtml}“\n${when}\n\n${dutiesHtml}`,
     postRepeat: '🔁 Priminimas apie įrašą',
+    eventChatLinked: (title: string) =>
+      `✅ Pokalbis susietas su renginiu „${title}“.\nĮstoti gali tie, kas jame tarnauja, eina ar jį veda — mygtuku „Atidaryti pokalbį“ renginyje. Prašymą patvirtinu pats.`,
+    eventChatJoinDenied: (title: string) =>
+      `Šis pokalbis skirtas tiems, kas tarnauja renginyje „${title}“, eina į jį ar jį veda. Pažymėkite „Einu“ programoje ir paprašykite dar kartą.`,
     meetingButton: 'Atidaryti susitikimą',
     postHasExtras: '📎 Įraše yra priedų, apklausa ar lentelė — atidarykite programėlę',
     chatLinked: (ministry: string) =>

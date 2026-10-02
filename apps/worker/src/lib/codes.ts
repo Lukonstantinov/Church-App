@@ -18,4 +18,6 @@ export const DEEP_LINK = {
   claim: 'c_',
   /** ?startgroup=l_<code>: link a Telegram group chat to a ministry. */
   chat: 'l_',
+  /** ?startgroup=e_<code>: link a Telegram group chat to an event. */
+  eventChat: 'e_',
 } as const;

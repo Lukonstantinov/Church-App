@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  EventChatMessage,
   LabelInput,
   LabelRef,
   SetMemberLabelsInput,
@@ -1134,5 +1135,51 @@ export function useSetMemberLabels(groupId: number) {
     mutationFn: ({ userId, labelIds }: { userId: number } & SetMemberLabelsInput) =>
       apiFetch(`/groups/${groupId}/members/${userId}/labels`, send('PUT', { labelIds })),
     onSuccess: () => void qc.invalidateQueries({ queryKey: keys.members(groupId) }),
+  });
+}
+
+// ---------- event chat ----------
+
+/** The in-app chat of an event; refreshed every few seconds while it is open. */
+export function useEventChat(eventId: number, enabled = true) {
+  return useQuery({
+    queryKey: ['events', eventId, 'chat'],
+    queryFn: () => apiFetch<EventChatMessage[]>(`/events/${eventId}/chat`),
+    enabled,
+    refetchInterval: 8000,
+    staleTime: 0,
+  });
+}
+
+export function usePostEventChat(eventId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) =>
+      apiFetch<EventChatMessage>(`/events/${eventId}/chat`, send('POST', { text })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['events', eventId, 'chat'] }),
+  });
+}
+
+export function useDeleteEventChat(eventId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: number) =>
+      apiFetch(`/events/${eventId}/chat/${messageId}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['events', eventId, 'chat'] }),
+  });
+}
+
+/** The link that adds the bot to a new or existing Telegram group, making it the event's chat. */
+export function useLinkEventChat(eventId: number) {
+  return useMutation({
+    mutationFn: () => apiFetch<{ url: string }>(`/events/${eventId}/chat/link`, send('POST')),
+  });
+}
+
+export function useUnlinkEventChat(eventId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch(`/events/${eventId}/chat`, send('DELETE')),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.event(eventId) }),
   });
 }

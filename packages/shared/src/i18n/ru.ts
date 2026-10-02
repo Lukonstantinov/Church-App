@@ -583,6 +583,22 @@ export const ru = {
     exemptNote: 'Вы освобождены от взносов',
   },
   events: {
+    chatEventTitle: 'Чат события',
+    chatInApp: 'Чат в приложении',
+    chatInAppHint: 'Его видят участники служения. Писать можно прямо здесь.',
+    chatWrite: 'Написать сообщение…',
+    chatEmpty: 'Пока пусто — напишите первым.',
+    chatSend: 'Отправить',
+    chatTelegram: 'Чат в Telegram',
+    chatTelegramCreate: 'Создать Telegram-чат',
+    chatTelegramSteps:
+      '1. Нажмите кнопку — Telegram предложит создать новую группу или выбрать готовую.\n2. Выберите группу и подтвердите: бот станет её администратором.\n3. Готово: участники события получат кнопку «Открыть чат». Бот пускает только тех, кто служит, идёт или ведёт событие.',
+    chatTelegramManaged: (title: string) => `Подключён: ${title}`,
+    chatTelegramDisconnect: 'Отключить чат',
+    chatTelegramDisconnectConfirm:
+      'Отключить Telegram-чат от события? Ссылка-приглашение перестанет работать.',
+    chatTelegramOpen: 'Открыть чат в Telegram',
+    chatDeleteMessage: 'Удалить сообщение?',
     remindTitleShort: 'Напомнить',
     remindServing: 'Те, кто служит',
     remindGoing: 'Те, кто идёт',
@@ -1117,6 +1133,10 @@ export const ru = {
     eventDuty: (titleHtml: string, when: string, dutiesHtml: string) =>
       `🛠 <b>Вам назначено служение на событии</b>\n«${titleHtml}»\n${when}\n\n${dutiesHtml}`,
     postRepeat: '🔁 Напоминание о публикации',
+    eventChatLinked: (title: string) =>
+      `✅ Чат подключён к событию «${title}».\nВступить могут те, кто служит, идёт на событие или ведёт его — по кнопке «Открыть чат» в событии. Бот сам одобрит заявку.`,
+    eventChatJoinDenied: (title: string) =>
+      `Этот чат — для тех, кто служит на событии «${title}», идёт на него или ведёт его. Отметьте «Иду» в приложении и подайте заявку снова.`,
     meetingButton: 'Открыть встречу',
     postHasExtras: '📎 В посте есть вложения, опрос или таблица — откройте приложение',
     chatLinked: (ministry: string) =>

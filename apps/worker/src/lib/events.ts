@@ -405,6 +405,9 @@ export async function eventDetail(
     ...summary!,
     description: event.description,
     chatUrl: event.chatUrl,
+    managedChat: event.tgChatId
+      ? { title: event.tgChatTitle, pending: event.chatLinkCode !== null }
+      : null,
     coverMediaId: event.coverMediaId,
     photos: await Promise.all(
       photos.map(async (p) => ({ id: p.id, url: await signedMediaUrl(secret, p.mediaId) })),

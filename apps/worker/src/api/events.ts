@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import {
   addPhotoSchema,
   createEventSchema,
@@ -8,6 +8,8 @@ import {
   eventPaymentSchema,
   localDate,
   remindEventSchema,
+  eventChatMessageSchema,
+  type EventChatMessage,
   rsvpSchema,
   setRolesSchema,
   updateEventSchema,
@@ -17,11 +19,13 @@ import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import {
   designTemplates,
+  eventMessages,
   eventPhotos,
   events,
   groups,
   memberships,
   transactions,
+  users,
 } from '../db/schema';
 import { assertCan, assertCanViewGroup } from '../lib/access';
 import { audit } from '../lib/audit';
@@ -38,9 +42,10 @@ import {
   setRsvp,
 } from '../lib/events';
 import { defaultReminderText, notifyDuties, sendEventReminder } from '../lib/eventReminder';
+import { startEventChatLink, unlinkEventChat } from '../lib/eventChats';
 import { assertGroupMedia } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
-import { appUrlFor, botApi } from '../lib/telegram';
+import { appUrlFor, botApi, botUsername } from '../lib/telegram';
 import { displayName } from '@church/shared';
 import { churchDefaultLocale, localeOf } from '../lib/church';
 import { idParam, parseBody } from './util';
@@ -168,6 +173,82 @@ async function tellAssigned(
       ),
     );
 }
+
+/** Link for adding the bot to a Telegram group, which becomes this event's chat. */
+eventRoutes.post('/:id/chat/link', async (c) => {
+  const { db, event } = await managed(c, idParam(c));
+  return c.json({ url: await startEventChatLink(db, event, await botUsername(c.env)) });
+});
+
+eventRoutes.delete('/:id/chat', async (c) => {
+  const { db, event } = await managed(c, idParam(c));
+  await unlinkEventChat(botApi(c.env), db, event);
+  return c.json({ ok: true });
+});
+
+/** Members of the ministry see and write in the event's in-app chat. */
+async function chatAccess(c: Context<App>, id: number) {
+  const db = c.get('db');
+  const user = c.get('user');
+  const event = await loadEventOr404(db, id);
+  const { member, canManage } = await eventAccess(db, user, event);
+  if (!member) throw new HTTPException(404, { message: 'event_not_found' });
+  return { db, user, event, canManage };
+}
+
+eventRoutes.get('/:id/chat', async (c) => {
+  const { db, user, event, canManage } = await chatAccess(c, idParam(c));
+  const rows = await db
+    .select({
+      m: eventMessages,
+      firstName: users.firstName,
+      lastName: users.lastName,
+    })
+    .from(eventMessages)
+    .innerJoin(users, eq(users.id, eventMessages.userId))
+    .where(eq(eventMessages.eventId, event.id))
+    .orderBy(desc(eventMessages.id))
+    .limit(100);
+  const out: EventChatMessage[] = rows.reverse().map(({ m, firstName, lastName }) => ({
+    id: m.id,
+    user: { id: m.userId, firstName, lastName },
+    text: m.text,
+    createdAt: m.createdAt,
+    mine: m.userId === user.id,
+    canDelete: m.userId === user.id || canManage,
+  }));
+  return c.json(out);
+});
+
+eventRoutes.post('/:id/chat', async (c) => {
+  const { db, user, event, canManage } = await chatAccess(c, idParam(c));
+  const { text } = await parseBody(c, eventChatMessageSchema);
+  const [m] = await db
+    .insert(eventMessages)
+    .values({ eventId: event.id, userId: user.id, text })
+    .returning();
+  const out: EventChatMessage = {
+    id: m!.id,
+    user: { id: user.id, firstName: user.firstName, lastName: user.lastName },
+    text: m!.text,
+    createdAt: m!.createdAt,
+    mine: true,
+    canDelete: true,
+  };
+  void canManage;
+  return c.json(out, 201);
+});
+
+eventRoutes.delete('/:id/chat/:messageId', async (c) => {
+  const { db, user, event, canManage } = await chatAccess(c, idParam(c));
+  const msg = await db.query.eventMessages.findFirst({
+    where: and(eq(eventMessages.id, idParam(c, 'messageId')), eq(eventMessages.eventId, event.id)),
+  });
+  if (!msg) throw new HTTPException(404, { message: 'not_found' });
+  if (msg.userId !== user.id && !canManage) throw new HTTPException(403, { message: 'forbidden' });
+  await db.delete(eventMessages).where(eq(eventMessages.id, msg.id));
+  return c.json({ ok: true });
+});
 
 /** The default reminder text, in the sender's language, to read and change before sending. */
 eventRoutes.get('/:id/reminder-text', async (c) => {

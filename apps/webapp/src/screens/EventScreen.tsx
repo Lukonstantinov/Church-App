@@ -1,4 +1,5 @@
 import { CountdownBadge, CountdownOnCover, hasCountdown } from '../components/Countdown';
+import { EventChat } from '../components/EventChat';
 import { EventCover } from '../components/EventCard';
 import { EventReminderSheet } from '../components/EventReminderSheet';
 import { useRef, useState } from 'react';
@@ -197,6 +198,7 @@ function EventBody({ e }: { e: EventDetail }) {
 
       {e.features.rsvp && e.member && <RsvpBlock e={e} />}
       {e.features.duties && <DutiesBlock e={e} />}
+      <EventChat e={e} />
       {e.features.gallery && <GalleryBlock e={e} />}
       {e.features.cost && (e.canManage ? <MoneyBlock e={e} /> : <MyCost e={e} />)}
 
