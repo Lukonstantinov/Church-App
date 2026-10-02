@@ -5,6 +5,7 @@ import type { Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { events, groups, jobRuns, meetings, outbox } from '../db/schema';
 import { sendEventReminder } from '../lib/eventReminder';
+import { pruneNotifications } from '../lib/notifications';
 import { getAppUrl, getChurch } from '../lib/church';
 import { escapeHtml } from '../lib/html';
 import { generateMeetings } from '../lib/meetings';
@@ -37,6 +38,7 @@ export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
   if (await claim(db, 'housekeeping', 'all', now.toISOString().slice(0, 10))) {
     const cutoff = new Date(now.getTime() - 7 * DAY_MS).toISOString();
     await db.delete(outbox).where(and(eq(outbox.status, 'sent'), lt(outbox.createdAt, cutoff)));
+    await pruneNotifications(db, now);
   }
 }
 

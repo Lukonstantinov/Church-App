@@ -20,6 +20,7 @@ import {
   type GroupRole,
   type GroupSummary,
   type LabelAnimation,
+  type LabelStyle,
   type MemberRow,
   type ContactRow,
 } from '@church/shared';
@@ -47,6 +48,7 @@ import { markFeedRead, unreadCounts } from '../lib/feed';
 import { assertGroupMedia, signedMediaUrl } from '../lib/media';
 import { createDefaultPositions, defaultPositionId, permsOf, roleFor } from '../lib/positions';
 import { botApi, botUsername, inviteLink } from '../lib/telegram';
+import { toLabelRef } from './labels';
 import { startChatLink, unlinkChat } from '../lib/chats';
 import { idParam, parseBody } from './util';
 
@@ -337,6 +339,8 @@ groupRoutes.get('/:id/members', async (c) => {
           id: groupLabels.id,
           name: groupLabels.name,
           color: groupLabels.color,
+          color2: groupLabels.color2,
+          style: groupLabels.style,
           animation: groupLabels.animation,
         })
         .from(memberLabels)
@@ -359,6 +363,8 @@ groupRoutes.get('/:id/members', async (c) => {
         id: l.id,
         name: l.name,
         color: l.color,
+        color2: l.color2,
+        style: l.style as LabelStyle,
         animation: l.animation as LabelAnimation,
       })),
     membershipId: m.id,
@@ -588,9 +594,26 @@ groupRoutes.get('/:id/contacts', async (c) => {
     .leftJoin(positions, eq(positions.id, memberships.positionId))
     .where(and(eq(memberships.groupId, group.id), eq(memberships.status, 'active')))
     .orderBy(users.firstName);
+  const labelRows = rows.length
+    ? await db
+        .select({ userId: memberLabels.userId, label: groupLabels })
+        .from(memberLabels)
+        .innerJoin(groupLabels, eq(groupLabels.id, memberLabels.labelId))
+        .where(
+          and(
+            eq(groupLabels.groupId, group.id),
+            inArray(
+              memberLabels.userId,
+              rows.map((r) => r.id),
+            ),
+          ),
+        )
+        .orderBy(asc(groupLabels.sort), asc(groupLabels.id))
+    : [];
   const list: ContactRow[] = rows.map(({ telegramId, ...r }) => ({
     ...r,
     offline: telegramId === null,
+    labels: labelRows.filter((l) => l.userId === r.id).map((l) => toLabelRef(l.label)),
   }));
   return c.json(list);
 });

@@ -24,6 +24,7 @@ import { membershipRoutes, userRoutes } from './members';
 import { groupPositionRoutes, positionRoutes } from './positions';
 import { devRoutes } from './dev';
 import { documentRoutes, groupReportRoutes } from './reports';
+import { notificationRoutes } from './notifications';
 import { groupLabelRoutes, labelRoutes } from './labels';
 import { eventRoutes, groupEventRoutes, myEventRoutes } from './events';
 import { groupTreasuryRoutes, myFinanceRoutes, transactionRoutes } from './treasury';
@@ -38,6 +39,7 @@ apiRoutes.get('/me', async (c) => {
 });
 
 apiRoutes.route('/me', meRoutes);
+apiRoutes.route('/me/notifications', notificationRoutes);
 apiRoutes.route('/church', churchRoutes);
 apiRoutes.route('/groups', groupRoutes);
 apiRoutes.route('/groups', groupMeetingRoutes);

@@ -7,6 +7,7 @@ import {
   type MeResponse,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
+import { BurnFrame } from '../components/Burn';
 import { CountdownBadge, hasCountdown } from '../components/Countdown';
 import { LookTop } from '../components/LookTop';
 import { TasksPill } from '../components/Assignments';
@@ -50,7 +51,7 @@ export function Hub({ me }: { me: MeResponse }) {
           <h2 className="mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
             📌 {t.feed.pinned}
           </h2>
-          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+          <div className="-mx-4 -my-1.5 flex snap-x gap-3 overflow-x-auto px-4 py-2.5 [scrollbar-width:none]">
             {pinned.data!.map((e) => (
               <PinnedEventCard
                 key={e.id}
@@ -252,37 +253,39 @@ function PinnedEventCard({
   // The event's own look, else its ministry's (colour, pattern, photo).
   const look = e.look ?? groups.data?.find((g) => g.id === e.groupId) ?? null;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block h-[150px] w-[78%] max-w-[320px] shrink-0 snap-start overflow-hidden rounded-[24px] text-left shadow-cta transition active:scale-[0.98]"
-    >
-      <LookTop look={look} fallbackColor={e.brandColor ?? fallbackTheme} className="h-full p-4">
-        {e.coverUrl && (
-          <>
-            <img
-              src={e.coverUrl}
-              alt=""
-              className="absolute inset-0 -z-0 h-full w-full object-cover"
-            />
-            <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
-          </>
-        )}
-        {hasCountdown(e) ? (
-          <span className="self-start">
-            <CountdownBadge startsAt={e.startsAt} design={e.design} />
+    <BurnFrame e={e} radius={24} className="h-[150px] w-[78%] max-w-[320px] shrink-0 snap-start">
+      <button
+        type="button"
+        onClick={onClick}
+        className="block h-full w-full overflow-hidden rounded-[24px] text-left shadow-cta transition active:scale-[0.98]"
+      >
+        <LookTop look={look} fallbackColor={e.brandColor ?? fallbackTheme} className="h-full p-4">
+          {e.coverUrl && (
+            <>
+              <img
+                src={e.coverUrl}
+                alt=""
+                className="absolute inset-0 -z-0 h-full w-full object-cover"
+              />
+              <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+            </>
+          )}
+          {hasCountdown(e) ? (
+            <span className="self-start">
+              <CountdownBadge startsAt={e.startsAt} design={e.design} />
+            </span>
+          ) : (
+            <span />
+          )}
+          <span className="relative flex flex-col">
+            <span className="text-[12px] font-bold uppercase tracking-wider opacity-80">
+              {e.groupName}
+            </span>
+            <span className="line-clamp-2 text-[19px] font-bold leading-tight">{e.title}</span>
+            <span className="text-[13px] opacity-85">{when(e)}</span>
           </span>
-        ) : (
-          <span />
-        )}
-        <span className="relative flex flex-col">
-          <span className="text-[12px] font-bold uppercase tracking-wider opacity-80">
-            {e.groupName}
-          </span>
-          <span className="line-clamp-2 text-[19px] font-bold leading-tight">{e.title}</span>
-          <span className="text-[13px] opacity-85">{when(e)}</span>
-        </span>
-      </LookTop>
-    </button>
+        </LookTop>
+      </button>
+    </BurnFrame>
   );
 }

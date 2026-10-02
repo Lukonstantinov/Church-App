@@ -979,3 +979,58 @@ describe('telling people about their duties', () => {
     );
   });
 });
+
+describe('notification inbox', () => {
+  it('keeps what people were told, opens its page and can be marked read', async () => {
+    const g = await createEnv('Уведомления');
+    const a = fakeUser('Получатель');
+    const aId = await join(a, g);
+    const date = addDays(localDate(new Date(), TZ), 5);
+    const ev = await apiJson<{ id: number }>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'Лагерь',
+        date,
+        startTime: '10:00',
+        description: 'Берите тёплые вещи и спальник.',
+        features: { duties: true },
+        roles: [{ name: 'Кухня', userIds: [aId] }],
+      },
+    });
+    type Inbox = {
+      unread: number;
+      items: {
+        id: number;
+        kind: string;
+        title: string;
+        body: string;
+        read: boolean;
+        link: unknown;
+      }[];
+    };
+    expect((await apiJson<Inbox>('/api/me/notifications', { user: a })).items).toEqual([]);
+
+    await apiJson(`/api/events/${ev.id}/remind`, { method: 'POST', user: ADMIN, json: {} });
+    const box = await apiJson<Inbox>('/api/me/notifications', { user: a });
+    expect(box.unread).toBe(1);
+    expect(box.items[0]).toMatchObject({
+      kind: 'event_reminder',
+      read: false,
+      link: { type: 'event', eventId: ev.id },
+    });
+    expect(box.items[0]!.title).toContain('Лагерь');
+    // The default reminder carries the description and the person's own duty.
+    expect(box.items[0]!.body).toContain('спальник');
+    expect(box.items[0]!.body).toContain('Кухня');
+    const msg = await sentTo(a.id, 'Напоминание');
+    expect(String(msg!.body.text)).toContain('Кухня');
+
+    // Someone else's inbox is separate; reading clears the counter.
+    expect((await apiJson<Inbox>('/api/me/notifications', { user: ADMIN })).unread).toBe(0);
+    await apiJson('/api/me/notifications/read', { method: 'POST', user: a, json: {} });
+    const after = await apiJson<Inbox>('/api/me/notifications', { user: a });
+    expect(after.unread).toBe(0);
+    expect(after.items[0]!.read).toBe(true);
+  });
+});

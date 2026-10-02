@@ -24,6 +24,7 @@ import { NewMeeting } from './screens/NewMeeting';
 import { Contacts } from './screens/Contacts';
 import { MeetingScreen } from './screens/MeetingScreen';
 import { Labels } from './screens/Labels';
+import { Notifications } from './screens/Notifications';
 import { Reminders } from './screens/Reminders';
 import { TaskScreen } from './screens/TaskScreen';
 import { NewTransaction } from './screens/NewTransaction';
@@ -98,6 +99,8 @@ function Router({ me }: { me: MeResponse }) {
       return <MeetingScreen key={route.meetingId} meetingId={route.meetingId} />;
     case 'task':
       return <TaskScreen key={route.meetingId} meetingId={route.meetingId} />;
+    case 'notifications':
+      return <Notifications />;
     case 'labels':
       return <Labels key={route.groupId} groupId={route.groupId} />;
     case 'reminders':

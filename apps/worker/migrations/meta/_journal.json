@@ -169,6 +169,20 @@
       "when": 1790933293951,
       "tag": "0023_labels",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1790935161296,
+      "tag": "0024_label_styles",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1790935348711,
+      "tag": "0025_notifications",
+      "breakpoints": true
     }
   ]
 }

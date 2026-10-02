@@ -185,9 +185,16 @@ export const LABEL_ANIMATIONS = [
 ] as const;
 export type LabelAnimation = (typeof LABEL_ANIMATIONS)[number];
 
+export const LABEL_STYLES = ['solid', 'gradient', 'rainbow'] as const;
+export type LabelStyle = (typeof LABEL_STYLES)[number];
+
+const hex = z.string().regex(/^#[0-9a-f]{6}$/i);
 export const labelInputSchema = z.object({
   name: z.string().trim().min(1).max(24),
-  color: z.string().regex(/^#[0-9a-f]{6}$/i),
+  color: hex,
+  /** Gradient labels fade from `color` to this one. */
+  color2: hex.nullish(),
+  style: z.enum(LABEL_STYLES).default('solid'),
   animation: z.enum(LABEL_ANIMATIONS).default('none'),
 });
 export type LabelInput = z.input<typeof labelInputSchema>;
@@ -196,6 +203,8 @@ export interface LabelRef {
   id: number;
   name: string;
   color: string;
+  color2: string | null;
+  style: LabelStyle;
   animation: LabelAnimation;
 }
 
@@ -235,6 +244,8 @@ export interface ContactRow {
   username: string | null;
   positionName: string | null;
   offline: boolean;
+  /** Labels everyone in the ministry can see. */
+  labels: LabelRef[];
 }
 
 export interface MemberDetail {
@@ -250,7 +261,12 @@ export interface MemberDetail {
     hasActiveClaimCode: boolean;
   };
   /** Memberships in groups the requester can see. */
-  memberships: (MeMembership & { membershipId: number; joinedAt: string | null })[];
+  memberships: (MeMembership & {
+    membershipId: number;
+    joinedAt: string | null;
+    /** The person's custom labels in that ministry. */
+    labels: LabelRef[];
+  })[];
   /** Attendance in the groups the requester may see (leaders: theirs; the user: own). */
   attendance: MemberAttendance[];
   permissions: {
@@ -802,3 +818,33 @@ export interface Telemetry {
   /** Cloudflare free-plan limits this app is designed around. */
   limits: { key: string; value: string }[];
 }
+
+// ---------- Notifications inbox ----------
+
+export type NotificationKind = 'event_reminder' | 'event_duty' | 'meeting_job' | 'post_repeat';
+
+export type NotificationLink =
+  | { type: 'event'; eventId: number }
+  | { type: 'task'; meetingId: number }
+  | { type: 'post'; groupId: number; postId: number };
+
+export interface NotificationRow {
+  id: number;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  link: NotificationLink | null;
+  createdAt: string;
+  read: boolean;
+}
+
+export interface NotificationsResponse {
+  items: NotificationRow[];
+  unread: number;
+}
+
+export const readNotificationsSchema = z.object({
+  /** Omit to mark everything read. */
+  ids: z.array(z.number().int().positive()).max(200).optional(),
+});
+export type ReadNotificationsInput = z.input<typeof readNotificationsSchema>;

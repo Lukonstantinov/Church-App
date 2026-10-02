@@ -287,7 +287,7 @@ eventRoutes.post('/:id/remind', async (c) => {
   const { db, user, event } = await managed(c, idParam(c));
   if (event.status === 'cancelled') throw new HTTPException(409, { message: 'cancelled' });
   const input = await parseBody(c, remindEventSchema);
-  const sent = await sendEventReminder(db, {
+  const { total: sent, bot } = await sendEventReminder(db, {
     event,
     group: { id: event.groupId },
     text: input.text,
@@ -296,7 +296,7 @@ eventRoutes.post('/:id/remind', async (c) => {
     envAppUrl: c.env.APP_URL,
     fallbackUrl: appUrlFor(c.env, c.req.url),
   });
-  if (sent > 0)
+  if (bot > 0)
     c.executionCtx.waitUntil(
       drainOutbox(db, botApi(c.env), { limit: 100 }).catch((err) =>
         console.error('reminder drain', err),
@@ -310,7 +310,7 @@ eventRoutes.post('/:id/remind', async (c) => {
     groupId: event.groupId,
     data: { sent, chosen: input.userIds?.length ?? null },
   });
-  return c.json({ sent });
+  return c.json({ sent, bot });
 });
 
 eventRoutes.patch('/:id', async (c) => {

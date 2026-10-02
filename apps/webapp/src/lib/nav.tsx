@@ -41,6 +41,7 @@ export type Route =
   | { name: 'event'; eventId: number }
   | { name: 'reminders'; groupId: number }
   | { name: 'labels'; groupId: number }
+  | { name: 'notifications' }
   | { name: 'eventForm'; groupId: number; eventId?: number; date?: string }
   | { name: 'groupSettings'; groupId: number }
   | { name: 'reports'; groupId: number }

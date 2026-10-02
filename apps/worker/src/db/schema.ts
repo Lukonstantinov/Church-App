@@ -764,6 +764,10 @@ export const groupLabels = sqliteTable(
       .references(() => groups.id),
     name: text('name').notNull(),
     color: text('color').notNull(),
+    /** Second colour of a gradient label. */
+    color2: text('color2'),
+    /** solid | gradient | rainbow */
+    style: text('style').notNull().default('solid'),
     animation: text('animation').notNull().default('none'),
     sort: integer('sort').notNull().default(0),
     createdBy: integer('created_by').references(() => users.id),
@@ -783,4 +787,23 @@ export const memberLabels = sqliteTable(
       .references(() => users.id),
   },
   (t) => [primaryKey({ columns: [t.labelId, t.userId] }), index('member_labels_user').on(t.userId)],
+);
+
+/** What a person was told (reminders, duties, jobs, repeated posts), kept to read in the app. */
+export const notifications = sqliteTable(
+  'notifications',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    kind: text('kind').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    /** JSON {type:'event'|'task'|'post', ...ids} for the page it opens. */
+    link: text('link'),
+    createdAt: createdAt(),
+    readAt: text('read_at'),
+  },
+  (t) => [index('notifications_user').on(t.userId, t.id)],
 );

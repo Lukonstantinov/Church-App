@@ -1,8 +1,16 @@
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { InlineKeyboard } from 'grammy';
 import { INTL_LOCALE, displayName, messages, type DutiesNotice, type Locale } from '@church/shared';
 import type { Db } from '../db/client';
-import { memberships, users, type Group, type events } from '../db/schema';
+import {
+  eventRoleAssignees,
+  eventRoles,
+  memberships,
+  users,
+  type Group,
+  type events,
+} from '../db/schema';
+import { recordNotification } from './notifications';
 
 type Event = typeof events.$inferSelect;
 import { churchDefaultLocale, getAppUrl, getChurch, localeOf } from './church';
@@ -23,35 +31,66 @@ async function whenOf(db: Db, event: Event, locale: Locale) {
   }).format(new Date(event.startsAt));
 }
 
+/** What the default reminder adds: a piece of the description, and the person's own duties. */
+async function extras(db: Db, event: Event, userId: number | null, locale: Locale) {
+  const t = messages(locale);
+  const description = event.description ? event.description.trim().slice(0, 280) : '';
+  const duties = userId
+    ? (
+        await db
+          .select({ name: eventRoles.name })
+          .from(eventRoleAssignees)
+          .innerJoin(eventRoles, eq(eventRoles.id, eventRoleAssignees.roleId))
+          .where(and(eq(eventRoles.eventId, event.id), eq(eventRoleAssignees.userId, userId)))
+      ).map((d) => d.name)
+    : [];
+  return {
+    description,
+    duty: duties.length ? t.bot.eventYourDuty(duties.join(', ')) : '',
+  };
+}
+
 /** The default reminder as plain text (for the sender to read and change). */
 export async function defaultReminderText(db: Db, event: Event, locale: Locale): Promise<string> {
   const t = messages(locale);
   const when = await whenOf(db, event, locale);
-  return stripTags(t.bot.eventReminder(event.title, when, event.location));
+  const { description } = await extras(db, event, null, locale);
+  return [stripTags(t.bot.eventReminder(event.title, when, event.location)), description]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
-/** Active, reachable members of a ministry (optionally only these people). */
+/** Active members of a ministry (optionally only these people); `bot` = the bot can write to them. */
 async function recipients(db: Db, groupId: number, userIds?: number[] | null) {
   const rows = await db
-    .select({ id: users.id, chatId: users.telegramId, locale: users.locale })
+    .select({
+      id: users.id,
+      chatId: users.telegramId,
+      reachable: users.isReachable,
+      locale: users.locale,
+    })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(
       and(
         eq(memberships.groupId, groupId),
         eq(memberships.status, 'active'),
-        eq(users.isReachable, true),
-        isNotNull(users.telegramId),
         ...(userIds && userIds.length > 0 ? [inArray(users.id, userIds)] : []),
       ),
     );
-  return rows as { id: number; chatId: number; locale: string | null }[];
+  return rows.map((r) => ({
+    id: r.id,
+    chatId: r.chatId,
+    locale: r.locale,
+    bot: r.chatId !== null && r.reachable,
+  }));
 }
 
 /**
- * Queues the reminder for the ministry's members (or only chosen ones). With a custom
- * text it goes as written (plus the sender's name); without, each person gets the default
- * in their own language. Returns how many were queued.
+ * Reminds the ministry's members (or only chosen ones). With a custom text it goes as
+ * written (plus the sender's name); without, each person gets the default in their own
+ * language, with a bit of the description and their own duties. Everyone gets it in the
+ * app's notification list; the bot message goes to those it can reach.
  */
 export async function sendEventReminder(
   db: Db,
@@ -66,38 +105,56 @@ export async function sendEventReminder(
     /** Stable key part so an automatic reminder can't be queued twice. */
     dedupe?: string;
   },
-): Promise<number> {
+): Promise<{ total: number; bot: number }> {
   const fallback = await churchDefaultLocale(db);
   const appUrl = ((await getAppUrl(db, args.envAppUrl)) ?? args.fallbackUrl)?.replace(/\/+$/, '');
   const list = await recipients(db, args.group.id, args.userIds);
   const stamp = args.dedupe ?? String(Date.now());
+  let bot = 0;
   for (const r of list) {
     const locale = localeOf({ locale: r.locale }, fallback);
     const t = messages(locale);
+    const when = await whenOf(db, args.event, locale);
+    const more = await extras(db, args.event, r.id, locale);
     let html: string;
+    let title = t.bot.notifReminderTitle(args.event.title);
+    let body: string;
     if (args.text) {
       const [first, ...rest] = escapeHtml(args.text).split('\n');
       html = [`<b>${first}</b>`, ...rest].join('\n');
+      title = args.text.split('\n')[0]!;
+      body = args.text.split('\n').slice(1).join('\n').trim() || when;
     } else {
-      const when = await whenOf(db, args.event, locale);
       html = t.bot.eventReminder(
         escapeHtml(args.event.title),
         when,
         args.event.location ? escapeHtml(args.event.location) : null,
       );
+      if (more.description) html += `\n\n<i>${escapeHtml(more.description)}</i>`;
+      if (more.duty) html += `\n\n🛠 ${escapeHtml(more.duty)}`;
+      body = [when, args.event.location, more.description, more.duty].filter(Boolean).join('\n');
     }
     if (args.senderName) html += `\n\n<i>${escapeHtml(t.bot.sentBy(args.senderName))}</i>`;
+    await recordNotification(db, {
+      userId: r.id,
+      kind: 'event_reminder',
+      title,
+      body: args.senderName ? `${body}\n${t.bot.sentBy(args.senderName)}` : body,
+      link: { type: 'event', eventId: args.event.id },
+    });
+    if (!r.bot) continue;
     const reply_markup = appUrl
       ? new InlineKeyboard().webApp(t.bot.eventButton, `${appUrl}/?event=${args.event.id}`)
       : undefined;
     await enqueue(db, {
-      chatId: r.chatId,
+      chatId: r.chatId!,
       method: 'sendMessage',
       payload: { chat_id: r.chatId, text: html, parse_mode: 'HTML', reply_markup },
       dedupeKey: `evremind:${args.event.id}:${r.chatId}:${stamp}`,
     });
+    bot++;
   }
-  return list.length;
+  return { total: list.length, bot };
 }
 
 /**
@@ -135,12 +192,26 @@ export async function notifyDuties(
   // People the bot can't write to (never started it, or blocked it) are named, so the sender knows.
   const skipped: string[] = [];
   for (const p of people) {
+    const locale = localeOf({ locale: p.locale }, fallback);
+    const t = messages(locale);
+    const mine = byUser.get(p.id)!;
+    // Always kept in the app, even when the bot can't reach them.
+    await recordNotification(db, {
+      userId: p.id,
+      kind: 'event_duty',
+      title: t.bot.notifDutyTitle(args.event.title),
+      body: [
+        mine
+          .map((d) => (d.description ? `${d.roleName} — ${d.description}` : d.roleName))
+          .join('\n'),
+        `${t.bot.sentBy(args.sender.name)}`,
+      ].join('\n'),
+      link: { type: 'event', eventId: args.event.id },
+    });
     if (!p.chatId || !p.reach) {
       skipped.push(displayName(p));
       continue;
     }
-    const locale = localeOf({ locale: p.locale }, fallback);
-    const t = messages(locale);
     const duties = byUser
       .get(p.id)!
       .map(

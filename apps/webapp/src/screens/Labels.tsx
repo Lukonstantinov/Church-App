@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { LABEL_ANIMATIONS, type LabelAnimation, type LabelRef } from '@church/shared';
+import {
+  LABEL_ANIMATIONS,
+  LABEL_STYLES,
+  type LabelAnimation,
+  type LabelRef,
+  type LabelStyle,
+} from '@church/shared';
 import { LabelChip } from '../components/LabelChip';
 import { Pill } from '../components/LookControls';
 import { IconPlus } from '../components/icons';
@@ -35,6 +41,8 @@ interface Draft {
   id?: number;
   name: string;
   color: string;
+  color2: string | null;
+  style: LabelStyle;
   animation: LabelAnimation;
 }
 
@@ -87,22 +95,39 @@ export function Labels({ groupId }: { groupId: number }) {
             maxLength={24}
           />
           <div>
-            <div className="mb-2 text-[13px] text-hint">{t.labels.color}</div>
-            <div className="flex flex-wrap gap-2.5">
-              {LABEL_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  aria-label={c}
-                  onClick={() => setDraft({ ...draft, color: c })}
-                  className={`h-9 w-9 rounded-full transition active:scale-90 ${
-                    draft.color === c ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
-                  }`}
-                  style={{ background: c }}
+            <div className="mb-2 text-[13px] text-hint">{t.labels.fill}</div>
+            <div className="flex flex-wrap gap-2">
+              {LABEL_STYLES.map((st) => (
+                <Pill
+                  key={st}
+                  on={draft.style === st}
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      style: st,
+                      color2: st === 'gradient' ? (draft.color2 ?? LABEL_COLORS[8]!) : draft.color2,
+                    })
+                  }
+                  label={st === 'rainbow' ? t.labels.rainbowFill : t.labels[st]}
                 />
               ))}
             </div>
           </div>
+          {draft.style !== 'rainbow' && (
+            <div>
+              <div className="mb-2 text-[13px] text-hint">{t.labels.color}</div>
+              <Swatches value={draft.color} onPick={(c) => setDraft({ ...draft, color: c })} />
+            </div>
+          )}
+          {draft.style === 'gradient' && (
+            <div>
+              <div className="mb-2 text-[13px] text-hint">{t.labels.color2}</div>
+              <Swatches
+                value={draft.color2 ?? ''}
+                onPick={(c) => setDraft({ ...draft, color2: c })}
+              />
+            </div>
+          )}
           <div>
             <div className="mb-2 text-[13px] text-hint">{t.labels.animation}</div>
             <div className="flex flex-wrap gap-2">
@@ -146,7 +171,14 @@ export function Labels({ groupId }: { groupId: number }) {
                   key={l.id}
                   type="button"
                   onClick={() =>
-                    setDraft({ id: l.id, name: l.name, color: l.color, animation: l.animation })
+                    setDraft({
+                      id: l.id,
+                      name: l.name,
+                      color: l.color,
+                      color2: l.color2,
+                      style: l.style,
+                      animation: l.animation,
+                    })
                   }
                   className="flex min-h-[56px] w-full items-center justify-between gap-3 border-b border-hairline px-4 py-2 text-left last:border-b-0 active:bg-hairline"
                 >
@@ -157,12 +189,39 @@ export function Labels({ groupId }: { groupId: number }) {
             </Section>
           )}
           <Button
-            onClick={() => setDraft({ name: '', color: LABEL_COLORS[5]!, animation: 'shimmer' })}
+            onClick={() =>
+              setDraft({
+                name: '',
+                color: LABEL_COLORS[5]!,
+                color2: null,
+                style: 'solid',
+                animation: 'shimmer',
+              })
+            }
           >
             <IconPlus size={18} /> {t.labels.new}
           </Button>
         </>
       )}
     </Screen>
+  );
+}
+
+function Swatches({ value, onPick }: { value: string; onPick: (c: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2.5">
+      {LABEL_COLORS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          aria-label={c}
+          onClick={() => onPick(c)}
+          className={`h-9 w-9 rounded-full transition active:scale-90 ${
+            value === c ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
+          }`}
+          style={{ background: c }}
+        />
+      ))}
+    </div>
   );
 }

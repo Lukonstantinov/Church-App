@@ -8,6 +8,7 @@ import {
   useCoverLook,
   type CoverState,
 } from '../components/CoverDesigner';
+import { BURN_COLORS, BURN_STYLES } from '../components/Burn';
 import { COUNTDOWN_COLORS, COUNTDOWN_SIZES, CountdownBadge } from '../components/Countdown';
 import { Pill } from '../components/LookControls';
 import { PosterMedia } from '../components/Poster';
@@ -414,6 +415,79 @@ function EventFormBody({
             </div>
           </div>
         )}
+      </Section>
+
+      <Section title={t.events.burnTitle} footer={t.events.burnHint}>
+        <div className="flex flex-col gap-3.5 p-3">
+          <div className="flex flex-wrap gap-2">
+            {BURN_STYLES.map((b) => (
+              <Pill
+                key={b}
+                on={(look.design.burnStyle ?? 'flame') === b}
+                onClick={() => setLook({ ...look, design: { ...look.design, burnStyle: b } })}
+                label={
+                  b === 'flame'
+                    ? t.events.burnFlame
+                    : b === 'glow'
+                      ? t.events.burnGlow
+                      : b === 'pulse'
+                        ? t.events.burnPulse
+                        : b === 'orbit'
+                          ? t.events.burnOrbit
+                          : t.events.burnOff
+                }
+              />
+            ))}
+          </div>
+          {(look.design.burnStyle ?? 'flame') !== 'off' && (
+            <>
+              <div>
+                <div className="mb-2 text-[13px] text-hint">{t.events.burnColor}</div>
+                <div className="flex flex-wrap gap-2.5">
+                  {BURN_COLORS.map((c) => {
+                    const on = (look.design.burnColor ?? BURN_COLORS[0]) === c;
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-label={c}
+                        onClick={() =>
+                          setLook({ ...look, design: { ...look.design, burnColor: c } })
+                        }
+                        className={`h-8 w-8 rounded-full transition active:scale-90 ${
+                          on ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
+                        }`}
+                        style={{ background: c }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[15px]">
+                  {t.events.burnWhen}: {look.design.burnDays ?? 3} {t.events.burnDaysUnit}
+                </span>
+                <Stepper
+                  value={look.design.burnDays ?? 3}
+                  onChange={(burnDays) =>
+                    setLook({
+                      ...look,
+                      design: { ...look.design, burnDays: Math.min(14, Math.max(1, burnDays)) },
+                    })
+                  }
+                />
+              </div>
+              <div className="flex min-h-[60px] items-center justify-center rounded-2xl bg-hairline/50 p-3">
+                <div
+                  className={`burn burn-${look.design.burnStyle ?? 'flame'} h-11 w-40 rounded-2xl bg-[var(--color-section)]`}
+                  style={
+                    { '--burn': look.design.burnColor ?? BURN_COLORS[0] } as React.CSSProperties
+                  }
+                />
+              </div>
+            </>
+          )}
+        </div>
       </Section>
 
       <section>

@@ -116,6 +116,13 @@ export const postDesignSchema = z.object({
     .string()
     .regex(/^#[0-9a-f]{6}$/i)
     .nullish(),
+  /** Events: how the outline burns when the event is near (flame by default), its colour and from how many days. */
+  burnStyle: z.enum(['off', 'flame', 'glow', 'pulse', 'orbit']).optional(),
+  burnColor: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/i)
+    .nullish(),
+  burnDays: z.number().int().min(1).max(14).optional(),
 });
 export type PostDesign = z.infer<typeof postDesignSchema>;
 export type PostDesignInput = z.input<typeof postDesignSchema>;

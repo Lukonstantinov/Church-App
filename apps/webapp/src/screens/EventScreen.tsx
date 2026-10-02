@@ -1,4 +1,5 @@
 import { CountdownBadge, CountdownOnCover, hasCountdown } from '../components/Countdown';
+import { BurnFrame } from '../components/Burn';
 import { EventChat } from '../components/EventChat';
 import { EventCover } from '../components/EventCard';
 import { EventReminderSheet } from '../components/EventReminderSheet';
@@ -127,17 +128,21 @@ function EventBody({ e }: { e: EventDetail }) {
             <EventCover e={e} />
             <CountdownOnCover e={e} />
           </div>
-          <HeroCard>{header}</HeroCard>
+          <BurnFrame e={e} radius="var(--radius-card)">
+            <HeroCard>{header}</HeroCard>
+          </BurnFrame>
         </>
       ) : (
-        <HeroCard>
-          {hasCountdown(e) && (
-            <div className="mb-3">
-              <CountdownBadge startsAt={e.startsAt} design={e.design} />
-            </div>
-          )}
-          {header}
-        </HeroCard>
+        <BurnFrame e={e} radius="var(--radius-card)">
+          <HeroCard>
+            {hasCountdown(e) && (
+              <div className="mb-3">
+                <CountdownBadge startsAt={e.startsAt} design={e.design} />
+              </div>
+            )}
+            {header}
+          </HeroCard>
+        </BurnFrame>
       )}
 
       {(e.canManage || e.chatUrl) && (

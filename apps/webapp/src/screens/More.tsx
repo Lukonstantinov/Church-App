@@ -4,6 +4,7 @@ import { Avatar } from '../components/Avatar';
 import { BrandHeader, LanguageSheet } from '../components/BrandHeader';
 import {
   IconBell,
+  IconTag,
   IconChart,
   IconGlobe,
   IconHome,
@@ -71,42 +72,55 @@ export function More({ groups }: { groups: GroupSummary[] }) {
         </div>
       </Section>
 
-      {env && (can('settings') || can('positions') || can('reports') || can('events.manage')) && (
-        <Section title={env.name}>
-          {can('settings') && (
-            <Row
-              before={iconTile(<IconSettings size={19} />)}
-              title={t.env.settings}
-              subtitle={`${t.env.theme} · ${t.env.logo} · ${t.groups.chatTitle}`}
-              onClick={() => push({ name: 'groupSettings', groupId: env.id })}
-            />
-          )}
-          {can('events.manage') && (
-            <Row
-              before={iconTile(<IconBell size={19} />)}
-              title={t.events.remindTitle}
-              subtitle={t.events.remindEntry}
-              onClick={() => push({ name: 'reminders', groupId: env.id })}
-            />
-          )}
-          {can('positions') && (
-            <Row
-              before={iconTile(<IconUsers size={19} />)}
-              title={t.positions.title}
-              subtitle={t.positions.entry}
-              onClick={() => push({ name: 'positions', groupId: env.id })}
-            />
-          )}
-          {can('reports') && (
-            <Row
-              before={iconTile(<IconChart size={19} />)}
-              title={t.reports.title}
-              subtitle={t.reports.entry}
-              onClick={() => push({ name: 'reports', groupId: env.id })}
-            />
-          )}
-        </Section>
-      )}
+      {env &&
+        (can('settings') ||
+          can('positions') ||
+          can('reports') ||
+          can('events.manage') ||
+          can('people.manage')) && (
+          <Section title={env.name}>
+            {can('settings') && (
+              <Row
+                before={iconTile(<IconSettings size={19} />)}
+                title={t.env.settings}
+                subtitle={`${t.env.theme} · ${t.env.logo} · ${t.groups.chatTitle}`}
+                onClick={() => push({ name: 'groupSettings', groupId: env.id })}
+              />
+            )}
+            {can('people.manage') && (
+              <Row
+                before={iconTile(<IconTag size={19} />)}
+                title={t.labels.title}
+                subtitle={t.labels.entry}
+                onClick={() => push({ name: 'labels', groupId: env.id })}
+              />
+            )}
+            {can('events.manage') && (
+              <Row
+                before={iconTile(<IconBell size={19} />)}
+                title={t.events.remindTitle}
+                subtitle={t.events.remindEntry}
+                onClick={() => push({ name: 'reminders', groupId: env.id })}
+              />
+            )}
+            {can('positions') && (
+              <Row
+                before={iconTile(<IconUsers size={19} />)}
+                title={t.positions.title}
+                subtitle={t.positions.entry}
+                onClick={() => push({ name: 'positions', groupId: env.id })}
+              />
+            )}
+            {can('reports') && (
+              <Row
+                before={iconTile(<IconChart size={19} />)}
+                title={t.reports.title}
+                subtitle={t.reports.entry}
+                onClick={() => push({ name: 'reports', groupId: env.id })}
+              />
+            )}
+          </Section>
+        )}
 
       {(envId !== null || user.isAdmin) && (
         <Section>

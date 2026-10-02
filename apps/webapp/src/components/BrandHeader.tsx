@@ -2,9 +2,10 @@ import { useState, type ReactNode } from 'react';
 import { LOCALE_NAMES, LOCALES, type Locale } from '@church/shared';
 import { useEnv } from '../lib/env';
 import { useI18n } from '../lib/i18n';
-import { useMe, useSetLocale } from '../lib/queries';
+import { useNav } from '../lib/nav';
+import { useMe, useNotifications, useSetLocale } from '../lib/queries';
 import { haptic } from '../lib/telegram';
-import { IconChevronDown, IconGlobe } from './icons';
+import { IconBell, IconChevronDown, IconGlobe } from './icons';
 import { Sheet, SheetOption } from './Sheet';
 import { IconButton } from './ui';
 
@@ -85,8 +86,29 @@ export function BrandHeader({
         )}
         {subtitle && <div className="truncate text-[14px] text-hint">{subtitle}</div>}
       </div>
+      <BellButton />
       <LanguageButton />
     </header>
+  );
+}
+
+/** The notification bell with the count of unread ones. */
+export function BellButton() {
+  const { t } = useI18n();
+  const { push } = useNav();
+  const inbox = useNotifications();
+  const unread = inbox.data?.unread ?? 0;
+  return (
+    <span className="relative">
+      <IconButton label={t.inbox.title} onClick={() => push({ name: 'notifications' })}>
+        <IconBell size={18} />
+      </IconButton>
+      {unread > 0 && (
+        <span className="breathe pointer-events-none absolute -right-1 -top-1 min-w-[18px] rounded-full bg-[#ef4444] px-1 text-center text-[11px] font-bold leading-[18px] text-white ring-2 ring-white/90">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
+    </span>
   );
 }
 

@@ -128,6 +128,11 @@ export const lt: Messages = {
     hint: 'Kaip juda programa: švelnūs pasirodymai, srūvantys gradientai, blizgesiai. „Išjungta“ viską sustabdo.',
   },
   labels: {
+    fill: 'Užpildas',
+    solid: 'Viena spalva',
+    gradient: 'Gradientas',
+    rainbowFill: 'Vaivorykštė',
+    color2: 'Antra spalva',
     title: 'Žymos',
     entry: 'Savos žymos su spalva ir animacija',
     manage: 'Tvarkyti žymas',
@@ -147,6 +152,12 @@ export const lt: Messages = {
     rainbow: 'Vaivorykštė',
     bounce: 'Šuolis',
     leaderTag: 'Vadovas',
+  },
+  inbox: {
+    title: 'Pranešimai',
+    hint: 'Čia surinkti priminimai, paskyrimai tarnystėms ir pakartoti skelbimai — viskas, ką botas siunčia Telegram.',
+    empty: 'Pranešimų dar nėra',
+    markAll: 'Pažymėti visus perskaitytais',
   },
   chart: {
     meeting: 'Susitikimas',
@@ -579,6 +590,16 @@ export const lt: Messages = {
     exemptNote: 'Jūs atleisti nuo nario mokesčio',
   },
   events: {
+    burnTitle: 'Degantis kontūras',
+    burnHint: 'Kai iki renginio liko mažai dienų, jo rėmelis pradeda degti.',
+    burnFlame: 'Liepsna',
+    burnGlow: 'Švytėjimas',
+    burnPulse: 'Pulsas',
+    burnOrbit: 'Orbita',
+    burnOff: 'Išjungta',
+    burnColor: 'Ugnies spalva',
+    burnWhen: 'Užsidega prieš',
+    burnDaysUnit: 'd.',
     dutiesSkipped: (names: string) => `Nepavyko pasiekti (botas negali jiems rašyti): ${names}`,
     dutiesNoNew:
       'Šioje tarnystėje naujų žmonių nėra — žinutė siunčiama ką tik pridėtiems. Norėdami parašyti jau paskirtiesiems, spauskite „Pranešti dabar“.',
@@ -1143,6 +1164,10 @@ export const lt: Messages = {
       `✅ Pokalbis susietas su renginiu „${title}“.\nĮstoti gali tie, kas jame tarnauja, eina ar jį veda — mygtuku „Atidaryti pokalbį“ renginyje. Prašymą patvirtinu pats.`,
     eventChatJoinDenied: (title: string) =>
       `Šis pokalbis skirtas tiems, kas tarnauja renginyje „${title}“, eina į jį ar jį veda. Pažymėkite „Einu“ programoje ir paprašykite dar kartą.`,
+    eventYourDuty: (names: string) => `Jūsų tarnystė: ${names}`,
+    notifReminderTitle: (title: string) => `Priminimas: „${title}“`,
+    notifDutyTitle: (title: string) => `Jums paskirta tarnystė: „${title}“`,
+    notifPostRepeatTitle: (group: string) => `Pakartojimas: ${group}`,
     meetingButton: 'Atidaryti susitikimą',
     postHasExtras: '📎 Įraše yra priedų, apklausa ar lentelė — atidarykite programėlę',
     chatLinked: (ministry: string) =>

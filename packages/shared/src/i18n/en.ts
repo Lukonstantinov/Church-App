@@ -126,6 +126,11 @@ export const en: Messages = {
     hint: 'How the app moves: soft entrances, flowing gradients, sheens. “Off” keeps everything still.',
   },
   labels: {
+    fill: 'Fill',
+    solid: 'One colour',
+    gradient: 'Gradient',
+    rainbowFill: 'Rainbow',
+    color2: 'Second colour',
     title: 'Labels',
     entry: 'Your own labels with colour and animation',
     manage: 'Manage labels',
@@ -145,6 +150,12 @@ export const en: Messages = {
     rainbow: 'Rainbow',
     bounce: 'Bounce',
     leaderTag: 'Leader',
+  },
+  inbox: {
+    title: 'Notifications',
+    hint: 'Reminders, duty assignments and repeated announcements are collected here — everything the bot sends you in Telegram.',
+    empty: 'No notifications yet',
+    markAll: 'Mark all read',
   },
   chart: {
     meeting: 'Meeting',
@@ -573,6 +584,16 @@ export const en: Messages = {
     exemptNote: 'You are exempt from dues',
   },
   events: {
+    burnTitle: 'Burning outline',
+    burnHint: 'When the event is only a few days away its outline starts to burn.',
+    burnFlame: 'Flame',
+    burnGlow: 'Glow',
+    burnPulse: 'Pulse',
+    burnOrbit: 'Orbit',
+    burnOff: 'Off',
+    burnColor: 'Fire colour',
+    burnWhen: 'Starts burning',
+    burnDaysUnit: 'd',
     dutiesSkipped: (names: string) => `Couldn’t reach (the bot can’t write to them): ${names}`,
     dutiesNoNew:
       'No new people in this duty — the message goes to those added just now. To write to those already assigned, tap “Tell them now”.',
@@ -1121,6 +1142,10 @@ export const en: Messages = {
       `✅ The chat is linked to the event “${title}”.\nPeople who serve at it, are going or run it can join with the “Open chat” button in the event. I approve the request myself.`,
     eventChatJoinDenied: (title: string) =>
       `This chat is for those who serve at “${title}”, are going to it or run it. Mark “Going” in the app and ask to join again.`,
+    eventYourDuty: (names: string) => `Your duty: ${names}`,
+    notifReminderTitle: (title: string) => `Reminder: “${title}”`,
+    notifDutyTitle: (title: string) => `You have a duty at “${title}”`,
+    notifPostRepeatTitle: (group: string) => `Repeat: ${group}`,
     meetingButton: 'Open the meeting',
     postHasExtras: '📎 This post has attachments, a poll or a table — open the app',
     chatLinked: (ministry: string) =>

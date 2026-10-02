@@ -47,6 +47,9 @@ export function initCover(
       align: d?.align ?? 'left',
       countdownSize: d?.countdownSize ?? 'm',
       countdownColor: d?.countdownColor ?? null,
+      burnStyle: d?.burnStyle ?? 'flame',
+      burnColor: d?.burnColor ?? null,
+      burnDays: d?.burnDays ?? 3,
     },
     own: {
       pattern: d?.custom?.pattern ?? null,

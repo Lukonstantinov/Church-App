@@ -29,6 +29,7 @@ import {
 import { MeetingHeroLines } from '../screens/MeetingScreen';
 import { canRollNow } from '../screens/Overview';
 import { Button, DateBadge, HeroCard } from './ui';
+import { BurnFrame } from './Burn';
 import { LookTop } from './LookTop';
 import { PosterCard, PosterMedia, hasCover } from './Poster';
 
@@ -363,26 +364,28 @@ function EventRow({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
   const t = useT();
   const d = f.dateBadge(e.startsAt);
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={t.overview.expand}
-      className="glass flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left shadow-card active:scale-[0.99]"
-    >
-      <span className="brand-gradient flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl text-white">
-        <span className="text-[17px] font-bold leading-none tabular-nums">{d.day}</span>
-        <span className="text-[9px] font-semibold uppercase leading-tight opacity-90">
-          {d.month}
+    <BurnFrame e={e} radius={16}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={t.overview.expand}
+        className="glass flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left shadow-card active:scale-[0.99]"
+      >
+        <span className="brand-gradient flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl text-white">
+          <span className="text-[17px] font-bold leading-none tabular-nums">{d.day}</span>
+          <span className="text-[9px] font-semibold uppercase leading-tight opacity-90">
+            {d.month}
+          </span>
         </span>
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-semibold leading-tight">{e.title}</span>
-        <span className="block truncate text-[12px] text-hint">
-          {d.weekday} · {f.time(e.startsAt)}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-semibold leading-tight">{e.title}</span>
+          <span className="block truncate text-[12px] text-hint">
+            {d.weekday} · {f.time(e.startsAt)}
+          </span>
         </span>
-      </span>
-      <CountdownBadge startsAt={e.startsAt} design={e.design} compact muted={!hasCountdown(e)} />
-    </button>
+        <CountdownBadge startsAt={e.startsAt} design={e.design} compact muted={!hasCountdown(e)} />
+      </button>
+    </BurnFrame>
   );
 }
 
@@ -432,32 +435,34 @@ function EventTile({ e, g, onToggle }: { e: EventSummary; g: GroupSummary; onTog
   const f = useFmt();
   const cover = e.coverUrl || e.design?.banner;
   return (
-    <Tile onToggle={onToggle}>
-      {cover ? (
-        <div className="pointer-events-none relative">
-          <EventCover e={e} className="aspect-[16/10]" compact />
-          <CountdownOnCover e={e} compact />
+    <BurnFrame e={e} radius={16} className="h-full">
+      <Tile onToggle={onToggle}>
+        {cover ? (
+          <div className="pointer-events-none relative">
+            <EventCover e={e} className="aspect-[16/10]" compact />
+            <CountdownOnCover e={e} compact />
+          </div>
+        ) : (
+          <div className="relative">
+            <LookTop
+              look={e.look ?? g}
+              className="flex aspect-[16/10] items-center justify-center text-[28px]"
+            >
+              <span className="m-auto">
+                <IconCalendar size={30} />
+              </span>
+            </LookTop>
+            <CountdownOnCover e={e} compact />
+          </div>
+        )}
+        <div className="flex flex-col gap-0.5 p-2.5">
+          <span className="truncate text-[14px] font-semibold">{e.title}</span>
+          <span className="truncate text-[12px] text-hint">
+            {f.weekdayDayMonth(e.startsAt)} · {f.time(e.startsAt)}
+          </span>
         </div>
-      ) : (
-        <div className="relative">
-          <LookTop
-            look={e.look ?? g}
-            className="flex aspect-[16/10] items-center justify-center text-[28px]"
-          >
-            <span className="m-auto">
-              <IconCalendar size={30} />
-            </span>
-          </LookTop>
-          <CountdownOnCover e={e} compact />
-        </div>
-      )}
-      <div className="flex flex-col gap-0.5 p-2.5">
-        <span className="truncate text-[14px] font-semibold">{e.title}</span>
-        <span className="truncate text-[12px] text-hint">
-          {f.weekdayDayMonth(e.startsAt)} · {f.time(e.startsAt)}
-        </span>
-      </div>
-    </Tile>
+      </Tile>
+    </BurnFrame>
   );
 }
 

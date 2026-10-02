@@ -514,14 +514,34 @@ html[data-motion='lively'] body::before {
   }
 }
 .label-shimmer {
-  background-image: linear-gradient(
-    100deg,
-    var(--label-color) 30%,
-    color-mix(in srgb, var(--label-color) 40%, white) 50%,
-    var(--label-color) 70%
-  ) !important;
-  background-size: 200% 100%;
-  animation: label-shimmer 2.8s linear infinite;
+  position: relative;
+  overflow: hidden;
+}
+.label-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  animation: label-sweep 2.4s ease-in-out infinite;
+}
+@keyframes label-sweep {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(320%) skewX(-18deg);
+  }
+}
+/* A rainbow or gradient label drifts along its colours. */
+.label-fill {
+  background-size: 220% 100% !important;
+  animation: label-fill 4s linear infinite;
+}
+@keyframes label-fill {
+  to {
+    background-position: -220% 0;
+  }
 }
 .label-pulse {
   animation: label-pulse 1.8s ease-in-out infinite;
@@ -543,7 +563,8 @@ html[data-motion='calm'] .flow,
 html[data-motion='calm'] .sheen::after,
 html[data-motion='calm'] .breathe,
 html[data-motion='calm'] .bob,
-html[data-motion='calm'] [class*='label-'] {
+html[data-motion='calm'] [class*='label-'],
+html[data-motion='calm'] .label-shimmer::after {
   animation: none;
 }
 html[data-motion='off'] *,
@@ -551,4 +572,112 @@ html[data-motion='off'] *::before,
 html[data-motion='off'] *::after {
   animation: none !important;
   transition-duration: 0.01ms !important;
+}
+
+/* ---------- Burning outline of an event that is near ---------- */
+@property --burn-a {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.burn {
+  position: relative;
+  box-shadow:
+    0 0 0 2px var(--burn),
+    0 0 12px 1px var(--burn);
+}
+@keyframes burn-flame {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--burn),
+      0 0 10px 1px var(--burn),
+      0 -2px 16px 2px color-mix(in srgb, var(--burn) 60%, transparent);
+  }
+  18% {
+    box-shadow:
+      0 0 0 2px var(--burn),
+      0 0 18px 4px var(--burn),
+      0 -5px 24px 5px color-mix(in srgb, var(--burn) 70%, transparent);
+  }
+  36% {
+    box-shadow:
+      0 0 0 2px var(--burn),
+      0 0 9px 1px var(--burn),
+      0 -3px 14px 1px color-mix(in srgb, var(--burn) 50%, transparent);
+  }
+  57% {
+    box-shadow:
+      0 0 0 2px var(--burn),
+      0 0 20px 5px var(--burn),
+      0 -6px 28px 6px color-mix(in srgb, var(--burn) 75%, transparent);
+  }
+  78% {
+    box-shadow:
+      0 0 0 2px var(--burn),
+      0 0 12px 2px var(--burn),
+      0 -3px 18px 2px color-mix(in srgb, var(--burn) 55%, transparent);
+  }
+}
+.burn-flame {
+  animation: burn-flame 1.6s ease-in-out infinite;
+}
+@keyframes burn-glow {
+  50% {
+    box-shadow:
+      0 0 0 2px var(--burn),
+      0 0 22px 5px var(--burn);
+  }
+}
+.burn-glow {
+  animation: burn-glow 2.8s ease-in-out infinite;
+}
+@keyframes burn-pulse {
+  0% {
+    box-shadow:
+      0 0 0 2px var(--burn),
+      0 0 0 2px color-mix(in srgb, var(--burn) 70%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 0 0 2px var(--burn),
+      0 0 0 14px transparent;
+  }
+}
+.burn-pulse {
+  animation: burn-pulse 1.8s ease-out infinite;
+}
+@keyframes burn-orbit {
+  to {
+    --burn-a: 360deg;
+  }
+}
+/* A bright spark runs around the outline. */
+.burn-orbit {
+  box-shadow: 0 0 14px 1px color-mix(in srgb, var(--burn) 55%, transparent);
+}
+.burn-orbit::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  padding: 3px;
+  pointer-events: none;
+  background: conic-gradient(from var(--burn-a), transparent 0 55%, var(--burn) 85%, #fff 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: burn-orbit 2.4s linear infinite;
+}
+html[data-motion='calm'] .burn-flame,
+html[data-motion='calm'] .burn-glow,
+html[data-motion='calm'] .burn-pulse,
+html[data-motion='calm'] .burn-orbit::before,
+html[data-motion='off'] .burn-flame,
+html[data-motion='off'] .burn-glow,
+html[data-motion='off'] .burn-pulse,
+html[data-motion='off'] .burn-orbit::before {
+  animation: none !important;
 }

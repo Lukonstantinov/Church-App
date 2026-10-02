@@ -1,5 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  NotificationsResponse,
+  ReadNotificationsInput,
   DutiesNotice,
   NotifyDutiesInput,
   EventChatMessage,
@@ -1196,5 +1198,26 @@ export function useUnlinkEventChat(eventId: number) {
   return useMutation({
     mutationFn: () => apiFetch(`/events/${eventId}/chat`, send('DELETE')),
     onSuccess: () => void qc.invalidateQueries({ queryKey: keys.event(eventId) }),
+  });
+}
+
+// ---------- notification inbox ----------
+
+export function useNotifications(enabled = true) {
+  return useQuery({
+    queryKey: ['me', 'notifications'],
+    queryFn: () => apiFetch<NotificationsResponse>('/me/notifications'),
+    enabled,
+    refetchInterval: 60_000,
+    staleTime: 15_000,
+  });
+}
+
+export function useReadNotifications() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ReadNotificationsInput) =>
+      apiFetch('/me/notifications/read', send('POST', input)),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['me', 'notifications'] }),
   });
 }

@@ -5,6 +5,7 @@ import {
   labelInputSchema,
   setMemberLabelsSchema,
   type LabelAnimation,
+  type LabelStyle,
   type LabelRef,
 } from '@church/shared';
 import type { Env } from '../env';
@@ -15,12 +16,15 @@ import { idParam, parseBody } from './util';
 
 type App = { Bindings: Env; Variables: AuthVariables };
 
-const toRef = (r: typeof groupLabels.$inferSelect): LabelRef => ({
+export const toLabelRef = (r: typeof groupLabels.$inferSelect): LabelRef => ({
   id: r.id,
   name: r.name,
   color: r.color,
+  color2: r.color2,
+  style: r.style as LabelStyle,
   animation: r.animation as LabelAnimation,
 });
+const toRef = toLabelRef;
 
 /** /api/groups/:id/labels */
 export const groupLabelRoutes = new Hono<App>();
@@ -51,6 +55,8 @@ groupLabelRoutes.post('/:id/labels', async (c) => {
       groupId: group.id,
       name: input.name,
       color: input.color.toLowerCase(),
+      color2: input.color2?.toLowerCase() ?? null,
+      style: input.style,
       animation: input.animation,
       sort: existing.length,
       createdBy: c.get('user').id,
@@ -108,7 +114,13 @@ labelRoutes.patch('/:id', async (c) => {
   const input = await parseBody(c, labelInputSchema);
   const [row] = await db
     .update(groupLabels)
-    .set({ name: input.name, color: input.color.toLowerCase(), animation: input.animation })
+    .set({
+      name: input.name,
+      color: input.color.toLowerCase(),
+      color2: input.color2?.toLowerCase() ?? null,
+      style: input.style,
+      animation: input.animation,
+    })
     .where(eq(groupLabels.id, label.id))
     .returning();
   return c.json(toRef(row!));

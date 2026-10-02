@@ -10,6 +10,7 @@ import { Sheet, SheetOption } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import { AttendanceSummary } from '../components/AttendanceSummary';
 import { Avatar } from '../components/Avatar';
+import { LabelChip, LabelPicker } from '../components/LabelChip';
 import { GroupDot } from '../components/GroupSwitcher';
 import { LinkShare } from '../components/LinkShare';
 import {
@@ -133,6 +134,18 @@ export function MemberScreen({ userId }: { userId: number }) {
                 subtitle={m.status === 'pending' ? t.member.statusPending : undefined}
                 after={m.positionName ? <Badge>{m.positionName}</Badge> : undefined}
               />
+              {m.labels.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 px-4 pb-2">
+                  {m.labels.map((l) => (
+                    <LabelChip key={l.id} label={l} />
+                  ))}
+                </div>
+              )}
+              {m.status === 'active' && canIn(m.groupId, 'people.manage') && (
+                <div className="px-4 pb-3">
+                  <LabelPicker groupId={m.groupId} userId={user.id} current={m.labels} />
+                </div>
+              )}
               {m.status === 'active' && canIn(m.groupId, 'positions') && !isSelf && (
                 <ActionRow onClick={() => setPositionFor(m)}>{t.positions.choose}</ActionRow>
               )}

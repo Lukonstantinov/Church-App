@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import {
   PERMISSIONS,
   setAdminSchema,
@@ -12,7 +12,8 @@ import {
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
-import { groups, memberships, positions, users } from '../db/schema';
+import { groupLabels, groups, memberLabels, memberships, positions, users } from '../db/schema';
+import { toLabelRef } from './labels';
 import { accessIn, canManageUser, visibleGroupIds } from '../lib/access';
 import { defaultPositionId, effectivePermissions, permsOf, roleFor } from '../lib/positions';
 import { groupLogoUrl } from '../lib/groups';
@@ -198,6 +199,22 @@ userRoutes.get('/:id', async (c) => {
         }),
       ),
   );
+  const labelRows = rows.length
+    ? await db
+        .select({ groupId: groupLabels.groupId, label: groupLabels })
+        .from(memberLabels)
+        .innerJoin(groupLabels, eq(groupLabels.id, memberLabels.labelId))
+        .where(
+          and(
+            eq(memberLabels.userId, id),
+            inArray(
+              groupLabels.groupId,
+              rows.map((r) => r.m.groupId),
+            ),
+          ),
+        )
+        .orderBy(asc(groupLabels.sort), asc(groupLabels.id))
+    : [];
   const detail: MemberDetail = {
     attendance,
     user: {
@@ -223,6 +240,7 @@ userRoutes.get('/:id', async (c) => {
         role: m.role,
         status: m.status,
         joinedAt: m.joinedAt,
+        labels: labelRows.filter((l) => l.groupId === m.groupId).map((l) => toLabelRef(l.label)),
       }),
     ),
     permissions: {

@@ -1,5 +1,6 @@
 import type { EventSummary } from '@church/shared';
 import { useFmt } from '../lib/format';
+import { BurnFrame } from './Burn';
 import { CountdownBadge, CountdownOnCover, hasCountdown } from './Countdown';
 import { useT } from '../lib/i18n';
 import { IconCheck, IconMapPin, IconUsers } from './icons';
@@ -65,58 +66,60 @@ export function EventCard({
   const when = useEventWhen();
   const cancelled = e.status === 'cancelled';
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`glass block w-full overflow-hidden rounded-[var(--radius-card)] text-left shadow-card transition active:scale-[0.99] ${cancelled ? 'opacity-60' : ''}`}
-    >
-      {e.coverUrl || e.design?.banner ? (
-        <div className="relative">
-          <EventCover e={e} />
-          <CountdownOnCover e={e} />
-        </div>
-      ) : (
-        hasCountdown(e) && (
-          <div className="px-4 pt-3">
-            <CountdownBadge startsAt={e.startsAt} design={e.design} />
+    <BurnFrame e={e} radius="var(--radius-card)">
+      <button
+        type="button"
+        onClick={onClick}
+        className={`glass block w-full overflow-hidden rounded-[var(--radius-card)] text-left shadow-card transition active:scale-[0.99] ${cancelled ? 'opacity-60' : ''}`}
+      >
+        {e.coverUrl || e.design?.banner ? (
+          <div className="relative">
+            <EventCover e={e} />
+            <CountdownOnCover e={e} />
           </div>
-        )
-      )}
-      <div className="flex items-start gap-3 p-4">
-        <DateBadge {...f.dateBadge(e.startsAt)} muted={cancelled} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span
-              className={`truncate text-[17px] font-semibold ${cancelled ? 'line-through' : ''}`}
-            >
-              {e.title}
-            </span>
-            {cancelled && <Badge tone="danger">{t.events.cancelled}</Badge>}
-          </div>
-          <div className="truncate text-[14px] text-hint">
-            {showGroup ? `${e.groupName} · ` : ''}
-            {when(e)}
-          </div>
-          {e.location && (
-            <div className="mt-0.5 flex items-center gap-1 truncate text-[14px] text-hint">
-              <IconMapPin size={14} className="shrink-0" />
-              <span className="truncate">{e.location}</span>
+        ) : (
+          hasCountdown(e) && (
+            <div className="px-4 pt-3">
+              <CountdownBadge startsAt={e.startsAt} design={e.design} />
             </div>
-          )}
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {e.features.rsvp && (
-              <Badge tone={e.myRsvp === 'going' ? 'success' : 'hint'}>
-                {e.myRsvp === 'going' ? <IconCheck size={12} /> : <IconUsers size={12} />}
-                {e.myRsvp === 'going' ? t.events.youGoing : t.events.goingCount(e.goingCount)}
-              </Badge>
+          )
+        )}
+        <div className="flex items-start gap-3 p-4">
+          <DateBadge {...f.dateBadge(e.startsAt)} muted={cancelled} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span
+                className={`truncate text-[17px] font-semibold ${cancelled ? 'line-through' : ''}`}
+              >
+                {e.title}
+              </span>
+              {cancelled && <Badge tone="danger">{t.events.cancelled}</Badge>}
+            </div>
+            <div className="truncate text-[14px] text-hint">
+              {showGroup ? `${e.groupName} · ` : ''}
+              {when(e)}
+            </div>
+            {e.location && (
+              <div className="mt-0.5 flex items-center gap-1 truncate text-[14px] text-hint">
+                <IconMapPin size={14} className="shrink-0" />
+                <span className="truncate">{e.location}</span>
+              </div>
             )}
-            {e.myRoles.length > 0 && <Badge>{e.myRoles.join(', ')}</Badge>}
-            {e.features.cost && e.priceCents ? (
-              <Badge tone="hint">{money(e.priceCents)}</Badge>
-            ) : null}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {e.features.rsvp && (
+                <Badge tone={e.myRsvp === 'going' ? 'success' : 'hint'}>
+                  {e.myRsvp === 'going' ? <IconCheck size={12} /> : <IconUsers size={12} />}
+                  {e.myRsvp === 'going' ? t.events.youGoing : t.events.goingCount(e.goingCount)}
+                </Badge>
+              )}
+              {e.myRoles.length > 0 && <Badge>{e.myRoles.join(', ')}</Badge>}
+              {e.features.cost && e.priceCents ? (
+                <Badge tone="hint">{money(e.priceCents)}</Badge>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
-    </button>
+      </button>
+    </BurnFrame>
   );
 }

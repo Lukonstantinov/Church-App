@@ -5,6 +5,7 @@ import type { Db } from '../db/client';
 import { meetings, users, type Meeting, type User } from '../db/schema';
 import { churchDefaultLocale, getAppUrl, getChurch, localeOf } from './church';
 import { escapeHtml } from './html';
+import { recordNotification } from './notifications';
 import { enqueue } from './outbox';
 
 type Role = 'leader' | 'snack';
@@ -125,9 +126,21 @@ export async function notifyMeetingRole(
   },
 ) {
   const person = await db.query.users.findFirst({ where: eq(users.id, args.userId) });
-  if (!person?.telegramId || !person.isReachable) return false;
+  if (!person) return false;
   const locale: Locale = localeOf(person, await churchDefaultLocale(db));
   const t = messages(locale);
+  // Kept in the app's notification list whether or not the bot can reach them.
+  const [headline, ...restLines] = args.text.split('\n');
+  await recordNotification(db, {
+    userId: person.id,
+    kind: 'meeting_job',
+    title: headline ?? args.meeting.title,
+    body: [restLines.join('\n').trim(), args.senderName ? t.bot.sentBy(args.senderName) : '']
+      .filter(Boolean)
+      .join('\n'),
+    link: { type: 'task', meetingId: args.meeting.id },
+  });
+  if (!person.telegramId || !person.isReachable) return false;
   // The first line is the headline.
   const [first, ...rest] = escapeHtml(args.text).split('\n');
   const signature = args.senderName

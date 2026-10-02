@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { displayName } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { IconSearch, IconTelegram } from '../components/icons';
+import { LabelChip } from '../components/LabelChip';
 import { useToast } from '../components/Toast';
 import { Badge, Screen, Skeleton, Title } from '../components/ui';
 import { useT } from '../lib/i18n';
@@ -58,6 +59,13 @@ export function Contacts({ groupId }: { groupId: number }) {
                 <span className="block truncate text-[13px] text-hint">
                   {c.username ? `@${c.username}` : c.offline ? t.people.offline : '—'}
                 </span>
+                {c.labels.length > 0 && (
+                  <span className="mt-1 flex flex-wrap gap-1">
+                    {c.labels.map((l) => (
+                      <LabelChip key={l.id} label={l} small />
+                    ))}
+                  </span>
+                )}
               </span>
               {c.positionName && <Badge>{c.positionName}</Badge>}
               {c.username && <IconTelegram size={20} className="shrink-0 text-link" />}

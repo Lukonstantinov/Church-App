@@ -33,6 +33,7 @@ import { unreadByPost } from './feed';
 import { escapeHtml } from './html';
 import { filesById } from './files';
 import { signedFileUrl, signedMediaUrl } from './media';
+import { recordNotification } from './notifications';
 import { enqueue } from './outbox';
 
 type AnnouncementDbRow = typeof announcements.$inferSelect;
@@ -96,6 +97,18 @@ export async function queuePostMessages(
   const photoUrl =
     firstPhoto && appUrl ? `${appUrl}${await signedMediaUrl(args.secret, firstPhoto)}` : null;
   for (const m of args.targets) {
+    if (args.repeatedBy) {
+      const tt = messages(localeOf(m, fallback));
+      await recordNotification(db, {
+        userId: m.id,
+        kind: 'post_repeat',
+        title: tt.bot.notifPostRepeatTitle(group.name),
+        body: [row.title, fullText.slice(0, 400), tt.bot.sentBy(displayName(args.repeatedBy))]
+          .filter(Boolean)
+          .join('\n'),
+        link: { type: 'post', groupId: group.id, postId: row.id },
+      });
+    }
     if (!m.chatId) continue;
     const t = messages(localeOf(m, fallback));
     const repeat = args.repeatedBy ? `${t.bot.postRepeat}\n\n` : '';
