@@ -334,7 +334,14 @@ export const updateScheduleSchema = z.object({
 export type UpdateScheduleInput = z.input<typeof updateScheduleSchema>;
 
 /** Kinds of youth meeting (optional label). */
-export const MEETING_KINDS = ['prayer', 'worship', 'outside', 'guest', 'prophetic'] as const;
+export const MEETING_KINDS = [
+  'prayer',
+  'worship',
+  'outside',
+  'guest',
+  'prophetic',
+  'leaders',
+] as const;
 export type MeetingKind = (typeof MEETING_KINDS)[number];
 
 export interface MeetingPerson {
@@ -383,6 +390,7 @@ export const createMeetingSchema = z.object({
   title: name,
   /** Only these people (user ids); omitted or empty = everyone in the ministry. */
   audience: z.array(z.number().int().positive()).max(500).optional(),
+  kind: z.enum(MEETING_KINDS).nullable().optional(),
 });
 export type CreateMeetingInput = z.input<typeof createMeetingSchema>;
 
@@ -433,7 +441,19 @@ export interface MeetingDetail extends MeetingRow {
   /** Which job the viewer was given on this meeting (null = none), and if they agreed. */
   myRole: 'leader' | 'snack' | null;
   myAcceptedAt: string | null;
+  /** When people were last told about it (null = never). */
+  announcedAt: string | null;
+  /** "Will you come?" answers (asked = the message asked it). */
+  rsvp: {
+    asked: boolean;
+    mine: MeetingRsvpStatus | null;
+    going: MeetingPerson[];
+    notGoing: MeetingPerson[];
+  };
 }
+
+export type MeetingRsvpStatus = 'going' | 'not_going';
+export const meetingRsvpSchema = z.object({ status: z.enum(['going', 'not_going']) });
 
 /** Send a post's notification again: to everyone in the ministry, or only chosen people. */
 export const resendPostSchema = z.object({
@@ -552,7 +572,16 @@ export interface CalendarData {
 export type NotifyMeetingInput = z.input<typeof notifyMeetingSchema>;
 
 /** Tell the ministry (everyone, leaders or chosen people) about a meeting, with its poster. */
+/** What a meeting message is about: the meeting, a changed time, or that it's cancelled. */
+export const MEETING_NOTICES = ['announce', 'changed', 'cancelled'] as const;
+export type MeetingNotice = (typeof MEETING_NOTICES)[number];
+
 export const announceMeetingSchema = z.object({
+  notice: z.enum(MEETING_NOTICES).default('announce'),
+  /** Add "I'll come / Can't" buttons; the answers go to the sender. */
+  ask: z.boolean().optional(),
+  /** For a changed time: when it was before (shown in the default text). */
+  previousStartsAt: z.string().datetime().nullish(),
   /** The message as edited by the sender; omitted = the default (in each person's language). */
   text: z.string().trim().min(1).max(3000).optional(),
   /** Only these people; omitted or null = everyone the meeting is for. */
@@ -831,7 +860,12 @@ export interface Telemetry {
 // ---------- Notifications inbox ----------
 
 export type NotificationKind =
-  'event_reminder' | 'event_duty' | 'meeting_job' | 'meeting_announce' | 'post_repeat';
+  | 'event_reminder'
+  | 'event_duty'
+  | 'meeting_job'
+  | 'meeting_announce'
+  | 'meeting_rsvp'
+  | 'post_repeat';
 
 export type NotificationLink =
   | { type: 'event'; eventId: number }

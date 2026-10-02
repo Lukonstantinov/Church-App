@@ -14,7 +14,6 @@ import {
   IconCalendar,
   IconChart,
   IconChevronRight,
-  IconClock,
   IconHeart,
   IconSearch,
   IconSend,
@@ -86,7 +85,10 @@ function Tile({
   hint,
   tone,
   onClick,
+  wide,
 }: {
+  /** Takes the whole row. */
+  wide?: boolean;
   icon: ReactNode;
   label: string;
   value: ReactNode;
@@ -95,7 +97,10 @@ function Tile({
   onClick?: () => void;
 }) {
   return (
-    <Card onClick={onClick} className="flex min-w-0 flex-col gap-1 p-3.5">
+    <Card
+      onClick={onClick}
+      className={`flex min-w-0 flex-col gap-1 p-3.5 ${wide ? 'col-span-2' : ''}`}
+    >
       <span
         className={`flex h-8 w-8 items-center justify-center rounded-xl ${
           tone === 'good'
@@ -154,12 +159,17 @@ function OverviewTab({ s, onTab }: { s: GroupStatistics; onTab: (t: Tab) => void
           value={x.averagePeople ?? '—'}
           hint={t.stats.perMeetingHint}
         />
-        <Tile icon={<IconStar size={17} />} label={t.stats.guests} value={x.guests} />
         <Tile
-          icon={<IconClock size={17} />}
-          label={t.stats.late}
-          value={x.late}
-          hint={`${t.stats.excused}: ${x.excused}`}
+          icon={<IconStar size={17} />}
+          label={t.stats.guests}
+          value={x.guests}
+          hint={x.excused ? `${t.stats.excused}: ${x.excused}` : undefined}
+        />
+        <Tile
+          icon={<IconCalendar size={17} />}
+          label={t.stats.events}
+          value={x.events}
+          onClick={() => onTab('events')}
         />
         <Tile
           icon={<IconHeart size={17} />}
@@ -178,12 +188,7 @@ function OverviewTab({ s, onTab }: { s: GroupStatistics; onTab: (t: Tab) => void
           onClick={() => onTab('people')}
         />
         <Tile
-          icon={<IconCalendar size={17} />}
-          label={t.stats.events}
-          value={x.events}
-          onClick={() => onTab('events')}
-        />
-        <Tile
+          wide
           icon={<IconUsers size={17} />}
           label={t.stats.duties}
           value={x.dutySlots ? `${Math.round((x.dutiesFilled / x.dutySlots) * 100)}%` : '—'}

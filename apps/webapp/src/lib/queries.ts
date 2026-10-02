@@ -11,6 +11,8 @@ import type {
   SetMemberLabelsInput,
   GroupStatistics,
   AnnounceMeetingInput,
+  MeetingNotice,
+  MeetingRsvpStatus,
   ResendPostInput,
   RemindEventInput,
   MessageTemplateInput,
@@ -435,14 +437,32 @@ export function useNotifyMeeting() {
 }
 
 /** The default announcement of a meeting (sender's language), to read and change. */
-export const fetchMeetingAnnounceText = (meetingId: number) =>
-  apiFetch<{ text: string }>(`/meetings/${meetingId}/announce-text`);
+export const fetchMeetingAnnounceText = (
+  meetingId: number,
+  notice: MeetingNotice = 'announce',
+  from?: string | null,
+) =>
+  apiFetch<{ text: string }>(
+    `/meetings/${meetingId}/announce-text?notice=${notice}${from ? `&from=${encodeURIComponent(from)}` : ''}`,
+  );
+
+/** "Will you come?" — the viewer's own answer. */
+export function useMeetingRsvp(meetingId: number) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (status: MeetingRsvpStatus) =>
+      apiFetch<{ ok: true }>(`/meetings/${meetingId}/rsvp`, send('POST', { status })),
+    onSuccess: invalidate,
+  });
+}
 
 /** Tell everyone (or leaders / chosen people) about a meeting, with its poster. */
 export function useAnnounceMeeting() {
+  const invalidate = useInvalidateAll();
   return useMutation({
     mutationFn: ({ id, ...input }: AnnounceMeetingInput & { id: number }) =>
       apiFetch<{ sent: number; bot: number }>(`/meetings/${id}/announce`, send('POST', input)),
+    onSuccess: invalidate,
   });
 }
 

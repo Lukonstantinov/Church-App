@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { displayName, type GroupSummary, type MeetingRow } from '@church/shared';
+import {
+  displayName,
+  type GroupSummary,
+  type MeetingNotice,
+  type MeetingRow,
+} from '@church/shared';
 import { useT } from '../lib/i18n';
 import { capturePoster } from '../lib/poster';
 import {
@@ -21,7 +26,7 @@ import { IconCheck, IconSend } from './icons';
 import { MeetingPoster } from './MeetingPoster';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
-import { Button, Toggle } from './ui';
+import { Button, Switch, Toggle } from './ui';
 
 /**
  * Tell the ministry about a meeting: the message (who leads, the topic, when and where)
@@ -32,10 +37,16 @@ export function MeetingAnnounceSheet({
   meeting,
   group,
   onClose,
+  notice = 'announce',
+  previousStartsAt,
 }: {
   meeting: MeetingRow;
   group: GroupSummary | undefined;
   onClose: () => void;
+  /** About the meeting, its changed time, or its cancellation. */
+  notice?: MeetingNotice;
+  /** For a changed time: when it was. */
+  previousStartsAt?: string | null;
 }) {
   const t = useT();
   const toast = useToast();
@@ -46,7 +57,11 @@ export function MeetingAnnounceSheet({
   const poster = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
-  const [withPoster, setWithPoster] = useState(true);
+  const [withPoster, setWithPoster] = useState(notice !== 'cancelled');
+  // A leaders' meeting (or one for chosen people) asks who will come by default.
+  const [ask, setAsk] = useState(
+    notice !== 'cancelled' && (meeting.kind === 'leaders' || meeting.audience !== null),
+  );
   const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
   const [busy, setBusy] = useState<'poster' | 'send' | null>(null);
   const [done, setDone] = useState<number | null>(null);
@@ -55,27 +70,31 @@ export function MeetingAnnounceSheet({
     .filter((m) => m.status === 'active' && m.role === 'leader')
     .map((m) => m.userId);
   const presets: AudiencePreset[] = [
-    { key: 'all', label: t.meetings.everyone, ids: null },
+    {
+      key: 'all',
+      label: meeting.audience ? t.meetings.meetingFor : t.meetings.everyone,
+      ids: meeting.audience ?? null,
+    },
     ...(members.data ? [{ key: 'leaders', label: t.meetings.leadersOnly, ids: leaders }] : []),
   ];
 
   const load = () => {
     setLoading(true);
-    fetchMeetingAnnounceText(meeting.id)
+    fetchMeetingAnnounceText(meeting.id, notice, previousStartsAt)
       .then((r) => setText(r.text))
       .catch(() => undefined)
       .finally(() => setLoading(false));
   };
   useEffect(() => {
     let alive = true;
-    fetchMeetingAnnounceText(meeting.id)
+    fetchMeetingAnnounceText(meeting.id, notice, previousStartsAt)
       .then((r) => alive && setText(r.text))
       .catch(() => undefined)
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
-  }, [meeting.id]);
+  }, [meeting.id, notice, previousStartsAt]);
 
   async function posterId(): Promise<number | null> {
     if (!withPoster || !poster.current) return null;
@@ -91,6 +110,9 @@ export function MeetingAnnounceSheet({
       setBusy('send');
       const res = await announce.mutateAsync({
         id: meeting.id,
+        notice,
+        ask: notice !== 'cancelled' && ask,
+        previousStartsAt: previousStartsAt ?? null,
         text: text.trim() || undefined,
         userIds: audienceIds(audience, presets),
         posterMediaId,
@@ -114,9 +136,27 @@ export function MeetingAnnounceSheet({
   const field =
     'w-full resize-y rounded-xl bg-hairline px-3 py-2.5 text-[15px] leading-snug outline-none';
   return (
-    <Sheet open onClose={onClose} title={t.meetings.announceMeeting}>
+    <Sheet
+      open
+      onClose={onClose}
+      title={
+        notice === 'cancelled'
+          ? t.meetings.noticeCancelled
+          : notice === 'changed'
+            ? t.meetings.noticeChanged
+            : meeting.kind === 'leaders'
+              ? `👑 ${t.meetings.announceMeeting}`
+              : t.meetings.announceMeeting
+      }
+    >
       <div className="flex flex-col gap-3 px-4 pb-4">
-        <p className="text-[13px] leading-snug text-hint">{t.meetings.announceMeetingHint}</p>
+        <p className="text-[13px] leading-snug text-hint">
+          {notice === 'cancelled'
+            ? t.meetings.cancelledAsk
+            : notice === 'changed'
+              ? t.meetings.timeChangedAsk
+              : t.meetings.announceMeetingHint}
+        </p>
         <div className="flex items-center justify-between gap-2">
           <span className="text-[13px] text-hint">{t.events.remindText}</span>
           <button type="button" onClick={load} className="text-[13px] font-semibold text-link">
@@ -146,12 +186,32 @@ export function MeetingAnnounceSheet({
                 {/* Shown at half size; captured at full size. */}
                 <div className="h-[338px] w-[270px] overflow-hidden rounded-xl shadow-card">
                   <div className="origin-top-left scale-50">
-                    <MeetingPoster ref={poster} m={meeting} g={group} />
+                    <MeetingPoster
+                      ref={poster}
+                      m={meeting}
+                      g={group}
+                      cancelled={notice === 'cancelled'}
+                    />
                   </div>
                 </div>
               </div>
             )}
           </div>
+        )}
+        {notice !== 'cancelled' && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={ask}
+            onClick={() => setAsk(!ask)}
+            className="flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left ring-1 ring-hairline"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-semibold">{t.meetings.askRsvp}</span>
+              <span className="block text-[12px] text-hint">{t.meetings.askRsvpHint}</span>
+            </span>
+            <Switch on={ask} />
+          </button>
         )}
         <AudienceChoice
           groupId={meeting.groupId}

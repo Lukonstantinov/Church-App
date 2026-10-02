@@ -1625,3 +1625,98 @@ describe('announcing a meeting and resending a post with an edited text', () => 
     expect(callsTo(calls, 'sendPhoto', a.id)).toHaveLength(0);
   });
 });
+
+describe('leaders meetings: ask who comes, time changes and cancellation', () => {
+  it('only chosen people get it; answers reach the sender; changed and cancelled notices', async () => {
+    const g = await createEnv('Лидерская');
+    const a = fakeUser('Лидер Аня');
+    const b = fakeUser('Простой Боря');
+    const aId = await join(a, g);
+    await join(b, g);
+    const date = addDays(localDate(new Date(), TZ), 4);
+    const m = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        date,
+        startTime: '18:00',
+        durationMin: 90,
+        title: 'Совет лидеров',
+        kind: 'leaders',
+        audience: [aId],
+      },
+    });
+    expect(m.kind).toBe('leaders');
+    const def = await apiJson<{ text: string }>(`/api/meetings/${m.id}/announce-text`, {
+      user: ADMIN,
+    });
+    expect(def.text).toContain('👑 Встреча лидеров');
+
+    // Asked "Will you come?": only the chosen person gets it, with the two buttons.
+    calls.length = 0;
+    const res = await apiJson<{ sent: number }>(`/api/meetings/${m.id}/announce`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { ask: true },
+    });
+    expect(res.sent).toBe(1);
+    const msg = await sentTo(a.id, 'Совет лидеров');
+    expect(String(msg!.body.text)).toContain('Придёте?');
+    expect(JSON.stringify(msg!.body.reply_markup)).toContain(`mr:y:${m.id}`);
+    expect(calls.some((c) => c.body.chat_id === b.id)).toBe(false);
+
+    // The answer is saved and the sender hears it.
+    calls.length = 0;
+    await pressButton(a, `mr:y:${m.id}`);
+    expect(await sentTo(ADMIN.id, 'Лидер Аня: ✅ будет')).toBeDefined();
+    const detail = await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: ADMIN });
+    expect(detail.rsvp.asked).toBe(true);
+    expect(detail.rsvp.going.map((p) => p.id)).toEqual([aId]);
+    expect(detail.announcedAt).not.toBeNull();
+    // Someone not on the meeting can't answer.
+    expect(
+      (
+        await api(`/api/meetings/${m.id}/rsvp`, {
+          method: 'POST',
+          user: b,
+          json: { status: 'going' },
+        })
+      ).status,
+    ).toBe(403);
+    // Changing the answer in the app.
+    await apiJson(`/api/meetings/${m.id}/rsvp`, {
+      method: 'POST',
+      user: a,
+      json: { status: 'not_going' },
+    });
+    expect((await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: a })).rsvp.mine).toBe(
+      'not_going',
+    );
+
+    // A new time: the default text has the old and the new one.
+    expect((await patch(m.id, { startTime: '19:30' })).status).toBe(200);
+    const changed = await apiJson<{ text: string }>(
+      `/api/meetings/${m.id}/announce-text?notice=changed&from=${encodeURIComponent(m.startsAt)}`,
+      { user: ADMIN },
+    );
+    expect(changed.text).toContain('Время встречи изменено');
+    expect(changed.text).toContain('Было:');
+    expect(changed.text).toContain('Теперь:');
+    expect(changed.text).toContain('19:30');
+
+    // Cancelled: only the cancellation can be sent.
+    expect((await patch(m.id, { status: 'cancelled' })).status).toBe(200);
+    expect(
+      (await api(`/api/meetings/${m.id}/announce`, { method: 'POST', user: ADMIN, json: {} }))
+        .status,
+    ).toBe(409);
+    calls.length = 0;
+    await apiJson(`/api/meetings/${m.id}/announce`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { notice: 'cancelled' },
+    });
+    const off = String((await sentTo(a.id, 'Встреча отменена'))!.body.text);
+    expect(off).not.toContain('Придёте?');
+  });
+});

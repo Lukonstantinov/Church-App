@@ -238,6 +238,11 @@ export const meetings = sqliteTable(
     /** When the person pressed "Agree" in the bot message. */
     leaderAcceptedAt: text('leader_accepted_at'),
     snackAcceptedAt: text('snack_accepted_at'),
+    /** Who last told people about the meeting, and when (they hear the answers). */
+    announcedBy: integer('announced_by'),
+    announcedAt: text('announced_at'),
+    /** The message asked "Will you come?" (answers in meeting_rsvps). */
+    askRsvp: integer('ask_rsvp', { mode: 'boolean' }).notNull().default(false),
     /** The schedule slot it was made for; stays put when the meeting is moved. */
     slotAt: text('slot_at'),
     rollTakenBy: integer('roll_taken_by'),
@@ -256,6 +261,22 @@ export const meetings = sqliteTable(
  * Who a meeting is for, when it isn't for the whole ministry. No rows = everyone.
  * Only these people see the meeting and are on its roll call.
  */
+/** Answers to "Will you come?" on a meeting message. */
+export const meetingRsvps = sqliteTable(
+  'meeting_rsvps',
+  {
+    meetingId: integer('meeting_id')
+      .notNull()
+      .references(() => meetings.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    status: text('status', { enum: ['going', 'not_going'] }).notNull(),
+    updatedAt: text('updated_at').notNull().default(now),
+  },
+  (t) => [primaryKey({ columns: [t.meetingId, t.userId] })],
+);
+
 export const meetingAudience = sqliteTable(
   'meeting_audience',
   {

@@ -3,14 +3,16 @@ import { Bot, InlineKeyboard, type Context } from 'grammy';
 import { displayName, messages, type Messages } from '@church/shared';
 import { adminTelegramIds, type Env } from '../env';
 import { getDb, type Db } from '../db/client';
-import { events, memberships, type User } from '../db/schema';
+import { events, meetings, memberships, type User } from '../db/schema';
 import { eventPictureId, eventRoster, rosterMessage } from '../lib/eventRoster';
 import { eventAccess } from '../lib/events';
 import { acceptPrivacy, upsertTelegramUser } from '../lib/users';
 import { churchDefaultLocale, localeOf } from '../lib/church';
-import { getBotInfo } from '../lib/telegram';
+import { botApi, getBotInfo } from '../lib/telegram';
 import { DEEP_LINK } from '../lib/codes';
 import { mediaFile } from '../lib/media';
+import { answerMeetingRsvp } from '../lib/meetingAnnounce';
+import { drainOutbox } from '../lib/outbox';
 import {
   announceJoinDecision,
   decideJoin,
@@ -296,6 +298,33 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
       link_preview_options: NO_PREVIEW,
       reply_markup: scheduleKeyboard(ctx.t, 'w'),
     });
+  });
+
+  // "Will you come?" under a meeting message: the answer is saved and the sender hears it.
+  pm.callbackQuery(/^mr:([yn]):(\d+)$/, async (ctx) => {
+    const meeting = await db.query.meetings.findFirst({
+      where: eq(meetings.id, Number(ctx.match[2])),
+    });
+    if (!meeting || meeting.status === 'cancelled') {
+      await ctx.answerCallbackQuery({ text: ctx.t.bot.meetingCancelled });
+      return;
+    }
+    const going = ctx.match[1] === 'y';
+    const ok = await answerMeetingRsvp(db, {
+      meeting,
+      user: ctx.dbUser,
+      status: going ? 'going' : 'not_going',
+      envAppUrl: env.APP_URL,
+      fallbackUrl: appUrl,
+    });
+    await ctx.answerCallbackQuery({
+      text: ok ? (going ? ctx.t.bot.rsvpThanksYes : ctx.t.bot.rsvpThanksNo) : undefined,
+      show_alert: false,
+    });
+    if (ok)
+      await drainOutbox(db, botApi(env), { limit: 5 }).catch((err) =>
+        console.error('rsvp drain', err),
+      );
   });
 
   // "Who serves where" under an event message, and as a command for the nearest events.

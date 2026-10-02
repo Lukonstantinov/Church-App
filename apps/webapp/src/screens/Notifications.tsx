@@ -12,6 +12,7 @@ const ICON: Record<NotificationKind, typeof IconBell> = {
   event_duty: IconUsers,
   meeting_job: IconCalendar,
   meeting_announce: IconCalendar,
+  meeting_rsvp: IconUsers,
   post_repeat: IconMegaphone,
 };
 

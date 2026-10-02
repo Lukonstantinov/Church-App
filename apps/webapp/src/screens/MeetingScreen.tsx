@@ -4,7 +4,9 @@ import {
   displayName,
   type MeetingDetail,
   type MeetingKind,
+  type MeetingNotice,
   type MeetingPerson,
+  type MeetingRsvpStatus,
   type UpdateMeetingInput,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
@@ -49,6 +51,7 @@ import {
   useGroup,
   useMeeting,
   useMeetingPeople,
+  useMeetingRsvp,
   useUpdateMeeting,
 } from '../lib/queries';
 import { confirmDialog, haptic, openTelegramLink } from '../lib/telegram';
@@ -123,7 +126,8 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
     role: 'leader' | 'snack';
     person: MeetingPerson | null;
   } | null>(null);
-  const [announcing, setAnnouncing] = useState(false);
+  // The message window: about the meeting, its new time, or its cancellation.
+  const [sheet, setSheet] = useState<{ notice: MeetingNotice; previous?: string } | null>(null);
   const people = useMeetingPeople(m.id, m.canEdit && (editing || picker !== null));
   const cancelled = m.status === 'cancelled';
   const budget = m.budgetCents ?? m.defaultBudgetCents;
@@ -191,9 +195,19 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
       />
 
       {m.canManage && !cancelled && (
-        <Button onClick={() => setAnnouncing(true)}>
-          <IconSend size={17} /> {t.meetings.announceMeeting}
+        <Button onClick={() => setSheet({ notice: 'announce' })}>
+          <IconSend size={17} /> {m.kind === 'leaders' ? '👑 ' : ''}
+          {m.announcedAt ? t.meetings.announceAgain : t.meetings.announceMeeting}
         </Button>
+      )}
+      {m.canManage && cancelled && (
+        <Button variant="secondary" onClick={() => setSheet({ notice: 'cancelled' })}>
+          <IconSend size={17} /> {t.meetings.noticeCancelled}
+        </Button>
+      )}
+
+      {(m.rsvp.asked || m.rsvp.going.length > 0 || m.rsvp.notGoing.length > 0) && (
+        <RsvpCard m={m} />
       )}
 
       {m.canEdit && !m.canManage && !m.topic && !m.location && (
@@ -213,7 +227,14 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
             saving={update.isPending}
             onCancel={() => setEditing(false)}
             onSave={async (input) => {
-              if (await save(input)) setEditing(false);
+              const moved = input.date !== undefined || input.startTime !== undefined;
+              const before = m.startsAt;
+              if (await save(input)) {
+                setEditing(false);
+                // A new time: offer to tell people right away.
+                if (moved && m.canManage && !cancelled)
+                  setSheet({ notice: 'changed', previous: before });
+              }
             }}
           />
         ) : (
@@ -360,7 +381,9 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           disabled={update.isPending || m.status === 'done'}
           onClick={async () => {
             if (!cancelled && !(await confirmDialog(t.meetings.cancelConfirm))) return;
-            await save({ status: cancelled ? 'scheduled' : 'cancelled' });
+            const ok = await save({ status: cancelled ? 'scheduled' : 'cancelled' });
+            // Cancelled: offer to tell people.
+            if (ok && !cancelled) setSheet({ notice: 'cancelled' });
           }}
         >
           {cancelled ? t.meetings.restore : t.meetings.cancelMeeting}
@@ -394,8 +417,15 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           onClose={() => setNotify(null)}
         />
       )}
-      {announcing && (
-        <MeetingAnnounceSheet meeting={m} group={group.data} onClose={() => setAnnouncing(false)} />
+      {sheet && (
+        <MeetingAnnounceSheet
+          key={sheet.notice}
+          meeting={m}
+          group={group.data}
+          notice={sheet.notice}
+          previousStartsAt={sheet.previous}
+          onClose={() => setSheet(null)}
+        />
       )}
     </Screen>
   );
@@ -696,5 +726,69 @@ function EditForm({
         </Button>
       </div>
     </Card>
+  );
+}
+
+/** "Will you come?": the viewer answers; managers see who is coming and who can't. */
+function RsvpCard({ m }: { m: MeetingDetail }) {
+  const t = useT();
+  const toast = useToast();
+  const answer = useMeetingRsvp(m.id);
+  const reply = async (status: MeetingRsvpStatus) => {
+    try {
+      await answer.mutateAsync(status);
+      haptic.success();
+      toast(status === 'going' ? t.bot.rsvpThanksYes : t.bot.rsvpThanksNo);
+    } catch {
+      haptic.error();
+      toast(t.common.actionFailed, 'error');
+    }
+  };
+  const names = (list: MeetingPerson[]) => list.map((p) => displayName(p)).join(', ');
+  return (
+    <Section title={t.meetings.rsvpTitle}>
+      <div className="flex flex-col gap-3 px-4 py-3">
+        {m.status !== 'cancelled' && (
+          <div className="flex gap-2">
+            {(['going', 'not_going'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                disabled={answer.isPending}
+                onClick={() => void reply(s)}
+                className={`flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-2xl text-[15px] font-semibold transition active:scale-[0.98] ${
+                  m.rsvp.mine === s
+                    ? s === 'going'
+                      ? 'bg-present text-white'
+                      : 'bg-absent text-white'
+                    : 'bg-hairline'
+                }`}
+              >
+                {s === 'going' ? `✅ ${t.meetings.rsvpGoingBtn}` : `❌ ${t.meetings.rsvpNoBtn}`}
+              </button>
+            ))}
+          </div>
+        )}
+        {m.canManage &&
+          (m.rsvp.going.length + m.rsvp.notGoing.length === 0 ? (
+            <p className="text-[14px] text-hint">{t.meetings.rsvpNobody}</p>
+          ) : (
+            <div className="flex flex-col gap-1.5 text-[14px]">
+              <div>
+                <b className="text-present">
+                  {t.meetings.rsvpGoing} · {m.rsvp.going.length}
+                </b>
+                {m.rsvp.going.length > 0 && <span> — {names(m.rsvp.going)}</span>}
+              </div>
+              <div>
+                <b className="text-absent">
+                  {t.meetings.rsvpNotGoing} · {m.rsvp.notGoing.length}
+                </b>
+                {m.rsvp.notGoing.length > 0 && <span> — {names(m.rsvp.notGoing)}</span>}
+              </div>
+            </div>
+          ))}
+      </div>
+    </Section>
   );
 }

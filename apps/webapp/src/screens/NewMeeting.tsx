@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { AudiencePicker } from '../components/AudiencePicker';
 import { MeetingFields, type MeetingFormValue } from '../components/MeetingForm';
 import { useToast } from '../components/Toast';
-import { Button, Screen, Section, TextField, Title } from '../components/ui';
+import { Button, Screen, Section, Switch, TextField, Title } from '../components/ui';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useCreateMeeting } from '../lib/queries';
+import { useCreateMeeting, useMembers } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 
 export function NewMeeting({ groupId, date: initialDate }: { groupId: number; date?: string }) {
@@ -17,6 +17,9 @@ export function NewMeeting({ groupId, date: initialDate }: { groupId: number; da
   const create = useCreateMeeting(groupId);
   const [date, setDate] = useState(() => initialDate ?? f.todayInput());
   const [audience, setAudience] = useState<number[] | null>(null);
+  // A leaders' meeting: only chosen people (the leaders to start with), its own poster.
+  const [leaders, setLeaders] = useState(false);
+  const members = useMembers(groupId);
   const [form, setForm] = useState<MeetingFormValue>({
     title: t.newMeeting.defaultTitle,
     startTime: '19:00',
@@ -30,6 +33,7 @@ export function NewMeeting({ groupId, date: initialDate }: { groupId: number; da
         date,
         ...form,
         audience: audience?.length ? audience : undefined,
+        kind: leaders ? 'leaders' : undefined,
       });
       haptic.success();
       toast(t.newMeeting.created);
@@ -46,6 +50,44 @@ export function NewMeeting({ groupId, date: initialDate }: { groupId: number; da
   return (
     <Screen>
       <Title subtitle={t.newMeeting.subtitle}>{t.newMeeting.title}</Title>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={leaders}
+        onClick={() => {
+          const on = !leaders;
+          setLeaders(on);
+          if (on) {
+            if (form.title === t.newMeeting.defaultTitle)
+              setForm({ ...form, title: t.meetings.leadersMeeting });
+            if (!audience?.length)
+              setAudience(
+                (members.data ?? [])
+                  .filter((m) => m.status === 'active' && m.role === 'leader')
+                  .map((m) => m.userId),
+              );
+          } else if (form.title === t.meetings.leadersMeeting) {
+            setForm({ ...form, title: t.newMeeting.defaultTitle });
+          }
+        }}
+        className={`flex items-center gap-3 rounded-[var(--radius-card)] p-4 text-left shadow-card ${
+          leaders ? 'text-white' : 'glass'
+        }`}
+        style={
+          leaders
+            ? { background: 'linear-gradient(135deg, #0b1220, #1e293b 60%, #3b2f12)' }
+            : undefined
+        }
+      >
+        <span className="text-[26px]">👑</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[16px] font-semibold">{t.meetings.leadersMeeting}</span>
+          <span className={`block text-[12px] ${leaders ? 'text-white/75' : 'text-hint'}`}>
+            {t.meetings.leadersMeetingHint}
+          </span>
+        </span>
+        <Switch on={leaders} />
+      </button>
       <Section>
         <TextField label={t.meetingForm.date} type="date" value={date} onChange={setDate} />
       </Section>
@@ -57,7 +99,7 @@ export function NewMeeting({ groupId, date: initialDate }: { groupId: number; da
       </Section>
       <Button
         onClick={() => void submit()}
-        disabled={!form.title.trim() || !date || create.isPending}
+        disabled={!form.title.trim() || !date || create.isPending || (leaders && !audience?.length)}
       >
         {t.common.create}
       </Button>

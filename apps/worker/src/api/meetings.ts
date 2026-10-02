@@ -11,7 +11,10 @@ import {
   calendarNoteSchema,
   localDate,
   messageTemplateSchema,
+  MEETING_NOTICES,
   announceMeetingSchema,
+  meetingRsvpSchema,
+  type MeetingNotice,
   notifyMeetingSchema,
   type CalendarData,
   updateMeetingSchema,
@@ -52,7 +55,12 @@ import {
 } from '../lib/meetingNotify';
 import { assertGroupMedia } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
-import { announceMeeting, defaultMeetingAnnouncement } from '../lib/meetingAnnounce';
+import {
+  announceMeeting,
+  answerMeetingRsvp,
+  defaultMeetingAnnouncement,
+  meetingRsvpLists,
+} from '../lib/meetingAnnounce';
 import { appUrlFor, botApi } from '../lib/telegram';
 import { audit } from '../lib/audit';
 import { churchDefaultLocale, getChurch, localeOf } from '../lib/church';
@@ -255,6 +263,7 @@ groupMeetingRoutes.post('/:id/meetings', async (c) => {
     .values({
       groupId: group.id,
       title: input.title,
+      kind: input.kind ?? null,
       startsAt: startsAt.toISOString(),
       endsAt: endsAt.toISOString(),
     })
@@ -428,6 +437,7 @@ meetingRoutes.get('/:id', async (c) => {
     throw new HTTPException(404, { message: 'not_found' });
   const group = (await db.query.groups.findFirst({ where: eq(groups.id, meeting.groupId) }))!;
   const [row] = await toMeetingRows(db, [meeting]);
+  const rsvp = await meetingRsvpLists(db, meeting.id);
   const seeRoll = a.roll || a.edit;
   const detail: MeetingDetail = {
     ...row!,
@@ -450,6 +460,13 @@ meetingRoutes.get('/:id', async (c) => {
         : meeting.snackUserId === user.id
           ? meeting.snackAcceptedAt
           : null,
+    announcedAt: meeting.announcedAt,
+    rsvp: {
+      asked: meeting.askRsvp,
+      mine: rsvp.rows.find((r) => r.id === user.id)?.status ?? null,
+      going: rsvp.going,
+      notGoing: rsvp.notGoing,
+    },
     attendance: seeRoll
       ? (
           await db
@@ -792,17 +809,39 @@ async function announceable(c: { get: (k: 'db' | 'user') => unknown }, id: numbe
 meetingRoutes.get('/:id/announce-text', async (c) => {
   const { db, user, meeting } = await announceable(c, idParam(c));
   const locale = localeOf(user, await churchDefaultLocale(db));
-  return c.json({ text: await defaultMeetingAnnouncement(db, meeting, locale) });
+  const raw = c.req.query('notice');
+  const notice = (MEETING_NOTICES as readonly string[]).includes(raw ?? '')
+    ? (raw as MeetingNotice)
+    : 'announce';
+  const from = c.req.query('from');
+  const previous = from && !Number.isNaN(Date.parse(from)) ? from : null;
+  return c.json({
+    text: await defaultMeetingAnnouncement(db, meeting, locale, notice, previous),
+  });
 });
 
 /** Tell everyone (or leaders / chosen people) about the meeting, with its poster. */
 meetingRoutes.post('/:id/announce', async (c) => {
   const { db, user, meeting } = await announceable(c, idParam(c));
-  if (meeting.status === 'cancelled') throw new HTTPException(409, { message: 'cancelled' });
   const input = await parseBody(c, announceMeetingSchema);
+  // A cancelled meeting can only be announced as cancelled.
+  if ((meeting.status === 'cancelled') !== (input.notice === 'cancelled'))
+    throw new HTTPException(409, { message: 'cancelled' });
   if (input.posterMediaId) await assertGroupMedia(db, meeting.groupId, input.posterMediaId);
+  if (input.notice !== 'cancelled')
+    await db
+      .update(meetings)
+      .set({
+        announcedBy: user.id,
+        announcedAt: new Date().toISOString(),
+        ...(input.ask ? { askRsvp: true } : {}),
+      })
+      .where(eq(meetings.id, meeting.id));
   const { total, bot } = await announceMeeting(db, {
     meeting,
+    notice: input.notice,
+    ask: input.ask,
+    previousStartsAt: input.previousStartsAt,
     text: input.text,
     userIds: input.userIds,
     posterMediaId: input.posterMediaId,
@@ -825,6 +864,28 @@ meetingRoutes.post('/:id/announce', async (c) => {
     data: { meetingId: meeting.id, sent: total, chosen: input.userIds?.length ?? null },
   });
   return c.json({ sent: total, bot });
+});
+
+/** "Will you come?" — the person's own answer (from the app). */
+meetingRoutes.post('/:id/rsvp', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, idParam(c)) });
+  if (!meeting) throw new HTTPException(404, { message: 'not_found' });
+  if (meeting.status === 'cancelled') throw new HTTPException(409, { message: 'cancelled' });
+  const { status } = await parseBody(c, meetingRsvpSchema);
+  const ok = await answerMeetingRsvp(db, {
+    meeting,
+    user,
+    status,
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+  });
+  if (!ok) throw new HTTPException(403, { message: 'forbidden' });
+  c.executionCtx.waitUntil(
+    drainOutbox(db, botApi(c.env), { limit: 10 }).catch((err) => console.error('rsvp drain', err)),
+  );
+  return c.json({ ok: true });
 });
 
 async function loadRollMeeting(c: { get: (k: 'db' | 'user') => unknown }, id: number) {

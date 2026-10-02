@@ -677,7 +677,6 @@ function statSummary(t: Messages, s: GroupStatistics): [string, string | number]
     [t.stats.cancelled(x.meetingsCancelled), ''],
     [t.stats.perMeeting, x.averagePeople ?? '—'],
     [t.stats.guests, x.guests],
-    [t.stats.late, x.late],
     [t.stats.excused, x.excused],
     [`${t.stats.faithful} (${t.stats.faithfulHint})`, x.faithful],
     [`${t.stats.atRisk} (${t.stats.atRiskHint})`, x.atRisk],
