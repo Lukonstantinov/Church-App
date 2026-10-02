@@ -55,17 +55,15 @@ export function Contacts({ groupId }: { groupId: number }) {
             >
               <Avatar id={c.id} firstName={c.firstName} lastName={c.lastName} size={40} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[16px] font-medium">{displayName(c)}</span>
+                <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  <span className="min-w-0 truncate text-[16px] font-medium">{displayName(c)}</span>
+                  {c.labels.map((l) => (
+                    <LabelChip key={l.id} label={l} small />
+                  ))}
+                </span>
                 <span className="block truncate text-[13px] text-hint">
                   {c.username ? `@${c.username}` : c.offline ? t.people.offline : '—'}
                 </span>
-                {c.labels.length > 0 && (
-                  <span className="mt-1 flex flex-wrap gap-1">
-                    {c.labels.map((l) => (
-                      <LabelChip key={l.id} label={l} small />
-                    ))}
-                  </span>
-                )}
               </span>
               {c.positionName && <Badge>{c.positionName}</Badge>}
               {c.username && <IconTelegram size={20} className="shrink-0 text-link" />}

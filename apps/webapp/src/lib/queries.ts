@@ -1167,7 +1167,12 @@ export function useSetMemberLabels(groupId: number) {
   return useMutation({
     mutationFn: ({ userId, labelIds }: { userId: number } & SetMemberLabelsInput) =>
       apiFetch(`/groups/${groupId}/members/${userId}/labels`, send('PUT', { labelIds })),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.members(groupId) }),
+    // Labels show in the people list, contacts, the profile and the main page.
+    onSuccess: (_d, { userId }) => {
+      void qc.invalidateQueries({ queryKey: ['groups', groupId] });
+      void qc.invalidateQueries({ queryKey: keys.user(userId) });
+      void qc.invalidateQueries({ queryKey: ['me'] });
+    },
   });
 }
 

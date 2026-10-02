@@ -58,7 +58,10 @@ export function PersonTags({
   defaultPosition,
   leaderText,
   labels,
+  inline,
 }: {
+  /** Sits on the name's line (no top gap). */
+  inline?: boolean;
   role: 'leader' | 'member';
   positionName: string | null;
   /** The position everyone starts with (not worth a tag). */
@@ -70,7 +73,7 @@ export function PersonTags({
   const showLeader = role === 'leader' && positionName !== leaderText;
   if (!showPosition && !showLeader && labels.length === 0) return null;
   return (
-    <span className="mt-1 flex flex-wrap items-center gap-1">
+    <span className={`${inline ? '' : 'mt-1 '}flex flex-wrap items-center gap-1`}>
       {showLeader && (
         <span className="brand-gradient inline-flex rounded-full px-1.5 py-px text-[11px] font-semibold text-white">
           {leaderText}

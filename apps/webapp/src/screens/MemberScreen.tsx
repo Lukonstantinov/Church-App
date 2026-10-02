@@ -62,6 +62,15 @@ export function MemberScreen({ userId }: { userId: number }) {
   const { user, memberships, permissions, attendance } = detail.data;
   const actorIsAdmin = me.data?.user.isAdmin === true;
   const isSelf = me.data?.user.id === user.id;
+  // Every label the person has (across ministries, once each), right by the name.
+  const headerLabels = [
+    ...new Map(
+      memberships
+        .filter((m) => m.status === 'active')
+        .flatMap((m) => m.labels)
+        .map((l) => [l.id, l] as const),
+    ).values(),
+  ];
 
   function startEdit() {
     setFirstName(user.firstName);
@@ -83,6 +92,9 @@ export function MemberScreen({ userId }: { userId: number }) {
         <div className="flex flex-wrap items-center justify-center gap-1.5 text-[15px] text-hint">
           {user.username && <span>@{user.username}</span>}
           {user.isAdmin && <Badge>{t.roles.admin}</Badge>}
+          {headerLabels.map((l) => (
+            <LabelChip key={l.id} label={l} />
+          ))}
           {user.offline && <Badge tone="hint">{t.common.offline}</Badge>}
           {!user.offline && !user.isReachable && (
             <Badge tone="danger">{t.common.unreachable}</Badge>
@@ -134,13 +146,6 @@ export function MemberScreen({ userId }: { userId: number }) {
                 subtitle={m.status === 'pending' ? t.member.statusPending : undefined}
                 after={m.positionName ? <Badge>{m.positionName}</Badge> : undefined}
               />
-              {m.labels.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 px-4 pb-2">
-                  {m.labels.map((l) => (
-                    <LabelChip key={l.id} label={l} />
-                  ))}
-                </div>
-              )}
               {m.status === 'active' && canIn(m.groupId, 'people.manage') && (
                 <div className="px-4 pb-3">
                   <LabelPicker groupId={m.groupId} userId={user.id} current={m.labels} />

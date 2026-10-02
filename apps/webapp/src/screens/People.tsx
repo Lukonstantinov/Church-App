@@ -88,18 +88,21 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
       >
         <Avatar id={m.userId} firstName={m.firstName} lastName={m.lastName} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[17px] font-medium">{displayName(m)}</div>
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <span className="min-w-0 truncate text-[17px] font-medium">{displayName(m)}</span>
+            <PersonTags
+              inline
+              role={m.role}
+              positionName={m.positionName}
+              defaultPosition={m.positionId === defaultId}
+              leaderText={t.roles.leader}
+              labels={m.labels}
+            />
+          </div>
           <div className="flex items-center gap-1.5 text-[13px] text-hint">
             {m.username ? `@${m.username}` : m.offline ? t.common.offline : null}
             {!m.offline && !m.isReachable && <Badge tone="danger">{t.common.unreachable}</Badge>}
           </div>
-          <PersonTags
-            role={m.role}
-            positionName={m.positionName}
-            defaultPosition={m.positionId === defaultId}
-            leaderText={t.roles.leader}
-            labels={m.labels}
-          />
         </div>
         <PercentChip percent={m.recentPercent} />
         <span className={`transition-transform ${openId === m.membershipId ? 'rotate-90' : ''}`}>
