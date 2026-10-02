@@ -1142,3 +1142,129 @@ describe('duty leaders and the poster label', () => {
     ).toBeNull();
   });
 });
+
+describe('personal bot commands', () => {
+  it('/services lists my ministries, duties and jobs; /events the nearest; /schedule by period', async () => {
+    const g = await createEnv('Команды бота');
+    const me = fakeUser('Командир');
+    const meId = await join(me, g);
+    const d1 = addDays(localDate(new Date(), TZ), 3);
+    const d2 = addDays(localDate(new Date(), TZ), 40);
+    const meeting = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date: d1, startTime: '19:00', durationMin: 120, title: 'Вечер молодёжи' },
+    });
+    await patch(meeting.id, { leaderUserId: meId });
+    await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date: d2, startTime: '19:00', durationMin: 120, title: 'Далёкая встреча' },
+    });
+    await apiJson(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'Лагерь осени',
+        date: addDays(localDate(new Date(), TZ), 10),
+        startTime: '10:00',
+        location: 'Лес',
+        features: { duties: true },
+        roles: [{ name: 'Кухня', userIds: [meId] }],
+      },
+    });
+
+    calls.length = 0;
+    await sendText(me, '/services');
+    const services = String((await sentTo(me.id, 'Ваши служения'))!.body.text);
+    expect(services).toContain('Команды бота');
+    expect(services).toContain('Кухня');
+    expect(services).toContain('Вечер молодёжи');
+    expect(services).toContain('ведёте');
+
+    calls.length = 0;
+    await sendText(me, '/events');
+    const next = String((await sentTo(me.id, 'Ближайшие события'))!.body.text);
+    expect(next).toContain('Лагерь осени');
+    expect(next).toContain('Кухня');
+
+    calls.length = 0;
+    await sendText(me, '/schedule');
+    const week = String((await sentTo(me.id, 'Расписание'))!.body.text);
+    expect(week).toContain('Вечер молодёжи');
+    expect(week).not.toContain('Далёкая встреча');
+    expect(week).not.toContain('Лагерь осени'); // 10 days away: not in a week
+    await pressButton(me, 'sc:q');
+    const edit = [...calls].reverse().find((c) => c.method === 'editMessageText');
+    expect(String(edit!.body.text)).toContain('Далёкая встреча');
+    expect(String(edit!.body.text)).toContain('Лагерь осени');
+  });
+});
+
+describe('post posters', () => {
+  it('a post made with a poster sends it as the photo; resending reuses it', async () => {
+    const g = await createEnv('Постер поста');
+    const a = fakeUser('Зритель постера');
+    await join(a, g);
+    const poster = (
+      (await (
+        await api(`/api/groups/${g.id}/media?kind=event`, {
+          method: 'POST',
+          user: ADMIN,
+          body: PNG,
+        })
+      ).json()) as { id: number }
+    ).id;
+    // A picture from another ministry can't be used.
+    const other = await createEnv('Чужое служение');
+    const foreign = (
+      (await (
+        await api(`/api/groups/${other.id}/media?kind=event`, {
+          method: 'POST',
+          user: ADMIN,
+          body: PNG,
+        })
+      ).json()) as { id: number }
+    ).id;
+    expect(
+      (
+        await api(`/api/groups/${g.id}/announcements`, {
+          method: 'POST',
+          user: ADMIN,
+          json: { text: 'x', posterMediaId: foreign },
+        })
+      ).status,
+    ).toBe(400);
+
+    calls.length = 0;
+    const post = await apiJson<{ announcement: { id: number } }>(
+      `/api/groups/${g.id}/announcements`,
+      {
+        method: 'POST',
+        user: ADMIN,
+        json: { title: 'Афиша', text: 'Ждём всех в пятницу', posterMediaId: poster },
+      },
+    );
+    const photo = async () => {
+      for (let i = 0; i < 20; i++) {
+        const hit = calls.find((c) => c.method === 'sendPhoto' && c.body.chat_id === a.id);
+        if (hit) return hit;
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      return undefined;
+    };
+    const first = await photo();
+    expect(String(first!.body.photo)).toContain(`/media/m/${poster}`);
+    expect(String(first!.body.caption)).toContain('Ждём всех в пятницу');
+
+    calls.length = 0;
+    await apiJson(`/api/announcements/${post.announcement.id}/resend`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {},
+    });
+    const again = await photo();
+    expect(String(again!.body.photo)).toContain(`/media/m/${poster}`);
+    expect(String(again!.body.caption)).toContain('Напоминание о публикации');
+  });
+});

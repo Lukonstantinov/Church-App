@@ -16,6 +16,12 @@ import {
 } from '../lib/membership';
 import { can } from '../lib/access';
 import { claimProfile } from '../lib/claim';
+import {
+  myServicesText,
+  nearestEventsText,
+  scheduleText,
+  type SchedulePeriod,
+} from '../lib/botDigest';
 import { completeChatLink, handleJoinRequest, retryPendingLink } from '../lib/chats';
 import {
   completeEventChatLink,
@@ -220,6 +226,50 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     await ctx.reply(ctx.t.bot.openApp, { reply_markup: openAppKeyboard(ctx.t) });
   });
 
+  // Personal digests: my services, the nearest events, and the schedule for a period.
+  pm.command('services', async (ctx) => {
+    await ctx.reply(await myServicesText(db, ctx.dbUser, localeOf(ctx.dbUser, churchLocale)), {
+      parse_mode: 'HTML',
+      reply_markup: openAppKeyboard(ctx.t),
+    });
+  });
+
+  pm.command('events', async (ctx) => {
+    await ctx.reply(await nearestEventsText(db, ctx.dbUser, localeOf(ctx.dbUser, churchLocale)), {
+      parse_mode: 'HTML',
+      reply_markup: openAppKeyboard(ctx.t),
+    });
+  });
+
+  const scheduleKeyboard = (t: Messages, current: SchedulePeriod) =>
+    new InlineKeyboard()
+      .text(`${current === 'w' ? '• ' : ''}${t.bot.periodWeek}`, 'sc:w')
+      .text(`${current === 'm' ? '• ' : ''}${t.bot.periodMonth}`, 'sc:m')
+      .text(`${current === 'q' ? '• ' : ''}${t.bot.periodQuarter}`, 'sc:q')
+      .row()
+      .webApp(t.bot.openApp, appUrl);
+
+  pm.command('schedule', async (ctx) => {
+    await ctx.reply(await scheduleText(db, ctx.dbUser, localeOf(ctx.dbUser, churchLocale), 'w'), {
+      parse_mode: 'HTML',
+      reply_markup: scheduleKeyboard(ctx.t, 'w'),
+    });
+  });
+
+  pm.callbackQuery(/^sc:([wmq])$/, async (ctx) => {
+    const period = ctx.match[1] as SchedulePeriod;
+    await ctx
+      .editMessageText(
+        await scheduleText(db, ctx.dbUser, localeOf(ctx.dbUser, churchLocale), period),
+        {
+          parse_mode: 'HTML',
+          reply_markup: scheduleKeyboard(ctx.t, period),
+        },
+      )
+      .catch(() => undefined);
+    await ctx.answerCallbackQuery();
+  });
+
   pm.command('privacy', async (ctx) => {
     await ctx.reply(ctx.t.bot.privacyInfo, { parse_mode: 'HTML' });
   });
@@ -256,6 +306,9 @@ export function commandsFor(t: Messages) {
   return [
     { command: 'start', description: t.commands.start },
     { command: 'app', description: t.commands.app },
+    { command: 'services', description: t.commands.services },
+    { command: 'events', description: t.commands.events },
+    { command: 'schedule', description: t.commands.schedule },
     { command: 'privacy', description: t.commands.privacy },
     { command: 'help', description: t.commands.help },
   ];

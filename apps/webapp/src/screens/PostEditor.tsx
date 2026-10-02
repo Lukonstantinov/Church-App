@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import {
+  MEDIA_MAX_BYTES,
   POST_KINDS,
   POST_KIND_KEYS,
   fontFamily,
@@ -98,9 +99,11 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
   const [blocks, setBlocks] = useState<DraftBlock[]>(post?.blocks.map(toDraft) ?? []);
   const [notify, setNotify] = useState(true);
   const [uploading, setUploading] = useState<[number, number] | null>(null);
+  const [making, setMaking] = useState(false);
+  const posterNode = useRef<HTMLDivElement>(null);
   const addBlock = (b: DraftBlock) => setBlocks((list) => [...list, b]);
   const uploads = useBlockUploads(groupId, addBlock);
-  const pending = publish.isPending || save.isPending;
+  const pending = publish.isPending || save.isPending || making;
   const set = (patch: Partial<PostDesign>) =>
     setCover((c) => ({ ...c, design: { ...c.design, ...patch } }));
 
@@ -136,8 +139,42 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
   const blockInput = toInput(blocks);
   const canSubmit = !!(text.trim() || title.trim() || blockInput.length);
 
+  /** The cover as a picture (for the bot message): drawn at full size off screen, then uploaded. */
+  async function makePoster(): Promise<number | null> {
+    const node = posterNode.current;
+    if (!coverShown || !node) return null;
+    try {
+      const { toJpeg } = await import('html-to-image');
+      const attempts = [
+        [1.5, 0.85],
+        [1.5, 0.7],
+        [1, 0.7],
+        [1, 0.5],
+      ] as const;
+      for (const skipFonts of [false, true]) {
+        try {
+          for (const [pixelRatio, quality] of attempts) {
+            const dataUrl = await toJpeg(node, { pixelRatio, quality, skipFonts });
+            const blob = await (await fetch(dataUrl)).blob();
+            if (blob.size <= MEDIA_MAX_BYTES) return (await upload.mutateAsync(blob)).id;
+          }
+          return null;
+        } catch {
+          // Embedding the fonts failed: try again without them.
+        }
+      }
+    } catch {
+      // No poster is better than no post.
+    }
+    return null;
+  }
+
   async function submit() {
+    setMaking(true);
+    const posterMediaId = await makePoster();
+    setMaking(false);
     const input = {
+      posterMediaId,
       title: title.trim() || null,
       text: text.trim(),
       mediaIds: photos.map((p) => p.id),
@@ -172,6 +209,23 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
       {coverShown && (
         <div className="glass-strong sticky top-0 z-10 -mx-4 rounded-b-[26px] px-4 pb-3 pt-3">
           <div className="overflow-hidden rounded-[var(--radius-card)] shadow-card">
+            <PosterMedia
+              title={title.trim() || null}
+              photos={photos}
+              tint={
+                photos.length && tintColor ? { color: tintColor, strength: tintStrength } : null
+              }
+              look={look}
+              design={design}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* The same cover at full size, off screen: the picture sent with the post is taken from it. */}
+      {coverShown && (
+        <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0, width: 720 }}>
+          <div ref={posterNode}>
             <PosterMedia
               title={title.trim() || null}
               photos={photos}

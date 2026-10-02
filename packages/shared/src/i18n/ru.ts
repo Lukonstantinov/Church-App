@@ -1205,6 +1205,23 @@ export const ru = {
     notifReminderTitle: (title: string) => `Напоминание: «${title}»`,
     notifDutyTitle: (title: string) => `Вам назначено служение: «${title}»`,
     notifPostRepeatTitle: (group: string) => `Повтор: ${group}`,
+    servicesTitle: '🛠 <b>Ваши служения</b>',
+    servicesEmpty: 'Пока вы не состоите ни в одном служении.',
+    servicesMinistries: '<b>Служения</b>',
+    servicesDuties: '<b>На событиях</b>',
+    servicesJobs: '<b>На встречах</b>',
+    jobLead: 'ведёте',
+    jobSnack: 'снеки',
+    eventsTitle: '📅 <b>Ближайшие события</b>',
+    eventsEmpty: 'Предстоящих событий нет.',
+    scheduleTitle: (period: string) => `🗓 <b>Расписание: ${period}</b>`,
+    scheduleEmpty: 'В это время встреч нет.',
+    periodWeek: 'Неделя',
+    periodMonth: 'Месяц',
+    periodQuarter: '3 месяца',
+    moreItems: (n: number) => `…и ещё ${n}. Всё расписание — в приложении.`,
+    youAre: 'Вы',
+    leadsRole: 'лидер',
     meetingButton: 'Открыть встречу',
     postHasExtras: '📎 В посте есть вложения, опрос или таблица — откройте приложение',
     chatLinked: (ministry: string) =>
@@ -1220,7 +1237,7 @@ export const ru = {
       `Привет, ${name}! 👋\n\nЭто бот молодёжного служения. Здесь отмечается посещаемость, приходят объявления и напоминания.\n\nНажми «Открыть приложение», чтобы начать.`,
     openApp: 'Открыть приложение',
     menuButton: 'Открыть',
-    help: 'Команды:\n/app — открыть приложение\n/privacy — политика конфиденциальности\n/help — помощь\n\nЧтобы вступить в группу, попросите у лидера ссылку-приглашение.',
+    help: 'Команды:\n/app — открыть приложение\n/services — мои служения\n/events — ближайшие события\n/schedule — расписание встреч\n/privacy — политика конфиденциальности\n/help — помощь\n\nЧтобы вступить в группу, попросите у лидера ссылку-приглашение.',
     privacyNotice:
       '<b>Прежде чем продолжить</b>\n\n' +
       'Мы храним только необходимое для работы служения: ваше имя и Telegram-аккаунт, в каких группах вы состоите, посещаемость встреч и (если вы их делаете) записи о пожертвованиях.\n\n' +
@@ -1261,6 +1278,9 @@ export const ru = {
     claimDone: (name: string) => `Готово! Профиль «${name}» теперь привязан к вашему Telegram ✅`,
   },
   commands: {
+    services: 'Мои служения',
+    events: 'Ближайшие события',
+    schedule: 'Расписание встреч',
     start: 'Начать',
     app: 'Открыть приложение',
     privacy: 'Мои данные и конфиденциальность',

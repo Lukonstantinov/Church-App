@@ -645,6 +645,8 @@ const hexColor = z.string().regex(/^#[0-9a-f]{6}$/i, '#rrggbb');
 
 /** A post in a ministry's feed: text, optionally a headline, photos and a tint (a poster). */
 const announcementFields = z.object({
+  /** A picture of the post's cover, made on the phone, sent with the bot message. */
+  posterMediaId: z.number().int().positive().nullish(),
   /** The event this post announces. */
   eventId: z.number().int().positive().nullish(),
   title: z

@@ -1182,6 +1182,23 @@ export const en: Messages = {
     notifReminderTitle: (title: string) => `Reminder: “${title}”`,
     notifDutyTitle: (title: string) => `You have a duty at “${title}”`,
     notifPostRepeatTitle: (group: string) => `Repeat: ${group}`,
+    servicesTitle: '🛠 <b>Your services</b>',
+    servicesEmpty: 'You are not in any ministry yet.',
+    servicesMinistries: '<b>Ministries</b>',
+    servicesDuties: '<b>At events</b>',
+    servicesJobs: '<b>At meetings</b>',
+    jobLead: 'you lead',
+    jobSnack: 'snacks',
+    eventsTitle: '📅 <b>Nearest events</b>',
+    eventsEmpty: 'No upcoming events.',
+    scheduleTitle: (period: string) => `🗓 <b>Schedule: ${period}</b>`,
+    scheduleEmpty: 'No meetings in this period.',
+    periodWeek: 'Week',
+    periodMonth: 'Month',
+    periodQuarter: '3 months',
+    moreItems: (n: number) => `…and ${n} more. The full schedule is in the app.`,
+    youAre: 'You',
+    leadsRole: 'leader',
     meetingButton: 'Open the meeting',
     postHasExtras: '📎 This post has attachments, a poll or a table — open the app',
     chatLinked: (ministry: string) =>
@@ -1197,7 +1214,7 @@ export const en: Messages = {
       `Hi, ${name}! 👋\n\nThis is the youth ministry bot. Attendance, announcements and reminders all happen here.\n\nTap “Open app” to get started.`,
     openApp: 'Open app',
     menuButton: 'Open',
-    help: 'Commands:\n/app — open the app\n/privacy — privacy policy\n/help — help\n\nTo join a group, ask a leader for an invite link.',
+    help: 'Commands:\n/app — open the app\n/services — my services\n/events — nearest events\n/schedule — meeting schedule\n/privacy — privacy policy\n/help — help\n\nTo join a group, ask a leader for an invite link.',
     privacyNotice:
       '<b>Before we continue</b>\n\n' +
       'We only keep what the ministry needs: your name and Telegram account, which groups you’re in, meeting attendance and (if you make any) donation records.\n\n' +
@@ -1238,6 +1255,9 @@ export const en: Messages = {
     claimDone: (name: string) => `Done! The profile “${name}” is now linked to your Telegram ✅`,
   },
   commands: {
+    services: 'My services',
+    events: 'Nearest events',
+    schedule: 'Meeting schedule',
     start: 'Start',
     app: 'Open the app',
     privacy: 'My data and privacy',

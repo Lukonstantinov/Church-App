@@ -43,6 +43,7 @@ export function contentColumns(input: UpdateAnnouncementInput) {
   const blocks = input.blocks ?? [];
   return {
     title: input.title ?? null,
+    posterMediaId: input.posterMediaId ?? null,
     text: input.text ?? '',
     mediaIds: input.mediaIds?.length ? input.mediaIds : null,
     tintColor: input.tintColor ?? null,
@@ -64,6 +65,7 @@ export function referencedIds(input: UpdateAnnouncementInput) {
   }
   const backdrop = input.design?.custom?.backdrop;
   if (backdrop) media.push(backdrop.mediaId);
+  if (input.posterMediaId) media.push(input.posterMediaId);
   return { media: [...new Set(media)], files: [...new Set(fileIds)] };
 }
 
@@ -93,7 +95,8 @@ export async function queuePostMessages(
     .filter(Boolean)
     .join('\n\n');
   const hasExtras = blocks.some((b) => b.type !== 'text');
-  const firstPhoto = row.mediaIds?.[0];
+  // The poster (the cover as a picture) leads; without one the first photo does.
+  const firstPhoto = row.posterMediaId ?? row.mediaIds?.[0];
   const photoUrl =
     firstPhoto && appUrl ? `${appUrl}${await signedMediaUrl(args.secret, firstPhoto)}` : null;
   for (const m of args.targets) {

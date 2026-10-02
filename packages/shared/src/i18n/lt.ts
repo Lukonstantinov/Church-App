@@ -1205,6 +1205,23 @@ export const lt: Messages = {
     notifReminderTitle: (title: string) => `Priminimas: „${title}“`,
     notifDutyTitle: (title: string) => `Jums paskirta tarnystė: „${title}“`,
     notifPostRepeatTitle: (group: string) => `Pakartojimas: ${group}`,
+    servicesTitle: '🛠 <b>Jūsų tarnystės</b>',
+    servicesEmpty: 'Dar nesate jokioje tarnystėje.',
+    servicesMinistries: '<b>Tarnystės</b>',
+    servicesDuties: '<b>Renginiuose</b>',
+    servicesJobs: '<b>Susitikimuose</b>',
+    jobLead: 'vedate',
+    jobSnack: 'užkandžiai',
+    eventsTitle: '📅 <b>Artimiausi renginiai</b>',
+    eventsEmpty: 'Artimų renginių nėra.',
+    scheduleTitle: (period: string) => `🗓 <b>Tvarkaraštis: ${period}</b>`,
+    scheduleEmpty: 'Šiuo laikotarpiu susitikimų nėra.',
+    periodWeek: 'Savaitė',
+    periodMonth: 'Mėnuo',
+    periodQuarter: '3 mėnesiai',
+    moreItems: (n: number) => `…ir dar ${n}. Visas tvarkaraštis — programoje.`,
+    youAre: 'Jūs',
+    leadsRole: 'vadovas',
     meetingButton: 'Atidaryti susitikimą',
     postHasExtras: '📎 Įraše yra priedų, apklausa ar lentelė — atidarykite programėlę',
     chatLinked: (ministry: string) =>
@@ -1220,7 +1237,7 @@ export const lt: Messages = {
       `Sveiki, ${name}! 👋\n\nTai jaunimo tarnystės botas. Čia žymimas lankomumas, gaunami skelbimai ir priminimai.\n\nSpauskite „Atidaryti programėlę“, kad pradėtumėte.`,
     openApp: 'Atidaryti programėlę',
     menuButton: 'Atidaryti',
-    help: 'Komandos:\n/app — atidaryti programėlę\n/privacy — privatumo politika\n/help — pagalba\n\nNorėdami prisijungti prie grupės, paprašykite vadovo kvietimo nuorodos.',
+    help: 'Komandos:\n/app — atidaryti programėlę\n/services — mano tarnystės\n/events — artimiausi renginiai\n/schedule — susitikimų tvarkaraštis\n/privacy — privatumo politika\n/help — pagalba\n\nNorėdami prisijungti prie grupės, paprašykite vadovo kvietimo nuorodos.',
     privacyNotice:
       '<b>Prieš tęsiant</b>\n\n' +
       'Saugome tik tai, ko reikia tarnystei: jūsų vardą ir Telegram paskyrą, kurioms grupėms priklausote, susitikimų lankomumą ir (jei aukojate) aukų įrašus.\n\n' +
@@ -1261,6 +1278,9 @@ export const lt: Messages = {
     claimDone: (name: string) => `Atlikta! Profilis „${name}“ dabar susietas su jūsų Telegram ✅`,
   },
   commands: {
+    services: 'Mano tarnystės',
+    events: 'Artimiausi renginiai',
+    schedule: 'Susitikimų tvarkaraštis',
     start: 'Pradėti',
     app: 'Atidaryti programėlę',
     privacy: 'Mano duomenys ir privatumas',
