@@ -10,7 +10,7 @@ import { acceptPrivacy, upsertTelegramUser } from '../lib/users';
 import { churchDefaultLocale, localeOf } from '../lib/church';
 import { getBotInfo } from '../lib/telegram';
 import { DEEP_LINK } from '../lib/codes';
-import { signedMediaUrl } from '../lib/media';
+import { mediaFile } from '../lib/media';
 import {
   announceJoinDecision,
   decideJoin,
@@ -257,11 +257,12 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
         ctx.t.bot.eventButton,
         `${base}/?event=${card.eventId}`,
       );
-      if (card.pictureId) {
-        const photo = `${base}${await signedMediaUrl(env.WEBHOOK_SECRET, card.pictureId)}`;
+      // The bot uploads the picture itself (Telegram can't take some formats by link).
+      const file = card.pictureId ? await mediaFile(db, card.pictureId) : null;
+      if (file) {
         const fits = card.text.length <= 1024;
         const sent = await ctx
-          .replyWithPhoto(photo, {
+          .replyWithPhoto(file, {
             caption: fits ? card.text : card.text.split('\n\n')[0],
             parse_mode: 'HTML',
             ...(fits ? { reply_markup } : {}),

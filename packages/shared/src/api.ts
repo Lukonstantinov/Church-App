@@ -234,6 +234,8 @@ export interface MemberRow {
   /** No Telegram account linked (added by a leader). */
   offline: boolean;
   isReachable: boolean;
+  /** A church administrator (the name is shown in red). */
+  isAdmin: boolean;
   guardianConsent: boolean;
   /** Attendance rate over the group's last 8 roll calls; null if none recorded yet. */
   recentPercent: number | null;
@@ -247,6 +249,8 @@ export interface ContactRow {
   username: string | null;
   positionName: string | null;
   offline: boolean;
+  /** A church administrator (the name is shown in red). */
+  isAdmin: boolean;
   /** Labels everyone in the ministry can see. */
   labels: LabelRef[];
 }
@@ -464,6 +468,8 @@ export const remindEventSchema = z.object({
   userIds: z.array(z.number().int().positive()).max(500).nullish(),
   /** Add who serves where (every duty with its people). */
   roster: z.boolean().optional(),
+  /** Send it with the event's poster (default: yes, when it has one). */
+  poster: z.boolean().optional(),
 });
 export type RemindEventInput = z.input<typeof remindEventSchema>;
 

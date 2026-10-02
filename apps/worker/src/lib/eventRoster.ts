@@ -2,8 +2,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import { displayName, dutyColor, messages, type Locale } from '@church/shared';
 import type { Db } from '../db/client';
 import { eventRoleAssignees, eventRoles, users, type events } from '../db/schema';
-import { escapeHtml } from './html';
-import { signedMediaUrl } from './media';
+import { escapeHtml, personLink } from './html';
 
 type Event = typeof events.$inferSelect;
 
@@ -21,6 +20,8 @@ export async function eventRoster(db: Db, eventId: number) {
       id: users.id,
       firstName: users.firstName,
       lastName: users.lastName,
+      username: users.username,
+      telegramId: users.telegramId,
     })
     .from(eventRoleAssignees)
     .innerJoin(users, eq(users.id, eventRoleAssignees.userId))
@@ -33,7 +34,13 @@ export async function eventRoster(db: Db, eventId: number) {
   const leaderIds = roles.map((r) => r.leaderUserId).filter((x): x is number => x !== null);
   const leaders = leaderIds.length
     ? await db
-        .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+        .select({
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          username: users.username,
+          telegramId: users.telegramId,
+        })
         .from(users)
         .where(inArray(users.id, leaderIds))
     : [];
@@ -46,22 +53,24 @@ export async function eventRoster(db: Db, eventId: number) {
       color: dutyColor(i),
       leaderId: r.leaderUserId,
       leader: leader ? displayName(leader) : null,
+      /** The name as a link to the person's Telegram (HTML). */
+      leaderLink: leader ? personLink(displayName(leader), leader) : null,
       people: assignees
         .filter((a) => a.roleId === r.id && a.id !== r.leaderUserId)
-        .map((a) => ({ id: a.id, name: displayName(a) })),
+        .map((a) => ({ id: a.id, name: displayName(a), link: personLink(displayName(a), a) })),
     };
   });
 }
 
 export type Roster = Awaited<ReturnType<typeof eventRoster>>;
 
-/** "🔴 Техника — ★ Anna, Mark" lines; empty when the event has no duties. */
+/** "🔴 Техника — ★ Anna, Mark" lines (names link to their Telegram); empty without duties. */
 export function rosterLines(roster: Roster, locale: Locale): string[] {
   const t = messages(locale).bot;
   return roster.map((r) => {
-    const names = [...(r.leader ? [`★ ${r.leader}`] : []), ...r.people.map((p) => p.name)];
+    const names = [...(r.leaderLink ? [`★ ${r.leaderLink}`] : []), ...r.people.map((p) => p.link)];
     return `${r.color.dot} <b>${escapeHtml(r.name)}</b> — ${
-      names.length ? escapeHtml(names.join(', ')) : `<i>${t.rosterNone}</i>`
+      names.length ? names.join(', ') : `<i>${t.rosterNone}</i>`
     }`;
   });
 }
@@ -75,13 +84,9 @@ export function rosterMessage(event: Pick<Event, 'title'>, roster: Roster, local
     : `${head}\n\n${t.rosterEmpty}`;
 }
 
-/** The event's picture for the bot: the cover photo, else the designed poster. */
-export async function eventPictureUrl(
-  event: Pick<Event, 'coverMediaId' | 'posterMediaId'>,
-  secret: string | undefined,
-  appUrl: string | null | undefined,
-): Promise<string | null> {
-  const id = event.coverMediaId ?? event.posterMediaId;
-  if (!id || !secret || !appUrl) return null;
-  return `${appUrl.replace(/\/+$/, '')}${await signedMediaUrl(secret, id)}`;
-}
+/**
+ * The event's picture for the bot: the poster (a JPEG the app makes from the cover), else
+ * the cover photo.
+ */
+export const eventPictureId = (event: Pick<Event, 'coverMediaId' | 'posterMediaId'>) =>
+  event.posterMediaId ?? event.coverMediaId ?? null;

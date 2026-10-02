@@ -136,6 +136,13 @@ export const lt: Messages = {
     title: 'Žymos',
     entry: 'Savos žymos su spalva ir animacija',
     manage: 'Tvarkyti žymas',
+    hasNow: 'Žmogus turi',
+    giveOne: 'Suteikti žymą',
+    noneYet: 'Žymų dar nėra',
+    tapToGive:
+      'Palieskite žymą, kad ją suteiktumėte — ją matys visi tarnystėje. Palieskite dar kartą, kad nuimtumėte.',
+    givenToast: (name: string) => `Žyma „${name}“ suteikta`,
+    takenToast: (name: string) => `Žyma „${name}“ nuimta`,
     new: 'Nauja žyma',
     name: 'Pavadinimas',
     color: 'Spalva',
@@ -677,6 +684,9 @@ export const lt: Messages = {
     remindSend: 'Siųsti priminimą',
     withRoster: 'Pridėti, kas kur tarnauja',
     withRosterHint: 'Visos renginio tarnystės ir žmonės jose — vienoje žinutėje.',
+    withPoster: 'Siųsti su plakatu',
+    noPoster:
+      'Renginys dar neturi plakato. Pridėkite viršelį ar dizainą renginio nustatymuose ir išsaugokite.',
     remindEveryone: 'Visi tarnystėje',
     remindSent: (n: number) => `Išsiųsta: ${n}`,
     remindNobody: 'Nėra kam siųsti: niekas nepaleido boto',

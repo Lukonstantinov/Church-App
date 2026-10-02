@@ -89,7 +89,11 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
         <Avatar id={m.userId} firstName={m.firstName} lastName={m.lastName} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-            <span className="min-w-0 truncate text-[17px] font-medium">{displayName(m)}</span>
+            <span
+              className={`min-w-0 truncate text-[17px] font-medium ${m.isAdmin ? 'admin-name' : ''}`}
+            >
+              {displayName(m)}
+            </span>
             <PersonTags
               inline
               role={m.role}

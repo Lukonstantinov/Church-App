@@ -3,6 +3,7 @@ import { useLabels, useSetMemberLabels } from '../lib/queries';
 import { useNav } from '../lib/nav';
 import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
+import { useToast } from './Toast';
 import type { LabelAnimation, LabelRef } from '@church/shared';
 
 const isLight = (hex: string) => {
@@ -102,20 +103,37 @@ export function LabelPicker({
   current: LabelRef[];
 }) {
   const t = useT();
+  const toast = useToast();
   const labels = useLabels(groupId);
   const set = useSetMemberLabels(groupId);
   const { push } = useNav();
   const mine = new Set(current.map((l) => l.id));
-  const toggle = (id: number) => {
+  const all = labels.data ?? [];
+  const toggle = (l: LabelRef) => {
     haptic.tap();
     const next = new Set(mine);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    set.mutate({ userId, labelIds: [...next] });
+    const giving = !next.has(l.id);
+    if (giving) next.add(l.id);
+    else next.delete(l.id);
+    set.mutate(
+      { userId, labelIds: [...next] },
+      {
+        onSuccess: () => {
+          haptic.success();
+          toast(giving ? t.labels.givenToast(l.name) : t.labels.takenToast(l.name));
+        },
+        onError: () => {
+          haptic.error();
+          toast(t.common.actionFailed, 'error');
+        },
+      },
+    );
   };
+  const given = all.filter((l) => mine.has(l.id));
+  const free = all.filter((l) => !mine.has(l.id));
   return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
         <span className="text-[12px] font-semibold uppercase tracking-wide text-hint">
           {t.labels.assign}
         </span>
@@ -127,21 +145,54 @@ export function LabelPicker({
           {t.labels.manage}
         </button>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {(labels.data ?? []).map((l) => (
-          <button
-            key={l.id}
-            type="button"
-            onClick={() => toggle(l.id)}
-            className={`rounded-full transition active:scale-95 ${mine.has(l.id) ? 'ring-2 ring-[var(--text)] ring-offset-1' : 'opacity-45'}`}
-          >
-            <LabelChip label={l} />
-          </button>
-        ))}
-        {(labels.data ?? []).length === 0 && (
-          <span className="text-[13px] text-hint">{t.labels.empty}</span>
-        )}
-      </div>
+      {all.length === 0 ? (
+        <span className="text-[13px] text-hint">{t.labels.empty}</span>
+      ) : (
+        <>
+          {/* What the person has: the real chips, tap ✕ to take one away. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {given.length === 0 ? (
+              <span className="text-[13px] text-hint">{t.labels.noneYet}</span>
+            ) : (
+              given.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  disabled={set.isPending}
+                  onClick={() => toggle(l)}
+                  className="inline-flex items-center gap-1 rounded-full active:scale-95"
+                >
+                  <LabelChip label={l} />
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-hairline text-[12px] text-hint">
+                    ✕
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          {/* Labels to give: outlined, with a plus. */}
+          {free.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {free.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  disabled={set.isPending}
+                  onClick={() => toggle(l)}
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-hint/50 px-2.5 py-0.5 text-[12px] font-semibold text-hint active:scale-95"
+                >
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: labelBackground(l) }}
+                  />
+                  + {l.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="text-[12px] leading-snug text-hint">{t.labels.tapToGive}</p>
+        </>
+      )}
     </div>
   );
 }

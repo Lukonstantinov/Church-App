@@ -173,7 +173,6 @@ async function tellAssigned(
     sender: { id: user.id, name: displayName(user) },
     envAppUrl: c.env.APP_URL,
     fallbackUrl: appUrlFor(c.env, c.req.url),
-    secret: c.env.WEBHOOK_SECRET,
   });
   if (result.sent > 0)
     c.executionCtx.waitUntil(
@@ -298,10 +297,10 @@ eventRoutes.post('/:id/remind', async (c) => {
     text: input.text,
     userIds: input.userIds,
     roster: input.roster,
+    poster: input.poster,
     senderName: displayName(user),
     envAppUrl: c.env.APP_URL,
     fallbackUrl: appUrlFor(c.env, c.req.url),
-    secret: c.env.WEBHOOK_SECRET,
   });
   if (bot > 0)
     c.executionCtx.waitUntil(

@@ -11,7 +11,7 @@ import {
   type events,
 } from '../db/schema';
 import { recordNotification } from './notifications';
-import { eventPictureUrl, eventRoster, rosterLines, type Roster } from './eventRoster';
+import { eventPictureId, eventRoster, rosterLines, type Roster } from './eventRoster';
 
 type Event = typeof events.$inferSelect;
 import { churchDefaultLocale, getAppUrl, getChurch, localeOf } from './church';
@@ -40,7 +40,7 @@ function eventKeyboard(
 function eventPayload(
   chatId: number,
   html: string,
-  picture: string | null,
+  picture: number | null,
   reply_markup: InlineKeyboard | undefined,
 ) {
   // Photo captions are limited to 1024 characters; longer messages go as text.
@@ -49,7 +49,7 @@ function eventPayload(
         method: 'sendPhoto' as const,
         payload: {
           chat_id: chatId,
-          photo: picture,
+          photo_media_id: picture,
           caption: html,
           parse_mode: 'HTML',
           reply_markup,
@@ -149,10 +149,10 @@ export async function sendEventReminder(
     fallbackUrl: string | null;
     /** Stable key part so an automatic reminder can't be queued twice. */
     dedupe?: string;
-    /** Signs the event picture's link (no picture without it). */
-    secret?: string;
     /** Add who serves where. */
     roster?: boolean;
+    /** With the event's picture (default yes). */
+    poster?: boolean;
   },
 ): Promise<{ total: number; bot: number }> {
   const fallback = await churchDefaultLocale(db);
@@ -160,7 +160,7 @@ export async function sendEventReminder(
   const list = await recipients(db, args.group.id, args.userIds);
   const stamp = args.dedupe ?? String(Date.now());
   const roster = await eventRoster(db, args.event.id);
-  const picture = await eventPictureUrl(args.event, args.secret, appUrl);
+  const picture = args.poster === false ? null : eventPictureId(args.event);
   let bot = 0;
   for (const r of list) {
     const locale = localeOf({ locale: r.locale }, fallback);
@@ -220,8 +220,6 @@ export async function notifyDuties(
     sender: { id: number; name: string };
     envAppUrl?: string;
     fallbackUrl: string | null;
-    /** Signs the event picture's link (no picture without it). */
-    secret?: string;
   },
 ): Promise<DutiesNotice> {
   const fallback = await churchDefaultLocale(db);
@@ -241,7 +239,7 @@ export async function notifyDuties(
     .from(users)
     .where(inArray(users.id, [...byUser.keys()]));
   const roster = await eventRoster(db, args.event.id);
-  const picture = await eventPictureUrl(args.event, args.secret, appUrl);
+  const picture = eventPictureId(args.event);
   let queued = 0;
   // People the bot can't write to (never started it, or blocked it) are named, so the sender knows.
   const skipped: string[] = [];

@@ -104,8 +104,7 @@ export async function queuePostMessages(
       : undefined;
   const firstPhoto =
     row.posterMediaId ?? row.mediaIds?.[0] ?? event?.coverMediaId ?? event?.posterMediaId;
-  const photoUrl =
-    firstPhoto && appUrl ? `${appUrl}${await signedMediaUrl(args.secret, firstPhoto)}` : null;
+  const photoId = firstPhoto ?? null;
   for (const m of args.targets) {
     if (args.repeatedBy) {
       const tt = messages(localeOf(m, fallback));
@@ -130,12 +129,18 @@ export async function queuePostMessages(
     }\n\n— ${escapeHtml(displayName(author))}${by}`;
     const reply_markup = appUrl ? new InlineKeyboard().webApp(t.bot.openApp, appUrl) : undefined;
     // Photo captions are limited to 1024 characters; longer posts go as a text message.
-    const asPhoto = photoUrl && body.length <= 1024;
+    const asPhoto = photoId !== null && body.length <= 1024;
     await enqueue(db, {
       chatId: m.chatId,
       method: asPhoto ? 'sendPhoto' : 'sendMessage',
       payload: asPhoto
-        ? { chat_id: m.chatId, photo: photoUrl, caption: body, parse_mode: 'HTML', reply_markup }
+        ? {
+            chat_id: m.chatId,
+            photo_media_id: photoId,
+            caption: body,
+            parse_mode: 'HTML',
+            reply_markup,
+          }
         : {
             chat_id: m.chatId,
             text: body,

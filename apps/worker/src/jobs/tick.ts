@@ -130,7 +130,6 @@ export async function remindUpcomingEvents(db: Db, env: Env, now: Date) {
         group: { id: rule.id },
         fallbackUrl: appUrl,
         envAppUrl: env.APP_URL,
-        secret: env.WEBHOOK_SECRET,
         roster: true,
         dedupe: 'auto',
       });

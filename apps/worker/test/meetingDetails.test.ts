@@ -374,7 +374,7 @@ describe('message preview, answers and the calendar', () => {
         (c) =>
           c.method === 'sendPhoto' &&
           c.body.chat_id === lead.id &&
-          String(c.body.photo).includes(`/media/m/${photo}`),
+          (c.body.photo as { upload?: boolean } | undefined)?.upload === true,
       ),
     ).toBe(true);
 
@@ -1190,7 +1190,7 @@ describe('personal bot commands', () => {
     const card = String((await sentTo(me.id, 'Лагерь осени'))!.body.text);
     expect(card).toContain('Лес');
     expect(card).toContain('Ответственные');
-    expect(card).toContain('Кухня</b> — Командир');
+    expect(card).toMatch(/Кухня<\/b> — <a href="tg:\/\/user\?id=\d+">Командир<\/a>/);
     expect(card).toContain('Ваше служение: Кухня');
 
     calls.length = 0;
@@ -1198,7 +1198,7 @@ describe('personal bot commands', () => {
     const week = String((await sentTo(me.id, 'Расписание'))!.body.text);
     expect(week).toContain('Вечер молодёжи');
     // Who leads and who brings the snacks.
-    expect(week).toContain('Ведущий: Командир');
+    expect(week).toMatch(/Ведущий: <a href="tg:\/\/user\?id=\d+">Командир<\/a>/);
     expect(week).toContain('Снеки: <i>не назначен</i>');
     expect(week).not.toContain('Далёкая встреча');
     expect(week).not.toContain('Лагерь осени'); // 10 days away: not in a week
@@ -1206,7 +1206,7 @@ describe('personal bot commands', () => {
     const edit = [...calls].reverse().find((c) => c.method === 'editMessageText');
     expect(String(edit!.body.text)).toContain('Далёкая встреча');
     expect(String(edit!.body.text)).toContain('Лагерь осени');
-    expect(String(edit!.body.text)).toContain('Кухня</b> — Командир');
+    expect(String(edit!.body.text)).toContain('Кухня</b> — <a href="tg://user?id=');
   });
 
   it('/events sends an event with a poster as a photo with the details as the caption', async () => {
@@ -1238,7 +1238,7 @@ describe('personal bot commands', () => {
       String(c.body.caption).includes('Вечер с постером'),
     );
     expect(photo).toBeTruthy();
-    expect(String(photo!.body.photo)).toContain(`/media/m/${poster}?`);
+    expect(photo!.body.photo).toEqual({ upload: true });
 
     // Editing can take the poster away.
     await apiJson(`/api/events/${ev.id}`, {
@@ -1306,7 +1306,7 @@ describe('post posters', () => {
       return undefined;
     };
     const first = await photo();
-    expect(String(first!.body.photo)).toContain(`/media/m/${poster}`);
+    expect(first!.body.photo).toEqual({ upload: true });
     expect(String(first!.body.caption)).toContain('Ждём всех в пятницу');
 
     calls.length = 0;
@@ -1316,7 +1316,7 @@ describe('post posters', () => {
       json: {},
     });
     const again = await photo();
-    expect(String(again!.body.photo)).toContain(`/media/m/${poster}`);
+    expect(again!.body.photo).toEqual({ upload: true });
     expect(String(again!.body.caption)).toContain('Напоминание о публикации');
   });
 });
@@ -1373,7 +1373,8 @@ describe('event messages: poster, duty colours, who serves where', () => {
 
     // The duty message is the poster with the details as its caption; each duty has its colour.
     const toA = await photoTo(a.id, 'Вам назначено служение');
-    expect(String(toA!.body.photo)).toContain(`/media/m/${poster}?`);
+    // The bot uploads the picture itself.
+    expect(toA!.body.photo).toEqual({ upload: true });
     expect(String(toA!.body.caption)).toContain('🔴 <b>Техника</b>');
     expect(JSON.stringify(toA!.body.reply_markup)).toContain(`ro:${ev.id}`);
     expect(String((await photoTo(b.id, 'Вам назначено служение'))!.body.caption)).toContain(
@@ -1384,8 +1385,9 @@ describe('event messages: poster, duty colours, who serves where', () => {
     calls.length = 0;
     await pressButton(b, `ro:${ev.id}`);
     const roster = String((await sentTo(b.id, 'Кто где служит'))!.body.text);
-    expect(roster).toContain('🔴 <b>Техника</b> — ★ Звукач');
-    expect(roster).toContain('🔵 <b>Уборка</b> — Дворник');
+    expect(roster).toMatch(/🔴 <b>Техника<\/b> — ★ <a href="tg:\/\/user\?id=\d+">Звукач<\/a>/);
+    expect(roster).toContain('🔵 <b>Уборка</b> — <a href="tg://user?id=');
+    expect(roster).toContain('>Дворник</a>');
     // Not for people outside the ministry.
     calls.length = 0;
     await pressButton(outsider, `ro:${ev.id}`);
@@ -1400,7 +1402,17 @@ describe('event messages: poster, duty colours, who serves where', () => {
     });
     const reminder = String((await photoTo(a.id, 'Слёт'))!.body.caption);
     expect(reminder).toContain('Ответственные');
-    expect(reminder).toContain('Уборка</b> — Дворник');
+    expect(reminder).toContain('>Дворник</a>');
+
+    // …and can go without the poster.
+    calls.length = 0;
+    await apiJson(`/api/events/${ev.id}/remind`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { text: 'Без картинки', poster: false, userIds: [aId] },
+    });
+    expect(await sentTo(a.id, 'Без картинки')).toBeDefined();
+    expect(callsTo(calls, 'sendPhoto', a.id)).toHaveLength(0);
 
     // /roster: the nearest events with duties.
     calls.length = 0;

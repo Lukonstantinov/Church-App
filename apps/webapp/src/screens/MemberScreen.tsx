@@ -88,7 +88,11 @@ export function MemberScreen({ userId }: { userId: number }) {
     <Screen>
       <header className="flex flex-col items-center gap-2 pt-4 text-center">
         <Avatar id={user.id} firstName={user.firstName} lastName={user.lastName} size={84} />
-        <h1 className="text-[26px] font-bold leading-tight tracking-tight">{displayName(user)}</h1>
+        <h1
+          className={`text-[26px] font-bold leading-tight tracking-tight ${user.isAdmin ? 'admin-name' : ''}`}
+        >
+          {displayName(user)}
+        </h1>
         <div className="flex flex-wrap items-center justify-center gap-1.5 text-[15px] text-hint">
           {user.username && <span>@{user.username}</span>}
           {user.isAdmin && <Badge>{t.roles.admin}</Badge>}

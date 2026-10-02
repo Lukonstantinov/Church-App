@@ -134,6 +134,13 @@ export const en: Messages = {
     title: 'Labels',
     entry: 'Your own labels with colour and animation',
     manage: 'Manage labels',
+    hasNow: 'This person has',
+    giveOne: 'Give a label',
+    noneYet: 'No labels yet',
+    tapToGive:
+      'Tap a label to give it — everyone in the ministry sees it. Tap again to take it away.',
+    givenToast: (name: string) => `Label “${name}” given`,
+    takenToast: (name: string) => `Label “${name}” taken away`,
     new: 'New label',
     name: 'Name',
     color: 'Colour',
@@ -670,6 +677,9 @@ export const en: Messages = {
     remindSend: 'Send reminder',
     withRoster: 'Add who serves where',
     withRosterHint: 'Every duty of the event and its people, in one message.',
+    withPoster: 'Send with the poster',
+    noPoster:
+      'The event has no poster yet. Add a cover or a design in the event settings and save.',
     remindEveryone: 'Everyone in the ministry',
     remindSent: (n: number) => `Sent: ${n}`,
     remindNobody: 'Nobody to send to: nobody has started the bot',

@@ -380,6 +380,7 @@ groupRoutes.get('/:id/members', async (c) => {
     requestedAt: m.createdAt,
     offline: u.telegramId === null,
     isReachable: u.isReachable,
+    isAdmin: u.isAdmin,
     guardianConsent: u.guardianConsentAt !== null,
     recentPercent: rates.get(u.id)?.counted
       ? Math.round((rates.get(u.id)!.attended / rates.get(u.id)!.counted) * 100)
@@ -587,6 +588,7 @@ groupRoutes.get('/:id/contacts', async (c) => {
       lastName: users.lastName,
       username: users.username,
       telegramId: users.telegramId,
+      isAdmin: users.isAdmin,
       positionName: positions.name,
     })
     .from(memberships)

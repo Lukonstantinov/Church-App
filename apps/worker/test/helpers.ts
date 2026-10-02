@@ -61,6 +61,29 @@ export interface TgCall {
 let messageSeq = 100;
 
 /** Stubs fetch to the Telegram Bot API and records every call. `failFor` chat ids get 403. */
+async function readMultipart(init: RequestInit): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = { multipart: true };
+  try {
+    const form = await new Request('https://tg.test/', {
+      method: 'POST',
+      headers: init.headers,
+      body: init.body,
+    }).formData();
+    for (const [key, value] of form.entries()) {
+      if (typeof value !== 'string') out[key] = { upload: true };
+      else if (key === 'chat_id') out[key] = Number(value);
+      else if (key === 'reply_markup') out[key] = JSON.parse(value);
+      else out[key] = value;
+    }
+    // grammY sends `photo: "attach://<field>"` with the file in that field.
+    for (const [key, value] of Object.entries(out))
+      if (typeof value === 'string' && value.startsWith('attach://')) out[key] = { upload: true };
+  } catch {
+    // Unreadable: recorded as a bare upload.
+  }
+  return out;
+}
+
 export function mockTelegram({
   failFor = [] as number[],
   failMethods = [] as string[],
@@ -69,12 +92,12 @@ export function mockTelegram({
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
     const method = url.pathname.split('/').pop()!;
-    // File uploads (sendDocument) are multipart streams; record them without parsing.
-    const body =
+    // File uploads (sendPhoto/sendDocument) are multipart: fields are read, files noted as uploads.
+    const body: Record<string, unknown> =
       typeof init?.body === 'string'
         ? (JSON.parse(init.body) as Record<string, unknown>)
         : init?.body
-          ? { multipart: true }
+          ? await readMultipart(init)
           : {};
     calls.push({ method, body });
     const json = (payload: unknown) =>

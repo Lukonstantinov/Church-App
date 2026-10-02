@@ -40,6 +40,8 @@ export function EventReminderSheet({
   const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
   const [done, setDone] = useState<number | null>(null);
   const [withRoster, setWithRoster] = useState(false);
+  const [withPoster, setWithPoster] = useState(true);
+  const picture = detail.data?.botPictureUrl ?? null;
 
   const serving = [
     ...new Set((detail.data?.roles ?? []).flatMap((r) => r.assignees.map((a) => a.id))),
@@ -80,6 +82,7 @@ export function EventReminderSheet({
         text: text.trim() || undefined,
         userIds: audienceIds(audience, presets),
         roster: withRoster,
+        poster: withPoster && !!picture,
       });
       if (res.sent === 0) {
         haptic.error();
@@ -118,6 +121,25 @@ export function EventReminderSheet({
           <p className="-mt-1 text-[12px] text-hint">
             {t.meetings.signatureHint} <i>{t.bot.sentBy(displayName(me.data.user))}</i>
           </p>
+        )}
+        {/* The poster goes with the message (as the picture, the text under it). */}
+        {detail.data && (
+          <div className="overflow-hidden rounded-xl bg-hairline/60">
+            {picture ? (
+              <>
+                <Toggle label={t.events.withPoster} checked={withPoster} onChange={setWithPoster} />
+                {withPoster && (
+                  <img
+                    src={picture}
+                    alt=""
+                    className="mx-4 mb-3 mt-1 max-h-40 w-[calc(100%-2rem)] rounded-lg object-cover"
+                  />
+                )}
+              </>
+            ) : (
+              <p className="px-4 py-3 text-[13px] leading-snug text-hint">{t.events.noPoster}</p>
+            )}
+          </div>
         )}
         {(detail.data?.roles.length ?? 0) > 0 && (
           <div className="overflow-hidden rounded-xl bg-hairline/60">

@@ -118,7 +118,8 @@ export async function notifyMeetingRole(
     userId: number;
     role: Role;
     text: string;
-    posterUrl?: string | null;
+    /** A picture sent before the message (uploaded by the bot). */
+    posterMediaId?: number | null;
     /** Who composed and sent it; shown to the recipient under the message. */
     senderName?: string | null;
     envAppUrl?: string;
@@ -157,11 +158,11 @@ export async function notifyMeetingRole(
   const key = `meeting:${code}:${chat_id}:${Date.now()}`;
   // The poster goes first on its own, so the message with the buttons arrives even if
   // Telegram can't fetch the picture.
-  if (args.posterUrl && appUrl) {
+  if (args.posterMediaId) {
     await enqueue(db, {
       chatId: chat_id,
       method: 'sendPhoto',
-      payload: { chat_id, photo: `${appUrl}${args.posterUrl}` },
+      payload: { chat_id, photo_media_id: args.posterMediaId },
       dedupeKey: `${key}:photo`,
     });
   }

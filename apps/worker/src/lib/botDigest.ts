@@ -13,7 +13,8 @@ import {
   type User,
 } from '../db/schema';
 import { getChurch } from './church';
-import { escapeHtml } from './html';
+import { escapeHtml, personLink } from './html';
+import { eventPictureId } from './eventRoster';
 import { audienceOf, meetingIsFor } from './meetings';
 
 type Period = 'w' | 'm' | 'q';
@@ -135,15 +136,21 @@ const short = (text: string | null, max: number) => {
   return one.length > max ? `${one.slice(0, max - 1)}…` : one;
 };
 
-/** Names of people by id. */
+/** People by id, as HTML: the name linked to their Telegram (tap to write to them). */
 async function namesOf(db: Db, ids: (number | null)[]) {
   const unique = [...new Set(ids.filter((x): x is number => x !== null))];
   if (unique.length === 0) return new Map<number, string>();
   const rows = await db
-    .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+    .select({
+      id: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      username: users.username,
+      telegramId: users.telegramId,
+    })
     .from(users)
     .where(inArray(users.id, unique));
-  return new Map(rows.map((r) => [r.id, displayName(r)]));
+  return new Map(rows.map((r) => [r.id, personLink(displayName(r), r)]));
 }
 
 /** Each event's duties: name, its leader and the people on it ("Техника — ★Anna, Mark"). */
@@ -186,7 +193,7 @@ function dutyLines(d: Duties, eventId: number, userId: number) {
       ...people.filter((id) => id !== r.leaderUserId).map((id) => d.names.get(id) ?? '?'),
     ];
     lines.push(
-      `${dutyColor(i).dot} <b>${escapeHtml(r.name)}</b> — ${names.length ? escapeHtml(names.join(', ')) : '…'}`,
+      `${dutyColor(i).dot} <b>${escapeHtml(r.name)}</b> — ${names.length ? names.join(', ') : '…'}`,
     );
   }
   return { lines, mine };
@@ -242,7 +249,7 @@ export async function nearestEvents(
     return {
       eventId: e.id,
       text: parts.join('\n\n'),
-      pictureId: e.coverMediaId ?? e.posterMediaId ?? null,
+      pictureId: eventPictureId(e),
     };
   });
   return { empty: null, cards };
@@ -315,8 +322,7 @@ export async function scheduleText(
   );
   const ministry = (groupId: number) =>
     ids.length > 1 ? ` · <i>${escapeHtml(names.get(groupId) ?? '')}</i>` : '';
-  const person = (id: number | null) =>
-    id ? escapeHtml(people.get(id) ?? '?') : `<i>${t.notAssigned}</i>`;
+  const person = (id: number | null) => (id ? (people.get(id) ?? '?') : `<i>${t.notAssigned}</i>`);
   type Row = { at: string; text: string };
   const rows: Row[] = [
     ...visible.map((m) => {

@@ -100,7 +100,7 @@ describe('ministry feed', () => {
     const sent = callsTo(calls, 'sendPhoto', m.id);
     expect(sent).toHaveLength(1);
     expect(String(sent[0]!.body.caption)).toContain('Лагерь 2026');
-    expect(String(sent[0]!.body.photo)).toMatch(/\/media\/m\/\d+\?e=/);
+    expect(sent[0]!.body.photo).toEqual({ upload: true });
 
     const feed = await apiJson<AnnouncementRow[]>(`/api/groups/${g.id}/announcements`, { user: m });
     expect(feed[0]!.photos.map((p) => p.id)).toEqual(photos);

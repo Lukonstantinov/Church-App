@@ -202,6 +202,8 @@ export interface EventDetail extends EventSummary {
   description: string | null;
   chatUrl: string | null;
   coverMediaId: number | null;
+  /** The picture the bot sends with event messages (poster, else cover photo); null = none. */
+  botPictureUrl: string | null;
   photos: { id: number; url: string }[];
   /** Filled when RSVP is on. `noAnswer` only for leaders. */
   rsvps: { going: PersonRef[]; notGoing: PersonRef[]; noAnswer: PersonRef[] };

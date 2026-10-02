@@ -681,3 +681,13 @@ html[data-motion='off'] .burn-pulse,
 html[data-motion='off'] .burn-orbit::before {
   animation: none !important;
 }
+
+/* Church administrators' names are red everywhere, so everyone knows who they are. */
+.admin-name {
+  color: #e11d2e;
+}
+@media (prefers-color-scheme: dark) {
+  .admin-name {
+    color: #f87171;
+  }
+}

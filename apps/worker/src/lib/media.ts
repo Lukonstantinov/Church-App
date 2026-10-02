@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
+import { InputFile } from 'grammy';
 import type { Db } from '../db/client';
 import { media } from '../db/schema';
 
@@ -152,4 +153,23 @@ export async function verifyFileSignature(
   let diff = 0;
   for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
   return diff === 0;
+}
+
+const EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+};
+
+/**
+ * A stored picture as a file the bot uploads itself (Telegram then doesn't have to fetch a
+ * link, which fails for some formats). Null when it's gone.
+ */
+export async function mediaFile(db: Db, id: number): Promise<InputFile | null> {
+  const row = await db.query.media.findFirst({
+    columns: { data: true, mime: true },
+    where: eq(media.id, id),
+  });
+  if (!row) return null;
+  return new InputFile(fromBase64(row.data), `picture.${EXT[row.mime] ?? 'jpg'}`);
 }

@@ -153,8 +153,9 @@ function EventFormBody({
   const [rolePicker, setRolePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const posterNode = useRef<HTMLDivElement>(null);
-  // The designed cover (no photo) is also saved as a picture, for the bot.
-  const designedCover = !cover && !!look.design.banner;
+  // The cover (photo with the title, or the design) is also saved as a JPEG picture: the
+  // bot sends it with event messages.
+  const designedCover = !!cover || !!look.design.banner;
 
   async function makePoster(): Promise<number | null> {
     if (!designedCover || !posterNode.current) return null;
@@ -337,7 +338,7 @@ function EventFormBody({
           <div ref={posterNode}>
             <PosterMedia
               title={title.trim() || t.events.name}
-              photos={[]}
+              photos={cover ? [cover] : []}
               tint={null}
               look={coverLook.look}
               design={look.design}

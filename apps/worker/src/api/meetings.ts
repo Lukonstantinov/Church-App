@@ -49,7 +49,7 @@ import {
   notifyMeetingRole,
   toTemplate,
 } from '../lib/meetingNotify';
-import { assertGroupMedia, signedMediaUrl } from '../lib/media';
+import { assertGroupMedia } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi } from '../lib/telegram';
 import { audit } from '../lib/audit';
@@ -753,9 +753,7 @@ meetingRoutes.post('/:id/notify', async (c) => {
     role: input.role,
     text,
     senderName: displayName(user),
-    posterUrl: input.posterMediaId
-      ? await signedMediaUrl(c.env.WEBHOOK_SECRET, input.posterMediaId)
-      : null,
+    posterMediaId: input.posterMediaId ?? null,
     envAppUrl: c.env.APP_URL,
     fallbackUrl: appUrlFor(c.env, c.req.url),
   });

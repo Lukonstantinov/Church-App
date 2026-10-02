@@ -2,9 +2,24 @@ import { and, eq, lte } from 'drizzle-orm';
 import { GrammyError, type Api } from 'grammy';
 import type { Db } from '../db/client';
 import { outbox, users } from '../db/schema';
+import { mediaFile } from './media';
 import { isUnreachableError } from './telegram';
 
 const MAX_ATTEMPTS = 5;
+
+/**
+ * A photo queued as `photo_media_id` (a stored picture) is uploaded by the bot when sent;
+ * without the picture it goes as text.
+ */
+async function resolvePhoto(db: Db, method: string, payload: Record<string, unknown>) {
+  if (method !== 'sendPhoto' || typeof payload.photo_media_id !== 'number')
+    return { method, payload };
+  const { photo_media_id: id, caption, ...rest } = payload;
+  const file = await mediaFile(db, id as number);
+  return file
+    ? { method, payload: { ...rest, caption, photo: file } }
+    : { method: 'sendMessage', payload: { ...rest, text: caption ?? '' } };
+}
 
 export interface OutboxMessage {
   chatId: number;
@@ -55,15 +70,20 @@ export async function drainOutbox(
   let failed = 0;
   for (const row of due) {
     try {
-      const call = raw[row.method];
-      if (!call) throw new Error(`unknown method ${row.method}`);
+      const { method, payload } = await resolvePhoto(
+        db,
+        row.method,
+        row.payload as Record<string, unknown>,
+      );
+      const call = raw[method];
+      if (!call) throw new Error(`unknown method ${method}`);
       try {
-        await call.call(api.raw, row.payload);
+        await call.call(api.raw, payload);
       } catch (err) {
-        // Telegram couldn't use the picture (link not reachable, bad file): the text still goes.
-        if (!(row.method === 'sendPhoto' && err instanceof GrammyError && err.error_code === 400))
+        // Telegram couldn't use the picture (bad file, unreachable link): the text still goes.
+        if (!(method === 'sendPhoto' && err instanceof GrammyError && err.error_code === 400))
           throw err;
-        const { photo: _photo, caption, ...rest } = row.payload as Record<string, unknown>;
+        const { photo: _photo, caption, ...rest } = payload;
         await raw.sendMessage!.call(api.raw, { ...rest, text: caption ?? '' });
       }
       await db.update(outbox).set({ status: 'sent', lastError: null }).where(eq(outbox.id, row.id));
