@@ -816,3 +816,101 @@ describe('event duties', () => {
     expect(calls.some((c) => c.method === 'sendMessage')).toBe(false);
   });
 });
+
+describe('sending a post again', () => {
+  it('goes to everyone or chosen people, marked as a repeat with who sent it', async () => {
+    const g = await createEnv('Повтор поста');
+    const a = fakeUser('Читатель');
+    const b = fakeUser('Второй читатель');
+    await join(a, g);
+    const bId = await join(b, g);
+    const post = await apiJson<{ announcement: { id: number } }>(
+      `/api/groups/${g.id}/announcements`,
+      { method: 'POST', user: ADMIN, json: { text: 'Собрание в пятницу', notify: false } },
+    );
+    const id = post.announcement.id;
+    calls.length = 0;
+    expect(
+      (await api(`/api/announcements/${id}/resend`, { method: 'POST', user: a, json: {} })).status,
+    ).toBe(403);
+
+    const some = await apiJson<{ sent: number }>(`/api/announcements/${id}/resend`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { userIds: [bId] },
+    });
+    expect(some.sent).toBe(1);
+    const msg = await sentTo(b.id, 'Собрание в пятницу');
+    expect(String(msg!.body.text)).toContain('Напоминание о публикации');
+    expect(String(msg!.body.text)).toContain('Отправил(а):');
+    expect(calls.some((c) => c.method === 'sendMessage' && c.body.chat_id === a.id)).toBe(false);
+
+    const all = await apiJson<{ sent: number }>(`/api/announcements/${id}/resend`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {},
+    });
+    expect(all.sent).toBeGreaterThanOrEqual(2);
+    expect(await sentTo(a.id, 'Собрание в пятницу')).toBeDefined();
+  });
+});
+
+describe('labels', () => {
+  it('a ministry makes labels with a colour and animation and gives them to people', async () => {
+    const g = await createEnv('Метки людей');
+    const a = fakeUser('Меченый');
+    const aId = await join(a, g);
+    type Label = { id: number; name: string; color: string; animation: string };
+    const label = await apiJson<Label>(`/api/groups/${g.id}/labels`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Прославление', color: '#A855F7', animation: 'shimmer' },
+    });
+    expect(label).toMatchObject({ name: 'Прославление', color: '#a855f7', animation: 'shimmer' });
+    // Members can't create labels.
+    expect(
+      (
+        await api(`/api/groups/${g.id}/labels`, {
+          method: 'POST',
+          user: a,
+          json: { name: 'x', color: '#000000' },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await api(`/api/groups/${g.id}/labels`, {
+          method: 'POST',
+          user: ADMIN,
+          json: { name: 'x', color: 'red', animation: 'shimmer' },
+        })
+      ).status,
+    ).toBe(400);
+
+    const give = (ids: number[]) =>
+      api(`/api/groups/${g.id}/members/${aId}/labels`, {
+        method: 'PUT',
+        user: ADMIN,
+        json: { labelIds: ids },
+      });
+    expect((await give([label.id])).status).toBe(200);
+    const row = async () =>
+      (await apiJson<MemberRow[]>(`/api/groups/${g.id}/members`, { user: ADMIN })).find(
+        (m) => m.userId === aId,
+      )!;
+    expect((await row()).labels).toEqual([label]);
+    expect((await give([99999])).status).toBe(400);
+
+    await apiJson(`/api/labels/${label.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { name: 'Команда', color: '#22c55e', animation: 'glow' },
+    });
+    expect((await row()).labels[0]).toMatchObject({ name: 'Команда', animation: 'glow' });
+    expect((await api(`/api/labels/${label.id}`, { method: 'DELETE', user: a })).status).toBe(403);
+    expect((await api(`/api/labels/${label.id}`, { method: 'DELETE', user: ADMIN })).status).toBe(
+      200,
+    );
+    expect((await row()).labels).toEqual([]);
+  });
+});

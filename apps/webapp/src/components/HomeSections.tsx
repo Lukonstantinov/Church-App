@@ -10,8 +10,10 @@ import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import { useEvents, useFeed } from '../lib/queries';
+import { storage } from '../lib/storage';
 import { haptic } from '../lib/telegram';
-import { CountdownOnCover } from './Countdown';
+import { useTileDrag } from '../lib/useTileDrag';
+import { CountdownBadge, CountdownOnCover, hasCountdown } from './Countdown';
 import { EventCard, EventCover } from './EventCard';
 import { CalendarTile, GroupCalendar, calendarOnHome, setCalendarOnHome } from './GroupCalendar';
 import { UnreadBadges } from './FeedEntry';
@@ -42,15 +44,16 @@ export interface HomeAction {
 export function HomeActionRow({ actions }: { actions: HomeAction[] }) {
   return (
     <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 pt-1 [scrollbar-width:none]">
-      {actions.map((a) => (
+      {actions.map((a, i) => (
         <button
           key={a.key}
+          style={{ '--i': i } as React.CSSProperties}
           type="button"
           onClick={() => {
             haptic.tap();
             a.onClick();
           }}
-          className="glass relative flex min-w-[62px] flex-1 flex-col items-center gap-1 rounded-2xl px-0.5 py-2 shadow-card active:scale-95"
+          className="reveal spring glass relative flex min-w-[62px] flex-1 flex-col items-center gap-1 rounded-2xl px-0.5 py-2 shadow-card"
         >
           <span className="brand-gradient flex h-9 w-9 items-center justify-center rounded-xl text-white">
             {a.icon}
@@ -134,9 +137,31 @@ const echoesEvent = (p: AnnouncementRow, events: EventSummary[]) =>
     ? events.some((e) => e.id === p.eventId)
     : events.some((e) => (p.text.split('\n')[0] ?? '').includes(e.title));
 
+const foldKey = (id: number) => `church.eventsFolded.${id}`;
+const orderKey = (id: number) => `church.homeOrder.${id}`;
+
+/** Puts items in the person's saved order; new ones keep their place next to their neighbour. */
+function applyOrder<T>(items: T[], keyOf: (i: T) => string, saved: string[]): T[] {
+  if (saved.length === 0) return items;
+  const rank = new Map(saved.map((k, i) => [k, i]));
+  const known = items
+    .filter((i) => rank.has(keyOf(i)))
+    .sort((x, y) => rank.get(keyOf(x))! - rank.get(keyOf(y))!);
+  const out = [...known];
+  items.forEach((item, idx) => {
+    if (rank.has(keyOf(item))) return;
+    const before = items[idx - 1];
+    const at = before ? out.findIndex((o) => keyOf(o) === keyOf(before)) : -1;
+    out.splice(at + 1, 0, item);
+  });
+  return out;
+}
+
 /**
- * What opens a ministry: pinned posts and coming events as small tiles, two per row
- * (tap to expand one to full width), then the newest post.
+ * What opens a ministry, as small tiles two per row: the calendar, then what is coming
+ * next (meetings and events by date), then pinned posts. Tiles can be dragged to other
+ * places (hold, then drag); events can be folded into single rows. A tile expands in
+ * steps: row, square, full card, the page itself.
  */
 export function HomeHighlights({
   g,
@@ -154,20 +179,34 @@ export function HomeHighlights({
   const feed = useFeed(g.id);
   const events = useEvents(g.id, 'upcoming');
   const [open, setOpen] = useState<string | null>(null);
+  // Folded events show as one row until tapped (then a square, then the full card).
+  const [folded, setFolded] = useState(() => storage.get(foldKey(g.id)) === '1');
+  const [peek, setPeek] = useState<Set<string>>(new Set());
+  const [saved, setSaved] = useState<string[]>(() => {
+    try {
+      return JSON.parse(storage.get(orderKey(g.id)) ?? '[]') as string[];
+    } catch {
+      return [];
+    }
+  });
   const [withCalendar, setWithCalendar] = useState(() => calendarOnHome(g.id));
   const first = feed.data?.pages[0] ?? [];
   const shownEvents = (events.data ?? []).filter((e) => e.status !== 'cancelled').slice(0, 6);
-  const items: Item[] = [
-    ...(withCalendar ? [{ kind: 'calendar' as const }] : []),
+  const timeline: Item[] = [
     ...meetings
       .filter((m) => m.status !== 'cancelled')
       .map((meeting) => ({ kind: 'meeting' as const, meeting })),
-    ...first
-      .filter((p) => p.pinned && !echoesEvent(p, shownEvents))
-      .map((post) => ({ kind: 'post' as const, post })),
     ...shownEvents.map((event) => ({ kind: 'event' as const, event })),
-  ];
-  const latest = first.find((p) => !p.pinned && !echoesEvent(p, shownEvents));
+  ].sort((a, b) =>
+    (a.kind === 'meeting'
+      ? a.meeting.startsAt
+      : a.kind === 'event'
+        ? a.event.startsAt
+        : ''
+    ).localeCompare(
+      b.kind === 'meeting' ? b.meeting.startsAt : b.kind === 'event' ? b.event.startsAt : '',
+    ),
+  );
   const keyOf = (i: Item) =>
     i.kind === 'calendar'
       ? 'cal'
@@ -176,27 +215,65 @@ export function HomeHighlights({
         : i.kind === 'event'
           ? `e${i.event.id}`
           : `m${i.meeting.id}`;
+  const base: Item[] = [
+    ...(withCalendar ? [{ kind: 'calendar' as const }] : []),
+    ...timeline,
+    ...first
+      .filter((p) => p.pinned && !echoesEvent(p, shownEvents))
+      .map((post) => ({ kind: 'post' as const, post })),
+  ];
+  const items = applyOrder(base, keyOf, saved);
+  const latest = first.find((p) => !p.pinned && !echoesEvent(p, shownEvents));
   const openPost = (id: number) => push({ name: 'post', groupId: g.id, postId: id });
   const openEvent = (id: number) => push({ name: 'event', eventId: id });
+
+  const drag = useTileDrag((from, to) => {
+    const keys = items.map(keyOf);
+    const i = keys.indexOf(from);
+    const j = keys.indexOf(to);
+    if (i < 0 || j < 0) return;
+    keys.splice(j, 0, keys.splice(i, 1)[0]!);
+    setSaved(keys);
+    storage.set(orderKey(g.id), JSON.stringify(keys));
+  });
+  const hasEvents = items.some((i) => i.kind === 'event');
 
   return (
     <div className="flex flex-col gap-3">
       {items.length > 0 && (
         <section>
-          <h2 className="mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-            {t.overview.important}
-          </h2>
+          <div className="mb-2 flex items-center justify-between gap-2 px-3">
+            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-section-header">
+              {t.overview.important}
+            </h2>
+            {hasEvents && (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic.tap();
+                  setFolded(!folded);
+                  storage.set(foldKey(g.id), folded ? '0' : '1');
+                  setPeek(new Set());
+                }}
+                className="spring rounded-full bg-hairline px-2.5 py-1 text-[12px] font-semibold text-hint"
+              >
+                {folded ? t.overview.unfoldEvents : t.overview.foldEvents}
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-2.5">
-            {items.map((item) => {
+            {items.map((item, idx) => {
               const k = keyOf(item);
               const expanded = open === k;
+              const asRow = item.kind === 'event' && folded && !peek.has(k) && !expanded;
               const toggle = () => {
                 haptic.tap();
                 setOpen(expanded ? null : k);
               };
+              const reveal = { '--i': idx } as React.CSSProperties;
               if (expanded)
                 return (
-                  <div key={k} className="col-span-2 flex flex-col gap-1.5">
+                  <div key={k} className="reveal col-span-2 flex flex-col gap-1.5" style={reveal}>
                     {item.kind === 'calendar' ? (
                       <>
                         <GroupCalendar g={g} />
@@ -228,17 +305,42 @@ export function HomeHighlights({
                     </button>
                   </div>
                 );
-              return item.kind === 'calendar' ? (
-                <CalendarTile key={k} g={g} onToggle={toggle} />
-              ) : item.kind === 'meeting' ? (
-                <MeetingTile key={k} m={item.meeting} g={g} onToggle={toggle} />
-              ) : item.kind === 'post' ? (
-                <PostTile key={k} post={item.post} onToggle={toggle} />
-              ) : (
-                <EventTile key={k} e={item.event} g={g} onToggle={toggle} />
+              const st = drag.state(k);
+              return (
+                <div
+                  key={k}
+                  {...drag.bind(k)}
+                  style={{ ...reveal, ...st.style }}
+                  className={`reveal no-select spring min-w-0 ${asRow ? 'col-span-2' : ''} ${
+                    st.dragging ? 'dragging' : ''
+                  } ${st.over ? 'drop-target' : ''}`}
+                >
+                  {item.kind === 'calendar' ? (
+                    <CalendarTile g={g} onToggle={toggle} />
+                  ) : item.kind === 'meeting' ? (
+                    <MeetingTile m={item.meeting} g={g} onToggle={toggle} />
+                  ) : item.kind === 'post' ? (
+                    <PostTile post={item.post} onToggle={toggle} />
+                  ) : asRow ? (
+                    <EventRow
+                      e={item.event}
+                      onToggle={() => {
+                        haptic.tap();
+                        setPeek(new Set(peek).add(k));
+                      }}
+                    />
+                  ) : (
+                    <EventTile e={item.event} g={g} onToggle={toggle} />
+                  )}
+                </div>
               );
             })}
           </div>
+          {items.length > 1 && (
+            <p className="mt-1.5 px-3 text-center text-[11px] text-hint/80">
+              {t.overview.dragHint}
+            </p>
+          )}
         </section>
       )}
       {latest && (
@@ -255,6 +357,35 @@ export function HomeHighlights({
   );
 }
 
+/** An event folded into one row: date, name and a live timer. */
+function EventRow({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
+  const f = useFmt();
+  const t = useT();
+  const d = f.dateBadge(e.startsAt);
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={t.overview.expand}
+      className="glass flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left shadow-card active:scale-[0.99]"
+    >
+      <span className="brand-gradient flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl text-white">
+        <span className="text-[17px] font-bold leading-none tabular-nums">{d.day}</span>
+        <span className="text-[9px] font-semibold uppercase leading-tight opacity-90">
+          {d.month}
+        </span>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-semibold leading-tight">{e.title}</span>
+        <span className="block truncate text-[12px] text-hint">
+          {d.weekday} · {f.time(e.startsAt)}
+        </span>
+      </span>
+      <CountdownBadge startsAt={e.startsAt} design={e.design} compact muted={!hasCountdown(e)} />
+    </button>
+  );
+}
+
 function Tile({ onToggle, children }: { onToggle: () => void; children: ReactNode }) {
   const t = useT();
   return (
@@ -262,7 +393,7 @@ function Tile({ onToggle, children }: { onToggle: () => void; children: ReactNod
       type="button"
       onClick={onToggle}
       aria-label={t.overview.expand}
-      className="glass flex flex-col overflow-hidden rounded-2xl text-left shadow-card active:scale-[0.98]"
+      className="glass flex h-full w-full flex-col overflow-hidden rounded-2xl text-left shadow-card active:scale-[0.98]"
     >
       {children}
     </button>

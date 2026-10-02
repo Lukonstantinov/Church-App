@@ -753,3 +753,34 @@ export const eventMessages = sqliteTable(
   },
   (t) => [index('event_messages_event').on(t.eventId, t.id)],
 );
+
+/** A ministry's own labels for people ("Worship team", "New"), each with a colour and an animation. */
+export const groupLabels = sqliteTable(
+  'group_labels',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    name: text('name').notNull(),
+    color: text('color').notNull(),
+    animation: text('animation').notNull().default('none'),
+    sort: integer('sort').notNull().default(0),
+    createdBy: integer('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index('group_labels_group').on(t.groupId)],
+);
+
+export const memberLabels = sqliteTable(
+  'member_labels',
+  {
+    labelId: integer('label_id')
+      .notNull()
+      .references(() => groupLabels.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+  },
+  (t) => [primaryKey({ columns: [t.labelId, t.userId] }), index('member_labels_user').on(t.userId)],
+);

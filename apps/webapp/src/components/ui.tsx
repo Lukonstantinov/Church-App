@@ -390,7 +390,7 @@ export function HeroCard({
   const on = onBrandStyle(env?.textColor, !!env?.pattern || !!env?.backdropUrl);
   return (
     <div
-      className={`brand-gradient relative overflow-hidden rounded-[var(--radius-card)] p-5 shadow-cta ${on.className} ${className}`}
+      className={`brand-gradient flow sheen relative overflow-hidden rounded-[var(--radius-card)] p-5 shadow-cta ${on.className} ${className}`}
       style={on.style}
     >
       <PatternLayer pattern={env?.pattern} logoUrl={env?.logoUrl} />

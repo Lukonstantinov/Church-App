@@ -10,10 +10,12 @@ import {
   IconSettings,
   IconUsers,
 } from '../components/icons';
+import { Pill } from '../components/LookControls';
 import { Badge, Row, Screen, Section } from '../components/ui';
 import { useEnv } from '../lib/env';
 import { useI18n } from '../lib/i18n';
 import { useNav } from '../lib/nav';
+import { MOTIONS, setMotion, useMotion } from '../lib/motion';
 import { useMe } from '../lib/queries';
 
 /** Profile, language, the ministry's settings (by rights) and church settings for admins. */
@@ -23,6 +25,7 @@ export function More({ groups }: { groups: GroupSummary[] }) {
   const { can } = useEnv();
   const me = useMe();
   const [langOpen, setLangOpen] = useState(false);
+  const motion = useMotion();
   const user = me.data?.user;
   const env = groups[0];
   if (!user) return null;
@@ -58,6 +61,14 @@ export function More({ groups }: { groups: GroupSummary[] }) {
           after={LOCALE_NAMES[locale]}
           onClick={() => setLangOpen(true)}
         />
+      </Section>
+
+      <Section title={t.motion.title} footer={t.motion.hint}>
+        <div className="flex flex-wrap gap-2 p-3">
+          {MOTIONS.map((m) => (
+            <Pill key={m} on={motion === m} onClick={() => setMotion(m)} label={t.motion[m]} />
+          ))}
+        </div>
       </Section>
 
       {env && (can('settings') || can('positions') || can('reports') || can('events.manage')) && (

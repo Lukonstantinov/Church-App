@@ -12,11 +12,19 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useDeletePost, useMe, usePinPost, useReact } from '../lib/queries';
+import { useDeletePost, useMe, usePinPost, useReact, useResendPost } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
-import { IconEdit, IconMegaphone, IconMore, IconTrash } from './icons';
+import {
+  AudienceChoice,
+  audienceEmpty,
+  audienceIds,
+  type Audience,
+  type AudiencePreset,
+} from './AudienceChoice';
+import { IconEdit, IconMegaphone, IconMore, IconSend, IconTrash } from './icons';
 import { Sheet, SheetOption } from './Sheet';
 import { useToast } from './Toast';
+import { Button } from './ui';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { PostBlocks } from './PostBlocks';
 import { RichText } from './RichText';
@@ -247,7 +255,11 @@ export function PostMenu({ post, onDeleted }: { post: AnnouncementRow; onDeleted
   const { push } = useNav();
   const pin = usePinPost(post.groupId);
   const del = useDeletePost(post.groupId);
+  const resend = useResendPost();
   const [open, setOpen] = useState(false);
+  const [resendOpen, setResendOpen] = useState(false);
+  const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
+  const presets: AudiencePreset[] = [{ key: 'all', label: t.meetings.everyone, ids: null }];
   if (!post.canPin && !post.canEdit && !post.canDelete) return null;
   const run = async (action: () => Promise<unknown>) => {
     setOpen(false);
@@ -284,6 +296,16 @@ export function PostMenu({ post, onDeleted }: { post: AnnouncementRow; onDeleted
         )}
         {post.canEdit && (
           <SheetOption
+            icon={<IconSend size={20} />}
+            label={t.feed.resendPost}
+            onClick={() => {
+              setOpen(false);
+              setResendOpen(true);
+            }}
+          />
+        )}
+        {post.canEdit && (
+          <SheetOption
             icon={<IconEdit size={20} />}
             label={t.feed.editPost}
             onClick={() => {
@@ -305,6 +327,35 @@ export function PostMenu({ post, onDeleted }: { post: AnnouncementRow; onDeleted
             }}
           />
         )}
+      </Sheet>
+      <Sheet open={resendOpen} onClose={() => setResendOpen(false)} title={t.feed.resendTitle}>
+        <div className="flex flex-col gap-3 px-5 pb-4">
+          <AudienceChoice
+            groupId={post.groupId}
+            presets={presets}
+            value={audience}
+            onChange={setAudience}
+          />
+          <Button
+            disabled={resend.isPending || audienceEmpty(audience, presets)}
+            onClick={async () => {
+              try {
+                const res = await resend.mutateAsync({
+                  postId: post.id,
+                  userIds: audienceIds(audience, presets),
+                });
+                haptic.success();
+                toast(t.events.remindSent(res.sent));
+                setResendOpen(false);
+              } catch {
+                haptic.error();
+                toast(t.common.actionFailed, 'error');
+              }
+            }}
+          >
+            <IconSend size={16} /> {t.feed.resendSend}
+          </Button>
+        </div>
       </Sheet>
     </span>
   );

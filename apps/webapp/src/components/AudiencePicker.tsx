@@ -15,12 +15,15 @@ export function AudiencePicker({
   value,
   onChange,
   hint,
+  bare,
 }: {
   groupId: number;
   value: number[] | null;
   onChange: (v: number[] | null) => void;
   /** Replaces the meeting wording under the chips ('' = none). */
   hint?: string;
+  /** Only the list of people (the caller has its own choice of audience). */
+  bare?: boolean;
 }) {
   const t = useT();
   const contacts = useContacts(groupId);
@@ -34,7 +37,7 @@ export function AudiencePicker({
   };
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
+      <div className={`flex flex-wrap gap-2 ${bare ? 'hidden' : ''}`}>
         <Pill on={value === null} onClick={() => onChange(null)} label={t.meetings.everyone} />
         <Pill
           on={value !== null}

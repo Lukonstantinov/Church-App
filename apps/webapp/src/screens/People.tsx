@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { displayName, type GroupSummary, type MemberRow } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { GroupSwitcher } from '../components/GroupSwitcher';
-import { IconSearch, IconTelegram, IconUserPlus, IconUsers } from '../components/icons';
+import { LabelChip, PersonTags } from '../components/LabelChip';
+import { IconSearch, IconTag, IconTelegram, IconUserPlus, IconUsers } from '../components/icons';
 import { LinkShare } from '../components/LinkShare';
 import { PercentChip } from '../components/Status';
 import { useToast } from '../components/Toast';
@@ -22,7 +23,9 @@ import { useNav } from '../lib/nav';
 import {
   useGroup,
   useMemberDetail,
+  useLabels,
   useMembers,
+  useSetMemberLabels,
   usePositions,
   useRotateInvite,
   useUpdateMembership,
@@ -92,6 +95,13 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
             {m.username ? `@${m.username}` : m.offline ? t.common.offline : null}
             {!m.offline && !m.isReachable && <Badge tone="danger">{t.common.unreachable}</Badge>}
           </div>
+          <PersonTags
+            role={m.role}
+            positionName={m.positionName}
+            defaultPosition={m.positionId === defaultId}
+            leaderText={t.roles.leader}
+            labels={m.labels}
+          />
         </div>
         <PercentChip percent={m.recentPercent} />
         <span className={`transition-transform ${openId === m.membershipId ? 'rotate-90' : ''}`}>
@@ -99,7 +109,12 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
         </span>
       </button>
       {openId === m.membershipId && (
-        <PersonDetails m={m} onProfile={() => push({ name: 'member', userId: m.userId })} />
+        <PersonDetails
+          m={m}
+          groupId={active.id}
+          canLabel={can('people.manage')}
+          onProfile={() => push({ name: 'member', userId: m.userId })}
+        />
       )}
     </div>
   );
@@ -187,6 +202,14 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
               {t.env.addPerson}
             </ActionRow>
           )}
+          {can('people.manage') && (
+            <ActionRow
+              icon={<IconTag size={20} />}
+              onClick={() => push({ name: 'labels', groupId: active.id })}
+            >
+              {t.labels.manage}
+            </ActionRow>
+          )}
         </Section>
       </div>
 
@@ -211,7 +234,17 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
 }
 
 /** A member's row opened in place: attendance, where they serve, contact and profile. */
-function PersonDetails({ m, onProfile }: { m: MemberRow; onProfile: () => void }) {
+function PersonDetails({
+  m,
+  groupId,
+  canLabel,
+  onProfile,
+}: {
+  m: MemberRow;
+  groupId: number;
+  canLabel: boolean;
+  onProfile: () => void;
+}) {
   const t = useT();
   const f = useFmt();
   const detail = useMemberDetail(m.userId);
@@ -263,6 +296,7 @@ function PersonDetails({ m, onProfile }: { m: MemberRow; onProfile: () => void }
           </div>
         )
       )}
+      {canLabel && <LabelPicker groupId={groupId} m={m} />}
       <div className="flex gap-2">
         {m.username && (
           <Button small onClick={() => openTelegramLink(`https://t.me/${m.username}`)}>
@@ -272,6 +306,53 @@ function PersonDetails({ m, onProfile }: { m: MemberRow; onProfile: () => void }
         <Button small variant="glass" onClick={onProfile}>
           {t.people.profile}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Tap labels to give them to the person or take them away. */
+function LabelPicker({ groupId, m }: { groupId: number; m: MemberRow }) {
+  const t = useT();
+  const labels = useLabels(groupId);
+  const set = useSetMemberLabels(groupId);
+  const { push } = useNav();
+  const mine = new Set(m.labels.map((l) => l.id));
+  const toggle = (id: number) => {
+    haptic.tap();
+    const next = new Set(mine);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    set.mutate({ userId: m.userId, labelIds: [...next] });
+  };
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[12px] font-semibold uppercase tracking-wide text-hint">
+          {t.labels.assign}
+        </span>
+        <button
+          type="button"
+          onClick={() => push({ name: 'labels', groupId })}
+          className="text-[13px] font-semibold text-link"
+        >
+          {t.labels.manage}
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {(labels.data ?? []).map((l) => (
+          <button
+            key={l.id}
+            type="button"
+            onClick={() => toggle(l.id)}
+            className={`rounded-full transition active:scale-95 ${mine.has(l.id) ? 'ring-2 ring-[var(--text)] ring-offset-1' : 'opacity-45'}`}
+          >
+            <LabelChip label={l} />
+          </button>
+        ))}
+        {(labels.data ?? []).length === 0 && (
+          <span className="text-[13px] text-hint">{t.labels.empty}</span>
+        )}
       </div>
     </div>
   );

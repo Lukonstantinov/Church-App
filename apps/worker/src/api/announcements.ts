@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import {
   commentSchema,
   pinSchema,
+  resendPostSchema,
   updateAnnouncementSchema,
   voteSchema,
   readPostBlocks,
@@ -26,6 +27,7 @@ import {
   media,
   memberships,
   pollVotes,
+  users,
 } from '../db/schema';
 import { accessIn, assertCan, assertCanViewGroup, groupsWithPermission } from '../lib/access';
 import { assertGroupFile, storeFile } from '../lib/files';
@@ -35,6 +37,7 @@ import {
   referencedIds,
   listAnnouncements,
   listComments,
+  queuePostMessages,
   toggleReaction,
 } from '../lib/announcements';
 import { audit } from '../lib/audit';
@@ -201,6 +204,64 @@ announcementRoutes.post('/:id/pin', async (c) => {
     data: { announcementId: post.id },
   });
   return c.json({ ok: true });
+});
+
+/**
+ * Send the post's notification again (moderators and the author): to everyone in the
+ * ministry or only chosen people. The message says it is a repeat and who sent it.
+ */
+announcementRoutes.post('/:id/resend', async (c) => {
+  const { db, user, post, moderate } = await loadPost(c, idParam(c));
+  if (post.authorId !== user.id && !moderate)
+    throw new HTTPException(403, { message: 'forbidden' });
+  const input = await parseBody(c, resendPostSchema);
+  const group = (await db.query.groups.findFirst({ where: eq(groups.id, post.groupId) }))!;
+  const author =
+    (post.authorId
+      ? await db.query.users.findFirst({ where: eq(users.id, post.authorId) })
+      : undefined) ?? user;
+  const chosen = input.userIds && input.userIds.length > 0 ? input.userIds : null;
+  const rows = await db
+    .select({
+      id: users.id,
+      chatId: users.telegramId,
+      locale: users.locale,
+    })
+    .from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId))
+    .where(
+      and(
+        eq(memberships.groupId, post.groupId),
+        eq(memberships.status, 'active'),
+        eq(users.isReachable, true),
+        isNotNull(users.telegramId),
+        ...(chosen ? [inArray(users.id, chosen)] : []),
+      ),
+    );
+  await queuePostMessages(db, {
+    group,
+    author,
+    row: post,
+    targets: rows,
+    appUrl: (await getAppUrl(db, c.env.APP_URL)) ?? appUrlFor(c.env, c.req.url),
+    secret: c.env.WEBHOOK_SECRET,
+    repeatedBy: user,
+  });
+  if (rows.length > 0)
+    c.executionCtx.waitUntil(
+      drainOutbox(db, botApi(c.env), { limit: 100 }).catch((err) =>
+        console.error('resend drain', err),
+      ),
+    );
+  await audit(db, {
+    actorUserId: user.id,
+    action: 'announcement_resent',
+    entity: 'group',
+    entityId: post.groupId,
+    groupId: post.groupId,
+    data: { announcementId: post.id, sent: rows.length, chosen: chosen?.length ?? null },
+  });
+  return c.json({ sent: rows.length });
 });
 
 /** Edit a post (author or moderators). Members are not notified again. */

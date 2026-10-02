@@ -1,5 +1,6 @@
 import { CountdownBadge, CountdownOnCover, hasCountdown } from '../components/Countdown';
 import { EventCover } from '../components/EventCard';
+import { EventReminderSheet } from '../components/EventReminderSheet';
 import { useRef, useState } from 'react';
 import {
   displayName,
@@ -14,6 +15,7 @@ import { useEventWhen } from '../components/EventCard';
 import {
   IconCheck,
   IconCoins,
+  IconBell,
   IconEdit,
   IconImage,
   IconMapPin,
@@ -70,6 +72,7 @@ function EventBody({ e }: { e: EventDetail }) {
   const when = useEventWhen();
   const { push } = useNav();
   const update = useUpdateEvent(e.id);
+  const [reminding, setReminding] = useState(false);
   const cancelled = e.status === 'cancelled';
 
   async function toggleCancelled() {
@@ -148,7 +151,20 @@ function EventBody({ e }: { e: EventDetail }) {
               <IconEdit size={16} /> {t.common.edit}
             </Button>
           )}
+          {e.canManage && !cancelled && (
+            <Button small variant="glass" onClick={() => setReminding(true)}>
+              <IconBell size={16} /> {t.events.remindTitleShort}
+            </Button>
+          )}
         </div>
+      )}
+      {reminding && (
+        <EventReminderSheet
+          eventId={e.id}
+          groupId={e.groupId}
+          title={e.title}
+          onClose={() => setReminding(false)}
+        />
       )}
 
       {e.myRoles.length > 0 && (

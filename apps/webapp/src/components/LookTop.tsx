@@ -33,7 +33,7 @@ export function LookTop({
     : on.style;
   return (
     <div
-      className={`brand-gradient relative overflow-hidden ${on.className} ${className}`}
+      className={`brand-gradient flow sheen relative overflow-hidden ${on.className} ${className}`}
       style={style}
     >
       <PatternLayer pattern={look?.pattern} logoUrl={look?.logoUrl} />

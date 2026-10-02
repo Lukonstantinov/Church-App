@@ -54,12 +54,15 @@ export function CountdownBadge({
   startsAt,
   design,
   compact,
+  muted,
   className = '',
 }: {
   startsAt: string;
   design?: Pick<PostDesign, 'countdownSize' | 'countdownColor'> | null;
   /** One size smaller, for small tiles. */
   compact?: boolean;
+  /** A quiet timer (no flame) for events that didn't ask for a countdown. */
+  muted?: boolean;
   className?: string;
 }) {
   const t = useT();
@@ -75,14 +78,23 @@ export function CountdownBadge({
   return (
     <span
       className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-bold tabular-nums shadow-card ${size.pad} ${size.text} ${className}`}
-      style={{
-        background: color ?? 'linear-gradient(135deg, #f59e0b, #ef4444)',
-        color: dark ? '#111827' : '#ffffff',
-      }}
+      style={
+        muted
+          ? {
+              background: 'var(--color-hairline, rgba(120,120,128,0.16))',
+              color: 'var(--color-hint)',
+            }
+          : {
+              background: color ?? 'linear-gradient(135deg, #f59e0b, #ef4444)',
+              color: dark ? '#111827' : '#ffffff',
+            }
+      }
     >
-      <span className={`flame ${size.flame} leading-none`} aria-hidden="true">
-        🔥
-      </span>
+      {!muted && (
+        <span className={`flame ${size.flame} leading-none`} aria-hidden="true">
+          🔥
+        </span>
+      )}
       <span>
         {days > 0 ? `${days}${t.meetings.dayShort} ` : ''}
         {clock}

@@ -33,7 +33,7 @@ export function ChurchLogo({ size = 48 }: { size?: number }) {
         alt={env?.name ?? church?.name}
         width={size}
         height={size}
-        className="shrink-0 bg-white object-contain shadow-card"
+        className="bob shrink-0 bg-white object-contain shadow-card"
         style={{ width: size, height: size, borderRadius: radius }}
       />
     );
@@ -41,7 +41,7 @@ export function ChurchLogo({ size = 48 }: { size?: number }) {
   return (
     <span
       aria-hidden="true"
-      className="brand-gradient inline-flex shrink-0 items-center justify-center font-bold text-white shadow-cta"
+      className="brand-gradient bob inline-flex shrink-0 items-center justify-center font-bold text-white shadow-cta"
       style={{ width: size, height: size, borderRadius: radius, fontSize: size * 0.36 }}
     >
       {initialsOf(env?.name ?? church?.name ?? '✝')}

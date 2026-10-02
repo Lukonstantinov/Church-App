@@ -18,7 +18,7 @@ export function UnreadBadges({ g, fallbackTheme }: { g: GroupSummary; fallbackTh
         </span>
       )}
       {g.unreadComments > 0 && (
-        <span className="min-w-[22px] rounded-full bg-[#ef4444] px-1.5 text-center text-[12px] font-bold leading-[22px] text-white ring-2 ring-white/90">
+        <span className="breathe min-w-[22px] rounded-full bg-[#ef4444] px-1.5 text-center text-[12px] font-bold leading-[22px] text-white ring-2 ring-white/90">
           {g.unreadComments > 99 ? '99+' : g.unreadComments}
         </span>
       )}

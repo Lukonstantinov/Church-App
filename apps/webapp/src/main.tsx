@@ -3,12 +3,14 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError } from './lib/api';
 import { watchForNewVersion } from './lib/freshness';
+import { applyMotion } from './lib/motion';
 import { initTelegram, isInsideTelegram } from './lib/telegram';
 import { App } from './App';
 import './index.css';
 import './fonts.css';
 
 initTelegram();
+applyMotion();
 watchForNewVersion();
 
 const queryClient = new QueryClient({

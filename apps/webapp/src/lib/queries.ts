@@ -1,5 +1,9 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  LabelInput,
+  LabelRef,
+  SetMemberLabelsInput,
+  ResendPostInput,
   RemindEventInput,
   MessageTemplateInput,
   MessageTemplateRow,
@@ -646,6 +650,14 @@ export function useUploadFile(groupId: number) {
   });
 }
 
+/** Send a post's notification again to everyone or chosen people. */
+export function useResendPost() {
+  return useMutation({
+    mutationFn: ({ postId, ...input }: ResendPostInput & { postId: number }) =>
+      apiFetch<{ sent: number }>(`/announcements/${postId}/resend`, send('POST', input)),
+  });
+}
+
 export function usePinPost(groupId: number) {
   const changed = useFeedChanged(groupId);
   return useMutation({
@@ -1083,5 +1095,44 @@ export function useArchivedGroups(enabled: boolean) {
     queryFn: async () =>
       (await apiFetch<GroupSummary[]>('/groups?archived=1')).filter((g) => g.archived),
     enabled,
+  });
+}
+
+// ---------- labels ----------
+
+export function useLabels(groupId: number, enabled = true) {
+  return useQuery({
+    queryKey: ['groups', groupId, 'labels'],
+    queryFn: () => apiFetch<LabelRef[]>(`/groups/${groupId}/labels`),
+    enabled,
+  });
+}
+
+export function useSaveLabel(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: LabelInput & { id?: number }) =>
+      id
+        ? apiFetch<LabelRef>(`/labels/${id}`, send('PATCH', input))
+        : apiFetch<LabelRef>(`/groups/${groupId}/labels`, send('POST', input)),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['groups', groupId] }),
+  });
+}
+
+export function useDeleteLabel(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiFetch(`/labels/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['groups', groupId] }),
+  });
+}
+
+/** Which of the ministry's labels a person has. */
+export function useSetMemberLabels(groupId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, labelIds }: { userId: number } & SetMemberLabelsInput) =>
+      apiFetch(`/groups/${groupId}/members/${userId}/labels`, send('PUT', { labelIds })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.members(groupId) }),
   });
 }

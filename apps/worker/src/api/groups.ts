@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   ENTER_ANIMATIONS,
   PERMISSIONS,
@@ -19,6 +19,7 @@ import {
   type GroupDetail,
   type GroupRole,
   type GroupSummary,
+  type LabelAnimation,
   type MemberRow,
   type ContactRow,
 } from '@church/shared';
@@ -27,7 +28,9 @@ import type { AuthVariables } from '../auth/middleware';
 import type { Db } from '../db/client';
 import {
   attendance,
+  groupLabels,
   groups,
+  memberLabels,
   meetings,
   memberships,
   positions,
@@ -327,7 +330,37 @@ groupRoutes.get('/:id/members', async (c) => {
       rates.set(mark.userId, r);
     }
   }
+  const labelRows = rows.length
+    ? await db
+        .select({
+          userId: memberLabels.userId,
+          id: groupLabels.id,
+          name: groupLabels.name,
+          color: groupLabels.color,
+          animation: groupLabels.animation,
+        })
+        .from(memberLabels)
+        .innerJoin(groupLabels, eq(groupLabels.id, memberLabels.labelId))
+        .where(
+          and(
+            eq(groupLabels.groupId, group.id),
+            inArray(
+              memberLabels.userId,
+              rows.map((r) => r.u.id),
+            ),
+          ),
+        )
+        .orderBy(asc(groupLabels.sort), asc(groupLabels.id))
+    : [];
   const result: MemberRow[] = rows.map(({ m, u, positionName }) => ({
+    labels: labelRows
+      .filter((l) => l.userId === u.id)
+      .map((l) => ({
+        id: l.id,
+        name: l.name,
+        color: l.color,
+        animation: l.animation as LabelAnimation,
+      })),
     membershipId: m.id,
     positionId: m.positionId,
     positionName,

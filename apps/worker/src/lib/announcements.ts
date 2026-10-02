@@ -67,6 +67,65 @@ export function referencedIds(input: UpdateAnnouncementInput) {
 }
 
 /**
+ * Queues the bot message of a post for the given people (a new post, or sent again).
+ * With photos the bot sends the first one with the text as its caption.
+ */
+export async function queuePostMessages(
+  db: Db,
+  args: {
+    group: Group;
+    author: User;
+    row: AnnouncementDbRow;
+    targets: { id: number; chatId: number | null; locale: string | null }[];
+    appUrl: string | null;
+    secret: string;
+    /** Sent again by someone: marks it as a repeat and says who sent it. */
+    repeatedBy?: User;
+  },
+) {
+  const { group, author, row, appUrl } = args;
+  const fallback = await churchDefaultLocale(db);
+  const stamp = args.repeatedBy ? `:r${Date.now()}` : '';
+  const head = row.title ? `<b>${escapeHtml(row.title)}</b>\n` : '';
+  const blocks = readPostBlocks(row.blocks);
+  const fullText = [row.text, ...blocks.flatMap((b) => (b.type === 'text' ? [b.text] : []))]
+    .filter(Boolean)
+    .join('\n\n');
+  const hasExtras = blocks.some((b) => b.type !== 'text');
+  const firstPhoto = row.mediaIds?.[0];
+  const photoUrl =
+    firstPhoto && appUrl ? `${appUrl}${await signedMediaUrl(args.secret, firstPhoto)}` : null;
+  for (const m of args.targets) {
+    if (!m.chatId) continue;
+    const t = messages(localeOf(m, fallback));
+    const repeat = args.repeatedBy ? `${t.bot.postRepeat}\n\n` : '';
+    const by = args.repeatedBy
+      ? `\n<i>${escapeHtml(t.bot.sentBy(displayName(args.repeatedBy)))}</i>`
+      : '';
+    const body = `${repeat}📢 <b>${escapeHtml(group.name)}</b>\n\n${head}${escapeHtml(fullText)}${
+      hasExtras ? `\n\n<i>${escapeHtml(t.bot.postHasExtras)}</i>` : ''
+    }\n\n— ${escapeHtml(displayName(author))}${by}`;
+    const reply_markup = appUrl ? new InlineKeyboard().webApp(t.bot.openApp, appUrl) : undefined;
+    // Photo captions are limited to 1024 characters; longer posts go as a text message.
+    const asPhoto = photoUrl && body.length <= 1024;
+    await enqueue(db, {
+      chatId: m.chatId,
+      method: asPhoto ? 'sendPhoto' : 'sendMessage',
+      payload: asPhoto
+        ? { chat_id: m.chatId, photo: photoUrl, caption: body, parse_mode: 'HTML', reply_markup }
+        : {
+            chat_id: m.chatId,
+            text: body,
+            parse_mode: 'HTML',
+            link_preview_options: { is_disabled: true },
+            reply_markup,
+          },
+      dedupeKey: `ann:${row.id}:${m.chatId}${stamp}`,
+    });
+  }
+}
+
+/**
  * Saves a post (text, or a poster with headline, photos and tint) and, unless told
  * not to, queues a bot message to every active member who can receive one. With
  * photos the bot sends the first one with the text as its caption.
@@ -118,41 +177,14 @@ export async function createAnnouncement(
     data: { announcementId: row!.id, recipients: reachable.length },
   });
 
-  const fallback = await churchDefaultLocale(db);
-  const head = row!.title ? `<b>${escapeHtml(row!.title)}</b>\n` : '';
-  const blocks = readPostBlocks(row!.blocks);
-  const fullText = [row!.text, ...blocks.flatMap((b) => (b.type === 'text' ? [b.text] : []))]
-    .filter(Boolean)
-    .join('\n\n');
-  const hasExtras = blocks.some((b) => b.type !== 'text');
-  const bodyFor = (extras: string) =>
-    `📢 <b>${escapeHtml(group.name)}</b>\n\n${head}${escapeHtml(fullText)}${
-      hasExtras ? `\n\n<i>${escapeHtml(extras)}</i>` : ''
-    }\n\n— ${escapeHtml(displayName(author))}`;
-  const firstPhoto = row!.mediaIds?.[0];
-  const photoUrl =
-    firstPhoto && appUrl ? `${appUrl}${await signedMediaUrl(args.secret, firstPhoto)}` : null;
-  for (const m of reachable) {
-    const t = messages(localeOf(m, fallback));
-    const body = bodyFor(t.bot.postHasExtras);
-    const reply_markup = appUrl ? new InlineKeyboard().webApp(t.bot.openApp, appUrl) : undefined;
-    // Photo captions are limited to 1024 characters; longer posts go as a text message.
-    const asPhoto = photoUrl && body.length <= 1024;
-    await enqueue(db, {
-      chatId: m.chatId!,
-      method: asPhoto ? 'sendPhoto' : 'sendMessage',
-      payload: asPhoto
-        ? { chat_id: m.chatId, photo: photoUrl, caption: body, parse_mode: 'HTML', reply_markup }
-        : {
-            chat_id: m.chatId,
-            text: body,
-            parse_mode: 'HTML',
-            link_preview_options: { is_disabled: true },
-            reply_markup,
-          },
-      dedupeKey: `ann:${row!.id}:${m.chatId}`,
-    });
-  }
+  await queuePostMessages(db, {
+    group,
+    author,
+    row: row!,
+    targets: reachable,
+    appUrl,
+    secret: args.secret,
+  });
 
   const [rendered] = await toRows(db, args.secret, author, [
     { a: row!, groupName: group.name, groupBrand: group, author },

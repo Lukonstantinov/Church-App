@@ -24,6 +24,7 @@ import { membershipRoutes, userRoutes } from './members';
 import { groupPositionRoutes, positionRoutes } from './positions';
 import { devRoutes } from './dev';
 import { documentRoutes, groupReportRoutes } from './reports';
+import { groupLabelRoutes, labelRoutes } from './labels';
 import { eventRoutes, groupEventRoutes, myEventRoutes } from './events';
 import { groupTreasuryRoutes, myFinanceRoutes, transactionRoutes } from './treasury';
 
@@ -50,6 +51,8 @@ apiRoutes.route('/me/events', myEventRoutes);
 apiRoutes.route('/groups', groupReportRoutes);
 apiRoutes.route('/me/document', documentRoutes);
 apiRoutes.route('/groups', groupPositionRoutes);
+apiRoutes.route('/groups', groupLabelRoutes);
+apiRoutes.route('/labels', labelRoutes);
 apiRoutes.route('/positions', positionRoutes);
 apiRoutes.route('/announcements', announcementRoutes);
 apiRoutes.route('/comments', commentRoutes);

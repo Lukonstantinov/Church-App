@@ -201,3 +201,9 @@ export const IconMic = make(
     <path d="M12 18v3.5" />
   </>,
 );
+export const IconTag = make(
+  <>
+    <path d="M20.5 13.5l-7 7a2 2 0 0 1-2.8 0L3 12.8V3h9.8l7.7 7.7a2 2 0 0 1 0 2.8z" />
+    <circle cx="7.5" cy="7.5" r="1.3" />
+  </>,
+);

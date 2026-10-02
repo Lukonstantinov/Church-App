@@ -341,3 +341,214 @@ body::before {
     animation: none;
   }
 }
+
+/* ---------- Motion design ----------
+   data-motion on <html>: "off" (nothing moves), "calm" (entrances only), "lively" (all). */
+
+/* Entrances: things arrive one after another, softly. */
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
+.reveal {
+  animation: reveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+/* The coloured gradient of a card drifts slowly. */
+@keyframes flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+.flow {
+  background-size: 220% 220%;
+  animation: flow 14s ease-in-out infinite;
+}
+
+/* A soft sheen passes over a card now and then. */
+@keyframes sheen {
+  0%,
+  62% {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(260%) skewX(-18deg);
+  }
+}
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+.sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  animation: sheen 7s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 0.9s);
+}
+
+/* Counters and badges breathe. */
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+}
+.breathe {
+  animation: breathe 2.6s ease-in-out infinite;
+}
+
+/* Icons and logos float a little. */
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+.bob {
+  animation: bob 4.5s ease-in-out infinite;
+}
+
+/* Page glow drifts. */
+@keyframes aurora {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, 2%, 0) scale(1.08);
+  }
+}
+html[data-motion='lively'] body::before {
+  animation: aurora 22s ease-in-out infinite;
+}
+
+/* Springy presses and a lift on touch. */
+.spring {
+  transition:
+    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.25s ease;
+}
+.spring:active {
+  transform: scale(0.95);
+}
+
+/* A tile being dragged to a new place. */
+.dragging {
+  z-index: 40;
+  transform-origin: center;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  opacity: 0.95;
+  transition: none;
+}
+.drop-target {
+  outline: 2px dashed var(--brand);
+  outline-offset: 3px;
+  border-radius: 22px;
+}
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Custom labels: each has its own animation. */
+@keyframes label-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes label-pulse {
+  50% {
+    transform: scale(1.07);
+    filter: brightness(1.15);
+  }
+}
+@keyframes label-glow {
+  50% {
+    box-shadow: 0 0 10px 2px var(--label-color);
+  }
+}
+@keyframes label-wave {
+  0%,
+  100% {
+    transform: rotate(-2.5deg);
+  }
+  50% {
+    transform: rotate(2.5deg);
+  }
+}
+@keyframes label-rainbow {
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+@keyframes label-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-3px);
+  }
+  60% {
+    transform: translateY(0);
+  }
+}
+.label-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    var(--label-color) 30%,
+    color-mix(in srgb, var(--label-color) 40%, white) 50%,
+    var(--label-color) 70%
+  ) !important;
+  background-size: 200% 100%;
+  animation: label-shimmer 2.8s linear infinite;
+}
+.label-pulse {
+  animation: label-pulse 1.8s ease-in-out infinite;
+}
+.label-glow {
+  animation: label-glow 2s ease-in-out infinite;
+}
+.label-wave {
+  animation: label-wave 1.4s ease-in-out infinite;
+}
+.label-rainbow {
+  animation: label-rainbow 6s linear infinite;
+}
+.label-bounce {
+  animation: label-bounce 1.6s ease-in-out infinite;
+}
+
+html[data-motion='calm'] .flow,
+html[data-motion='calm'] .sheen::after,
+html[data-motion='calm'] .breathe,
+html[data-motion='calm'] .bob,
+html[data-motion='calm'] [class*='label-'] {
+  animation: none;
+}
+html[data-motion='off'] *,
+html[data-motion='off'] *::before,
+html[data-motion='off'] *::after {
+  animation: none !important;
+  transition-duration: 0.01ms !important;
+}

@@ -71,9 +71,10 @@ export function Hub({ me }: { me: MeResponse }) {
         </Card>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          {list.map((g) => (
+          {list.map((g, i) => (
             <EnvCard
               key={g.id}
+              index={i}
               g={g}
               fallbackTheme={me.church.brandColor}
               onClick={() => push({ name: 'env', groupId: g.id })}
@@ -166,10 +167,12 @@ export function EnvCard({
   g,
   fallbackTheme,
   onClick,
+  index = 0,
 }: {
   g: GroupSummary;
   fallbackTheme: string;
   onClick: () => void;
+  index?: number;
 }) {
   const t = useT();
   const theme = resolveBrand(g.brandColor ?? fallbackTheme);
@@ -185,11 +188,14 @@ export function EnvCard({
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left shadow-cta transition active:scale-[0.97] ${on.className}`}
-      style={{
-        ...on.style,
-        background: `linear-gradient(145deg, ${theme.light} 0%, ${theme.partner} 100%)`,
-      }}
+      className={`reveal sheen spring relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left shadow-cta ${on.className}`}
+      style={
+        {
+          ...on.style,
+          '--i': index,
+          background: `linear-gradient(145deg, ${theme.light} 0%, ${theme.partner} 100%)`,
+        } as React.CSSProperties
+      }
     >
       <PatternLayer pattern={g.pattern} logoUrl={g.logoUrl} />
       <BackdropLayer backdrop={g.backdrop} url={g.backdropUrl} />

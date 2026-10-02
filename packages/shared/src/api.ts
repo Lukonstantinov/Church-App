@@ -173,7 +173,41 @@ export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 
 // ---------- Members ----------
 
+/** How a custom label moves. */
+export const LABEL_ANIMATIONS = [
+  'none',
+  'shimmer',
+  'pulse',
+  'glow',
+  'wave',
+  'rainbow',
+  'bounce',
+] as const;
+export type LabelAnimation = (typeof LABEL_ANIMATIONS)[number];
+
+export const labelInputSchema = z.object({
+  name: z.string().trim().min(1).max(24),
+  color: z.string().regex(/^#[0-9a-f]{6}$/i),
+  animation: z.enum(LABEL_ANIMATIONS).default('none'),
+});
+export type LabelInput = z.input<typeof labelInputSchema>;
+
+export interface LabelRef {
+  id: number;
+  name: string;
+  color: string;
+  animation: LabelAnimation;
+}
+
+/** Which of the ministry's labels a person has. */
+export const setMemberLabelsSchema = z.object({
+  labelIds: z.array(z.number().int().positive()).max(30),
+});
+export type SetMemberLabelsInput = z.input<typeof setMemberLabelsSchema>;
+
 export interface MemberRow {
+  /** The person's custom labels. */
+  labels: LabelRef[];
   membershipId: number;
   positionId: number | null;
   positionName: string | null;
@@ -397,6 +431,12 @@ export interface MeetingDetail extends MeetingRow {
   myRole: 'leader' | 'snack' | null;
   myAcceptedAt: string | null;
 }
+
+/** Send a post's notification again: to everyone in the ministry, or only chosen people. */
+export const resendPostSchema = z.object({
+  userIds: z.array(z.number().int().positive()).max(500).nullish(),
+});
+export type ResendPostInput = z.input<typeof resendPostSchema>;
 
 /** Send an event reminder now: the text (edited or default) to everyone or chosen people. */
 export const remindEventSchema = z.object({

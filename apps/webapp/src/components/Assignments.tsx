@@ -37,7 +37,7 @@ export function useTasks(groupId?: number) {
           label: t.meetings.tasks,
           onClick: toggle,
           badge: (
-            <span className="min-w-[22px] rounded-full bg-[#ef4444] px-1.5 text-center text-[12px] font-bold leading-[22px] text-white ring-2 ring-white/90">
+            <span className="breathe min-w-[22px] rounded-full bg-[#ef4444] px-1.5 text-center text-[12px] font-bold leading-[22px] text-white ring-2 ring-white/90">
               {list.length > 99 ? '99+' : list.length}
             </span>
           ),
