@@ -219,6 +219,9 @@ export const ru = {
     cameOf: (a: number, b: number) => `пришли ${a} из ${b}`,
   },
   meetings: {
+    announceMeeting: 'Сообщить о встрече',
+    announceMeetingHint: 'Текст, постер и кому отправить — всё можно поменять перед отправкой.',
+    leadersOnly: 'Лидерам',
     dayShort: 'д',
     countdownSize: 'Размер счётчика',
     countdownColor: 'Цвет счётчика',
@@ -969,7 +972,8 @@ export const ru = {
     noRights: 'без особых прав',
     rightsCount: (c: number, all: number) => (c === all ? 'все права' : `прав: ${c} из ${all}`),
     delete: 'Удалить должность',
-    confirmDelete: 'Удалить эту должность?',
+    confirmDelete:
+      'Удалить эту должность? Люди с ней станут обычными участниками: без особых прав, но видят посты и события.',
     inUse: 'Сначала переведите людей на другую должность',
     escalation: 'Нельзя выдать права, которых нет у вас',
     ownPosition: 'Свою должность может менять только администратор церкви',
@@ -1315,6 +1319,7 @@ export const ru = {
     notifReminderTitle: (title: string) => `Напоминание: «${title}»`,
     notifDutyTitle: (title: string) => `Вам назначено служение: «${title}»`,
     notifPostRepeatTitle: (group: string) => `Повтор: ${group}`,
+    notifMeetingTitle: (title: string) => `Встреча: ${title}`,
     servicesTitle: '🛠 <b>Ваши служения</b>',
     servicesEmpty: 'Пока вы не состоите ни в одном служении.',
     servicesMinistries: '<b>Служения</b>',

@@ -215,6 +215,9 @@ export const en: Messages = {
     cameOf: (a: number, b: number) => `${a} of ${b} came`,
   },
   meetings: {
+    announceMeeting: 'Tell about the meeting',
+    announceMeetingHint: 'Text, poster and who gets it — change anything before sending.',
+    leadersOnly: 'Leaders',
     dayShort: 'd',
     countdownSize: 'Counter size',
     countdownColor: 'Counter colour',
@@ -953,7 +956,8 @@ export const en: Messages = {
     noRights: 'no special rights',
     rightsCount: (c: number, all: number) => (c === all ? 'all rights' : `${c} of ${all} rights`),
     delete: 'Delete position',
-    confirmDelete: 'Delete this position?',
+    confirmDelete:
+      'Delete this position? People who have it become plain members: no special rights, but they still see posts and events.',
     inUse: 'Move people to another position first',
     escalation: 'You can’t give rights you don’t have',
     ownPosition: 'Only a church admin can change their own position',
@@ -1293,6 +1297,7 @@ export const en: Messages = {
     notifReminderTitle: (title: string) => `Reminder: “${title}”`,
     notifDutyTitle: (title: string) => `You have a duty at “${title}”`,
     notifPostRepeatTitle: (group: string) => `Repeat: ${group}`,
+    notifMeetingTitle: (title: string) => `Meeting: ${title}`,
     servicesTitle: '🛠 <b>Your services</b>',
     servicesEmpty: 'You are not in any ministry yet.',
     servicesMinistries: '<b>Ministries</b>',

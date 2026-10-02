@@ -11,6 +11,7 @@ import {
   calendarNoteSchema,
   localDate,
   messageTemplateSchema,
+  announceMeetingSchema,
   notifyMeetingSchema,
   type CalendarData,
   updateMeetingSchema,
@@ -51,9 +52,10 @@ import {
 } from '../lib/meetingNotify';
 import { assertGroupMedia } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
+import { announceMeeting, defaultMeetingAnnouncement } from '../lib/meetingAnnounce';
 import { appUrlFor, botApi } from '../lib/telegram';
 import { audit } from '../lib/audit';
-import { getChurch } from '../lib/church';
+import { churchDefaultLocale, getChurch, localeOf } from '../lib/church';
 import {
   audienceOf,
   editWindow,
@@ -774,6 +776,55 @@ meetingRoutes.post('/:id/notify', async (c) => {
     );
   }
   return c.json({ sent });
+});
+
+/** A meeting the user may announce (needs the right to manage meetings). */
+async function announceable(c: { get: (k: 'db' | 'user') => unknown }, id: number) {
+  const db = c.get('db') as AuthVariables['db'];
+  const user = c.get('user') as AuthVariables['user'];
+  const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, id) });
+  if (!meeting) throw new HTTPException(404, { message: 'not_found' });
+  await assertCan(db, user, meeting.groupId, 'meetings.manage');
+  return { db, user, meeting };
+}
+
+/** The default announcement, in the sender's language, to read and change before sending. */
+meetingRoutes.get('/:id/announce-text', async (c) => {
+  const { db, user, meeting } = await announceable(c, idParam(c));
+  const locale = localeOf(user, await churchDefaultLocale(db));
+  return c.json({ text: await defaultMeetingAnnouncement(db, meeting, locale) });
+});
+
+/** Tell everyone (or leaders / chosen people) about the meeting, with its poster. */
+meetingRoutes.post('/:id/announce', async (c) => {
+  const { db, user, meeting } = await announceable(c, idParam(c));
+  if (meeting.status === 'cancelled') throw new HTTPException(409, { message: 'cancelled' });
+  const input = await parseBody(c, announceMeetingSchema);
+  if (input.posterMediaId) await assertGroupMedia(db, meeting.groupId, input.posterMediaId);
+  const { total, bot } = await announceMeeting(db, {
+    meeting,
+    text: input.text,
+    userIds: input.userIds,
+    posterMediaId: input.posterMediaId,
+    senderName: displayName(user),
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+  });
+  if (bot > 0)
+    c.executionCtx.waitUntil(
+      drainOutbox(db, botApi(c.env), { limit: 100 }).catch((err) =>
+        console.error('announce drain', err),
+      ),
+    );
+  await audit(db, {
+    actorUserId: user.id,
+    action: 'meeting_announced',
+    entity: 'group',
+    entityId: meeting.groupId,
+    groupId: meeting.groupId,
+    data: { meetingId: meeting.id, sent: total, chosen: input.userIds?.length ?? null },
+  });
+  return c.json({ sent: total, bot });
 });
 
 async function loadRollMeeting(c: { get: (k: 'db' | 'user') => unknown }, id: number) {

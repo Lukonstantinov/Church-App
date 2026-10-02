@@ -24,6 +24,7 @@ import {
 import { Pill } from '../components/LookControls';
 import { useMoney } from '../components/money';
 import { NotifySheet } from '../components/NotifySheet';
+import { MeetingAnnounceSheet } from '../components/MeetingAnnounceSheet';
 import { PersonPicker } from '../components/PersonPicker';
 import { useToast } from '../components/Toast';
 import {
@@ -122,6 +123,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
     role: 'leader' | 'snack';
     person: MeetingPerson | null;
   } | null>(null);
+  const [announcing, setAnnouncing] = useState(false);
   const people = useMeetingPeople(m.id, m.canEdit && (editing || picker !== null));
   const cancelled = m.status === 'cancelled';
   const budget = m.budgetCents ?? m.defaultBudgetCents;
@@ -187,6 +189,12 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
         acceptedAt={m.leaderAcceptedAt}
         onNotify={m.canManage ? () => setNotify({ role: 'leader', person: m.leader }) : undefined}
       />
+
+      {m.canManage && !cancelled && (
+        <Button onClick={() => setAnnouncing(true)}>
+          <IconSend size={17} /> {t.meetings.announceMeeting}
+        </Button>
+      )}
 
       {m.canEdit && !m.canManage && !m.topic && !m.location && (
         <Card className="p-4 text-[14px]">{t.meetings.youLead}</Card>
@@ -385,6 +393,9 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           person={notify.person}
           onClose={() => setNotify(null)}
         />
+      )}
+      {announcing && (
+        <MeetingAnnounceSheet meeting={m} group={group.data} onClose={() => setAnnouncing(false)} />
       )}
     </Screen>
   );

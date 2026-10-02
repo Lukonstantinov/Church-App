@@ -216,6 +216,9 @@ export const lt: Messages = {
     cameOf: (a: number, b: number) => `atėjo ${a} iš ${b}`,
   },
   meetings: {
+    announceMeeting: 'Pranešti apie susitikimą',
+    announceMeetingHint: 'Tekstą, plakatą ir gavėjus galima pakeisti prieš siunčiant.',
+    leadersOnly: 'Vadovams',
     dayShort: 'd',
     countdownSize: 'Skaitiklio dydis',
     countdownColor: 'Skaitiklio spalva',
@@ -968,7 +971,8 @@ export const lt: Messages = {
     rightsCount: (c: number, all: number) =>
       c === all ? 'visos teisės' : `teisių: ${c} iš ${all}`,
     delete: 'Ištrinti pareigas',
-    confirmDelete: 'Ištrinti šias pareigas?',
+    confirmDelete:
+      'Ištrinti šias pareigas? Jas turintys taps paprastais nariais: be ypatingų teisių, bet matys įrašus ir renginius.',
     inUse: 'Pirmiausia perkelkite žmones į kitas pareigas',
     escalation: 'Negalite suteikti teisių, kurių neturite patys',
     ownPosition: 'Savo pareigas gali keisti tik bažnyčios administratorius',
@@ -1315,6 +1319,7 @@ export const lt: Messages = {
     notifReminderTitle: (title: string) => `Priminimas: „${title}“`,
     notifDutyTitle: (title: string) => `Jums paskirta tarnystė: „${title}“`,
     notifPostRepeatTitle: (group: string) => `Pakartojimas: ${group}`,
+    notifMeetingTitle: (title: string) => `Susitikimas: ${title}`,
     servicesTitle: '🛠 <b>Jūsų tarnystės</b>',
     servicesEmpty: 'Dar nesate jokioje tarnystėje.',
     servicesMinistries: '<b>Tarnystės</b>',

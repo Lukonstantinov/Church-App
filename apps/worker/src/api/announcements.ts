@@ -246,6 +246,8 @@ announcementRoutes.post('/:id/resend', async (c) => {
     appUrl: (await getAppUrl(db, c.env.APP_URL)) ?? appUrlFor(c.env, c.req.url),
     secret: c.env.WEBHOOK_SECRET,
     repeatedBy: user,
+    text: input.text,
+    poster: input.poster,
   });
   if (rows.length > 0)
     c.executionCtx.waitUntil(

@@ -438,6 +438,10 @@ export interface MeetingDetail extends MeetingRow {
 /** Send a post's notification again: to everyone in the ministry, or only chosen people. */
 export const resendPostSchema = z.object({
   userIds: z.array(z.number().int().positive()).max(500).nullish(),
+  /** The text as edited by the sender (replaces the post's text in this message). */
+  text: z.string().trim().min(1).max(3000).nullish(),
+  /** With the post's picture (default yes). */
+  poster: z.boolean().optional(),
 });
 export type ResendPostInput = z.input<typeof resendPostSchema>;
 
@@ -546,6 +550,16 @@ export interface CalendarData {
   canNote: boolean;
 }
 export type NotifyMeetingInput = z.input<typeof notifyMeetingSchema>;
+
+/** Tell the ministry (everyone, leaders or chosen people) about a meeting, with its poster. */
+export const announceMeetingSchema = z.object({
+  /** The message as edited by the sender; omitted = the default (in each person's language). */
+  text: z.string().trim().min(1).max(3000).optional(),
+  /** Only these people; omitted or null = everyone the meeting is for. */
+  userIds: z.array(z.number().int().positive()).max(500).nullish(),
+  posterMediaId: z.number().int().positive().nullish(),
+});
+export type AnnounceMeetingInput = z.input<typeof announceMeetingSchema>;
 
 export interface RollEntry {
   userId: number;
@@ -691,6 +705,8 @@ export interface AnnouncementRow {
   /** How many members the bot sent it to. */
   recipients: number;
   photos: { id: number; url: string }[];
+  /** The cover drawn as a picture (what the bot sends); null = none made. */
+  posterUrl: string | null;
   tint: { color: string; strength: number } | null;
   templateId: number | null;
   eventId: number | null;
@@ -814,7 +830,8 @@ export interface Telemetry {
 
 // ---------- Notifications inbox ----------
 
-export type NotificationKind = 'event_reminder' | 'event_duty' | 'meeting_job' | 'post_repeat';
+export type NotificationKind =
+  'event_reminder' | 'event_duty' | 'meeting_job' | 'meeting_announce' | 'post_repeat';
 
 export type NotificationLink =
   | { type: 'event'; eventId: number }

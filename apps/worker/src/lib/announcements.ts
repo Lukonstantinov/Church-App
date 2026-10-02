@@ -85,16 +85,30 @@ export async function queuePostMessages(
     secret: string;
     /** Sent again by someone: marks it as a repeat and says who sent it. */
     repeatedBy?: User;
+    /** The text as edited by the sender (replaces the title and text in this message). */
+    text?: string | null;
+    /** With the post's picture (default yes). */
+    poster?: boolean;
   },
 ) {
   const { group, author, row, appUrl } = args;
   const fallback = await churchDefaultLocale(db);
   const stamp = args.repeatedBy ? `:r${Date.now()}` : '';
-  const head = row.title ? `<b>${escapeHtml(row.title)}</b>\n` : '';
+  const override = args.text?.trim() || null;
   const blocks = readPostBlocks(row.blocks);
-  const fullText = [row.text, ...blocks.flatMap((b) => (b.type === 'text' ? [b.text] : []))]
-    .filter(Boolean)
-    .join('\n\n');
+  const fullText =
+    override ??
+    [row.text, ...blocks.flatMap((b) => (b.type === 'text' ? [b.text] : []))]
+      .filter(Boolean)
+      .join('\n\n');
+  // An edited text: its first line is the headline.
+  const [firstLine, ...restLines] = (override ?? '').split('\n');
+  const head = override
+    ? `<b>${escapeHtml(firstLine!)}</b>\n`
+    : row.title
+      ? `<b>${escapeHtml(row.title)}</b>\n`
+      : '';
+  const bodyText = override ? restLines.join('\n') : fullText;
   const hasExtras = blocks.some((b) => b.type !== 'text');
   // The poster (the cover as a picture) leads; without one the first photo does.
   // A post announcing an event without pictures of its own shows the event's.
@@ -104,7 +118,7 @@ export async function queuePostMessages(
       : undefined;
   const firstPhoto =
     row.posterMediaId ?? row.mediaIds?.[0] ?? event?.coverMediaId ?? event?.posterMediaId;
-  const photoId = firstPhoto ?? null;
+  const photoId = args.poster === false ? null : (firstPhoto ?? null);
   for (const m of args.targets) {
     if (args.repeatedBy) {
       const tt = messages(localeOf(m, fallback));
@@ -124,7 +138,7 @@ export async function queuePostMessages(
     const by = args.repeatedBy
       ? `\n<i>${escapeHtml(t.bot.sentBy(displayName(args.repeatedBy)))}</i>`
       : '';
-    const body = `${repeat}📢 <b>${escapeHtml(group.name)}</b>\n\n${head}${escapeHtml(fullText)}${
+    const body = `${repeat}📢 <b>${escapeHtml(group.name)}</b>\n\n${head}${escapeHtml(bodyText)}${
       hasExtras ? `\n\n<i>${escapeHtml(t.bot.postHasExtras)}</i>` : ''
     }\n\n— ${escapeHtml(displayName(author))}${by}`;
     const reply_markup = appUrl ? new InlineKeyboard().webApp(t.bot.openApp, appUrl) : undefined;
@@ -421,6 +435,7 @@ async function toRows(
         photos: await Promise.all(
           (a.mediaIds ?? []).map(async (id) => ({ id, url: await signedMediaUrl(secret, id) })),
         ),
+        posterUrl: a.posterMediaId ? await signedMediaUrl(secret, a.posterMediaId) : null,
         tint:
           a.tintColor !== null ? { color: a.tintColor, strength: a.tintStrength ?? 0.35 } : null,
         templateId: a.templateId,

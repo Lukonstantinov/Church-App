@@ -14,7 +14,7 @@ import type { AuthVariables } from '../auth/middleware';
 import { memberships, positions } from '../db/schema';
 import { accessIn, assertCan } from '../lib/access';
 import { audit } from '../lib/audit';
-import { listPositions, permsOf } from '../lib/positions';
+import { listPositions, permsOf, roleFor } from '../lib/positions';
 import { idParam, parseBody } from './util';
 
 /** A position's look as stored: the full look, colours in lower case. */
@@ -127,12 +127,18 @@ positionRoutes.delete('/:id', async (c) => {
   const { db, user, pos, mine } = await loadPosition(c, idParam(c));
   assertNoEscalation(mine, permsOf(pos));
   if (pos.isDefault) throw new HTTPException(409, { message: 'default_position' });
-  const holder = await db.query.memberships.findFirst({
-    columns: { id: true },
-    where: and(eq(memberships.positionId, pos.id), eq(memberships.status, 'active')),
+  // People who held it become plain members: the default position and its rights
+  // (usually none — they still see posts and events).
+  const fallback = await db.query.positions.findFirst({
+    where: and(eq(positions.groupId, pos.groupId), eq(positions.isDefault, true)),
   });
-  if (holder) throw new HTTPException(409, { message: 'position_in_use' });
-  await db.update(memberships).set({ positionId: null }).where(eq(memberships.positionId, pos.id));
+  await db
+    .update(memberships)
+    .set({
+      positionId: fallback?.id ?? null,
+      role: fallback ? roleFor(permsOf(fallback)) : 'member',
+    })
+    .where(eq(memberships.positionId, pos.id));
   await db.delete(positions).where(eq(positions.id, pos.id));
   await audit(db, {
     actorUserId: user.id,

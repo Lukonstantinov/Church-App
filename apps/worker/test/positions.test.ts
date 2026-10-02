@@ -175,15 +175,16 @@ describe('positions', () => {
     const u = fakeUser('Фотограф');
     const row = await join(u, g);
     await assign(row.membershipId, media.id);
-    expect(
-      (await api(`/api/positions/${media.id}`, { method: 'DELETE', user: ADMIN })).status,
-    ).toBe(409);
-    await assign(row.membershipId, def.id);
+    // Deleting a position people hold: they become plain members (the default position).
     const after = await apiJson<PositionRow[]>(`/api/positions/${media.id}`, {
       method: 'DELETE',
       user: ADMIN,
     });
     expect(after.map((p) => p.name)).not.toContain('Медиа');
+    const me = (await apiJson<MemberRow[]>(`/api/groups/${g.id}/members`, { user: ADMIN })).find(
+      (m) => m.membershipId === row.membershipId,
+    )!;
+    expect(me).toMatchObject({ positionId: def.id, role: 'member' });
   });
 
   it('switching the default position changes what new members get', async () => {

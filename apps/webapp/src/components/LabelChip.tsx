@@ -30,7 +30,9 @@ export function PersonTags({
   labels: LabelRef[];
 }) {
   const showPosition = positionName && !defaultPosition;
-  const showLeader = role === 'leader' && positionName !== leaderText;
+  // The generic "Leader" tag only when no position of their own says it already
+  // (a "Youth leader" with leader rights shows just that).
+  const showLeader = role === 'leader' && !showPosition && positionName !== leaderText;
   if (!showPosition && !showLeader && labels.length === 0) return null;
   return (
     <span className={`${inline ? '' : 'mt-1 '}flex flex-wrap items-center gap-1`}>

@@ -12,7 +12,14 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useDeletePost, useMe, usePinPost, useReact, useResendPost } from '../lib/queries';
+import {
+  useDeletePost,
+  useMe,
+  useMembers,
+  usePinPost,
+  useReact,
+  useResendPost,
+} from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
 import {
   AudienceChoice,
@@ -24,7 +31,7 @@ import {
 import { IconEdit, IconMegaphone, IconMore, IconSend, IconTrash } from './icons';
 import { Sheet, SheetOption } from './Sheet';
 import { useToast } from './Toast';
-import { Button } from './ui';
+import { Button, Toggle } from './ui';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { PostBlocks } from './PostBlocks';
 import { RichText } from './RichText';
@@ -255,11 +262,8 @@ export function PostMenu({ post, onDeleted }: { post: AnnouncementRow; onDeleted
   const { push } = useNav();
   const pin = usePinPost(post.groupId);
   const del = useDeletePost(post.groupId);
-  const resend = useResendPost();
   const [open, setOpen] = useState(false);
   const [resendOpen, setResendOpen] = useState(false);
-  const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
-  const presets: AudiencePreset[] = [{ key: 'all', label: t.meetings.everyone, ids: null }];
   if (!post.canPin && !post.canEdit && !post.canDelete) return null;
   const run = async (action: () => Promise<unknown>) => {
     setOpen(false);
@@ -328,36 +332,100 @@ export function PostMenu({ post, onDeleted }: { post: AnnouncementRow; onDeleted
           />
         )}
       </Sheet>
-      <Sheet open={resendOpen} onClose={() => setResendOpen(false)} title={t.feed.resendTitle}>
-        <div className="flex flex-col gap-3 px-5 pb-4">
-          <AudienceChoice
-            groupId={post.groupId}
-            presets={presets}
-            value={audience}
-            onChange={setAudience}
-          />
-          <Button
-            disabled={resend.isPending || audienceEmpty(audience, presets)}
-            onClick={async () => {
-              try {
-                const res = await resend.mutateAsync({
-                  postId: post.id,
-                  userIds: audienceIds(audience, presets),
-                });
-                haptic.success();
-                toast(t.events.remindSent(res.sent));
-                setResendOpen(false);
-              } catch {
-                haptic.error();
-                toast(t.common.actionFailed, 'error');
-              }
-            }}
-          >
-            <IconSend size={16} /> {t.feed.resendSend}
-          </Button>
-        </div>
-      </Sheet>
+      {resendOpen && <ResendSheet post={post} onClose={() => setResendOpen(false)} />}
     </span>
+  );
+}
+
+/**
+ * Send a post again: the text to read and change (the first line is the headline), its
+ * picture on or off, and who gets it — everyone, the leaders or chosen people.
+ */
+function ResendSheet({ post, onClose }: { post: AnnouncementRow; onClose: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  const resend = useResendPost();
+  const members = useMembers(post.groupId);
+  const original = [post.title, post.text].filter(Boolean).join('\n');
+  const [text, setText] = useState(original);
+  const picture = post.posterUrl ?? post.photos[0]?.url ?? null;
+  const [withPoster, setWithPoster] = useState(true);
+  const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
+  const leaders = (members.data ?? [])
+    .filter((m) => m.status === 'active' && m.role === 'leader')
+    .map((m) => m.userId);
+  const presets: AudiencePreset[] = [
+    { key: 'all', label: t.meetings.everyone, ids: null },
+    ...(members.data ? [{ key: 'leaders', label: t.meetings.leadersOnly, ids: leaders }] : []),
+  ];
+
+  async function send() {
+    try {
+      const edited = text.trim() !== original.trim();
+      const res = await resend.mutateAsync({
+        postId: post.id,
+        userIds: audienceIds(audience, presets),
+        // Unchanged: the post goes as it is (with all its text blocks).
+        text: edited ? text.trim() : null,
+        poster: withPoster,
+      });
+      haptic.success();
+      toast(t.events.remindSent(res.sent));
+      onClose();
+    } catch {
+      haptic.error();
+      toast(t.common.actionFailed, 'error');
+    }
+  }
+
+  return (
+    <Sheet open onClose={onClose} title={t.feed.resendTitle}>
+      <div className="flex flex-col gap-3 px-5 pb-4">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[13px] text-hint">{t.events.remindText}</span>
+          <button
+            type="button"
+            onClick={() => setText(original)}
+            className="text-[13px] font-semibold text-link"
+          >
+            {t.meetings.resetText}
+          </button>
+        </div>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={3000}
+          rows={7}
+          className="w-full resize-y rounded-xl bg-hairline px-3 py-2.5 text-[15px] leading-snug outline-none"
+        />
+        {picture && (
+          <div className="overflow-hidden rounded-2xl ring-1 ring-hairline">
+            <div className="px-1">
+              <Toggle label={t.events.withPoster} checked={withPoster} onChange={setWithPoster} />
+            </div>
+            {withPoster && (
+              <img
+                src={picture}
+                alt=""
+                className="mx-4 mb-3 mt-1 max-h-48 w-[calc(100%-2rem)] rounded-lg object-cover"
+              />
+            )}
+          </div>
+        )}
+        <AudienceChoice
+          groupId={post.groupId}
+          presets={presets}
+          value={audience}
+          onChange={setAudience}
+        />
+        <Button
+          disabled={resend.isPending || !text.trim() || audienceEmpty(audience, presets)}
+          onClick={() => void send()}
+        >
+          <IconSend size={16} /> {t.feed.resendSend}
+        </Button>
+      </div>
+    </Sheet>
   );
 }
 

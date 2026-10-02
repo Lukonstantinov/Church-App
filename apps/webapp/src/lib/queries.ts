@@ -10,6 +10,7 @@ import type {
   LabelRef,
   SetMemberLabelsInput,
   GroupStatistics,
+  AnnounceMeetingInput,
   ResendPostInput,
   RemindEventInput,
   MessageTemplateInput,
@@ -430,6 +431,18 @@ export function useNotifyMeeting() {
     mutationFn: ({ id, ...input }: NotifyMeetingInput & { id: number }) =>
       apiFetch<{ sent: boolean }>(`/meetings/${id}/notify`, { method: 'POST', ...json(input) }),
     onSuccess: invalidate,
+  });
+}
+
+/** The default announcement of a meeting (sender's language), to read and change. */
+export const fetchMeetingAnnounceText = (meetingId: number) =>
+  apiFetch<{ text: string }>(`/meetings/${meetingId}/announce-text`);
+
+/** Tell everyone (or leaders / chosen people) about a meeting, with its poster. */
+export function useAnnounceMeeting() {
+  return useMutation({
+    mutationFn: ({ id, ...input }: AnnounceMeetingInput & { id: number }) =>
+      apiFetch<{ sent: number; bot: number }>(`/meetings/${id}/announce`, send('POST', input)),
   });
 }
 

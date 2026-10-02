@@ -1534,3 +1534,94 @@ describe('label looks and position looks', () => {
     expect(plain.find((p) => p.id === pos.id)!.look).toBeNull();
   });
 });
+
+describe('announcing a meeting and resending a post with an edited text', () => {
+  it('meeting: default text, poster, chosen people, edited text; post: edited text without poster', async () => {
+    const g = await createEnv('Объявления встреч');
+    const a = fakeUser('Спикер');
+    const b = fakeUser('Слушатель');
+    const aId = await join(a, g);
+    const bId = await join(b, g);
+    const date = addDays(localDate(new Date(), TZ), 3);
+    const m = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, startTime: '19:00', durationMin: 120, title: 'Молодёжка' },
+    });
+    await patch(m.id, { leaderUserId: aId, topic: 'Вера и дела', location: 'Šeškinės 22A' });
+
+    const def = await apiJson<{ text: string }>(`/api/meetings/${m.id}/announce-text`, {
+      user: ADMIN,
+    });
+    expect(def.text).toContain('📣 Молодёжка');
+    expect(def.text).toContain('«Вера и дела»');
+    expect(def.text).toContain('📍 Šeškinės 22A');
+    expect(def.text).toContain('🎤 Ведущий: Спикер');
+    // Members can't announce.
+    expect(
+      (await api(`/api/meetings/${m.id}/announce`, { method: 'POST', user: b, json: {} })).status,
+    ).toBe(403);
+
+    const poster = (
+      (await (
+        await api(`/api/groups/${g.id}/media?kind=event`, {
+          method: 'POST',
+          user: ADMIN,
+          body: PNG,
+        })
+      ).json()) as { id: number }
+    ).id;
+    calls.length = 0;
+    const one = await apiJson<{ sent: number }>(`/api/meetings/${m.id}/announce`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { userIds: [bId], posterMediaId: poster },
+    });
+    expect(one.sent).toBe(1);
+    let photo;
+    for (let i = 0; i < 20 && !photo; i++) {
+      photo = calls.find((c) => c.method === 'sendPhoto' && c.body.chat_id === b.id);
+      if (!photo) await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(photo!.body.photo).toEqual({ upload: true });
+    expect(String(photo!.body.caption)).toContain('<b>📣 Молодёжка</b>');
+    expect(String(photo!.body.caption)).toContain('Отправил(а): Админ');
+    expect(JSON.stringify(photo!.body.reply_markup)).toContain(`?meeting=${m.id}`);
+    expect(calls.some((c) => c.body.chat_id === a.id)).toBe(false);
+    const inbox = await apiJson<{ items: { kind: string }[] }>('/api/me/notifications', {
+      user: b,
+    });
+    expect(inbox.items[0]!.kind).toBe('meeting_announce');
+
+    // Edited text, to everyone, no poster.
+    calls.length = 0;
+    await apiJson(`/api/meetings/${m.id}/announce`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { text: 'Сегодня встреча!\nПриходите пораньше' },
+    });
+    expect(String((await sentTo(a.id, 'Сегодня встреча'))!.body.text)).toContain(
+      '<b>Сегодня встреча!</b>\nПриходите пораньше',
+    );
+
+    // A post sent again with a new text and without its picture.
+    const post = await apiJson<{ announcement: { id: number } }>(
+      `/api/groups/${g.id}/announcements`,
+      {
+        method: 'POST',
+        user: ADMIN,
+        json: { text: 'Старый текст поста', mediaIds: [poster], notify: false },
+      },
+    );
+    calls.length = 0;
+    await apiJson(`/api/announcements/${post.announcement.id}/resend`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { userIds: [aId], text: 'Новый заголовок\nи пара строк', poster: false },
+    });
+    const re = String((await sentTo(a.id, 'Новый заголовок'))!.body.text);
+    expect(re).toContain('<b>Новый заголовок</b>\nи пара строк');
+    expect(re).not.toContain('Старый текст поста');
+    expect(callsTo(calls, 'sendPhoto', a.id)).toHaveLength(0);
+  });
+});

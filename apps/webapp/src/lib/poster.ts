@@ -4,10 +4,16 @@ import { MEDIA_MAX_BYTES } from '@church/shared';
  * Draws a rendered cover as a JPEG small enough to upload (the bot sends it as a
  * picture). Lowers the size and quality until it fits; null when it can't be drawn.
  */
-export async function capturePoster(node: HTMLElement): Promise<Blob | null> {
+export async function capturePoster(node: HTMLElement, sharp = false): Promise<Blob | null> {
   try {
     const { toJpeg } = await import('html-to-image');
     const attempts = [
+      ...(sharp
+        ? ([
+            [2, 0.88],
+            [2, 0.72],
+          ] as const)
+        : []),
       [1.5, 0.85],
       [1.5, 0.7],
       [1, 0.7],
