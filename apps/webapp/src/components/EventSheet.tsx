@@ -10,9 +10,28 @@ import { useEventWhen } from './EventCard';
 import { useT } from '../lib/i18n';
 import { LookTop } from './LookTop';
 import { ProgramList } from './EventProgram';
+import { useMoney } from './money';
 
 /** Width the poster is drawn at (and captured at, twice over). */
 export const SHEET_WIDTH = 720;
+
+/** The parts of the sheet below the poster that can be shown or left out. */
+export const SHEET_PARTS = ['description', 'program', 'roles', 'going', 'finance'] as const;
+export type SheetPart = (typeof SHEET_PARTS)[number];
+
+/** Which parts this event has anything for (finance only for people who see the money). */
+export const availableParts = (e: EventDetail): SheetPart[] =>
+  SHEET_PARTS.filter((p) =>
+    p === 'description'
+      ? !!e.description
+      : p === 'program'
+        ? e.program.length > 0
+        : p === 'roles'
+          ? e.roles.length > 0
+          : p === 'going'
+            ? e.rsvps.going.length > 0
+            : e.finance !== null,
+  );
 
 /**
  * The event as one tall poster: cover with title, when and where; the church's label
@@ -21,9 +40,17 @@ export const SHEET_WIDTH = 720;
  */
 export const EventSheet = forwardRef<
   HTMLDivElement,
-  { e: EventDetail; g: GroupSummary | undefined; church: ChurchInfo }
->(function EventSheet({ e, g, church }, ref) {
+  {
+    e: EventDetail;
+    g: GroupSummary | undefined;
+    church: ChurchInfo;
+    /** What to show under the poster (default: everything the event has). */
+    parts?: readonly SheetPart[];
+  }
+>(function EventSheet({ e, g, church, parts = SHEET_PARTS }, ref) {
   const t = useT();
+  const money = useMoney();
+  const show = (p: SheetPart) => parts.includes(p);
   const when = useEventWhen();
   const label = church.sheetLabel || church.name;
   return (
@@ -60,11 +87,11 @@ export const EventSheet = forwardRef<
       </LookTop>
 
       <div className="flex flex-col gap-8 px-9 py-9">
-        {e.description && (
+        {show('description') && e.description && (
           <p className="whitespace-pre-line text-[21px] leading-relaxed">{e.description}</p>
         )}
 
-        {e.program.length > 0 && (
+        {show('program') && e.program.length > 0 && (
           <section>
             <h2 className="mb-3 text-[24px] font-extrabold">{t.events.program}</h2>
             <div className="overflow-hidden rounded-2xl border border-[#e5e7eb] text-[19px]">
@@ -73,7 +100,7 @@ export const EventSheet = forwardRef<
           </section>
         )}
 
-        {e.roles.length > 0 && (
+        {show('roles') && e.roles.length > 0 && (
           <section>
             <h2 className="mb-3 text-[24px] font-extrabold">{t.events.sheetTitle}</h2>
             <div className="overflow-hidden rounded-2xl border border-[#e5e7eb]">
@@ -123,6 +150,55 @@ export const EventSheet = forwardRef<
             </div>
             {e.roles.some((r) => r.leader) && (
               <p className="mt-2 text-[15px] text-[#6b7280]">★ — {t.events.colLeader}</p>
+            )}
+          </section>
+        )}
+
+        {show('going') && e.rsvps.going.length > 0 && (
+          <section>
+            <h2 className="mb-3 text-[24px] font-extrabold">
+              {t.events.sheetGoing} · {e.rsvps.going.length}
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {e.rsvps.going.map((p) => (
+                <span
+                  key={p.id}
+                  className="rounded-full bg-[#f3f4f6] px-3.5 py-1 text-[17px] font-semibold"
+                >
+                  {displayName(p)}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {show('finance') && e.finance && (
+          <section>
+            <h2 className="mb-3 text-[24px] font-extrabold">{t.events.sheetFinance}</h2>
+            <div className="grid grid-cols-3 gap-3">
+              {(
+                [
+                  [t.events.sheetPrice, e.finance.priceCents],
+                  [t.events.sheetCollected, e.finance.collectedCents],
+                  [t.events.sheetSpent, e.finance.expenseCents],
+                ] as const
+              ).map(([label, cents]) => (
+                <div key={label} className="rounded-2xl bg-[#f3f4f6] px-4 py-3">
+                  <div className="text-[15px] text-[#6b7280]">{label}</div>
+                  <div className="text-[24px] font-extrabold">
+                    {cents === null ? '—' : money(cents)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {e.finance.people.some((p) => p.paidCents > 0) && (
+              <div className="mt-3 text-[17px]">
+                <b>{t.events.sheetPaid}:</b>{' '}
+                {e.finance.people
+                  .filter((p) => p.paidCents > 0)
+                  .map((p) => `${displayName(p.member)} (${money(p.paidCents)})`)
+                  .join(', ')}
+              </div>
             )}
           </section>
         )}

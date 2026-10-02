@@ -1,4 +1,5 @@
 import { labelLookSchema, type LabelLook } from './labels';
+import { appBackgroundSchema, type AppBackground } from './background';
 import { z } from 'zod';
 import {
   ENTER_ANIMATIONS,
@@ -50,6 +51,8 @@ export interface ChurchInfo {
   logoUrl: string | null;
   /** What is printed top right on event posters and PDFs; empty = the church's name. */
   sheetLabel: string | null;
+  /** The main window's background (null = the default). */
+  appBackground: AppBackground | null;
 }
 
 export const updateMeSchema = z.object({ locale: z.enum(LOCALES) });
@@ -65,6 +68,7 @@ export const updateChurchSchema = z.object({
   defaultLocale: z.enum(LOCALES).optional(),
   brandColor: z.string().refine(isBrandValue, 'theme').optional(),
   sheetLabel: z.string().trim().max(40).nullable().optional(),
+  appBackground: appBackgroundSchema.nullable().optional(),
 });
 export type UpdateChurchInput = z.input<typeof updateChurchSchema>;
 
@@ -123,6 +127,8 @@ export interface GroupSummary {
   /** Photo behind the card (whole or split with the pattern). */
   backdrop: BackdropConfig | null;
   backdropUrl: string | null;
+  /** The background of this ministry's screens (null = the default). */
+  pageBackground: AppBackground | null;
 }
 
 export interface GroupDetail extends GroupSummary {
@@ -165,6 +171,7 @@ export const updateGroupSchema = z.object({
     .optional(),
   logoMediaId: z.number().int().positive().nullable().optional(),
   backdrop: backdropSchema.nullable().optional(),
+  pageBackground: appBackgroundSchema.nullable().optional(),
   name: name.optional(),
   description: optionalText(300).optional(),
   chatUrl: chatUrlSchema.optional(),

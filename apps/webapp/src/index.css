@@ -917,3 +917,66 @@ html[data-motion='off'] .burn-orbit::before {
     color: #f87171;
   }
 }
+
+/* ---------- App background (church / ministry setting) ---------- */
+.app-bg-drift {
+  background-size: 160% 160%;
+  animation: app-bg-drift 28s ease-in-out infinite alternate;
+}
+@keyframes app-bg-drift {
+  from {
+    background-position: 0% 0%;
+    transform: rotate(0deg) scale(1);
+  }
+  to {
+    background-position: 100% 100%;
+    transform: rotate(4deg) scale(1.05);
+  }
+}
+.app-bg-breathe {
+  animation: app-bg-breathe 9s ease-in-out infinite;
+}
+@keyframes app-bg-breathe {
+  50% {
+    opacity: 0.6;
+  }
+}
+.app-bg-blob {
+  animation: app-bg-blob 24s ease-in-out infinite alternate;
+}
+.app-bg-blob-2 {
+  animation-duration: 31s;
+  animation-direction: alternate-reverse;
+}
+@keyframes app-bg-blob {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(18vw, 22vh) scale(1.2);
+  }
+}
+.app-tex-dots {
+  background: radial-gradient(currentColor 1.2px, transparent 1.8px) 0 0 / 18px 18px;
+}
+.app-tex-grid {
+  background:
+    linear-gradient(currentColor 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(90deg, currentColor 1px, transparent 1px) 0 0 / 28px 28px;
+  opacity: 0.6;
+}
+.app-tex-stripes {
+  background: repeating-linear-gradient(-45deg, currentColor 0 2px, transparent 2px 16px);
+}
+.app-tex-waves {
+  background: radial-gradient(circle at 50% 0, transparent 9px, currentColor 10px, transparent 11px)
+    0 0 / 24px 14px;
+}
+.app-tex-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+html[data-motion='calm'] [class*='app-bg-'],
+html[data-motion='off'] [class*='app-bg-'] {
+  animation: none;
+}

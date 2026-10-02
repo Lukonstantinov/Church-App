@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { LabelExtra, LabelLook } from '@church/shared';
+import type { AppBackground, LabelExtra, LabelLook } from '@church/shared';
 import {
   check,
   customType,
@@ -42,6 +42,8 @@ export const churchSettings = sqliteTable(
     logoUpdatedAt: text('logo_updated_at'),
     /** The label printed top right on posters and PDFs (empty = the church's name). */
     sheetLabel: text('sheet_label'),
+    /** The main window's background (AppBackground JSON; NULL = the default). */
+    appBackground: text('app_background', { mode: 'json' }).$type<AppBackground>(),
   },
   (t) => [check('church_settings_singleton', sql`${t.id} = 1`)],
 );
@@ -108,6 +110,8 @@ export const groups = sqliteTable('groups', {
   eventReminderHours: integer('event_reminder_hours'),
   /** Photo behind the ministry card (BackdropConfig JSON), NULL = colours only. */
   backdrop: text('backdrop'),
+  /** The background of the ministry's screens (AppBackground JSON; NULL = the default). */
+  pageBackground: text('page_background', { mode: 'json' }).$type<AppBackground>(),
   archivedAt: text('archived_at'),
   createdAt: createdAt(),
 });

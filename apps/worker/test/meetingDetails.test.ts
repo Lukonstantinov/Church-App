@@ -1720,3 +1720,49 @@ describe('leaders meetings: ask who comes, time changes and cancellation', () =>
     expect(off).not.toContain('Придёте?');
   });
 });
+
+describe('app backgrounds', () => {
+  it('the church and each ministry keep their own background', async () => {
+    const g = await createEnv('Фон служения');
+    const church = await apiJson<{ appBackground: unknown }>('/api/church', {
+      method: 'PATCH',
+      user: ADMIN,
+      json: {
+        appBackground: { source: 'color', colors: ['#3b82f6', '#a855f7'], strength: 0.5 },
+      },
+    });
+    expect(church.appBackground).toMatchObject({
+      source: 'color',
+      colors: ['#3b82f6', '#a855f7'],
+      strength: 0.5,
+      texture: 'none',
+      animation: 'none',
+    });
+    await apiJson(`/api/groups/${g.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { pageBackground: { source: 'theme', texture: 'pattern', animation: 'aurora' } },
+    });
+    const detail = await apiJson<GroupDetail>(`/api/groups/${g.id}`, { user: ADMIN });
+    expect(detail.pageBackground).toMatchObject({ source: 'theme', animation: 'aurora' });
+    // Bad values are refused; null brings the default back.
+    expect(
+      (
+        await api(`/api/groups/${g.id}`, {
+          method: 'PATCH',
+          user: ADMIN,
+          json: { pageBackground: { source: 'neon' } },
+        })
+      ).status,
+    ).toBe(400);
+    await apiJson(`/api/groups/${g.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { pageBackground: null },
+    });
+    expect(
+      (await apiJson<GroupDetail>(`/api/groups/${g.id}`, { user: ADMIN })).pageBackground,
+    ).toBeNull();
+    await apiJson('/api/church', { method: 'PATCH', user: ADMIN, json: { appBackground: null } });
+  });
+});

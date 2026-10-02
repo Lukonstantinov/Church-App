@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { BackgroundEditor } from '../components/BackgroundEditor';
 import type { GroupDetail } from '@church/shared';
 import { IconImage, IconTelegram, IconTrash } from '../components/icons';
 import { PatternDesigner } from '../components/PatternDesigner';
@@ -170,6 +171,17 @@ function Form({ g }: { g: GroupDetail }) {
           fallbackTheme={churchTheme}
           saving={update.isPending}
           onSave={(look) => void patchNow(look)}
+        />
+      </Section>
+
+      <Section title={t.appBg.title}>
+        <BackgroundEditor
+          value={g.pageBackground}
+          look={g}
+          saving={update.isPending}
+          onSave={async (pageBackground) => {
+            await update.mutateAsync({ pageBackground });
+          }}
         />
       </Section>
 

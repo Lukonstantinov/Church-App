@@ -142,6 +142,7 @@ async function summarize(
         logoUrl: groupLogoUrl(g),
         backdrop,
         backdropUrl: backdrop ? await signedMediaUrl(secret, backdrop.mediaId) : null,
+        pageBackground: g.pageBackground ?? null,
       };
     }),
   );

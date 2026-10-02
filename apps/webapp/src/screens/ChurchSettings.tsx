@@ -1,3 +1,4 @@
+import { BackgroundEditor } from '../components/BackgroundEditor';
 import { useRef, useState } from 'react';
 import { LOCALE_NAMES, LOCALES, type Locale } from '@church/shared';
 import { ChurchLogo } from '../components/BrandHeader';
@@ -168,6 +169,18 @@ export function ChurchSettings() {
 
       <Section title={t.settings.color} footer={t.settings.colorHint}>
         <ThemePicker value={church.brandColor} onChange={(v) => v && void pickColor(v)} />
+      </Section>
+
+      <Section title={t.appBg.title}>
+        <BackgroundEditor
+          church
+          value={church.appBackground}
+          look={{ brandColor: church.brandColor, pattern: null, logoUrl: church.logoUrl }}
+          saving={update.isPending}
+          onSave={async (appBackground) => {
+            await update.mutateAsync({ appBackground });
+          }}
+        />
       </Section>
 
       <Section title={t.settings.defaultLanguage} footer={t.settings.defaultLanguageHint}>

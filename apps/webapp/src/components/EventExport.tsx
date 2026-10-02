@@ -7,7 +7,8 @@ import { useT } from '../lib/i18n';
 import { sendDocumentToChat, sendPictureToChat, useGroup, useMe } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 import { useEventWhen } from './EventCard';
-import { EventSheet, SHEET_WIDTH } from './EventSheet';
+import { EventSheet, SHEET_WIDTH, availableParts, type SheetPart } from './EventSheet';
+import { Pill } from './LookControls';
 import { IconCheck, IconSend } from './icons';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
@@ -30,6 +31,11 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
   const when = useEventWhen();
   const node = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState<Job | null>(null);
+  // What the picture shows under the poster: everything except the money, to start with.
+  const available = availableParts(e);
+  const [parts, setParts] = useState<SheetPart[]>(available.filter((p) => p !== 'finance'));
+  const togglePart = (p: SheetPart) =>
+    setParts((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]));
   const [done, setDone] = useState<Job | null>(null);
   // The poster's full height, so the small preview can scroll through all of it.
   const [height, setHeight] = useState(900);
@@ -40,7 +46,7 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
     const watch = new ResizeObserver(() => setHeight(el.offsetHeight));
     watch.observe(el);
     return () => watch.disconnect();
-  }, [church]);
+  }, [church, parts]);
   if (!church) return null;
 
   /** The poster as an image: PNG, or a JPEG when the PNG would be too big to send. */
@@ -120,10 +126,33 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
                 height: height * 0.42,
               }}
             >
-              <EventSheet ref={node} e={e} g={group.data} church={church} />
+              <EventSheet ref={node} e={e} g={group.data} church={church} parts={parts} />
             </div>
           </div>
         </div>
+        {available.length > 0 && (
+          <div>
+            <div className="mb-2 text-[13px] text-hint">{t.events.sheetShow}</div>
+            <div className="flex flex-wrap gap-2">
+              {available.map((p) => (
+                <Pill
+                  key={p}
+                  on={parts.includes(p)}
+                  onClick={() => togglePart(p)}
+                  label={
+                    {
+                      description: t.events.partDescription,
+                      program: t.events.partProgram,
+                      roles: t.events.partRoles,
+                      going: t.events.partGoing,
+                      finance: t.events.partFinance,
+                    }[p]
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        )}
         {btn('picture', t.events.exportPicture, 'primary')}
         {btn('file', t.events.exportPictureFile)}
         {btn('pdf', t.events.exportPdf)}

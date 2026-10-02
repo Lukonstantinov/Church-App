@@ -11,3 +11,4 @@ export * from './events';
 export * from './permissions';
 export * from './posts';
 export * from './labels';
+export * from './background';

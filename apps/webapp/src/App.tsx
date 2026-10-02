@@ -8,6 +8,7 @@ import { applyBrand } from './lib/theme';
 import { useGroups, useMe } from './lib/queries';
 import { EnvProvider, soloEnvironment, useEnv } from './lib/env';
 import { Hub } from './screens/Hub';
+import { AppBackdrop } from './components/AppBackdrop';
 import { AddPerson } from './screens/AddPerson';
 import { PositionEditor, Positions } from './screens/Positions';
 import { isInsideTelegram } from './lib/telegram';
@@ -64,7 +65,19 @@ function Themed({ me, children }: { me: MeResponse; children: React.ReactNode })
   const env = groups.data?.find((g) => g.id === id) ?? null;
   const theme = env?.brandColor ?? me.church.brandColor;
   useEffect(() => applyBrand(theme), [theme]);
-  return <EnvProvider env={env}>{children}</EnvProvider>;
+  // Inside a ministry: its background; on the main window: the church's.
+  const bg = env ? env.pageBackground : me.church.appBackground;
+  const look = env ?? {
+    brandColor: me.church.brandColor,
+    pattern: null,
+    logoUrl: me.church.logoUrl,
+  };
+  return (
+    <EnvProvider env={env}>
+      <AppBackdrop bg={bg} look={look} />
+      {children}
+    </EnvProvider>
+  );
 }
 
 function Router({ me }: { me: MeResponse }) {

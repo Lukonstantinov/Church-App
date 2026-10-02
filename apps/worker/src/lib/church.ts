@@ -20,6 +20,7 @@ export async function getChurch(db: Db): Promise<ChurchInfo> {
       brandColor: true,
       logoUpdatedAt: true,
       sheetLabel: true,
+      appBackground: true,
     },
   });
   const brand = row?.brandColor ?? DEFAULT_BRAND;
@@ -31,6 +32,7 @@ export async function getChurch(db: Db): Promise<ChurchInfo> {
     brandColor: isBrandValue(brand) ? brand : DEFAULT_BRAND,
     logoUrl: row?.logoUpdatedAt ? `/media/logo?v=${encodeURIComponent(row.logoUpdatedAt)}` : null,
     sheetLabel: row?.sheetLabel || null,
+    appBackground: row?.appBackground ?? null,
   };
 }
 
