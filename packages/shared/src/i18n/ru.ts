@@ -421,6 +421,7 @@ export const ru = {
     failed: 'Не удалось создать встречу',
   },
   people: {
+    all: 'Все',
     attendanceRate: 'Посещаемость',
     serves: 'Служит',
     position: 'Должность',

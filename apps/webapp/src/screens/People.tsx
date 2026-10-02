@@ -48,20 +48,31 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
   const list = members.data ?? [];
   const pending = can('people.manage') ? list.filter((m) => m.status === 'pending') : [];
   const activeList = list.filter((m) => m.status === 'active');
-  // Sections per position (in the ministry's order); the default one is the main list.
+  // One list for everyone, in the ministry's position order (leaders first), then by name;
+  // chips filter it by position.
   const defaultId = positions.data?.find((p) => p.isDefault)?.id ?? null;
-  const special = (positions.data ?? [])
-    .filter((p) => !p.isDefault)
-    .map((p) => ({ p, people: activeList.filter((m) => m.positionId === p.id) }))
-    .filter((x) => x.people.length > 0);
-  const specialIds = new Set(special.map((x) => x.p.id));
-  const regular = activeList.filter(
-    (m) => m.positionId === defaultId || m.positionId === null || !specialIds.has(m.positionId),
+  const order = new Map((positions.data ?? []).map((p, i) => [p.id, p.isDefault ? 999 : i]));
+  const rank = (m: MemberRow) => order.get(m.positionId ?? -1) ?? 999;
+  const sorted = [...activeList].sort(
+    (a, b) => rank(a) - rank(b) || displayName(a).localeCompare(displayName(b)),
   );
+  const chips = (positions.data ?? [])
+    .map((p) => ({
+      p,
+      n: activeList.filter((m) =>
+        p.isDefault ? m.positionId === p.id || m.positionId === null : m.positionId === p.id,
+      ).length,
+    }))
+    .filter((x) => x.n > 0);
+  const [only, setOnly] = useState<number | null>(null);
   const q = query.trim().toLocaleLowerCase();
-  const filtered = q
-    ? regular.filter((m) => displayName(m).toLocaleLowerCase().includes(q))
-    : regular;
+  const filtered = sorted.filter(
+    (m) =>
+      (only === null || m.positionId === only || (only === defaultId && m.positionId === null)) &&
+      (!q ||
+        displayName(m).toLocaleLowerCase().includes(q) ||
+        (m.username ?? '').toLocaleLowerCase().includes(q)),
+  );
 
   async function decide(m: MemberRow, approve: boolean) {
     try {
@@ -175,14 +186,8 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
         </Section>
       )}
 
-      {special.map(({ p, people }) => (
-        <Section key={p.id} title={`${p.name} · ${people.length}`}>
-          {people.map(row)}
-        </Section>
-      ))}
-
       <div className="flex flex-col gap-3">
-        {regular.length > 8 && (
+        {activeList.length > 5 && (
           <label className="glass flex min-h-[46px] items-center gap-2 rounded-2xl px-3 shadow-card">
             <IconSearch size={18} className="text-hint" />
             <input
@@ -193,8 +198,20 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
             />
           </label>
         )}
-        <Section title={positions.data?.find((p) => p.isDefault)?.name ?? t.people.members}>
-          {members.isPending ? null : regular.length === 0 ? (
+        {chips.length > 1 && (
+          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
+            <FilterChip on={only === null} onClick={() => setOnly(null)}>
+              {t.people.all} · {activeList.length}
+            </FilterChip>
+            {chips.map(({ p, n }) => (
+              <FilterChip key={p.id} on={only === p.id} onClick={() => setOnly(p.id)}>
+                {p.name} · {n}
+              </FilterChip>
+            ))}
+          </div>
+        )}
+        <Section title={`${t.people.members} · ${filtered.length}`}>
+          {members.isPending ? null : activeList.length === 0 ? (
             <EmptyState icon={<IconUsers size={26} />} title={t.people.emptyTitle}>
               {t.people.emptyText}
             </EmptyState>
@@ -317,5 +334,30 @@ function PersonDetails({
         </Button>
       </div>
     </div>
+  );
+}
+
+function FilterChip({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        haptic.tap();
+        onClick();
+      }}
+      className={`shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-semibold transition active:scale-95 ${
+        on ? 'brand-gradient text-white shadow-cta' : 'glass shadow-card'
+      }`}
+    >
+      {children}
+    </button>
   );
 }

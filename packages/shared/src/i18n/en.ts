@@ -415,6 +415,7 @@ export const en: Messages = {
     failed: 'Couldn’t create the meeting',
   },
   people: {
+    all: 'All',
     attendanceRate: 'Attendance',
     serves: 'Serves in',
     position: 'Position',

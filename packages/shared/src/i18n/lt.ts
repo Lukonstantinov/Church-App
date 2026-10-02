@@ -417,6 +417,7 @@ export const lt: Messages = {
     failed: 'Nepavyko sukurti susitikimo',
   },
   people: {
+    all: 'Visi',
     attendanceRate: 'Lankomumas',
     serves: 'Tarnauja',
     position: 'Pareigos',
