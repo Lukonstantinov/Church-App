@@ -9,6 +9,7 @@ import type {
   LabelInput,
   LabelRef,
   SetMemberLabelsInput,
+  GroupStatistics,
   ResendPostInput,
   RemindEventInput,
   MessageTemplateInput,
@@ -1016,6 +1017,16 @@ export const fetchTreasuryExport = (groupId: number, p: ReportPeriod) =>
   apiFetch<TreasuryExport>(`/groups/${groupId}/treasury/export?${periodQuery(p)}`);
 export const fetchDues = (groupId: number, year: number) =>
   apiFetch<DuesSheet>(`/groups/${groupId}/dues?year=${year}`);
+/** The statistics screen: totals, people, meetings and events of a period. */
+export function useStatistics(groupId: number, p: ReportPeriod, enabled = true) {
+  return useQuery({
+    queryKey: ['groups', groupId, 'statistics', p.from, p.to],
+    queryFn: () => apiFetch<GroupStatistics>(`/groups/${groupId}/statistics?${periodQuery(p)}`),
+    enabled,
+    placeholderData: (prev) => prev,
+  });
+}
+
 export const fetchAttendanceExport = (groupId: number, p: ReportPeriod) =>
   apiFetch<AttendanceExport>(`/groups/${groupId}/attendance/export?${periodQuery(p)}`);
 

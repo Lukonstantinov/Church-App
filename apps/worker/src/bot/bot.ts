@@ -4,7 +4,7 @@ import { displayName, messages, type Messages } from '@church/shared';
 import { adminTelegramIds, type Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { events, memberships, type User } from '../db/schema';
-import { eventRoster, rosterMessage } from '../lib/eventRoster';
+import { eventPictureId, eventRoster, rosterMessage } from '../lib/eventRoster';
 import { eventAccess } from '../lib/events';
 import { acceptPrivacy, upsertTelegramUser } from '../lib/users';
 import { churchDefaultLocale, localeOf } from '../lib/church';
@@ -41,6 +41,9 @@ export interface BotDeps {
 }
 
 type Ctx = Context & { dbUser: User; t: Messages };
+
+/** Links to people's Telegram must not unfold into a big profile preview. */
+const NO_PREVIEW = { is_disabled: true };
 
 export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
   const bot = new Bot<Ctx>(env.BOT_TOKEN, { botInfo: await getBotInfo(env) });
@@ -271,7 +274,11 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
           .catch(() => false);
         if (sent && fits) continue;
       }
-      await ctx.reply(card.text, { parse_mode: 'HTML', reply_markup });
+      await ctx.reply(card.text, {
+        parse_mode: 'HTML',
+        reply_markup,
+        link_preview_options: NO_PREVIEW,
+      });
     }
   });
 
@@ -286,6 +293,7 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
   pm.command('schedule', async (ctx) => {
     await ctx.reply(await scheduleText(db, ctx.dbUser, localeOf(ctx.dbUser, churchLocale), 'w'), {
       parse_mode: 'HTML',
+      link_preview_options: NO_PREVIEW,
       reply_markup: scheduleKeyboard(ctx.t, 'w'),
     });
   });
@@ -307,19 +315,29 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
       return;
     }
     await ctx.answerCallbackQuery();
-    await ctx.reply(rosterMessage(event, await eventRoster(db, event.id), locale), {
-      parse_mode: 'HTML',
-      reply_markup: new InlineKeyboard().webApp(
-        ctx.t.bot.eventButton,
-        `${appUrl.replace(/\/+$/, '')}/?event=${event.id}`,
-      ),
-    });
+    const text = rosterMessage(event, await eventRoster(db, event.id), locale);
+    const reply_markup = new InlineKeyboard().webApp(
+      ctx.t.bot.eventButton,
+      `${appUrl.replace(/\/+$/, '')}/?event=${event.id}`,
+    );
+    // With the event's poster when it has one (and the list fits a caption).
+    const pictureId = eventPictureId(event);
+    const file = pictureId && text.length <= 1024 ? await mediaFile(db, pictureId) : null;
+    if (file) {
+      const sent = await ctx
+        .replyWithPhoto(file, { caption: text, parse_mode: 'HTML', reply_markup })
+        .then(() => true)
+        .catch(() => false);
+      if (sent) return;
+    }
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup, link_preview_options: NO_PREVIEW });
   });
 
   pm.command('roster', async (ctx) => {
     await ctx.reply(await rosterText(db, ctx.dbUser, localeOf(ctx.dbUser, churchLocale)), {
       parse_mode: 'HTML',
       reply_markup: openAppKeyboard(ctx.t),
+      link_preview_options: NO_PREVIEW,
     });
   });
 
@@ -330,6 +348,7 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
         await scheduleText(db, ctx.dbUser, localeOf(ctx.dbUser, churchLocale), period),
         {
           parse_mode: 'HTML',
+          link_preview_options: NO_PREVIEW,
           reply_markup: scheduleKeyboard(ctx.t, period),
         },
       )

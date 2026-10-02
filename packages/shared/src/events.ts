@@ -204,6 +204,8 @@ export interface EventDetail extends EventSummary {
   coverMediaId: number | null;
   /** The picture the bot sends with event messages (poster, else cover photo); null = none. */
   botPictureUrl: string | null;
+  /** The poster the app made from the cover (null = not made yet). */
+  posterMediaId: number | null;
   photos: { id: number; url: string }[];
   /** Filled when RSVP is on. `noAnswer` only for leaders. */
   rsvps: { going: PersonRef[]; notGoing: PersonRef[]; noAnswer: PersonRef[] };

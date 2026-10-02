@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  addDays,
   localDate,
   type AttendanceExport,
   type GroupDetail,
+  type GroupStatistics,
   type MeetingRow,
   type TreasuryExport,
 } from '@church/shared';
@@ -159,5 +161,77 @@ describe('sending a picture to the chat', () => {
     expect(callsTo(calls, 'sendDocument')).toHaveLength(1);
     expect((await send(Uint8Array.from([1, 2, 3, 4]))).status).toBe(415);
     expect((await send(new Uint8Array())).status).toBe(400);
+  });
+});
+
+describe('statistics', () => {
+  it('totals, per person, per meeting and per event for a period; leaders only', async () => {
+    const g = await createGroup('Статистика');
+    const add = async (firstName: string) =>
+      (
+        await apiJson<{ userId: number }>(`/api/groups/${g}/members`, {
+          method: 'POST',
+          user: ADMIN,
+          json: { firstName },
+        })
+      ).userId;
+    const anna = await add('Анна');
+    const boris = await add('Борис');
+    const today = localDate(Date.now(), 'Europe/Riga');
+    const meeting = async (title: string, roll: { userId: number; status: string }[]) => {
+      const m = await post<MeetingRow>(`/api/groups/${g}/meetings`, {
+        date: today,
+        startTime: '00:00',
+        title,
+        durationMin: 15,
+      });
+      await apiJson(`/api/meetings/${m.id}/roll`, {
+        method: 'PUT',
+        user: ADMIN,
+        json: { entries: roll, guestCount: 1 },
+      });
+    };
+    await meeting('Первая', [
+      { userId: anna, status: 'present' },
+      { userId: boris, status: 'absent' },
+    ]);
+    await meeting('Вторая', [
+      { userId: anna, status: 'late' },
+      { userId: boris, status: 'absent' },
+    ]);
+    await meeting('Третья', [
+      { userId: anna, status: 'present' },
+      { userId: boris, status: 'absent' },
+    ]);
+
+    const s = await apiJson<GroupStatistics>(
+      `/api/groups/${g}/statistics?from=${today}&to=${today}`,
+      { user: ADMIN },
+    );
+    expect(s.summary).toMatchObject({
+      meetingsHeld: 3,
+      averageRate: 50,
+      guests: 3,
+      late: 1,
+      faithful: 1,
+      atRisk: 1,
+    });
+    expect(s.series).toHaveLength(3);
+    const a = s.people.find((p) => p.userId === anna)!;
+    const b = s.people.find((p) => p.userId === boris)!;
+    expect(a).toMatchObject({ present: 2, late: 1, percent: 100, streak: 0 });
+    expect(b).toMatchObject({ absent: 3, percent: 0, streak: 3, lastSeen: null });
+    expect(s.meetings.map((m) => m.rate)).toEqual([50, 50, 50]);
+
+    // Outside the period: nothing held.
+    const before = addDays(today, -40);
+    const empty = await apiJson<GroupStatistics>(
+      `/api/groups/${g}/statistics?from=${before}&to=${addDays(before, 5)}`,
+      { user: ADMIN },
+    );
+    expect(empty.summary.meetingsHeld).toBe(0);
+    expect(
+      (await api(`/api/groups/${g}/statistics`, { user: fakeUser('Посторонний') })).status,
+    ).toBe(403);
   });
 });

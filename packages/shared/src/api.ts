@@ -861,3 +861,92 @@ export const readNotificationsSchema = z.object({
   ids: z.array(z.number().int().positive()).max(200).optional(),
 });
 export type ReadNotificationsInput = z.input<typeof readNotificationsSchema>;
+
+/** One person in the statistics of a period. */
+export interface StatPerson {
+  userId: number;
+  firstName: string;
+  lastName: string | null;
+  username: string | null;
+  positionName: string | null;
+  role: GroupRole | null;
+  isAdmin: boolean;
+  /** Still in the ministry (false = left, but was marked in the period). */
+  active: boolean;
+  joinedAt: string | null;
+  present: number;
+  late: number;
+  absent: number;
+  excused: number;
+  /** present + late + absent (excused not counted). */
+  counted: number;
+  percent: number | null;
+  /** Absences in a row up to the latest meeting of the period. */
+  streak: number;
+  /** Last meeting they came to (in the period). */
+  lastSeen: string | null;
+  /** Meetings they led / brought the snacks to. */
+  led: number;
+  snacks: number;
+  /** Event duties they had. */
+  duties: number;
+}
+
+export interface StatMeeting {
+  id: number;
+  title: string;
+  startsAt: string;
+  kind: string | null;
+  topic: string | null;
+  leaderName: string | null;
+  present: number;
+  late: number;
+  absent: number;
+  excused: number;
+  guests: number;
+  rate: number | null;
+}
+
+export interface StatEvent {
+  id: number;
+  title: string;
+  startsAt: string;
+  going: number;
+  notGoing: number;
+  roles: number;
+  slots: number;
+  filled: number;
+}
+
+/** Everything the statistics screen shows for one ministry and period. */
+export interface GroupStatistics {
+  groupName: string;
+  from: string;
+  to: string;
+  summary: {
+    activeMembers: number;
+    newMembers: number;
+    leftMembers: number;
+    meetingsHeld: number;
+    meetingsCancelled: number;
+    averageRate: number | null;
+    /** People (members + guests) per meeting on average. */
+    averagePeople: number | null;
+    guests: number;
+    late: number;
+    excused: number;
+    events: number;
+    dutySlots: number;
+    dutiesFilled: number;
+    /** Members at 80 % or more. */
+    faithful: number;
+    /** Members absent 3+ times in a row. */
+    atRisk: number;
+  };
+  /** Oldest → newest. */
+  series: AttendancePoint[];
+  kinds: { kind: string | null; meetings: number; averageRate: number | null }[];
+  people: StatPerson[];
+  meetings: StatMeeting[];
+  events: StatEvent[];
+}

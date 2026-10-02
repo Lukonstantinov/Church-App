@@ -16,6 +16,7 @@ import { attendance, meetings, memberships, transactions, users } from '../db/sc
 import { assertCan } from '../lib/access';
 import { getChurch } from '../lib/church';
 import { botApi, isUnreachableError } from '../lib/telegram';
+import { groupStatistics } from '../lib/statistics';
 import { toTransactionRows } from '../lib/treasury';
 import { idParam } from './util';
 
@@ -51,6 +52,15 @@ function periodParam(c: { req: { query: (k: string) => string | undefined } }) {
 
 /** Data for reports, built on the phone (the Worker's CPU budget is too small for PDF/Excel). */
 export const groupReportRoutes = new Hono<App>();
+
+/** GET /groups/:id/statistics?from=&to= — everything the statistics screen shows. */
+groupReportRoutes.get('/:id/statistics', async (c) => {
+  const db = c.get('db');
+  const group = await assertCan(db, c.get('user'), idParam(c), 'people.view');
+  const { from, to } = periodParam(c);
+  const { timezone } = await getChurch(db);
+  return c.json(await groupStatistics(db, group, { from, to }, timezone));
+});
 
 groupReportRoutes.get('/:id/treasury/export', async (c) => {
   const db = c.get('db');

@@ -5,6 +5,7 @@ import { EventExport } from '../components/EventExport';
 import { EventCover } from '../components/EventCard';
 import { EventReminderSheet } from '../components/EventReminderSheet';
 import { ProgramBlock } from '../components/EventProgram';
+import { PosterBackfill } from '../components/PosterBackfill';
 import { useRef, useState } from 'react';
 import {
   displayName,
@@ -120,6 +121,7 @@ function EventBody({ e }: { e: EventDetail }) {
 
   return (
     <Screen>
+      <PosterBackfill e={e} />
       {e.coverUrl ? (
         <div className="relative -mx-4 -mt-4 overflow-hidden">
           <img src={e.coverUrl} alt="" className="aspect-[4/3] w-full object-cover" />

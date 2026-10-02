@@ -1,8 +1,7 @@
 import type { GroupSummary, MeetingRow } from '@church/shared';
-import { AttendanceChart } from '../components/AttendanceChart';
 import { GroupSwitcher } from '../components/GroupSwitcher';
-import { IconCalendar, IconClock, IconUsers } from '../components/icons';
-import { Badge, Button, Card, EmptyState, Screen, Skeleton, StatTile } from '../components/ui';
+import { IconCalendar, IconClock } from '../components/icons';
+import { Button, Card, EmptyState, Screen, Skeleton } from '../components/ui';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useEnv } from '../lib/env';
@@ -25,8 +24,6 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
   const stats = useGroupStats(active.id);
   const me = useMe();
   const s = stats.data;
-  // Requests only matter to people who can approve them.
-  const pending = s && can('people.manage') ? s.pendingCount : 0;
   const upcoming = useUpcoming(active.id);
   const tasks = useTasks(active.id);
   const base = useHomeActions(active, me.data?.church.brandColor ?? 'blue', can);
@@ -49,15 +46,7 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
       />
 
       {!s ? (
-        <>
-          <Skeleton className="h-44 w-full" />
-          <div className="flex gap-3">
-            <Skeleton className="h-20 flex-1" />
-            <Skeleton className="h-20 flex-1" />
-            <Skeleton className="h-20 flex-1" />
-          </div>
-          <Skeleton className="h-56 w-full" />
-        </>
+        <Skeleton className="h-20 w-full" />
       ) : (
         <>
           {can('attendance.take') && s.awaitingRoll.length > 0 && (
@@ -112,44 +101,6 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
               </EmptyState>
             </Card>
           )}
-
-          <div className="flex gap-3">
-            <StatTile
-              icon={<IconCalendar size={17} />}
-              label={t.overview.attendance}
-              value={s.averageRate === null ? '—' : `${s.averageRate}%`}
-              hint={
-                s.series.length === 0 ? t.common.noData : t.overview.forMeetings(s.series.length)
-              }
-            />
-            <StatTile
-              icon={<IconUsers size={17} />}
-              label={t.overview.members}
-              value={s.activeMembers}
-              badge={pending > 0 ? <Badge tone="danger">+{pending}</Badge> : undefined}
-              hint={pending > 0 ? t.common.requests(pending) : t.overview.inGroup}
-              onClick={can('people.view') ? () => setTab('people') : undefined}
-            />
-          </div>
-
-          <Card className="p-4">
-            <h2 className="text-[17px] font-semibold">{t.overview.chartTitle}</h2>
-            <p className="mb-3 flex items-center gap-1.5 text-[13px] text-hint">
-              {s.averageRate === null ? (
-                t.overview.chartAppears
-              ) : (
-                <>
-                  <span className="inline-block h-px w-4 bg-text/40" aria-hidden="true" />
-                  {t.overview.average(s.averageRate)}
-                </>
-              )}
-            </p>
-            {s.series.length === 0 ? (
-              <p className="py-6 text-center text-[14px] text-hint">{t.overview.chartEmpty}</p>
-            ) : (
-              <AttendanceChart series={s.series} average={s.averageRate} />
-            )}
-          </Card>
         </>
       )}
     </Screen>

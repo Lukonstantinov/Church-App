@@ -207,3 +207,6 @@ export const IconTag = make(
     <circle cx="7.5" cy="7.5" r="1.3" />
   </>,
 );
+export const IconStar = make(
+  <path d="M12 3.8l2.5 5.1 5.6.8-4.05 3.95.95 5.6L12 16.6l-5 2.65.95-5.6L3.9 9.7l5.6-.8z" />,
+);

@@ -57,7 +57,13 @@ function eventPayload(
       }
     : {
         method: 'sendMessage' as const,
-        payload: { chat_id: chatId, text: html, parse_mode: 'HTML', reply_markup },
+        payload: {
+          chat_id: chatId,
+          text: html,
+          parse_mode: 'HTML',
+          reply_markup,
+          link_preview_options: { is_disabled: true },
+        },
       };
 }
 

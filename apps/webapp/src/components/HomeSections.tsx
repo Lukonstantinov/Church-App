@@ -19,6 +19,7 @@ import { CalendarTile, GroupCalendar, calendarOnHome, setCalendarOnHome } from '
 import { UnreadBadges } from './FeedEntry';
 import {
   IconCalendar,
+  IconChart,
   IconClock,
   IconEdit,
   IconMegaphone,
@@ -73,7 +74,7 @@ export function HomeActionRow({ actions }: { actions: HomeAction[] }) {
 export function useHomeActions(
   g: GroupSummary,
   fallbackTheme: string,
-  can: (p: 'announce' | 'meetings.manage' | 'people.manage') => boolean,
+  can: (p: 'announce' | 'meetings.manage' | 'people.manage' | 'people.view') => boolean,
 ): HomeAction[] {
   const t = useT();
   const { push } = useNav();
@@ -116,6 +117,13 @@ export function useHomeActions(
     label: t.overview.quickMembers,
     onClick: () => push({ name: 'contacts', groupId: g.id }),
   });
+  if (can('people.view'))
+    actions.push({
+      key: 'stats',
+      icon: <IconChart size={18} />,
+      label: t.stats.title,
+      onClick: () => push({ name: 'stats', groupId: g.id }),
+    });
   return actions;
 }
 

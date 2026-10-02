@@ -8,6 +8,8 @@ import {
   type AttendanceExport,
   type AttendanceStatus,
   type DuesSheet,
+  type GroupStatistics,
+  type MeetingKind,
   type Messages,
   type TransactionRow,
   type TreasuryExport,
@@ -653,5 +655,306 @@ export async function attendancePdf(ctx: ReportCtx, data: AttendanceExport): Pro
     },
     layout,
   });
+  return toBlob(pdfDoc(ctx, title, content));
+}
+
+// ---------- statistics ----------
+
+const pctText = (n: number | null) => (n === null ? '—' : `${n}%`);
+const pctColor = (n: number | null) =>
+  n === null ? '#999999' : n >= 75 ? '#1f9d55' : n >= 50 ? '#c77c02' : '#d64541';
+const kindName = (t: Messages, kind: string | null) =>
+  kind ? (t.meetings.kinds[kind as MeetingKind] ?? kind) : t.stats.noKind;
+
+/** The summary as label/value pairs (shared by Excel and PDF). */
+function statSummary(t: Messages, s: GroupStatistics): [string, string | number][] {
+  const x = s.summary;
+  return [
+    [t.stats.members, x.activeMembers],
+    [t.stats.newLeft(x.newMembers, x.leftMembers), ''],
+    [t.stats.attendance, pctText(x.averageRate)],
+    [t.stats.meetingsHeld, x.meetingsHeld],
+    [t.stats.cancelled(x.meetingsCancelled), ''],
+    [t.stats.perMeeting, x.averagePeople ?? '—'],
+    [t.stats.guests, x.guests],
+    [t.stats.late, x.late],
+    [t.stats.excused, x.excused],
+    [`${t.stats.faithful} (${t.stats.faithfulHint})`, x.faithful],
+    [`${t.stats.atRisk} (${t.stats.atRiskHint})`, x.atRisk],
+    [t.stats.events, x.events],
+    [t.stats.duties, t.stats.dutiesHint(x.dutiesFilled, x.dutySlots)],
+  ];
+}
+
+export async function statisticsXlsx(
+  ctx: ReportCtx,
+  s: GroupStatistics,
+  label: string,
+): Promise<Blob> {
+  const { t, f } = ctx;
+  const ExcelJS = await excel();
+  const wb = new ExcelJS.Workbook();
+  const header = (ws: Worksheet) => {
+    const head = ws.getRow(1);
+    head.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    head.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(ctx.brandHex) } };
+    head.alignment = { vertical: 'middle' };
+    head.height = 22;
+  };
+
+  const sum = wb.addWorksheet(t.stats.tabOverview);
+  sum.columns = [
+    { header: t.stats.file(s.groupName, label), width: 44 },
+    { header: '', width: 22 },
+  ];
+  header(sum);
+  for (const [k, v] of statSummary(t, s)) sum.addRow([k, v]);
+  sum.addRow([]);
+  sum.addRow([t.stats.byKind]).font = { bold: true };
+  for (const k of s.kinds)
+    sum.addRow([
+      `${kindName(t, k.kind)} — ${t.common.meetings(k.meetings)}`,
+      pctText(k.averageRate),
+    ]);
+
+  const people = wb.addWorksheet(t.stats.tabPeople, { views: [{ state: 'frozen', ySplit: 1 }] });
+  people.columns = [
+    { header: t.reports.colName, width: 26 },
+    { header: t.stats.colPosition, width: 18 },
+    { header: '%', width: 7 },
+    { header: t.status.present, width: 11 },
+    { header: t.status.late, width: 11 },
+    { header: t.status.excused, width: 13 },
+    { header: t.status.absent, width: 11 },
+    { header: t.stats.colStreak, width: 14 },
+    { header: t.stats.colLastSeen, width: 14 },
+    { header: t.stats.led, width: 9 },
+    { header: t.stats.snacks, width: 9 },
+    { header: t.stats.dutiesShort, width: 11 },
+    { header: t.stats.joined, width: 13 },
+  ];
+  header(people);
+  for (const p of s.people) {
+    const row = people.addRow([
+      displayName(p) + (p.active ? '' : ` (${t.stats.leftMinistry})`),
+      p.positionName ?? '',
+      p.percent === null ? '' : p.percent / 100,
+      p.present,
+      p.late,
+      p.excused,
+      p.absent,
+      p.streak || '',
+      p.lastSeen ? f.dayMonth(p.lastSeen) : '',
+      p.led || '',
+      p.snacks || '',
+      p.duties || '',
+      p.joinedAt ? f.dayMonth(p.joinedAt) : '',
+    ]);
+    row.getCell(3).numFmt = '0%';
+    if (p.streak >= 3)
+      row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILL.absent } };
+  }
+
+  const meets = wb.addWorksheet(t.stats.tabMeetings, { views: [{ state: 'frozen', ySplit: 1 }] });
+  meets.columns = [
+    { header: t.reports.colDate, width: 12 },
+    { header: t.stats.tabMeetings, width: 28 },
+    { header: t.stats.colTopic, width: 24 },
+    { header: t.stats.colKind, width: 16 },
+    { header: t.stats.leader, width: 20 },
+    { header: t.status.present, width: 11 },
+    { header: t.status.late, width: 11 },
+    { header: t.status.excused, width: 13 },
+    { header: t.status.absent, width: 11 },
+    { header: t.reports.guests, width: 9 },
+    { header: '%', width: 7 },
+  ];
+  header(meets);
+  for (const m of s.meetings) {
+    const row = meets.addRow([
+      f.dayMonth(m.startsAt),
+      m.title,
+      m.topic ?? '',
+      kindName(t, m.kind),
+      m.leaderName ?? '',
+      m.present,
+      m.late,
+      m.excused,
+      m.absent,
+      m.guests,
+      m.rate === null ? '' : m.rate / 100,
+    ]);
+    row.getCell(11).numFmt = '0%';
+  }
+
+  const evs = wb.addWorksheet(t.stats.tabEvents, { views: [{ state: 'frozen', ySplit: 1 }] });
+  evs.columns = [
+    { header: t.reports.colDate, width: 12 },
+    { header: t.stats.tabEvents, width: 30 },
+    { header: t.stats.going, width: 10 },
+    { header: t.stats.notGoing, width: 10 },
+    { header: t.stats.colDuties, width: 24 },
+  ];
+  header(evs);
+  for (const e of s.events)
+    evs.addRow([
+      f.dayMonth(e.startsAt),
+      e.title,
+      e.going,
+      e.notGoing,
+      e.slots ? `${e.filled} / ${e.slots}` : '',
+    ]);
+
+  const buf = await wb.xlsx.writeBuffer();
+  return new Blob([buf], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
+export async function statisticsPdf(
+  ctx: ReportCtx,
+  s: GroupStatistics,
+  label: string,
+): Promise<Blob> {
+  const { t, f } = ctx;
+  const title = t.stats.file(s.groupName, label);
+  const th = (text: string, alignment: 'left' | 'center' | 'right' = 'left') => ({
+    text,
+    style: 'th',
+    alignment,
+  });
+  const content: Content[] = [
+    { text: title, style: 'h1' },
+    {
+      text: t.reports.generated(f.dayMonth(new Date().toISOString())),
+      style: 'muted',
+      margin: [0, 2, 0, 10],
+    },
+    {
+      table: {
+        widths: ['*', 'auto'],
+        body: statSummary(t, s).map(([k, v]) => [k, { text: String(v), bold: true }]),
+      },
+      layout,
+    },
+  ];
+  if (s.kinds.length) {
+    content.push({ text: t.stats.byKind, style: 'h2' });
+    content.push({
+      table: {
+        headerRows: 1,
+        widths: ['*', 'auto', 'auto'],
+        body: [
+          [th(t.stats.colKind), th(t.stats.tabMeetings, 'center'), th('%', 'right')],
+          ...s.kinds.map((k) => [
+            kindName(t, k.kind),
+            { text: String(k.meetings), alignment: 'center' as const },
+            { text: pctText(k.averageRate), alignment: 'right' as const, bold: true },
+          ]),
+        ],
+      },
+      layout,
+    });
+  }
+  content.push({ text: t.stats.tabPeople, style: 'h2' });
+  content.push({
+    table: {
+      headerRows: 1,
+      widths: ['*', 'auto', 'auto', 'auto', 'auto', 'auto', 'auto', 'auto'],
+      body: [
+        [
+          th(t.reports.colName),
+          th(t.status.present, 'center'),
+          th(t.status.late, 'center'),
+          th(t.status.absent, 'center'),
+          th(t.stats.colStreak, 'center'),
+          th(t.stats.dutiesShort, 'center'),
+          th(t.stats.colLastSeen, 'center'),
+          th('%', 'right'),
+        ],
+        ...s.people.map((p) => [
+          {
+            text: displayName(p) + (p.active ? '' : ` (${t.stats.leftMinistry})`),
+            color: p.isAdmin ? '#e11d2e' : undefined,
+          },
+          { text: String(p.present || ''), alignment: 'center' as const },
+          { text: String(p.late || ''), alignment: 'center' as const },
+          { text: String(p.absent || ''), alignment: 'center' as const },
+          {
+            text: String(p.streak || ''),
+            alignment: 'center' as const,
+            color: p.streak >= 3 ? '#d64541' : undefined,
+            bold: p.streak >= 3,
+          },
+          { text: String(p.duties + p.led + p.snacks || ''), alignment: 'center' as const },
+          { text: p.lastSeen ? f.dayMonth(p.lastSeen) : '—', alignment: 'center' as const },
+          {
+            text: pctText(p.percent),
+            alignment: 'right' as const,
+            bold: true,
+            color: pctColor(p.percent),
+          },
+        ]),
+      ],
+    },
+    layout,
+  });
+  if (s.meetings.length) {
+    content.push({ text: t.stats.tabMeetings, style: 'h2' });
+    content.push({
+      table: {
+        headerRows: 1,
+        widths: ['auto', '*', 'auto', 'auto', 'auto', 'auto'],
+        body: [
+          [
+            th(t.reports.colDate),
+            th(t.stats.tabMeetings),
+            th(t.status.present, 'center'),
+            th(t.status.absent, 'center'),
+            th(t.reports.guests, 'center'),
+            th('%', 'right'),
+          ],
+          ...s.meetings.map((m) => [
+            f.dayMonth(m.startsAt),
+            `${m.title}${m.topic ? ` «${m.topic}»` : ''}${m.leaderName ? `\n${t.stats.leader}: ${m.leaderName}` : ''}`,
+            { text: String(m.present + m.late), alignment: 'center' as const },
+            { text: String(m.absent), alignment: 'center' as const },
+            { text: String(m.guests || ''), alignment: 'center' as const },
+            {
+              text: pctText(m.rate),
+              alignment: 'right' as const,
+              bold: true,
+              color: pctColor(m.rate),
+            },
+          ]),
+        ],
+      },
+      layout,
+    });
+  }
+  if (s.events.length) {
+    content.push({ text: t.stats.tabEvents, style: 'h2' });
+    content.push({
+      table: {
+        headerRows: 1,
+        widths: ['auto', '*', 'auto', 'auto'],
+        body: [
+          [
+            th(t.reports.colDate),
+            th(t.stats.tabEvents),
+            th(t.stats.going, 'center'),
+            th(t.stats.colDuties, 'center'),
+          ],
+          ...s.events.map((e) => [
+            f.dayMonth(e.startsAt),
+            e.title,
+            { text: String(e.going), alignment: 'center' as const },
+            { text: e.slots ? `${e.filled} / ${e.slots}` : '—', alignment: 'center' as const },
+          ]),
+        ],
+      },
+      layout,
+    });
+  }
   return toBlob(pdfDoc(ctx, title, content));
 }

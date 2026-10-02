@@ -473,6 +473,7 @@ export async function eventDetail(
       ? { title: event.tgChatTitle, pending: event.chatLinkCode !== null }
       : null,
     coverMediaId: event.coverMediaId,
+    posterMediaId: event.posterMediaId,
     botPictureUrl:
       (event.posterMediaId ?? event.coverMediaId)
         ? await signedMediaUrl(secret, (event.posterMediaId ?? event.coverMediaId)!)

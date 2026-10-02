@@ -45,6 +45,7 @@ export type Route =
   | { name: 'eventForm'; groupId: number; eventId?: number; date?: string }
   | { name: 'groupSettings'; groupId: number }
   | { name: 'reports'; groupId: number }
+  | { name: 'stats'; groupId: number }
   | { name: 'positions'; groupId: number }
   | { name: 'position'; groupId: number; positionId?: number }
   | { name: 'addPerson'; groupId: number }

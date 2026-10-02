@@ -1384,7 +1384,10 @@ describe('event messages: poster, duty colours, who serves where', () => {
     // The button shows who serves where, in one message.
     calls.length = 0;
     await pressButton(b, `ro:${ev.id}`);
-    const roster = String((await sentTo(b.id, 'Кто где служит'))!.body.text);
+    // …with the event's poster, the list as its caption.
+    const rosterMsg = await photoTo(b.id, 'Кто где служит');
+    expect(rosterMsg!.body.photo).toEqual({ upload: true });
+    const roster = String(rosterMsg!.body.caption);
     expect(roster).toMatch(/🔴 <b>Техника<\/b> — ★ <a href="tg:\/\/user\?id=\d+">Звукач<\/a>/);
     expect(roster).toContain('🔵 <b>Уборка</b> — <a href="tg://user?id=');
     expect(roster).toContain('>Дворник</a>');
@@ -1392,6 +1395,7 @@ describe('event messages: poster, duty colours, who serves where', () => {
     calls.length = 0;
     await pressButton(outsider, `ro:${ev.id}`);
     expect(await sentTo(outsider.id, 'Кто где служит')).toBeUndefined();
+    expect(await photoTo(outsider.id, 'Кто где служит')).toBeUndefined();
 
     // A reminder can add who serves where.
     calls.length = 0;

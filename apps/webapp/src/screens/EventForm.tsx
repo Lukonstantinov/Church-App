@@ -153,12 +153,10 @@ function EventFormBody({
   const [rolePicker, setRolePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const posterNode = useRef<HTMLDivElement>(null);
-  // The cover (photo with the title, or the design) is also saved as a JPEG picture: the
-  // bot sends it with event messages.
-  const designedCover = !!cover || !!look.design.banner;
 
+  /** The cover (photo with the title, the design, or the ministry's look) as a JPEG for the bot. */
   async function makePoster(): Promise<number | null> {
-    if (!designedCover || !posterNode.current) return null;
+    if (!posterNode.current) return null;
     const blob = await capturePoster(posterNode.current);
     if (!blob) return null;
     return upload
@@ -333,19 +331,17 @@ function EventFormBody({
       )}
 
       {/* The designed cover at full size, off screen: the picture the bot sends is taken from it. */}
-      {designedCover && (
-        <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0, width: 720 }}>
-          <div ref={posterNode}>
-            <PosterMedia
-              title={title.trim() || t.events.name}
-              photos={cover ? [cover] : []}
-              tint={null}
-              look={coverLook.look}
-              design={look.design}
-            />
-          </div>
+      <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0, width: 720 }}>
+        <div ref={posterNode}>
+          <PosterMedia
+            title={title.trim() || t.events.name}
+            photos={cover ? [cover] : []}
+            tint={null}
+            look={coverLook.look}
+            design={{ ...look.design, banner: true }}
+          />
         </div>
-      )}
+      </div>
 
       {!cover && (
         <Section title={t.events.coverLook} footer={t.events.coverLookHint}>

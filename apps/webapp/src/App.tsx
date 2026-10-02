@@ -32,6 +32,7 @@ import { EventForm } from './screens/EventForm';
 import { EventScreen } from './screens/EventScreen';
 import { GroupSettings } from './screens/GroupSettings';
 import { Reports } from './screens/Reports';
+import { Statistics } from './screens/Statistics';
 import { RollCall } from './screens/RollCall';
 import { Schedule } from './screens/Schedule';
 
@@ -118,6 +119,8 @@ function Router({ me }: { me: MeResponse }) {
       );
     case 'reports':
       return <Reports key={route.groupId} groupId={route.groupId} />;
+    case 'stats':
+      return <Statistics key={route.groupId} groupId={route.groupId} />;
     case 'positions':
       return <Positions key={route.groupId} groupId={route.groupId} />;
     case 'position':
@@ -147,7 +150,7 @@ function Router({ me }: { me: MeResponse }) {
 
 /**
  * Bot buttons open a screen directly: `?roll=<id>` the roll call, `?meeting=<id>` a
- * meeting (sent to the person who leads it or buys snacks).
+ * meeting (sent to the person who leads it or buys snacks), `?stats=<ministry>` statistics.
  */
 function initialRoute(me: MeResponse): Route | undefined {
   const params = new URLSearchParams(window.location.search);
@@ -155,6 +158,8 @@ function initialRoute(me: MeResponse): Route | undefined {
   if (Number.isSafeInteger(meeting) && meeting > 0) return { name: 'task', meetingId: meeting };
   const event = Number(params.get('event'));
   if (Number.isSafeInteger(event) && event > 0) return { name: 'event', eventId: event };
+  const stats = Number(params.get('stats'));
+  if (Number.isSafeInteger(stats) && stats > 0) return { name: 'stats', groupId: stats };
   const raw = params.get('roll');
   const id = Number(raw);
   if (!raw || !Number.isSafeInteger(id) || id <= 0 || !canTakeRoll(me)) return undefined;
