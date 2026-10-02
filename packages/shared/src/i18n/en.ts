@@ -573,6 +573,12 @@ export const en: Messages = {
     exemptNote: 'You are exempt from dues',
   },
   events: {
+    dutiesSkipped: (names: string) => `Couldn’t reach (the bot can’t write to them): ${names}`,
+    dutiesNoNew:
+      'No new people in this duty — the message goes to those added just now. To write to those already assigned, tap “Tell them now”.',
+    notifyNow: 'Tell them now',
+    notifyAllAssigned: 'Tell everyone assigned',
+    dutiesNobody: 'Nobody is assigned',
     chatEventTitle: 'Event chat',
     chatInApp: 'Chat in the app',
     chatInAppHint: 'The ministry’s members can see it. Write right here.',

@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import {
   displayName,
   parseAmount,
+  type DutiesNotice,
   type EventDetail,
   type EventRole,
   type PersonRef,
@@ -17,6 +18,7 @@ import {
   IconCheck,
   IconCoins,
   IconBell,
+  IconSend,
   IconEdit,
   IconImage,
   IconMapPin,
@@ -39,6 +41,7 @@ import {
   Loading,
   ProgressBar,
   Screen,
+  ActionRow,
   Section,
   Toggle,
 } from '../components/ui';
@@ -54,6 +57,7 @@ import {
   useEventPayment,
   useMembers,
   useRsvp,
+  useNotifyDuties,
   useSetRoles,
   useUpdateEvent,
   useUploadMedia,
@@ -349,10 +353,26 @@ function RsvpBlock({ e }: { e: EventDetail }) {
   );
 }
 
+/** Says how a duty message went: how many were told, who couldn't be reached, or why nobody was. */
+function useDutyToast() {
+  const t = useT();
+  const toast = useToast();
+  return (n: DutiesNotice | null, asked: boolean) => {
+    if (!n) return;
+    if (n.sent > 0) toast(t.events.dutiesNotified(n.sent));
+    else if (asked && n.skipped.length === 0) toast(t.events.dutiesNoNew);
+    if (n.skipped.length > 0) toast(t.events.dutiesSkipped(n.skipped.join(', ')), 'error');
+  };
+}
+
 function DutiesBlock({ e }: { e: EventDetail }) {
   const t = useT();
+  const toast = useToast();
   const { push } = useNav();
   const [editing, setEditing] = useState<EventRole | null>(null);
+  const notifyAll = useNotifyDuties(e.id);
+  const report = useDutyToast();
+  const anyone = e.roles.some((r) => r.assignees.length > 0);
   return (
     <Section title={t.events.duties}>
       {e.roles.length === 0 ? (
@@ -409,6 +429,22 @@ function DutiesBlock({ e }: { e: EventDetail }) {
           <IconPlus size={20} /> {t.events.addRole}
         </button>
       )}
+      {e.canManage && anyone && (
+        <ActionRow
+          icon={<IconSend size={20} />}
+          disabled={notifyAll.isPending}
+          onClick={async () => {
+            try {
+              report(await notifyAll.mutateAsync({}), true);
+              haptic.success();
+            } catch {
+              toast(t.common.actionFailed, 'error');
+            }
+          }}
+        >
+          {t.events.notifyAllAssigned}
+        </ActionRow>
+      )}
       {e.canManage && <AssignSheet e={e} role={editing} onClose={() => setEditing(null)} />}
     </Section>
   );
@@ -428,6 +464,8 @@ function AssignSheet({
   const toast = useToast();
   const members = useMembers(e.groupId, role !== null);
   const setRoles = useSetRoles(e.id);
+  const notifyNow = useNotifyDuties(e.id);
+  const report = useDutyToast();
   const [picked, setPicked] = useState<number[]>([]);
   // Whoever is newly picked gets a message naming their duty (on by default).
   const [notify, setNotify] = useState(true);
@@ -446,7 +484,7 @@ function AssignSheet({
   async function save() {
     if (!role) return;
     try {
-      await setRoles.mutateAsync({
+      const saved = await setRoles.mutateAsync({
         roles: e.roles.map((r) => ({
           id: r.id,
           name: r.name,
@@ -457,6 +495,7 @@ function AssignSheet({
         notify,
       });
       haptic.success();
+      report(saved.notified, notify);
       onClose();
     } catch {
       toast(t.common.saveFailed, 'error');
@@ -489,6 +528,23 @@ function AssignSheet({
             );
           })}
           <div className="px-5 pt-2">
+            {role.assignees.length > 0 && (
+              <Button
+                small
+                variant="glass"
+                disabled={notifyNow.isPending}
+                onClick={async () => {
+                  try {
+                    report(await notifyNow.mutateAsync({ roleId: role.id }), true);
+                    haptic.success();
+                  } catch {
+                    toast(t.common.actionFailed, 'error');
+                  }
+                }}
+              >
+                <IconSend size={15} /> {t.events.notifyNow}
+              </Button>
+            )}
             <Toggle label={t.events.notifyDuties} checked={notify} onChange={setNotify} />
             <p className="pb-2 text-[12px] text-hint">{t.events.notifyDutiesHint}</p>
             <Button onClick={() => void save()} disabled={setRoles.isPending}>

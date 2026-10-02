@@ -914,3 +914,68 @@ describe('labels', () => {
     expect((await row()).labels).toEqual([]);
   });
 });
+
+describe('telling people about their duties', () => {
+  it('reports the result and can write to people already assigned', async () => {
+    const g = await createEnv('Сообщить о служении');
+    const a = fakeUser('Назначенный');
+    const aId = await join(a, g);
+    const date = addDays(localDate(new Date(), TZ), 6);
+    const ev = await apiJson<{ id: number; roles: { id: number }[] }>(
+      `/api/groups/${g.id}/events`,
+      {
+        method: 'POST',
+        user: ADMIN,
+        json: {
+          title: 'Выезд',
+          date,
+          startTime: '10:00',
+          features: { duties: true },
+          roles: [{ name: 'Звук', description: 'Принести кабели' }],
+        },
+      },
+    );
+    const roleId = (
+      await apiJson<{ roles: { id: number }[] }>(`/api/events/${ev.id}`, { user: ADMIN })
+    ).roles[0]!.id;
+
+    // Assigned without a message (switch off): nothing is sent, and nothing is reported.
+    calls.length = 0;
+    const quiet = await apiJson<{ notified: unknown }>(`/api/events/${ev.id}/roles`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: {
+        roles: [{ id: roleId, name: 'Звук', description: 'Принести кабели', userIds: [aId] }],
+      },
+    });
+    expect(quiet.notified).toBeNull();
+    await new Promise((r) => setTimeout(r, 60));
+    expect(calls.some((c) => c.method === 'sendMessage' && c.body.chat_id === a.id)).toBe(false);
+
+    // Saving again with the switch on: nobody is new, so the count is 0 — but "tell them now" works.
+    const again = await apiJson<{ notified: { sent: number; skipped: string[] } }>(
+      `/api/events/${ev.id}/roles`,
+      {
+        method: 'PUT',
+        user: ADMIN,
+        json: {
+          roles: [{ id: roleId, name: 'Звук', description: 'Принести кабели', userIds: [aId] }],
+          notify: true,
+        },
+      },
+    );
+    expect(again.notified).toEqual({ sent: 0, skipped: [] });
+    expect(
+      (await api(`/api/events/${ev.id}/duties/notify`, { method: 'POST', user: a, json: {} }))
+        .status,
+    ).toBe(403);
+    const now = await apiJson<{ sent: number; skipped: string[] }>(
+      `/api/events/${ev.id}/duties/notify`,
+      { method: 'POST', user: ADMIN, json: { roleId } },
+    );
+    expect(now).toEqual({ sent: 1, skipped: [] });
+    expect(String((await sentTo(a.id, 'Вам назначено служение'))!.body.text)).toContain(
+      'Принести кабели',
+    );
+  });
+});

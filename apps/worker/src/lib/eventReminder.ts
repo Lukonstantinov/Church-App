@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { InlineKeyboard } from 'grammy';
-import { INTL_LOCALE, messages, type Locale } from '@church/shared';
+import { INTL_LOCALE, displayName, messages, type DutiesNotice, type Locale } from '@church/shared';
 import type { Db } from '../db/client';
 import { memberships, users, type Group, type events } from '../db/schema';
 
@@ -114,18 +114,17 @@ export async function notifyDuties(
     envAppUrl?: string;
     fallbackUrl: string | null;
   },
-): Promise<number> {
+): Promise<DutiesNotice> {
   const fallback = await churchDefaultLocale(db);
   const appUrl = ((await getAppUrl(db, args.envAppUrl)) ?? args.fallbackUrl)?.replace(/\/+$/, '');
   const byUser = new Map<number, typeof args.added>();
-  for (const a of args.added) {
-    if (a.userId === args.sender.id) continue;
-    byUser.set(a.userId, [...(byUser.get(a.userId) ?? []), a]);
-  }
-  if (byUser.size === 0) return 0;
+  for (const a of args.added) byUser.set(a.userId, [...(byUser.get(a.userId) ?? []), a]);
+  if (byUser.size === 0) return { sent: 0, skipped: [] };
   const people = await db
     .select({
       id: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
       chatId: users.telegramId,
       locale: users.locale,
       reach: users.isReachable,
@@ -133,8 +132,13 @@ export async function notifyDuties(
     .from(users)
     .where(inArray(users.id, [...byUser.keys()]));
   let queued = 0;
+  // People the bot can't write to (never started it, or blocked it) are named, so the sender knows.
+  const skipped: string[] = [];
   for (const p of people) {
-    if (!p.chatId || !p.reach) continue;
+    if (!p.chatId || !p.reach) {
+      skipped.push(displayName(p));
+      continue;
+    }
     const locale = localeOf({ locale: p.locale }, fallback);
     const t = messages(locale);
     const duties = byUser
@@ -159,5 +163,5 @@ export async function notifyDuties(
     });
     queued++;
   }
-  return queued;
+  return { sent: queued, skipped };
 }

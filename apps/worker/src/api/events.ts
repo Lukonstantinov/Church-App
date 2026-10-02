@@ -8,6 +8,8 @@ import {
   eventPaymentSchema,
   localDate,
   remindEventSchema,
+  notifyDutiesSchema,
+  type DutiesNotice,
   eventChatMessageSchema,
   type EventChatMessage,
   rsvpSchema,
@@ -21,6 +23,8 @@ import {
   designTemplates,
   eventMessages,
   eventPhotos,
+  eventRoleAssignees,
+  eventRoles,
   events,
   groups,
   memberships,
@@ -151,28 +155,45 @@ async function managed(c: { get: (k: 'db' | 'user') => unknown }, id: number) {
   return { db, user, event };
 }
 
-/** Messages the people newly given a duty and sends it off in the background. */
+/** Messages the given people about their duties and sends it off in the background. */
 async function tellAssigned(
   c: Context<App>,
   db: AuthVariables['db'],
   user: AuthVariables['user'],
   event: typeof events.$inferSelect,
   added: DutyAdded[],
-) {
-  const queued = await notifyDuties(db, {
+): Promise<DutiesNotice> {
+  const result = await notifyDuties(db, {
     event,
     added,
     sender: { id: user.id, name: displayName(user) },
     envAppUrl: c.env.APP_URL,
     fallbackUrl: appUrlFor(c.env, c.req.url),
   });
-  if (queued > 0)
+  if (result.sent > 0)
     c.executionCtx.waitUntil(
       drainOutbox(db, botApi(c.env), { limit: 100 }).catch((err) =>
         console.error('duty drain', err),
       ),
     );
+  return result;
 }
+
+/** Sends the duty message again to everyone assigned now (or to one duty's people). */
+eventRoutes.post('/:id/duties/notify', async (c) => {
+  const { db, user, event } = await managed(c, idParam(c));
+  const { roleId } = await parseBody(c, notifyDutiesSchema);
+  const rows = await db
+    .select({
+      userId: eventRoleAssignees.userId,
+      roleName: eventRoles.name,
+      description: eventRoles.description,
+    })
+    .from(eventRoleAssignees)
+    .innerJoin(eventRoles, eq(eventRoles.id, eventRoleAssignees.roleId))
+    .where(and(eq(eventRoles.eventId, event.id), ...(roleId ? [eq(eventRoles.id, roleId)] : [])));
+  return c.json(await tellAssigned(c, db, user, event, rows));
+});
 
 /** Link for adding the bot to a Telegram group, which becomes this event's chat. */
 eventRoutes.post('/:id/chat/link', async (c) => {
@@ -346,7 +367,7 @@ eventRoutes.put('/:id/roles', async (c) => {
   const { db, user, event } = await managed(c, idParam(c));
   const { roles, notify } = await parseBody(c, setRolesSchema);
   const added = await setRoles(db, event, roles);
-  if (notify) await tellAssigned(c, db, user, event, added);
+  const notified = notify ? await tellAssigned(c, db, user, event, added) : null;
   const row =
     roles.length && !event.hasDuties
       ? (
@@ -357,7 +378,10 @@ eventRoutes.put('/:id/roles', async (c) => {
             .returning()
         )[0]!
       : event;
-  return c.json(await eventDetail(db, c.env.WEBHOOK_SECRET, row, user));
+  return c.json({
+    ...(await eventDetail(db, c.env.WEBHOOK_SECRET, row, user)),
+    notified,
+  });
 });
 
 eventRoutes.put('/:id/rsvp', async (c) => {

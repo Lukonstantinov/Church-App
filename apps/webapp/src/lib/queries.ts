@@ -1,5 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  DutiesNotice,
+  NotifyDutiesInput,
   EventChatMessage,
   LabelInput,
   LabelRef,
@@ -911,7 +913,9 @@ function useEventSaved() {
   };
 }
 
-function useEventMutation<I>(request: (input: I) => Promise<EventDetail>) {
+function useEventMutation<I, R extends EventDetail = EventDetail>(
+  request: (input: I) => Promise<R>,
+) {
   const saved = useEventSaved();
   return useMutation({ mutationFn: request, onSuccess: saved });
 }
@@ -935,8 +939,19 @@ export function useUpdateEvent(id: number) {
 
 export function useSetRoles(id: number) {
   return useEventMutation((input: { roles: RoleInput[]; notify?: boolean }) =>
-    apiFetch<EventDetail>(`/events/${id}/roles`, send('PUT', input)),
+    apiFetch<EventDetail & { notified: DutiesNotice | null }>(
+      `/events/${id}/roles`,
+      send('PUT', input),
+    ),
   );
+}
+
+/** Write again to the people already assigned (everyone, or one duty's people). */
+export function useNotifyDuties(id: number) {
+  return useMutation({
+    mutationFn: (input: NotifyDutiesInput) =>
+      apiFetch<DutiesNotice>(`/events/${id}/duties/notify`, send('POST', input)),
+  });
 }
 
 export function useRsvp(id: number) {

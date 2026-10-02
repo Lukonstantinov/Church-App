@@ -207,3 +207,13 @@ export interface EventDetail extends EventSummary {
   /** Belongs to the ministry (can answer RSVP); false when seeing a pinned event. */
   member: boolean;
 }
+
+/** Tell the people already assigned to duties (all of them, or one duty) what they serve in. */
+export const notifyDutiesSchema = z.object({ roleId: z.number().int().positive().optional() });
+export type NotifyDutiesInput = z.input<typeof notifyDutiesSchema>;
+
+/** How a duty message went: how many were sent, and who it could not reach. */
+export interface DutiesNotice {
+  sent: number;
+  skipped: string[];
+}

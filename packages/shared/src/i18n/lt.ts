@@ -579,6 +579,12 @@ export const lt: Messages = {
     exemptNote: 'Jūs atleisti nuo nario mokesčio',
   },
   events: {
+    dutiesSkipped: (names: string) => `Nepavyko pasiekti (botas negali jiems rašyti): ${names}`,
+    dutiesNoNew:
+      'Šioje tarnystėje naujų žmonių nėra — žinutė siunčiama ką tik pridėtiems. Norėdami parašyti jau paskirtiesiems, spauskite „Pranešti dabar“.',
+    notifyNow: 'Pranešti dabar',
+    notifyAllAssigned: 'Pranešti visiems paskirtiesiems',
+    dutiesNobody: 'Niekas nepaskirtas',
     chatEventTitle: 'Renginio pokalbis',
     chatInApp: 'Pokalbis programoje',
     chatInAppHint: 'Jį mato tarnystės nariai. Rašykite čia pat.',
