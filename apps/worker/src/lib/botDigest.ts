@@ -1,5 +1,5 @@
 import { and, asc, eq, gte, inArray, isNotNull, lt, ne, or } from 'drizzle-orm';
-import { INTL_LOCALE, messages, type Locale } from '@church/shared';
+import { INTL_LOCALE, displayName, messages, type Locale } from '@church/shared';
 import type { Db } from '../db/client';
 import {
   eventRoleAssignees,
@@ -9,14 +9,12 @@ import {
   meetings,
   memberships,
   positions,
+  users,
   type User,
 } from '../db/schema';
 import { getChurch } from './church';
 import { escapeHtml } from './html';
 import { audienceOf, meetingIsFor } from './meetings';
-
-/** The longest list sent in one message (Telegram allows 4096 characters). */
-const MAX_LINES = 30;
 
 type Period = 'w' | 'm' | 'q';
 const DAYS: Record<Period, number> = { w: 7, m: 31, q: 92 };
@@ -131,8 +129,82 @@ export async function myServicesText(db: Db, user: User, locale: Locale): Promis
   return out.join('\n');
 }
 
-/** The nearest events of the person's ministries, with their own duty at each. */
-export async function nearestEventsText(db: Db, user: User, locale: Locale): Promise<string> {
+/** Short, one-line piece of a longer text. */
+const short = (text: string | null, max: number) => {
+  const one = (text ?? '').replace(/\s+/g, ' ').trim();
+  return one.length > max ? `${one.slice(0, max - 1)}…` : one;
+};
+
+/** Names of people by id. */
+async function namesOf(db: Db, ids: (number | null)[]) {
+  const unique = [...new Set(ids.filter((x): x is number => x !== null))];
+  if (unique.length === 0) return new Map<number, string>();
+  const rows = await db
+    .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+    .from(users)
+    .where(inArray(users.id, unique));
+  return new Map(rows.map((r) => [r.id, displayName(r)]));
+}
+
+/** Each event's duties: name, its leader and the people on it ("Техника — ★Anna, Mark"). */
+async function dutiesOf(db: Db, eventIds: number[]) {
+  const roles = eventIds.length
+    ? await db
+        .select()
+        .from(eventRoles)
+        .where(inArray(eventRoles.eventId, eventIds))
+        .orderBy(asc(eventRoles.sort), asc(eventRoles.id))
+    : [];
+  const assignees = roles.length
+    ? await db
+        .select()
+        .from(eventRoleAssignees)
+        .where(
+          inArray(
+            eventRoleAssignees.roleId,
+            roles.map((r) => r.id),
+          ),
+        )
+    : [];
+  const names = await namesOf(db, [
+    ...roles.map((r) => r.leaderUserId),
+    ...assignees.map((a) => a.userId),
+  ]);
+  return { roles, assignees, names };
+}
+
+type Duties = Awaited<ReturnType<typeof dutiesOf>>;
+
+function dutyLines(d: Duties, eventId: number, userId: number) {
+  const lines: string[] = [];
+  const mine: string[] = [];
+  for (const r of d.roles.filter((x) => x.eventId === eventId)) {
+    const people = d.assignees.filter((a) => a.roleId === r.id).map((a) => a.userId);
+    if (people.includes(userId) || r.leaderUserId === userId) mine.push(r.name);
+    const names = [
+      ...(r.leaderUserId ? [`★ ${d.names.get(r.leaderUserId) ?? '?'}`] : []),
+      ...people.filter((id) => id !== r.leaderUserId).map((id) => d.names.get(id) ?? '?'),
+    ];
+    lines.push(
+      `• <b>${escapeHtml(r.name)}</b> — ${names.length ? escapeHtml(names.join(', ')) : '…'}`,
+    );
+  }
+  return { lines, mine };
+}
+
+export type EventCard = { eventId: number; text: string; pictureId: number | null };
+
+/**
+ * The nearest events of the person's ministries (and pinned ones), one card each: when,
+ * where, a bit of the description, who is responsible for what (★ = the duty's leader),
+ * and the person's own duty. `pictureId` is the cover photo or the designed poster.
+ */
+export async function nearestEvents(
+  db: Db,
+  user: User,
+  locale: Locale,
+  limit = 5,
+): Promise<{ empty: string | null; cards: EventCard[] }> {
   const t = messages(locale).bot;
   const f = await formatter(db, locale);
   const mine = await myGroups(db, user.id);
@@ -150,33 +222,39 @@ export async function nearestEventsText(db: Db, user: User, locale: Locale): Pro
           ),
         )
         .orderBy(asc(events.startsAt))
-        .limit(8)
+        .limit(limit)
     : [];
-  if (rows.length === 0) return `${t.eventsTitle}\n\n${t.eventsEmpty}`;
-  const duties = await db
-    .select({ eventId: eventRoles.eventId, role: eventRoles.name })
-    .from(eventRoleAssignees)
-    .innerJoin(eventRoles, eq(eventRoles.id, eventRoleAssignees.roleId))
-    .where(
-      and(
-        eq(eventRoleAssignees.userId, user.id),
-        inArray(
-          eventRoles.eventId,
-          rows.map((r) => r.e.id),
-        ),
-      ),
-    );
-  const out = [t.eventsTitle, ''];
-  for (const { e, group } of rows) {
-    const mineHere = duties.filter((d) => d.eventId === e.id).map((d) => d.role);
-    out.push(
-      `<b>${escapeHtml(e.title)}</b>\n${f.day(e.startsAt)}, ${f.time(e.startsAt)}${e.location ? ` · 📍 ${escapeHtml(e.location)}` : ''}\n<i>${escapeHtml(group)}</i>${mineHere.length ? `\n🛠 <b>${escapeHtml(mineHere.join(', '))}</b>` : ''}\n`,
-    );
-  }
-  return out.join('\n').trim();
+  if (rows.length === 0) return { empty: `${t.eventsTitle}\n\n${t.eventsEmpty}`, cards: [] };
+  const duties = await dutiesOf(
+    db,
+    rows.map((r) => r.e.id),
+  );
+  const cards = rows.map(({ e, group }) => {
+    const { lines, mine: myDuties } = dutyLines(duties, e.id, user.id);
+    const parts = [
+      `<b>${escapeHtml(e.title)}</b>`,
+      `🗓 ${f.day(e.startsAt)}, ${f.time(e.startsAt)}${e.location ? `\n📍 ${escapeHtml(e.location)}` : ''}`,
+      `<i>${escapeHtml(group)}</i>`,
+    ];
+    if (e.description) parts.push(escapeHtml(short(e.description, 220)));
+    if (lines.length) parts.push(`👥 <b>${t.responsible}</b>\n${lines.slice(0, 8).join('\n')}`);
+    if (myDuties.length) parts.push(`🛠 <b>${escapeHtml(t.eventYourDuty(myDuties.join(', ')))}</b>`);
+    return {
+      eventId: e.id,
+      text: parts.join('\n\n'),
+      pictureId: e.coverMediaId ?? e.posterMediaId ?? null,
+    };
+  });
+  return { empty: null, cards };
 }
 
-/** All meetings (and events) of the person's ministries for a week, a month or three months. */
+/** Telegram allows 4096 characters; the list stops a bit before that. */
+const MAX_CHARS = 3700;
+
+/**
+ * All meetings (and events) of the person's ministries for a week, a month or three
+ * months, with who leads, who brings the snacks, where, and a short note.
+ */
 export async function scheduleText(
   db: Db,
   user: User,
@@ -226,37 +304,59 @@ export async function scheduleText(
     db,
     ms.map((m) => m.id),
   );
+  const visible = ms.filter((m) => meetingIsFor(audience, m.id, user.id));
+  const people = await namesOf(db, [
+    ...visible.map((m) => m.leaderUserId),
+    ...visible.map((m) => m.snackUserId),
+  ]);
+  const duties = await dutiesOf(
+    db,
+    es.map((e) => e.id),
+  );
+  const ministry = (groupId: number) =>
+    ids.length > 1 ? ` · <i>${escapeHtml(names.get(groupId) ?? '')}</i>` : '';
+  const person = (id: number | null) =>
+    id ? escapeHtml(people.get(id) ?? '?') : `<i>${t.notAssigned}</i>`;
   type Row = { at: string; text: string };
   const rows: Row[] = [
-    ...ms
-      .filter((m) => meetingIsFor(audience, m.id, user.id))
-      .map((m) => ({
-        at: m.startsAt,
-        text: `${f.time(m.startsAt)} — ${escapeHtml(m.title)}${m.topic ? ` «${escapeHtml(m.topic)}»` : ''}${ids.length > 1 ? ` · <i>${escapeHtml(names.get(m.groupId) ?? '')}</i>` : ''}${
+    ...visible.map((m) => {
+      const lines = [
+        `${f.time(m.startsAt)} — <b>${escapeHtml(m.title)}</b>${m.topic ? ` «${escapeHtml(m.topic)}»` : ''}${ministry(m.groupId)}${
           m.leaderUserId === user.id || m.snackUserId === user.id ? ' 🛠' : ''
         }`,
-      })),
-    ...es.map((e) => ({
-      at: e.startsAt,
-      text: `${f.time(e.startsAt)} — 📅 <b>${escapeHtml(e.title)}</b>${e.location ? ` · ${escapeHtml(e.location)}` : ''}`,
-    })),
+        `   🎤 ${t.whoLeads}: ${person(m.leaderUserId)} · 🍪 ${t.whoSnacks}: ${person(m.snackUserId)}`,
+      ];
+      if (m.location) lines.push(`   📍 ${escapeHtml(m.location)}`);
+      if (m.notes) lines.push(`   <i>${escapeHtml(short(m.notes, 90))}</i>`);
+      return { at: m.startsAt, text: lines.join('\n') };
+    }),
+    ...es.map((e) => {
+      const lines = [
+        `${f.time(e.startsAt)} — 📅 <b>${escapeHtml(e.title)}</b>${ministry(e.groupId)}`,
+      ];
+      if (e.location) lines.push(`   📍 ${escapeHtml(e.location)}`);
+      if (e.description) lines.push(`   <i>${escapeHtml(short(e.description, 90))}</i>`);
+      const { lines: d } = dutyLines(duties, e.id, user.id);
+      lines.push(...d.slice(0, 5).map((x) => `   ${x}`));
+      return { at: e.startsAt, text: lines.join('\n') };
+    }),
   ].sort((a, b) => a.at.localeCompare(b.at));
   if (rows.length === 0) return `${head}\n\n${t.scheduleEmpty}`;
   const out = [head];
+  let size = head.length;
   let lastDay = '';
   let shown = 0;
   for (const r of rows) {
-    if (shown >= MAX_LINES) break;
     const k = f.key(r.at);
-    if (k !== lastDay) {
-      out.push('', `<b>${f.day(r.at)}</b>`);
-      lastDay = k;
-    }
-    out.push(r.text);
+    const block = k !== lastDay ? `\n\n<b>${f.day(r.at)}</b>\n${r.text}` : `\n\n${r.text}`;
+    if (size + block.length > MAX_CHARS) break;
+    out.push(block);
+    size += block.length;
+    lastDay = k;
     shown++;
   }
-  if (rows.length > shown) out.push('', t.moreItems(rows.length - shown));
-  return out.join('\n');
+  if (rows.length > shown) out.push(`\n\n${t.moreItems(rows.length - shown)}`);
+  return out.join('');
 }
 
 export type SchedulePeriod = Period;

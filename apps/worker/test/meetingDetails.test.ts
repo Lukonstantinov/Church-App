@@ -26,6 +26,7 @@ import {
   ADMIN,
   api,
   apiJson,
+  callsTo,
   fakeUser,
   mockTelegram,
   pressButton,
@@ -1184,20 +1185,71 @@ describe('personal bot commands', () => {
 
     calls.length = 0;
     await sendText(me, '/events');
-    const next = String((await sentTo(me.id, 'Ближайшие события'))!.body.text);
-    expect(next).toContain('Лагерь осени');
-    expect(next).toContain('Кухня');
+    expect(await sentTo(me.id, 'Ближайшие события')).toBeTruthy();
+    // Each event is its own card: where, who is responsible for what, and my duty.
+    const card = String((await sentTo(me.id, 'Лагерь осени'))!.body.text);
+    expect(card).toContain('Лес');
+    expect(card).toContain('Ответственные');
+    expect(card).toContain('Кухня</b> — Командир');
+    expect(card).toContain('Ваше служение: Кухня');
 
     calls.length = 0;
     await sendText(me, '/schedule');
     const week = String((await sentTo(me.id, 'Расписание'))!.body.text);
     expect(week).toContain('Вечер молодёжи');
+    // Who leads and who brings the snacks.
+    expect(week).toContain('Ведущий: Командир');
+    expect(week).toContain('Снеки: <i>не назначен</i>');
     expect(week).not.toContain('Далёкая встреча');
     expect(week).not.toContain('Лагерь осени'); // 10 days away: not in a week
     await pressButton(me, 'sc:q');
     const edit = [...calls].reverse().find((c) => c.method === 'editMessageText');
     expect(String(edit!.body.text)).toContain('Далёкая встреча');
     expect(String(edit!.body.text)).toContain('Лагерь осени');
+    expect(String(edit!.body.text)).toContain('Кухня</b> — Командир');
+  });
+
+  it('/events sends an event with a poster as a photo with the details as the caption', async () => {
+    const g = await createEnv('Постер события');
+    const me = fakeUser('Смотрящий постер');
+    await join(me, g);
+    const poster = (
+      (await (
+        await api(`/api/groups/${g.id}/media?kind=event`, {
+          method: 'POST',
+          user: ADMIN,
+          body: PNG,
+        })
+      ).json()) as { id: number }
+    ).id;
+    const ev = await apiJson<{ id: number }>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'Вечер с постером',
+        date: addDays(localDate(new Date(), TZ), 5),
+        startTime: '18:00',
+        posterMediaId: poster,
+      },
+    });
+    calls.length = 0;
+    await sendText(me, '/events');
+    const photo = callsTo(calls, 'sendPhoto').find((c) =>
+      String(c.body.caption).includes('Вечер с постером'),
+    );
+    expect(photo).toBeTruthy();
+    expect(String(photo!.body.photo)).toContain(`/media/m/${poster}?`);
+
+    // Editing can take the poster away.
+    await apiJson(`/api/events/${ev.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { posterMediaId: null },
+    });
+    calls.length = 0;
+    await sendText(me, '/events');
+    expect(callsTo(calls, 'sendPhoto')).toHaveLength(0);
+    expect(await sentTo(me.id, 'Вечер с постером')).toBeTruthy();
   });
 });
 

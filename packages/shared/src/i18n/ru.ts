@@ -1222,6 +1222,10 @@ export const ru = {
     moreItems: (n: number) => `…и ещё ${n}. Всё расписание — в приложении.`,
     youAre: 'Вы',
     leadsRole: 'лидер',
+    whoLeads: 'Ведущий',
+    whoSnacks: 'Снеки',
+    notAssigned: 'не назначен',
+    responsible: 'Ответственные',
     meetingButton: 'Открыть встречу',
     postHasExtras: '📎 В посте есть вложения, опрос или таблица — откройте приложение',
     chatLinked: (ministry: string) =>

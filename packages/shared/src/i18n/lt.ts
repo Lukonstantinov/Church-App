@@ -1222,6 +1222,10 @@ export const lt: Messages = {
     moreItems: (n: number) => `…ir dar ${n}. Visas tvarkaraštis — programoje.`,
     youAre: 'Jūs',
     leadsRole: 'vadovas',
+    whoLeads: 'Veda',
+    whoSnacks: 'Užkandžiai',
+    notAssigned: 'nepaskirta',
+    responsible: 'Atsakingi',
     meetingButton: 'Atidaryti susitikimą',
     postHasExtras: '📎 Įraše yra priedų, apklausa ar lentelė — atidarykite programėlę',
     chatLinked: (ministry: string) =>

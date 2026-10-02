@@ -12,6 +12,7 @@ import { BURN_COLORS, BURN_STYLES } from '../components/Burn';
 import { COUNTDOWN_COLORS, COUNTDOWN_SIZES, CountdownBadge } from '../components/Countdown';
 import { Pill } from '../components/LookControls';
 import { PosterMedia } from '../components/Poster';
+import { capturePoster } from '../lib/poster';
 import { Sheet } from '../components/Sheet';
 import {
   IconCalendar,
@@ -151,6 +152,19 @@ function EventFormBody({
     setLook((c) => ({ ...c, design: { ...c.design, ...patch } }));
   const [rolePicker, setRolePicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const posterNode = useRef<HTMLDivElement>(null);
+  // The designed cover (no photo) is also saved as a picture, for the bot.
+  const designedCover = !cover && !!look.design.banner;
+
+  async function makePoster(): Promise<number | null> {
+    if (!designedCover || !posterNode.current) return null;
+    const blob = await capturePoster(posterNode.current);
+    if (!blob) return null;
+    return upload
+      .mutateAsync(blob)
+      .then((m) => m.id)
+      .catch(() => null);
+  }
 
   const priceCents = price.trim() ? parseAmount(price) : null;
   const chatOk = !chatUrl.trim() || CHAT_RE.test(chatUrl.trim());
@@ -203,7 +217,9 @@ function EventFormBody({
             userIds: r.userIds,
           }))
       : [];
+    const posterMediaId = await makePoster();
     const common = {
+      posterMediaId,
       title: title.trim(),
       description,
       location,
@@ -313,6 +329,21 @@ function EventFormBody({
             {upload.isPending ? t.treasury.uploading : t.events.addCover}
           </span>
         </button>
+      )}
+
+      {/* The designed cover at full size, off screen: the picture the bot sends is taken from it. */}
+      {designedCover && (
+        <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0, width: 720 }}>
+          <div ref={posterNode}>
+            <PosterMedia
+              title={title.trim() || t.events.name}
+              photos={[]}
+              tint={null}
+              look={coverLook.look}
+              design={look.design}
+            />
+          </div>
+        </div>
       )}
 
       {!cover && (

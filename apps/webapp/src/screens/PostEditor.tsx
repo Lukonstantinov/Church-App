@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
+import { capturePoster } from '../lib/poster';
 import {
-  MEDIA_MAX_BYTES,
   POST_KINDS,
   POST_KIND_KEYS,
   fontFamily,
@@ -141,32 +141,13 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
 
   /** The cover as a picture (for the bot message): drawn at full size off screen, then uploaded. */
   async function makePoster(): Promise<number | null> {
-    const node = posterNode.current;
-    if (!coverShown || !node) return null;
-    try {
-      const { toJpeg } = await import('html-to-image');
-      const attempts = [
-        [1.5, 0.85],
-        [1.5, 0.7],
-        [1, 0.7],
-        [1, 0.5],
-      ] as const;
-      for (const skipFonts of [false, true]) {
-        try {
-          for (const [pixelRatio, quality] of attempts) {
-            const dataUrl = await toJpeg(node, { pixelRatio, quality, skipFonts });
-            const blob = await (await fetch(dataUrl)).blob();
-            if (blob.size <= MEDIA_MAX_BYTES) return (await upload.mutateAsync(blob)).id;
-          }
-          return null;
-        } catch {
-          // Embedding the fonts failed: try again without them.
-        }
-      }
-    } catch {
-      // No poster is better than no post.
-    }
-    return null;
+    if (!coverShown || !posterNode.current) return null;
+    const blob = await capturePoster(posterNode.current);
+    if (!blob) return null;
+    return upload
+      .mutateAsync(blob)
+      .then((m) => m.id)
+      .catch(() => null);
   }
 
   async function submit() {

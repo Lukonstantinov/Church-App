@@ -8,6 +8,7 @@ import { acceptPrivacy, upsertTelegramUser } from '../lib/users';
 import { churchDefaultLocale, localeOf } from '../lib/church';
 import { getBotInfo } from '../lib/telegram';
 import { DEEP_LINK } from '../lib/codes';
+import { signedMediaUrl } from '../lib/media';
 import {
   announceJoinDecision,
   decideJoin,
@@ -16,12 +17,7 @@ import {
 } from '../lib/membership';
 import { can } from '../lib/access';
 import { claimProfile } from '../lib/claim';
-import {
-  myServicesText,
-  nearestEventsText,
-  scheduleText,
-  type SchedulePeriod,
-} from '../lib/botDigest';
+import { myServicesText, nearestEvents, scheduleText, type SchedulePeriod } from '../lib/botDigest';
 import { completeChatLink, handleJoinRequest, retryPendingLink } from '../lib/chats';
 import {
   completeEventChatLink,
@@ -234,11 +230,40 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     });
   });
 
+  // One message per event: its poster (cover photo or designed cover) with the details as
+  // the caption; without a picture, or when it can't be sent, the details as text.
   pm.command('events', async (ctx) => {
-    await ctx.reply(await nearestEventsText(db, ctx.dbUser, localeOf(ctx.dbUser, churchLocale)), {
-      parse_mode: 'HTML',
-      reply_markup: openAppKeyboard(ctx.t),
-    });
+    const { empty, cards } = await nearestEvents(
+      db,
+      ctx.dbUser,
+      localeOf(ctx.dbUser, churchLocale),
+    );
+    if (empty) {
+      await ctx.reply(empty, { parse_mode: 'HTML', reply_markup: openAppKeyboard(ctx.t) });
+      return;
+    }
+    const base = appUrl.replace(/\/+$/, '');
+    await ctx.reply(ctx.t.bot.eventsTitle, { parse_mode: 'HTML' });
+    for (const card of cards) {
+      const reply_markup = new InlineKeyboard().webApp(
+        ctx.t.bot.eventButton,
+        `${base}/?event=${card.eventId}`,
+      );
+      if (card.pictureId) {
+        const photo = `${base}${await signedMediaUrl(env.WEBHOOK_SECRET, card.pictureId)}`;
+        const fits = card.text.length <= 1024;
+        const sent = await ctx
+          .replyWithPhoto(photo, {
+            caption: fits ? card.text : card.text.split('\n\n')[0],
+            parse_mode: 'HTML',
+            ...(fits ? { reply_markup } : {}),
+          })
+          .then(() => true)
+          .catch(() => false);
+        if (sent && fits) continue;
+      }
+      await ctx.reply(card.text, { parse_mode: 'HTML', reply_markup });
+    }
   });
 
   const scheduleKeyboard = (t: Messages, current: SchedulePeriod) =>

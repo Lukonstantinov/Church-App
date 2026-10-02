@@ -63,6 +63,8 @@ export const createEventSchema = z.object({
   endTime: time.nullish(),
   location: optionalText(120),
   coverMediaId: z.number().int().positive().nullish(),
+  /** The designed cover as a picture, made by the app (for the bot). */
+  posterMediaId: z.number().int().positive().nullish(),
   /** Cover design when there is no cover photo (same choices as posts). */
   design: postDesignSchema.nullish(),
   templateId: z.number().int().positive().nullish(),
@@ -86,6 +88,7 @@ export const updateEventSchema = z.object({
   endTime: time.nullish(),
   location: optionalText(120).optional(),
   coverMediaId: z.number().int().positive().nullable().optional(),
+  posterMediaId: z.number().int().positive().nullable().optional(),
   design: postDesignSchema.nullable().optional(),
   templateId: z.number().int().positive().nullable().optional(),
   countdown: z.boolean().optional(),

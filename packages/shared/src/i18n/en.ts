@@ -1199,6 +1199,10 @@ export const en: Messages = {
     moreItems: (n: number) => `…and ${n} more. The full schedule is in the app.`,
     youAre: 'You',
     leadsRole: 'leader',
+    whoLeads: 'Leads',
+    whoSnacks: 'Snacks',
+    notAssigned: 'not assigned',
+    responsible: 'Who is responsible',
     meetingButton: 'Open the meeting',
     postHasExtras: '📎 This post has attachments, a poll or a table — open the app',
     chatLinked: (ministry: string) =>

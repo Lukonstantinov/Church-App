@@ -95,6 +95,7 @@ groupEventRoutes.post('/:id/events', async (c) => {
   const { timezone } = await getChurch(db);
   const times = eventTimes(input, timezone);
   if (input.coverMediaId) await assertGroupMedia(db, group.id, input.coverMediaId);
+  if (input.posterMediaId) await assertGroupMedia(db, group.id, input.posterMediaId);
   await assertDesign(db, group.id, input.design, input.templateId);
   const [row] = await db
     .insert(events)
@@ -105,6 +106,7 @@ groupEventRoutes.post('/:id/events', async (c) => {
       ...times,
       location: input.location,
       coverMediaId: input.coverMediaId ?? null,
+      posterMediaId: input.posterMediaId ?? null,
       design: input.design ? JSON.stringify(input.design) : null,
       templateId: input.templateId ?? null,
       countdown: input.countdown ?? false,
@@ -336,6 +338,10 @@ eventRoutes.patch('/:id', async (c) => {
   if (input.coverMediaId !== undefined) {
     if (input.coverMediaId) await assertGroupMedia(db, event.groupId, input.coverMediaId);
     patch.coverMediaId = input.coverMediaId;
+  }
+  if (input.posterMediaId !== undefined) {
+    if (input.posterMediaId) await assertGroupMedia(db, event.groupId, input.posterMediaId);
+    patch.posterMediaId = input.posterMediaId;
   }
   if (input.date !== undefined || input.startTime !== undefined) {
     if (!input.date || !input.startTime) throw new HTTPException(400, { message: 'date_and_time' });

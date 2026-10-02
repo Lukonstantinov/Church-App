@@ -455,6 +455,8 @@ export const events = sqliteTable(
     endsAt: text('ends_at'),
     location: text('location'),
     coverMediaId: integer('cover_media_id').references(() => media.id),
+    /** The designed cover drawn as a picture (sent by the bot when there is no cover photo). */
+    posterMediaId: integer('poster_media_id').references(() => media.id),
     hasGallery: integer('has_gallery', { mode: 'boolean' }).notNull().default(false),
     hasRsvp: integer('has_rsvp', { mode: 'boolean' }).notNull().default(false),
     hasDuties: integer('has_duties', { mode: 'boolean' }).notNull().default(false),

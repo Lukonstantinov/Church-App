@@ -1,0 +1,1 @@
+ALTER TABLE `events` ADD `poster_media_id` integer REFERENCES media(id);
