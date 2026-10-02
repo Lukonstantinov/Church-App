@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { groupColor, type GroupSummary } from '@church/shared';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
+import { useGroups } from '../lib/queries';
 import { BrandHeader } from './BrandHeader';
 import { Sheet, SheetOption } from './Sheet';
 
@@ -14,11 +15,14 @@ export function GroupDot({
   size?: number;
   theme?: string | null;
 }) {
+  // Without a theme given, the ministry's own one (so a ministry has one colour everywhere).
+  const groups = useGroups(theme === undefined);
+  const own = theme === undefined ? groups.data?.find((g) => g.id === id)?.brandColor : theme;
   return (
     <span
       aria-hidden="true"
       className="inline-block shrink-0 rounded-full"
-      style={{ width: size, height: size, background: groupColor(id, theme) }}
+      style={{ width: size, height: size, background: groupColor(id, own) }}
     />
   );
 }

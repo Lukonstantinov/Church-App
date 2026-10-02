@@ -11,6 +11,7 @@ import {
   type events,
 } from '../db/schema';
 import { recordNotification } from './notifications';
+import { eventPictureUrl, eventRoster, rosterLines, type Roster } from './eventRoster';
 
 type Event = typeof events.$inferSelect;
 import { churchDefaultLocale, getAppUrl, getChurch, localeOf } from './church';
@@ -18,6 +19,50 @@ import { escapeHtml } from './html';
 import { enqueue } from './outbox';
 
 const stripTags = (html: string) => html.replace(/<[^>]+>/g, '');
+
+/** Buttons under an event message: open it, and (when it has duties) who serves where. */
+function eventKeyboard(
+  t: ReturnType<typeof messages>,
+  eventId: number,
+  appUrl: string | undefined,
+  hasDuties: boolean,
+) {
+  const kb = new InlineKeyboard();
+  if (appUrl) kb.webApp(t.bot.eventButton, `${appUrl}/?event=${eventId}`);
+  if (hasDuties) {
+    if (appUrl) kb.row();
+    kb.text(t.bot.rosterButton, `ro:${eventId}`);
+  }
+  return appUrl || hasDuties ? kb : undefined;
+}
+
+/** An event message for the outbox: with the event's picture when it has one and the text fits. */
+function eventPayload(
+  chatId: number,
+  html: string,
+  picture: string | null,
+  reply_markup: InlineKeyboard | undefined,
+) {
+  // Photo captions are limited to 1024 characters; longer messages go as text.
+  return picture && html.length <= 1024
+    ? {
+        method: 'sendPhoto' as const,
+        payload: {
+          chat_id: chatId,
+          photo: picture,
+          caption: html,
+          parse_mode: 'HTML',
+          reply_markup,
+        },
+      }
+    : {
+        method: 'sendMessage' as const,
+        payload: { chat_id: chatId, text: html, parse_mode: 'HTML', reply_markup },
+      };
+}
+
+const dotOf = (roster: Roster, name: string) =>
+  roster.find((r) => r.name === name)?.color.dot ?? '•';
 
 async function whenOf(db: Db, event: Event, locale: Locale) {
   const { timezone } = await getChurch(db);
@@ -104,12 +149,18 @@ export async function sendEventReminder(
     fallbackUrl: string | null;
     /** Stable key part so an automatic reminder can't be queued twice. */
     dedupe?: string;
+    /** Signs the event picture's link (no picture without it). */
+    secret?: string;
+    /** Add who serves where. */
+    roster?: boolean;
   },
 ): Promise<{ total: number; bot: number }> {
   const fallback = await churchDefaultLocale(db);
   const appUrl = ((await getAppUrl(db, args.envAppUrl)) ?? args.fallbackUrl)?.replace(/\/+$/, '');
   const list = await recipients(db, args.group.id, args.userIds);
   const stamp = args.dedupe ?? String(Date.now());
+  const roster = await eventRoster(db, args.event.id);
+  const picture = await eventPictureUrl(args.event, args.secret, appUrl);
   let bot = 0;
   for (const r of list) {
     const locale = localeOf({ locale: r.locale }, fallback);
@@ -134,6 +185,8 @@ export async function sendEventReminder(
       if (more.duty) html += `\n\n🛠 ${escapeHtml(more.duty)}`;
       body = [when, args.event.location, more.description, more.duty].filter(Boolean).join('\n');
     }
+    if (args.roster && roster.length)
+      html += `\n\n👥 <b>${t.bot.responsible}</b>\n${rosterLines(roster, locale).join('\n')}`;
     if (args.senderName) html += `\n\n<i>${escapeHtml(t.bot.sentBy(args.senderName))}</i>`;
     await recordNotification(db, {
       userId: r.id,
@@ -143,13 +196,10 @@ export async function sendEventReminder(
       link: { type: 'event', eventId: args.event.id },
     });
     if (!r.bot) continue;
-    const reply_markup = appUrl
-      ? new InlineKeyboard().webApp(t.bot.eventButton, `${appUrl}/?event=${args.event.id}`)
-      : undefined;
+    const reply_markup = eventKeyboard(t, args.event.id, appUrl, roster.length > 0);
     await enqueue(db, {
       chatId: r.chatId!,
-      method: 'sendMessage',
-      payload: { chat_id: r.chatId, text: html, parse_mode: 'HTML', reply_markup },
+      ...eventPayload(r.chatId!, html, picture, reply_markup),
       dedupeKey: `evremind:${args.event.id}:${r.chatId}:${stamp}`,
     });
     bot++;
@@ -170,6 +220,8 @@ export async function notifyDuties(
     sender: { id: number; name: string };
     envAppUrl?: string;
     fallbackUrl: string | null;
+    /** Signs the event picture's link (no picture without it). */
+    secret?: string;
   },
 ): Promise<DutiesNotice> {
   const fallback = await churchDefaultLocale(db);
@@ -188,6 +240,8 @@ export async function notifyDuties(
     })
     .from(users)
     .where(inArray(users.id, [...byUser.keys()]));
+  const roster = await eventRoster(db, args.event.id);
+  const picture = await eventPictureUrl(args.event, args.secret, appUrl);
   let queued = 0;
   // People the bot can't write to (never started it, or blocked it) are named, so the sender knows.
   const skipped: string[] = [];
@@ -216,20 +270,17 @@ export async function notifyDuties(
       .get(p.id)!
       .map(
         (d) =>
-          `• <b>${escapeHtml(d.roleName)}</b>${d.description ? ` — ${escapeHtml(d.description)}` : ''}`,
+          `${dotOf(roster, d.roleName)} <b>${escapeHtml(d.roleName)}</b>${d.description ? ` — ${escapeHtml(d.description)}` : ''}`,
       )
       .join('\n');
     const when = await whenOf(db, args.event, locale);
     let html = t.bot.eventDuty(escapeHtml(args.event.title), when, duties);
     if (args.event.location) html += `\n📍 ${escapeHtml(args.event.location)}`;
     html += `\n\n<i>${escapeHtml(t.bot.sentBy(args.sender.name))}</i>`;
-    const reply_markup = appUrl
-      ? new InlineKeyboard().webApp(t.bot.eventButton, `${appUrl}/?event=${args.event.id}`)
-      : undefined;
+    const reply_markup = eventKeyboard(t, args.event.id, appUrl, roster.length > 0);
     await enqueue(db, {
       chatId: p.chatId,
-      method: 'sendMessage',
-      payload: { chat_id: p.chatId, text: html, parse_mode: 'HTML', reply_markup },
+      ...eventPayload(p.chatId, html, picture, reply_markup),
       dedupeKey: `evduty:${args.event.id}:${p.chatId}:${Date.now()}`,
     });
     queued++;

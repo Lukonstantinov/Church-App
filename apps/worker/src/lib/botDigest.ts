@@ -1,5 +1,5 @@
 import { and, asc, eq, gte, inArray, isNotNull, lt, ne, or } from 'drizzle-orm';
-import { INTL_LOCALE, displayName, messages, type Locale } from '@church/shared';
+import { INTL_LOCALE, displayName, dutyColor, messages, type Locale } from '@church/shared';
 import type { Db } from '../db/client';
 import {
   eventRoleAssignees,
@@ -178,7 +178,7 @@ type Duties = Awaited<ReturnType<typeof dutiesOf>>;
 function dutyLines(d: Duties, eventId: number, userId: number) {
   const lines: string[] = [];
   const mine: string[] = [];
-  for (const r of d.roles.filter((x) => x.eventId === eventId)) {
+  for (const [i, r] of d.roles.filter((x) => x.eventId === eventId).entries()) {
     const people = d.assignees.filter((a) => a.roleId === r.id).map((a) => a.userId);
     if (people.includes(userId) || r.leaderUserId === userId) mine.push(r.name);
     const names = [
@@ -186,7 +186,7 @@ function dutyLines(d: Duties, eventId: number, userId: number) {
       ...people.filter((id) => id !== r.leaderUserId).map((id) => d.names.get(id) ?? '?'),
     ];
     lines.push(
-      `• <b>${escapeHtml(r.name)}</b> — ${names.length ? escapeHtml(names.join(', ')) : '…'}`,
+      `${dutyColor(i).dot} <b>${escapeHtml(r.name)}</b> — ${names.length ? escapeHtml(names.join(', ')) : '…'}`,
     );
   }
   return { lines, mine };
@@ -360,3 +360,37 @@ export async function scheduleText(
 }
 
 export type SchedulePeriod = Period;
+
+/** Who serves where at the nearest events that have duties, in one message. */
+export async function rosterText(db: Db, user: User, locale: Locale): Promise<string> {
+  const t = messages(locale).bot;
+  const f = await formatter(db, locale);
+  const ids = (await myGroups(db, user.id)).map((g) => g.groupId);
+  const rows = ids.length
+    ? await db
+        .select()
+        .from(events)
+        .where(
+          and(
+            inArray(events.groupId, ids),
+            eq(events.hasDuties, true),
+            gte(events.startsAt, new Date().toISOString()),
+            ne(events.status, 'cancelled'),
+          ),
+        )
+        .orderBy(asc(events.startsAt))
+        .limit(3)
+    : [];
+  if (rows.length === 0) return `${t.rosterButton}\n\n${t.rosterEmpty}`;
+  const duties = await dutiesOf(
+    db,
+    rows.map((e) => e.id),
+  );
+  const parts = rows.map((e) => {
+    const { lines } = dutyLines(duties, e.id, user.id);
+    return `${t.rosterTitle(escapeHtml(e.title))}\n🗓 ${f.day(e.startsAt)}, ${f.time(e.startsAt)}\n\n${
+      lines.length ? lines.join('\n') : t.rosterEmpty
+    }`;
+  });
+  return parts.join('\n\n').slice(0, 4000);
+}

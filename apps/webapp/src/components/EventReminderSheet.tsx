@@ -13,7 +13,7 @@ import {
 import { IconCheck, IconSend } from './icons';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
-import { Button } from './ui';
+import { Button, Toggle } from './ui';
 
 /**
  * Remind people about an event: read and change the text, pick who gets it (everyone,
@@ -39,6 +39,7 @@ export function EventReminderSheet({
   const [loading, setLoading] = useState(true);
   const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
   const [done, setDone] = useState<number | null>(null);
+  const [withRoster, setWithRoster] = useState(false);
 
   const serving = [
     ...new Set((detail.data?.roles ?? []).flatMap((r) => r.assignees.map((a) => a.id))),
@@ -78,6 +79,7 @@ export function EventReminderSheet({
         id: eventId,
         text: text.trim() || undefined,
         userIds: audienceIds(audience, presets),
+        roster: withRoster,
       });
       if (res.sent === 0) {
         haptic.error();
@@ -116,6 +118,12 @@ export function EventReminderSheet({
           <p className="-mt-1 text-[12px] text-hint">
             {t.meetings.signatureHint} <i>{t.bot.sentBy(displayName(me.data.user))}</i>
           </p>
+        )}
+        {(detail.data?.roles.length ?? 0) > 0 && (
+          <div className="overflow-hidden rounded-xl bg-hairline/60">
+            <Toggle label={t.events.withRoster} checked={withRoster} onChange={setWithRoster} />
+            <p className="-mt-1 px-4 pb-2.5 text-[12px] text-hint">{t.events.withRosterHint}</p>
+          </div>
         )}
         <AudienceChoice
           groupId={groupId}

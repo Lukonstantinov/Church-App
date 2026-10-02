@@ -462,6 +462,8 @@ export const remindEventSchema = z.object({
   text: z.string().trim().min(1).max(3000).optional(),
   /** Only these people (user ids); omitted or null = everyone in the ministry. */
   userIds: z.array(z.number().int().positive()).max(500).nullish(),
+  /** Add who serves where (every duty with its people). */
+  roster: z.boolean().optional(),
 });
 export type RemindEventInput = z.input<typeof remindEventSchema>;
 

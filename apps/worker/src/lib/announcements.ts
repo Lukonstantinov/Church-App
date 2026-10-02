@@ -19,6 +19,7 @@ import {
   announcementReactions,
   announcements,
   designTemplates,
+  events,
   groups,
   memberships,
   pollVotes,
@@ -96,7 +97,13 @@ export async function queuePostMessages(
     .join('\n\n');
   const hasExtras = blocks.some((b) => b.type !== 'text');
   // The poster (the cover as a picture) leads; without one the first photo does.
-  const firstPhoto = row.posterMediaId ?? row.mediaIds?.[0];
+  // A post announcing an event without pictures of its own shows the event's.
+  const event =
+    !row.posterMediaId && !row.mediaIds?.length && row.eventId
+      ? await db.query.events.findFirst({ where: eq(events.id, row.eventId) })
+      : undefined;
+  const firstPhoto =
+    row.posterMediaId ?? row.mediaIds?.[0] ?? event?.coverMediaId ?? event?.posterMediaId;
   const photoUrl =
     firstPhoto && appUrl ? `${appUrl}${await signedMediaUrl(args.secret, firstPhoto)}` : null;
   for (const m of args.targets) {

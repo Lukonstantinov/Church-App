@@ -1320,3 +1320,100 @@ describe('post posters', () => {
     expect(String(again!.body.caption)).toContain('Напоминание о публикации');
   });
 });
+
+describe('event messages: poster, duty colours, who serves where', () => {
+  const photoTo = async (chatId: number, text: string) => {
+    for (let i = 0; i < 20; i++) {
+      const hit = calls.find(
+        (c) =>
+          c.method === 'sendPhoto' &&
+          c.body.chat_id === chatId &&
+          String(c.body.caption).includes(text),
+      );
+      if (hit) return hit;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    return undefined;
+  };
+
+  it('duty and reminder messages carry the poster, coloured duties and a roster button', async () => {
+    const g = await createEnv('Цветные служения');
+    const a = fakeUser('Звукач');
+    const b = fakeUser('Дворник');
+    const outsider = fakeUser('Чужак');
+    const aId = await join(a, g);
+    const bId = await join(b, g);
+    await sendText(outsider, '/start');
+    const poster = (
+      (await (
+        await api(`/api/groups/${g.id}/media?kind=event`, {
+          method: 'POST',
+          user: ADMIN,
+          body: PNG,
+        })
+      ).json()) as { id: number }
+    ).id;
+    calls.length = 0;
+    const ev = await apiJson<EventSummary>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'Слёт',
+        date: addDays(localDate(new Date(), TZ), 4),
+        startTime: '12:00',
+        posterMediaId: poster,
+        features: { duties: true },
+        roles: [
+          { name: 'Техника', userIds: [aId], leaderId: aId },
+          { name: 'Уборка', userIds: [bId] },
+        ],
+        notifyAssigned: true,
+      },
+    });
+
+    // The duty message is the poster with the details as its caption; each duty has its colour.
+    const toA = await photoTo(a.id, 'Вам назначено служение');
+    expect(String(toA!.body.photo)).toContain(`/media/m/${poster}?`);
+    expect(String(toA!.body.caption)).toContain('🔴 <b>Техника</b>');
+    expect(JSON.stringify(toA!.body.reply_markup)).toContain(`ro:${ev.id}`);
+    expect(String((await photoTo(b.id, 'Вам назначено служение'))!.body.caption)).toContain(
+      '🔵 <b>Уборка</b>',
+    );
+
+    // The button shows who serves where, in one message.
+    calls.length = 0;
+    await pressButton(b, `ro:${ev.id}`);
+    const roster = String((await sentTo(b.id, 'Кто где служит'))!.body.text);
+    expect(roster).toContain('🔴 <b>Техника</b> — ★ Звукач');
+    expect(roster).toContain('🔵 <b>Уборка</b> — Дворник');
+    // Not for people outside the ministry.
+    calls.length = 0;
+    await pressButton(outsider, `ro:${ev.id}`);
+    expect(await sentTo(outsider.id, 'Кто где служит')).toBeUndefined();
+
+    // A reminder can add who serves where.
+    calls.length = 0;
+    await apiJson(`/api/events/${ev.id}/remind`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { roster: true, userIds: [aId] },
+    });
+    const reminder = String((await photoTo(a.id, 'Слёт'))!.body.caption);
+    expect(reminder).toContain('Ответственные');
+    expect(reminder).toContain('Уборка</b> — Дворник');
+
+    // /roster: the nearest events with duties.
+    calls.length = 0;
+    await sendText(a, '/roster');
+    expect(String((await sentTo(a.id, 'Кто где служит'))!.body.text)).toContain('Слёт');
+
+    // When Telegram can't use the picture, the text still arrives.
+    calls = mockTelegram({ failMethods: ['sendPhoto'] });
+    await apiJson(`/api/events/${ev.id}/remind`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { text: 'Последний сбор', userIds: [bId] },
+    });
+    expect(await sentTo(b.id, 'Последний сбор')).toBeDefined();
+  });
+});

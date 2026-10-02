@@ -14,6 +14,7 @@ import {
   type EventRole,
   type PersonRef,
   type RsvpStatus,
+  dutyColor,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { Pill } from '../components/LookControls';
@@ -394,12 +395,20 @@ function DutiesBlock({ e }: { e: EventDetail }) {
       {e.roles.length === 0 ? (
         <p className="px-4 py-4 text-[15px] text-hint">{t.events.noRoles}</p>
       ) : (
-        e.roles.map((r) => {
+        e.roles.map((r, i) => {
           const full = r.assignees.length >= r.slots;
+          // Each duty has its own colour (the same dot is used in the bot messages).
+          const color = dutyColor(i).hex;
           const content = (
             <>
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[16px] font-semibold">{r.name}</span>
+                <span className="flex items-center gap-2 text-[16px] font-semibold">
+                  <span
+                    className="h-3 w-3 shrink-0 self-center rounded-full"
+                    style={{ background: color, boxShadow: `0 0 0 3px ${color}33` }}
+                  />
+                  {r.name}
+                </span>
                 <span
                   className={`text-[13px] font-semibold ${full ? 'text-present' : 'text-late'}`}
                 >
@@ -432,12 +441,17 @@ function DutiesBlock({ e }: { e: EventDetail }) {
               key={r.id}
               type="button"
               onClick={() => setEditing(r)}
+              style={{ boxShadow: `inset 4px 0 0 ${color}` }}
               className="block w-full border-b border-hairline px-4 py-3 text-left last:border-b-0 active:bg-hairline"
             >
               {content}
             </button>
           ) : (
-            <div key={r.id} className="border-b border-hairline px-4 py-3 last:border-b-0">
+            <div
+              key={r.id}
+              style={{ boxShadow: `inset 4px 0 0 ${color}` }}
+              className="border-b border-hairline px-4 py-3 last:border-b-0"
+            >
               {content}
             </div>
           );

@@ -351,9 +351,9 @@ export const announcements = sqliteTable(
     recipients: integer('recipients').notNull().default(0),
     /** Pinned posts come first in the ministry's feed. */
     pinnedAt: text('pinned_at'),
-    /** The event this post announces (written when the event was created). */
     /** The post's poster picture (rendered on the phone), sent with the bot message. */
     posterMediaId: integer('poster_media_id').references(() => media.id),
+    /** The event this post announces (written when the event was created). */
     eventId: integer('event_id'),
     editedAt: text('edited_at'),
     /** PostDesign JSON: cover, type, colour, fonts; NULL = defaults. */

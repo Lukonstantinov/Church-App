@@ -34,6 +34,7 @@ export async function enqueue(db: Db, msg: OutboxMessage): Promise<boolean> {
  * Sends due messages, at most `limit` per call (the Worker may make ~50 outgoing
  * requests per run, and Telegram allows ~30 messages/second overall).
  * - 429: waits Telegram's `retry_after` and stops this batch.
+ * - a picture Telegram can't use: sent again as text.
  * - 403 (blocked the bot): message is dead, the user is marked unreachable.
  * - anything else: exponential backoff, dead after 5 attempts.
  */
@@ -56,7 +57,15 @@ export async function drainOutbox(
     try {
       const call = raw[row.method];
       if (!call) throw new Error(`unknown method ${row.method}`);
-      await call.call(api.raw, row.payload);
+      try {
+        await call.call(api.raw, row.payload);
+      } catch (err) {
+        // Telegram couldn't use the picture (link not reachable, bad file): the text still goes.
+        if (!(row.method === 'sendPhoto' && err instanceof GrammyError && err.error_code === 400))
+          throw err;
+        const { photo: _photo, caption, ...rest } = row.payload as Record<string, unknown>;
+        await raw.sendMessage!.call(api.raw, { ...rest, text: caption ?? '' });
+      }
       await db.update(outbox).set({ status: 'sent', lastError: null }).where(eq(outbox.id, row.id));
       sent++;
     } catch (err) {

@@ -3,7 +3,9 @@ import { Bot, InlineKeyboard, type Context } from 'grammy';
 import { displayName, messages, type Messages } from '@church/shared';
 import { adminTelegramIds, type Env } from '../env';
 import { getDb, type Db } from '../db/client';
-import { memberships, type User } from '../db/schema';
+import { events, memberships, type User } from '../db/schema';
+import { eventRoster, rosterMessage } from '../lib/eventRoster';
+import { eventAccess } from '../lib/events';
 import { acceptPrivacy, upsertTelegramUser } from '../lib/users';
 import { churchDefaultLocale, localeOf } from '../lib/church';
 import { getBotInfo } from '../lib/telegram';
@@ -17,7 +19,13 @@ import {
 } from '../lib/membership';
 import { can } from '../lib/access';
 import { claimProfile } from '../lib/claim';
-import { myServicesText, nearestEvents, scheduleText, type SchedulePeriod } from '../lib/botDigest';
+import {
+  myServicesText,
+  nearestEvents,
+  rosterText,
+  scheduleText,
+  type SchedulePeriod,
+} from '../lib/botDigest';
 import { completeChatLink, handleJoinRequest, retryPendingLink } from '../lib/chats';
 import {
   completeEventChatLink,
@@ -281,6 +289,39 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     });
   });
 
+  // "Who serves where" under an event message, and as a command for the nearest events.
+  pm.callbackQuery(/^ro:(\d+)$/, async (ctx) => {
+    const locale = localeOf(ctx.dbUser, churchLocale);
+    const event = await db.query.events.findFirst({
+      where: eq(events.id, Number(ctx.match[1])),
+    });
+    const visible =
+      event &&
+      (await eventAccess(db, ctx.dbUser, event).then(
+        () => true,
+        () => false,
+      ));
+    if (!event || !visible) {
+      await ctx.answerCallbackQuery({ text: ctx.t.bot.rosterEmpty });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    await ctx.reply(rosterMessage(event, await eventRoster(db, event.id), locale), {
+      parse_mode: 'HTML',
+      reply_markup: new InlineKeyboard().webApp(
+        ctx.t.bot.eventButton,
+        `${appUrl.replace(/\/+$/, '')}/?event=${event.id}`,
+      ),
+    });
+  });
+
+  pm.command('roster', async (ctx) => {
+    await ctx.reply(await rosterText(db, ctx.dbUser, localeOf(ctx.dbUser, churchLocale)), {
+      parse_mode: 'HTML',
+      reply_markup: openAppKeyboard(ctx.t),
+    });
+  });
+
   pm.callbackQuery(/^sc:([wmq])$/, async (ctx) => {
     const period = ctx.match[1] as SchedulePeriod;
     await ctx
@@ -334,6 +375,7 @@ export function commandsFor(t: Messages) {
     { command: 'services', description: t.commands.services },
     { command: 'events', description: t.commands.events },
     { command: 'schedule', description: t.commands.schedule },
+    { command: 'roster', description: t.commands.roster },
     { command: 'privacy', description: t.commands.privacy },
     { command: 'help', description: t.commands.help },
   ];

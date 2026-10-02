@@ -479,3 +479,20 @@ export const ENTER_ANIMATIONS = [
   'none',
 ] as const;
 export type EnterAnimation = (typeof ENTER_ANIMATIONS)[number];
+
+/**
+ * Each duty of an event gets its own colour, by its place in the list: the same dot in
+ * the bot (Telegram text can't be coloured) and the same colour in the app.
+ */
+export const DUTY_COLORS = [
+  { dot: '🔴', hex: '#ef4444' },
+  { dot: '🔵', hex: '#3b82f6' },
+  { dot: '🟢', hex: '#22c55e' },
+  { dot: '🟠', hex: '#f97316' },
+  { dot: '🟣', hex: '#a855f7' },
+  { dot: '🟡', hex: '#eab308' },
+  { dot: '🟤', hex: '#a16207' },
+  { dot: '⚫', hex: '#475569' },
+] as const;
+
+export const dutyColor = (index: number) => DUTY_COLORS[index % DUTY_COLORS.length]!;

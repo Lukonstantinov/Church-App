@@ -1,5 +1,11 @@
 import { forwardRef } from 'react';
-import { displayName, type ChurchInfo, type EventDetail, type GroupSummary } from '@church/shared';
+import {
+  displayName,
+  dutyColor,
+  type ChurchInfo,
+  type EventDetail,
+  type GroupSummary,
+} from '@church/shared';
 import { useEventWhen } from './EventCard';
 import { useT } from '../lib/i18n';
 import { LookTop } from './LookTop';
@@ -71,9 +77,19 @@ export const EventSheet = forwardRef<
           <section>
             <h2 className="mb-3 text-[24px] font-extrabold">{t.events.sheetTitle}</h2>
             <div className="overflow-hidden rounded-2xl border border-[#e5e7eb]">
-              {e.roles.map((r) => (
-                <div key={r.id} className="border-b border-[#e5e7eb] px-5 py-4 last:border-b-0">
-                  <div className="text-[21px] font-bold">{r.name}</div>
+              {e.roles.map((r, i) => (
+                <div
+                  key={r.id}
+                  className="border-b border-[#e5e7eb] px-5 py-4 last:border-b-0"
+                  style={{ boxShadow: `inset 6px 0 0 ${dutyColor(i).hex}` }}
+                >
+                  <div className="flex items-center gap-2.5 text-[21px] font-bold">
+                    <span
+                      className="h-3.5 w-3.5 shrink-0 rounded-full"
+                      style={{ background: dutyColor(i).hex }}
+                    />
+                    {r.name}
+                  </div>
                   {r.description && (
                     <div className="mt-0.5 text-[17px] leading-snug text-[#6b7280]">
                       {r.description}
