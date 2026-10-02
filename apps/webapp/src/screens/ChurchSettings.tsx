@@ -46,6 +46,7 @@ export function ChurchSettings() {
   const removeLogo = useRemoveLogo();
   const fileInput = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(church.name);
+  const [sheetLabel, setSheetLabel] = useState(church.sheetLabel ?? '');
 
   const zones = TIMEZONES.includes(church.timezone) ? TIMEZONES : [church.timezone, ...TIMEZONES];
 
@@ -110,6 +111,24 @@ export function ChurchSettings() {
             small
             onClick={() => void patch({ name })}
             disabled={!name.trim() || name.trim() === church.name || update.isPending}
+          >
+            {t.common.save}
+          </Button>
+        </div>
+      </Section>
+
+      <Section title={t.settings.sheetLabel} footer={t.settings.sheetLabelHint}>
+        <TextField
+          label={t.settings.sheetLabel}
+          value={sheetLabel}
+          onChange={setSheetLabel}
+          maxLength={40}
+        />
+        <div className="p-3">
+          <Button
+            small
+            onClick={() => void patch({ sheetLabel: sheetLabel.trim() || null })}
+            disabled={sheetLabel.trim() === (church.sheetLabel ?? '') || update.isPending}
           >
             {t.common.save}
           </Button>

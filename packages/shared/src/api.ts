@@ -47,6 +47,8 @@ export interface ChurchInfo {
   brandColor: BrandValue;
   /** Relative URL of the uploaded logo (cache-busted), or null. */
   logoUrl: string | null;
+  /** What is printed top right on event posters and PDFs; empty = the church's name. */
+  sheetLabel: string | null;
 }
 
 export const updateMeSchema = z.object({ locale: z.enum(LOCALES) });
@@ -61,6 +63,7 @@ export const updateChurchSchema = z.object({
     .optional(),
   defaultLocale: z.enum(LOCALES).optional(),
   brandColor: z.string().refine(isBrandValue, 'theme').optional(),
+  sheetLabel: z.string().trim().max(40).nullable().optional(),
 });
 export type UpdateChurchInput = z.input<typeof updateChurchSchema>;
 

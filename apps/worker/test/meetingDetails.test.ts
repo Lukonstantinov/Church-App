@@ -1034,3 +1034,111 @@ describe('notification inbox', () => {
     expect(after.items[0]!.read).toBe(true);
   });
 });
+
+describe('event programme', () => {
+  it('managers set a timed programme with leaders; everyone reads it in order', async () => {
+    const g = await createEnv('Программа события');
+    const a = fakeUser('Ведущий программы');
+    const aId = await join(a, g);
+    const date = addDays(localDate(new Date(), TZ), 6);
+    const ev = await apiJson<{ id: number }>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'Конференция', date, startTime: '10:00' },
+    });
+    type Item = {
+      time: string;
+      title: string;
+      day: number;
+      person: { id: number } | null;
+      note: string | null;
+    };
+    const put = (user: FakeTgUser, items: unknown[]) =>
+      api(`/api/events/${ev.id}/program`, { method: 'PUT', user, json: { items } });
+
+    expect((await put(a, [])).status).toBe(403);
+    expect((await put(ADMIN, [{ time: '12:00', title: 'Обед', userId: 999999 }])).status).toBe(400);
+    expect(
+      (
+        await put(ADMIN, [
+          { time: '14:00', title: 'Прославление', userId: aId, note: 'Две песни' },
+          { time: '10:30', title: 'Регистрация' },
+          { time: '09:00', day: 1, title: 'Завтрак' },
+        ])
+      ).status,
+    ).toBe(200);
+    const seen = (await apiJson<{ program: Item[] }>(`/api/events/${ev.id}`, { user: a })).program;
+    expect(seen.map((i) => `${i.day}:${i.time}`)).toEqual(['0:10:30', '0:14:00', '1:09:00']);
+    expect(seen[1]).toMatchObject({
+      title: 'Прославление',
+      person: { id: aId },
+      note: 'Две песни',
+    });
+
+    // Saving replaces the whole list.
+    await put(ADMIN, [{ time: '11:00', title: 'Единственный пункт' }]);
+    expect(
+      (await apiJson<{ program: Item[] }>(`/api/events/${ev.id}`, { user: a })).program,
+    ).toHaveLength(1);
+  });
+});
+
+describe('duty leaders and the poster label', () => {
+  it('marks one assignee as the duty leader; admins set the label printed on posters', async () => {
+    const g = await createEnv('Лидеры служений');
+    const a = fakeUser('Первый лидер');
+    const b = fakeUser('Второй');
+    const aId = await join(a, g);
+    const bId = await join(b, g);
+    const date = addDays(localDate(new Date(), TZ), 6);
+    const ev = await apiJson<{ id: number }>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'Выезд',
+        date,
+        startTime: '10:00',
+        features: { duties: true },
+        roles: [{ name: 'Звук' }],
+      },
+    });
+    type Detail = { roles: { id: number; leader: { id: number } | null }[] };
+    const roleId = (await apiJson<Detail>(`/api/events/${ev.id}`, { user: ADMIN })).roles[0]!.id;
+    const put = (leaderId: number | null, userIds: number[]) =>
+      apiJson(`/api/events/${ev.id}/roles`, {
+        method: 'PUT',
+        user: ADMIN,
+        json: { roles: [{ id: roleId, name: 'Звук', userIds, leaderId }] },
+      });
+    await put(bId, [aId, bId]);
+    expect(
+      (await apiJson<Detail>(`/api/events/${ev.id}`, { user: a })).roles[0]!.leader,
+    ).toMatchObject({ id: bId });
+    // A leader who isn't among the people is ignored.
+    await put(999, [aId]);
+    expect(
+      (await apiJson<Detail>(`/api/events/${ev.id}`, { user: a })).roles[0]!.leader,
+    ).toBeNull();
+
+    // The label on posters: admin only, empty falls back to the church name.
+    expect(
+      (await api('/api/church', { method: 'PATCH', user: a, json: { sheetLabel: 'CZK Church' } }))
+        .status,
+    ).toBe(403);
+    const church = await apiJson<{ sheetLabel: string | null }>('/api/church', {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { sheetLabel: 'CZK Church' },
+    });
+    expect(church.sheetLabel).toBe('CZK Church');
+    expect(
+      (
+        await apiJson<{ sheetLabel: string | null }>('/api/church', {
+          method: 'PATCH',
+          user: ADMIN,
+          json: { sheetLabel: null },
+        })
+      ).sheetLabel,
+    ).toBeNull();
+  });
+});

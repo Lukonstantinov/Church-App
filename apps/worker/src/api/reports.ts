@@ -4,6 +4,7 @@ import { InputFile } from 'grammy';
 import { and, asc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import {
   DOCUMENT_MAX_BYTES,
+  IMAGE_SEND_MAX_BYTES,
   addDays,
   zonedToUtc,
   type AttendanceExport,
@@ -179,6 +180,37 @@ documentRoutes.post('/', async (c) => {
   }
   try {
     await botApi(c.env).sendDocument(user.telegramId, new InputFile(bytes, name));
+  } catch (err) {
+    if (isUnreachableError(err)) throw new HTTPException(409, { message: 'bot_blocked' });
+    throw err;
+  }
+  return c.json({ ok: true });
+});
+
+/**
+ * The person's own picture (an event poster, built on the phone) to their chat with the
+ * bot: as a photo (easy to forward) or as a file (full quality). PNG or JPEG only.
+ */
+export const photoRoutes = new Hono<App>();
+
+photoRoutes.post('/', async (c) => {
+  const user = c.get('user');
+  if (!user.telegramId) throw new HTTPException(400, { message: 'no_telegram' });
+  const declared = Number(c.req.header('content-length') ?? 0);
+  if (declared > IMAGE_SEND_MAX_BYTES) throw new HTTPException(413, { message: 'too_large' });
+  const bytes = new Uint8Array(await c.req.arrayBuffer());
+  if (bytes.length === 0) throw new HTTPException(400, { message: 'empty' });
+  if (bytes.length > IMAGE_SEND_MAX_BYTES) throw new HTTPException(413, { message: 'too_large' });
+  const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  const jpg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (!png && !jpg) throw new HTTPException(415, { message: 'unsupported_file' });
+  const asFile = c.req.query('as') === 'file';
+  const raw = (c.req.query('name') ?? 'poster').replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 60);
+  const file = new InputFile(bytes, `${raw || 'poster'}.${png ? 'png' : 'jpg'}`);
+  const caption = (c.req.query('caption') ?? '').slice(0, 200) || undefined;
+  try {
+    if (asFile) await botApi(c.env).sendDocument(user.telegramId, file, { caption });
+    else await botApi(c.env).sendPhoto(user.telegramId, file, { caption });
   } catch (err) {
     if (isUnreachableError(err)) throw new HTTPException(409, { message: 'bot_blocked' });
     throw err;

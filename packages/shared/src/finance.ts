@@ -239,3 +239,5 @@ export interface TreasuryExport {
 
 /** Largest report file the bot will send (Telegram allows 50 MB; ours are small). */
 export const DOCUMENT_MAX_BYTES = 8_000_000;
+/** Largest picture the bot will send to a chat (Telegram's photo limit is 10 MB). */
+export const IMAGE_SEND_MAX_BYTES = 9_000_000;

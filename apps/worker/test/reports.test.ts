@@ -146,3 +146,18 @@ describe('sending a report to the chat', () => {
     expect(callsTo(calls, 'sendDocument')).toHaveLength(0);
   });
 });
+
+describe('sending a picture to the chat', () => {
+  it('sends PNG/JPEG as a photo or a file; refuses anything else', async () => {
+    const calls = mockTelegram();
+    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+    const send = (body: Uint8Array, q = '') =>
+      api(`/api/me/photo${q}`, { method: 'POST', user: ADMIN, body });
+    expect((await send(png)).status).toBe(200);
+    expect(callsTo(calls, 'sendPhoto')).toHaveLength(1);
+    expect((await send(png, '?as=file&name=Афиша')).status).toBe(200);
+    expect(callsTo(calls, 'sendDocument')).toHaveLength(1);
+    expect((await send(Uint8Array.from([1, 2, 3, 4]))).status).toBe(415);
+    expect((await send(new Uint8Array())).status).toBe(400);
+  });
+});

@@ -1,8 +1,10 @@
 import { CountdownBadge, CountdownOnCover, hasCountdown } from '../components/Countdown';
 import { BurnFrame } from '../components/Burn';
 import { EventChat } from '../components/EventChat';
+import { EventExport } from '../components/EventExport';
 import { EventCover } from '../components/EventCard';
 import { EventReminderSheet } from '../components/EventReminderSheet';
+import { ProgramBlock } from '../components/EventProgram';
 import { useRef, useState } from 'react';
 import {
   displayName,
@@ -14,6 +16,7 @@ import {
   type RsvpStatus,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
+import { Pill } from '../components/LookControls';
 import { useEventWhen } from '../components/EventCard';
 import {
   IconCheck,
@@ -79,6 +82,7 @@ function EventBody({ e }: { e: EventDetail }) {
   const { push } = useNav();
   const update = useUpdateEvent(e.id);
   const [reminding, setReminding] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const cancelled = e.status === 'cancelled';
 
   async function toggleCancelled() {
@@ -166,8 +170,14 @@ function EventBody({ e }: { e: EventDetail }) {
               <IconBell size={16} /> {t.events.remindTitleShort}
             </Button>
           )}
+          {e.canManage && (
+            <Button small variant="glass" onClick={() => setExporting(true)}>
+              <IconImage size={16} /> {t.events.exportTitle}
+            </Button>
+          )}
         </div>
       )}
+      {exporting && <EventExport e={e} onClose={() => setExporting(false)} />}
       {reminding && (
         <EventReminderSheet
           eventId={e.id}
@@ -206,6 +216,7 @@ function EventBody({ e }: { e: EventDetail }) {
       )}
 
       {e.features.rsvp && e.member && <RsvpBlock e={e} />}
+      <ProgramBlock e={e} />
       {e.features.duties && <DutiesBlock e={e} />}
       <EventChat e={e} />
       {e.features.gallery && <GalleryBlock e={e} />}
@@ -402,7 +413,14 @@ function DutiesBlock({ e }: { e: EventDetail }) {
               )}
               <div className="mt-2">
                 {r.assignees.length ? (
-                  <People people={r.assignees} />
+                  <>
+                    {r.leader && (
+                      <div className="mb-1.5 text-[13px] font-semibold text-accent">
+                        ★ {t.events.dutyLeader}: {displayName(r.leader)}
+                      </div>
+                    )}
+                    <People people={r.assignees} />
+                  </>
                 ) : (
                   <span className="text-[14px] text-hint">{t.events.nobody}</span>
                 )}
@@ -472,12 +490,14 @@ function AssignSheet({
   const notifyNow = useNotifyDuties(e.id);
   const report = useDutyToast();
   const [picked, setPicked] = useState<number[]>([]);
+  const [leaderId, setLeaderId] = useState<number | null>(null);
   // Whoever is newly picked gets a message naming their duty (on by default).
   const [notify, setNotify] = useState(true);
   const [forRole, setForRole] = useState<number | null>(null);
   if (role && forRole !== role.id) {
     setForRole(role.id);
     setPicked(role.assignees.map((a) => a.id));
+    setLeaderId(role.leader?.id ?? null);
   }
   const active = (members.data ?? []).filter((m) => m.status === 'active');
   // People who said "going" first — they are the ones who can serve.
@@ -494,6 +514,7 @@ function AssignSheet({
           id: r.id,
           name: r.name,
           description: r.description,
+          leaderId: r.id === role.id ? leaderId : (r.leader?.id ?? null),
           slots: r.slots,
           userIds: r.id === role.id ? picked : r.assignees.map((a) => a.id),
         })),
@@ -532,6 +553,26 @@ function AssignSheet({
               />
             );
           })}
+          {picked.length > 0 && (
+            <div className="px-5 pt-2">
+              <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-hint">
+                {t.events.dutyLeader}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {picked.map((id) => {
+                  const m = active.find((x) => x.userId === id);
+                  return (
+                    <Pill
+                      key={id}
+                      on={leaderId === id}
+                      onClick={() => setLeaderId(leaderId === id ? null : id)}
+                      label={`${leaderId === id ? '★ ' : ''}${m ? displayName(m) : id}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="px-5 pt-2">
             {role.assignees.length > 0 && (
               <Button

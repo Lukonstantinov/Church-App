@@ -23,7 +23,7 @@ import {
 import { membershipRoutes, userRoutes } from './members';
 import { groupPositionRoutes, positionRoutes } from './positions';
 import { devRoutes } from './dev';
-import { documentRoutes, groupReportRoutes } from './reports';
+import { documentRoutes, groupReportRoutes, photoRoutes } from './reports';
 import { notificationRoutes } from './notifications';
 import { groupLabelRoutes, labelRoutes } from './labels';
 import { eventRoutes, groupEventRoutes, myEventRoutes } from './events';
@@ -52,6 +52,7 @@ apiRoutes.route('/events', eventRoutes);
 apiRoutes.route('/me/events', myEventRoutes);
 apiRoutes.route('/groups', groupReportRoutes);
 apiRoutes.route('/me/document', documentRoutes);
+apiRoutes.route('/me/photo', photoRoutes);
 apiRoutes.route('/groups', groupPositionRoutes);
 apiRoutes.route('/groups', groupLabelRoutes);
 apiRoutes.route('/labels', labelRoutes);

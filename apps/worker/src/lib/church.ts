@@ -19,6 +19,7 @@ export async function getChurch(db: Db): Promise<ChurchInfo> {
       defaultLocale: true,
       brandColor: true,
       logoUpdatedAt: true,
+      sheetLabel: true,
     },
   });
   const brand = row?.brandColor ?? DEFAULT_BRAND;
@@ -29,6 +30,7 @@ export async function getChurch(db: Db): Promise<ChurchInfo> {
     defaultLocale: isLocale(row?.defaultLocale) ? row.defaultLocale : DEFAULT_LOCALE,
     brandColor: isBrandValue(brand) ? brand : DEFAULT_BRAND,
     logoUrl: row?.logoUpdatedAt ? `/media/logo?v=${encodeURIComponent(row.logoUpdatedAt)}` : null,
+    sheetLabel: row?.sheetLabel || null,
   };
 }
 

@@ -5,6 +5,7 @@ import {
   readPostDesign,
   type EventDetail,
   type EventFinance,
+  type EventProgramItem,
   type EventRole,
   type EventSummary,
   type PersonRef,
@@ -15,6 +16,7 @@ import type { Db } from '../db/client';
 import {
   eventPhotos,
   eventRoleAssignees,
+  eventProgram,
   eventRoles,
   eventRsvps,
   events,
@@ -77,6 +79,58 @@ async function peopleIn(db: Db, groupId: number, userIds: number[]): Promise<Set
   return new Set(rows.map((r) => r.userId));
 }
 
+/** The programme in order: by day, then time. */
+export async function loadProgram(db: Db, eventId: number): Promise<EventProgramItem[]> {
+  const rows = await db
+    .select({
+      p: eventProgram,
+      firstName: users.firstName,
+      lastName: users.lastName,
+    })
+    .from(eventProgram)
+    .leftJoin(users, eq(users.id, eventProgram.userId))
+    .where(eq(eventProgram.eventId, eventId))
+    .orderBy(asc(eventProgram.day), asc(eventProgram.time), asc(eventProgram.sort));
+  return rows.map(({ p, firstName, lastName }) => ({
+    id: p.id,
+    day: p.day,
+    time: p.time,
+    title: p.title,
+    person: p.userId ? { id: p.userId, firstName: firstName ?? '', lastName } : null,
+    note: p.note,
+  }));
+}
+
+/** Replaces the programme; the people named must be members of the event's ministry. */
+export async function setProgram(
+  db: Db,
+  event: EventRow,
+  items: {
+    day?: number;
+    time: string;
+    title: string;
+    userId?: number | null;
+    note?: string | null;
+  }[],
+): Promise<void> {
+  const ids = [...new Set(items.map((i) => i.userId).filter((x): x is number => !!x))];
+  const allowed = await peopleIn(db, event.groupId, ids);
+  if (ids.some((u) => !allowed.has(u))) throw new HTTPException(400, { message: 'not_a_member' });
+  await db.delete(eventProgram).where(eq(eventProgram.eventId, event.id));
+  if (items.length)
+    await db.insert(eventProgram).values(
+      items.map((i, sort) => ({
+        eventId: event.id,
+        day: i.day ?? 0,
+        time: i.time,
+        title: i.title,
+        userId: i.userId ?? null,
+        note: i.note ?? null,
+        sort,
+      })),
+    );
+}
+
 /** Someone given a duty they didn't have before. */
 export interface DutyAdded {
   userId: number;
@@ -122,7 +176,13 @@ export async function setRoles(db: Db, event: EventRow, roles: RoleInput[]): Pro
       roleId = r.id;
       await db
         .update(eventRoles)
-        .set({ name: r.name, description: r.description ?? null, slots: r.slots ?? 1, sort })
+        .set({
+          name: r.name,
+          description: r.description ?? null,
+          leaderUserId: r.leaderId && (r.userIds ?? []).includes(r.leaderId) ? r.leaderId : null,
+          slots: r.slots ?? 1,
+          sort,
+        })
         .where(eq(eventRoles.id, roleId));
       await db.delete(eventRoleAssignees).where(eq(eventRoleAssignees.roleId, roleId));
     } else {
@@ -132,6 +192,7 @@ export async function setRoles(db: Db, event: EventRow, roles: RoleInput[]): Pro
           eventId: event.id,
           name: r.name,
           description: r.description ?? null,
+          leaderUserId: r.leaderId && (r.userIds ?? []).includes(r.leaderId) ? r.leaderId : null,
           slots: r.slots ?? 1,
           sort,
         })
@@ -359,6 +420,9 @@ export async function eventDetail(
     id: r.id,
     name: r.name,
     description: r.description,
+    leader: assignees.find((a) => a.roleId === r.id && a.id === r.leaderUserId)
+      ? person(assignees.find((a) => a.roleId === r.id && a.id === r.leaderUserId)!)
+      : null,
     slots: r.slots,
     assignees: assignees.filter((a) => a.roleId === r.id).map(person),
   }));
@@ -416,6 +480,7 @@ export async function eventDetail(
       ? { going, notGoing, noAnswer }
       : { going: [], notGoing: [], noAnswer: [] },
     roles: event.hasDuties ? roleList : [],
+    program: await loadProgram(db, event.id),
     finance,
     myPaidCents: paidBy.get(user.id) ?? 0,
     canManage,

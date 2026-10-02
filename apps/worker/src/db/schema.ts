@@ -39,6 +39,8 @@ export const churchSettings = sqliteTable(
     logoData: text('logo_data'),
     logoMime: text('logo_mime'),
     logoUpdatedAt: text('logo_updated_at'),
+    /** The label printed top right on posters and PDFs (empty = the church's name). */
+    sheetLabel: text('sheet_label'),
   },
   (t) => [check('church_settings_singleton', sql`${t.id} = 1`)],
 );
@@ -528,6 +530,8 @@ export const eventRoles = sqliteTable(
     name: text('name').notNull(),
     /** What this duty involves, shown to the people who serve in it. */
     description: text('description'),
+    /** Who leads this duty (one of its people). */
+    leaderUserId: integer('leader_user_id').references(() => users.id),
     slots: integer('slots').notNull().default(1),
     sort: integer('sort').notNull().default(0),
   },
@@ -806,4 +810,24 @@ export const notifications = sqliteTable(
     readAt: text('read_at'),
   },
   (t) => [index('notifications_user').on(t.userId, t.id)],
+);
+
+/** The programme of an event: timed items, each with who leads it. */
+export const eventProgram = sqliteTable(
+  'event_program',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id),
+    /** Day of the event (0 = the first day). */
+    day: integer('day').notNull().default(0),
+    /** Local "HH:MM". */
+    time: text('time').notNull(),
+    title: text('title').notNull(),
+    userId: integer('user_id').references(() => users.id),
+    note: text('note'),
+    sort: integer('sort').notNull().default(0),
+  },
+  (t) => [index('event_program_event').on(t.eventId)],
 );

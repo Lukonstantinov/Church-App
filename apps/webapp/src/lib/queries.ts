@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  SetProgramInput,
   NotificationsResponse,
   ReadNotificationsInput,
   DutiesNotice,
@@ -949,6 +950,13 @@ export function useSetRoles(id: number) {
 }
 
 /** Write again to the people already assigned (everyone, or one duty's people). */
+/** Replace the event's programme. */
+export function useSetProgram(id: number) {
+  return useEventMutation((input: SetProgramInput) =>
+    apiFetch<EventDetail>(`/events/${id}/program`, send('PUT', input)),
+  );
+}
+
 export function useNotifyDuties(id: number) {
   return useMutation({
     mutationFn: (input: NotifyDutiesInput) =>
@@ -1010,6 +1018,14 @@ export const fetchDues = (groupId: number, year: number) =>
   apiFetch<DuesSheet>(`/groups/${groupId}/dues?year=${year}`);
 export const fetchAttendanceExport = (groupId: number, p: ReportPeriod) =>
   apiFetch<AttendanceExport>(`/groups/${groupId}/attendance/export?${periodQuery(p)}`);
+
+/** The bot sends a picture (PNG/JPEG) to the user's own chat, as a photo or as a file. */
+export const sendPictureToChat = (image: Blob, name: string, asFile = false) =>
+  apiFetch<{ ok: true }>(`/me/photo?name=${encodeURIComponent(name)}${asFile ? '&as=file' : ''}`, {
+    method: 'POST',
+    body: image,
+    headers: { 'content-type': image.type || 'image/png' },
+  });
 
 /** The bot sends the file to the user's own chat. */
 export const sendDocumentToChat = (file: Blob, name: string) =>

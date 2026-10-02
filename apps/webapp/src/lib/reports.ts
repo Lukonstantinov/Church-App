@@ -86,12 +86,12 @@ function totals(data: TreasuryExport) {
 
 // ---------- Excel ----------
 
-async function excel() {
+export async function excel() {
   const mod = await import('exceljs');
   return (mod.default ?? mod) as typeof ExcelJSModule;
 }
 
-const argb = (hex: string) => `FF${hex.replace('#', '').toUpperCase()}`;
+export const argb = (hex: string) => `FF${hex.replace('#', '').toUpperCase()}`;
 const FILL = {
   present: 'FFD9F2E1',
   late: 'FFFCEBC9',
@@ -397,7 +397,7 @@ export async function attendanceXlsx(ctx: ReportCtx, data: AttendanceExport): Pr
 
 // ---------- PDF ----------
 
-async function pdf() {
+export async function pdf() {
   const mod = await import('pdfmake/build/pdfmake');
   const fonts = await import('pdfmake/build/vfs_fonts');
   const pdfMake = (mod.default ?? mod) as typeof PdfMakeModule;

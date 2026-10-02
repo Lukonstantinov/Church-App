@@ -9,6 +9,7 @@ import {
   localDate,
   remindEventSchema,
   notifyDutiesSchema,
+  setProgramSchema,
   type DutiesNotice,
   eventChatMessageSchema,
   type EventChatMessage,
@@ -42,6 +43,7 @@ import {
   listEvents,
   listPinned,
   loadEventOr404,
+  setProgram,
   setRoles,
   setRsvp,
 } from '../lib/events';
@@ -382,6 +384,14 @@ eventRoutes.put('/:id/roles', async (c) => {
     ...(await eventDetail(db, c.env.WEBHOOK_SECRET, row, user)),
     notified,
   });
+});
+
+/** Replaces the event's programme (managers). */
+eventRoutes.put('/:id/program', async (c) => {
+  const { db, user, event } = await managed(c, idParam(c));
+  const { items } = await parseBody(c, setProgramSchema);
+  await setProgram(db, event, items);
+  return c.json(await eventDetail(db, c.env.WEBHOOK_SECRET, event, user));
 });
 
 eventRoutes.put('/:id/rsvp', async (c) => {

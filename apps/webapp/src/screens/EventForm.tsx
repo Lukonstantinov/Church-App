@@ -61,6 +61,7 @@ interface RoleDraft {
   id?: number;
   name: string;
   description: string;
+  leaderId: number | null;
   slots: number;
   userIds: number[];
 }
@@ -134,6 +135,7 @@ function EventFormBody({
       id: r.id,
       name: r.name,
       description: r.description ?? '',
+      leaderId: r.leader?.id ?? null,
       slots: r.slots,
       userIds: r.assignees.map((a) => a.id),
     })) ?? [],
@@ -174,7 +176,14 @@ function EventFormBody({
   const addRole = (name = '') =>
     setRoleDrafts((r) => [
       ...r,
-      { key: `n${Date.now()}${r.length}`, name, description: '', slots: 1, userIds: [] },
+      {
+        key: `n${Date.now()}${r.length}`,
+        name,
+        description: '',
+        leaderId: null,
+        slots: 1,
+        userIds: [],
+      },
     ]);
   const editRole = (key: string, patch: Partial<RoleDraft>) =>
     setRoleDrafts((r) => r.map((x) => (x.key === key ? { ...x, ...patch } : x)));
@@ -189,6 +198,7 @@ function EventFormBody({
             id: r.id,
             name: r.name.trim(),
             description: r.description.trim() || null,
+            leaderId: r.leaderId,
             slots: r.slots,
             userIds: r.userIds,
           }))

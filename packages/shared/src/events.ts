@@ -38,6 +38,8 @@ export const roleInputSchema = z.object({
   name: z.string().trim().min(1).max(40),
   /** What this duty involves. */
   description: z.string().trim().max(600).nullish(),
+  /** Who leads this duty; must be one of `userIds`. */
+  leaderId: z.number().int().positive().nullish(),
   slots: z.number().int().min(1).max(50).default(1),
   userIds: z.array(z.number().int().positive()).max(50).default([]),
 });
@@ -161,6 +163,8 @@ export interface EventRole {
   id: number;
   name: string;
   description: string | null;
+  /** The duty's leader, if one is marked. */
+  leader: PersonRef | null;
   slots: number;
   assignees: PersonRef[];
 }
@@ -199,6 +203,8 @@ export interface EventDetail extends EventSummary {
   /** Filled when RSVP is on. `noAnswer` only for leaders. */
   rsvps: { going: PersonRef[]; notGoing: PersonRef[]; noAnswer: PersonRef[] };
   roles: EventRole[];
+  /** The timed programme of the event. */
+  program: EventProgramItem[];
   /** Only for leaders, when cost tracking is on. */
   finance: EventFinance | null;
   /** What the requester has paid for this event. */
@@ -216,4 +222,27 @@ export type NotifyDutiesInput = z.input<typeof notifyDutiesSchema>;
 export interface DutiesNotice {
   sent: number;
   skipped: string[];
+}
+
+// ---------- Programme ----------
+
+export const programItemSchema = z.object({
+  /** Day of the event, 0 = the first. */
+  day: z.number().int().min(0).max(13).default(0),
+  time,
+  title: z.string().trim().min(1).max(80),
+  /** Who leads this part. */
+  userId: z.number().int().positive().nullish(),
+  note: z.string().trim().max(200).nullish(),
+});
+export const setProgramSchema = z.object({ items: z.array(programItemSchema).max(60) });
+export type SetProgramInput = z.input<typeof setProgramSchema>;
+
+export interface EventProgramItem {
+  id: number;
+  day: number;
+  time: string;
+  title: string;
+  person: PersonRef | null;
+  note: string | null;
 }
