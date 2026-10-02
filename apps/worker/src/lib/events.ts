@@ -77,8 +77,18 @@ async function peopleIn(db: Db, groupId: number, userIds: number[]): Promise<Set
   return new Set(rows.map((r) => r.userId));
 }
 
-/** Replaces the event's duty list; roles keep their id (and people) when passed back. */
-export async function setRoles(db: Db, event: EventRow, roles: RoleInput[]): Promise<void> {
+/** Someone given a duty they didn't have before. */
+export interface DutyAdded {
+  userId: number;
+  roleName: string;
+  description: string | null;
+}
+
+/**
+ * Replaces the event's duty list; roles keep their id (and people) when passed back.
+ * Returns who was newly given which duty, so they can be told.
+ */
+export async function setRoles(db: Db, event: EventRow, roles: RoleInput[]): Promise<DutyAdded[]> {
   const allUsers = [...new Set(roles.flatMap((r) => r.userIds ?? []))];
   const allowed = await peopleIn(db, event.groupId, allUsers);
   if (allUsers.some((u) => !allowed.has(u)))
@@ -89,6 +99,14 @@ export async function setRoles(db: Db, event: EventRow, roles: RoleInput[]): Pro
     .from(eventRoles)
     .where(eq(eventRoles.eventId, event.id));
   const existingIds = new Set(existing.map((r) => r.id));
+  const before = existingIds.size
+    ? await db
+        .select({ roleId: eventRoleAssignees.roleId, userId: eventRoleAssignees.userId })
+        .from(eventRoleAssignees)
+        .where(inArray(eventRoleAssignees.roleId, [...existingIds]))
+    : [];
+  const had = new Set(before.map((a) => `${a.roleId}:${a.userId}`));
+  const added: DutyAdded[] = [];
   const keep = new Set(
     roles.map((r) => r.id).filter((id): id is number => !!id && existingIds.has(id)),
   );
@@ -104,21 +122,31 @@ export async function setRoles(db: Db, event: EventRow, roles: RoleInput[]): Pro
       roleId = r.id;
       await db
         .update(eventRoles)
-        .set({ name: r.name, slots: r.slots ?? 1, sort })
+        .set({ name: r.name, description: r.description ?? null, slots: r.slots ?? 1, sort })
         .where(eq(eventRoles.id, roleId));
       await db.delete(eventRoleAssignees).where(eq(eventRoleAssignees.roleId, roleId));
     } else {
       const [row] = await db
         .insert(eventRoles)
-        .values({ eventId: event.id, name: r.name, slots: r.slots ?? 1, sort })
+        .values({
+          eventId: event.id,
+          name: r.name,
+          description: r.description ?? null,
+          slots: r.slots ?? 1,
+          sort,
+        })
         .returning({ id: eventRoles.id });
       roleId = row!.id;
     }
     const ids = [...new Set(r.userIds ?? [])];
     if (ids.length) {
       await db.insert(eventRoleAssignees).values(ids.map((userId) => ({ roleId, userId })));
+      for (const userId of ids)
+        if (!had.has(`${roleId}:${userId}`))
+          added.push({ userId, roleName: r.name, description: r.description ?? null });
     }
   }
+  return added;
 }
 
 export async function setRsvp(
@@ -172,7 +200,11 @@ async function summarize(
       .from(eventRsvps)
       .where(and(inArray(eventRsvps.eventId, ids), eq(eventRsvps.userId, userId))),
     db
-      .select({ eventId: eventRoles.eventId, name: eventRoles.name })
+      .select({
+        eventId: eventRoles.eventId,
+        name: eventRoles.name,
+        description: eventRoles.description,
+      })
       .from(eventRoleAssignees)
       .innerJoin(eventRoles, eq(eventRoles.id, eventRoleAssignees.roleId))
       .where(and(inArray(eventRoles.eventId, ids), eq(eventRoleAssignees.userId, userId)))
@@ -207,6 +239,9 @@ async function summarize(
         brandColor: e.groupBrand ?? null,
         myRsvp: mineBy.get(e.id) ?? null,
         myRoles: myRoles.filter((r) => r.eventId === e.id).map((r) => r.name),
+        myDuties: myRoles
+          .filter((r) => r.eventId === e.id)
+          .map((r) => ({ name: r.name, description: r.description })),
         design,
         templateId: e.templateId,
         countdown: e.countdown,
@@ -323,6 +358,7 @@ export async function eventDetail(
   const roleList: EventRole[] = roles.map((r) => ({
     id: r.id,
     name: r.name,
+    description: r.description,
     slots: r.slots,
     assignees: assignees.filter((a) => a.roleId === r.id).map(person),
   }));

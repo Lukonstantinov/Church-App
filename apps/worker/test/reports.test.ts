@@ -86,6 +86,43 @@ describe('report data', () => {
   });
 });
 
+describe('report periods', () => {
+  it('a month or a from..to range limits the entries and moves the opening balance', async () => {
+    const g = await createGroup('Период');
+    const year = new Date().getUTCFullYear();
+    const put = (occurredOn: string, kind: 'income' | 'expense', amountCents: number) =>
+      post(`/api/groups/${g}/transactions`, { kind, amountCents, occurredOn });
+    await put(`${year}-01-10`, 'income', 1000);
+    await put(`${year}-02-05`, 'expense', 200);
+    await put(`${year}-02-20`, 'income', 400);
+    await put(`${year}-03-01`, 'income', 50);
+    const get = (q: string) =>
+      apiJson<TreasuryExport>(`/api/groups/${g}/treasury/export?${q}`, { user: ADMIN });
+
+    const feb = await get(`from=${year}-02-01&to=${year}-02-28`);
+    expect(feb.transactions).toHaveLength(2);
+    expect(feb.openingCents).toBe(1000);
+    expect(feb.closingCents).toBe(1200);
+    expect(feb.from).toBe(`${year}-02-01`);
+
+    // The end day counts, the day after doesn't.
+    const range = await get(`from=${year}-02-05&to=${year}-02-20`);
+    expect(range.transactions).toHaveLength(2);
+    expect((await get(`from=${year}-02-05&to=${year}-02-19`)).transactions).toHaveLength(1);
+
+    // A broken range falls back to the whole year.
+    const whole = await get(`from=${year}-03-01&to=${year}-02-01&year=${year}`);
+    expect(whole.transactions).toHaveLength(4);
+    expect(whole.to).toBe(`${year}-12-31`);
+
+    const att = await apiJson<AttendanceExport>(
+      `/api/groups/${g}/attendance/export?from=${year}-02-01&to=${year}-02-28`,
+      { user: ADMIN },
+    );
+    expect(att).toMatchObject({ from: `${year}-02-01`, to: `${year}-02-28` });
+  });
+});
+
 describe('sending a report to the chat', () => {
   const pdf = new TextEncoder().encode('%PDF-1.4\n%fake\n');
   const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3]);

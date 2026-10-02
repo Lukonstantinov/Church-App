@@ -184,6 +184,15 @@ export function LookControls({
               onChange={(v) => setB({ focusY: v })}
             />
             <Slider
+              label={t.env.photoTint}
+              value={Math.round(backdrop.tint * 100)}
+              min={0}
+              max={100}
+              suffix="%"
+              onChange={(v) => setB({ tint: v / 100 })}
+              extra={<SmallButton onClick={() => setB({ tint: 0 })}>{t.env.reset}</SmallButton>}
+            />
+            <Slider
               label={t.env.shade}
               value={Math.round(backdrop.dim * 100)}
               min={-80}

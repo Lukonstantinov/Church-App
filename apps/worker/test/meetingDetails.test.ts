@@ -758,3 +758,61 @@ describe('event reminders and the sender line', () => {
     expect(String(hits[0]!.body.text)).not.toContain('Отправил(а)');
   });
 });
+
+describe('event duties', () => {
+  it('describes each duty and tells only the newly assigned people', async () => {
+    const g = await createEnv('Служения на событии');
+    const a = fakeUser('Техник');
+    const b = fakeUser('Уборщик');
+    const aId = await join(a, g);
+    const bId = await join(b, g);
+    const date = addDays(localDate(new Date(), TZ), 6);
+    const ev = await apiJson<EventSummary>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'Конференция',
+        date,
+        startTime: '10:00',
+        location: 'Вильнюс',
+        description: 'Большой день для всей молодёжи.\n\nПрограмма внутри.',
+        roles: [{ name: 'Техника', description: 'Свет и звук, приходить за час', userIds: [aId] }],
+        notifyAssigned: true,
+      },
+    });
+    const first = await sentTo(a.id, 'Вам назначено служение');
+    expect(String(first!.body.text)).toContain('Техника');
+    expect(String(first!.body.text)).toContain('Свет и звук, приходить за час');
+    expect(String(first!.body.text)).toContain('Отправил(а):');
+    expect(JSON.stringify(first!.body.reply_markup)).toContain(`?event=${ev.id}`);
+
+    const detail = await apiJson<{
+      description: string;
+      roles: { id: number; description: string }[];
+    }>(`/api/events/${ev.id}`, { user: a });
+    expect(detail.description).toContain('Программа внутри');
+    expect(detail.roles[0]!.description).toBe('Свет и звук, приходить за час');
+
+    // Editing: the first person is not told again, the new one is; no flag, nobody is told.
+    calls.length = 0;
+    const roleId = detail.roles[0]!.id;
+    await apiJson(`/api/events/${ev.id}/roles`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: {
+        roles: [{ id: roleId, name: 'Техника', description: 'Свет и звук', userIds: [aId, bId] }],
+        notify: true,
+      },
+    });
+    expect(await sentTo(b.id, 'Вам назначено служение')).toBeDefined();
+    expect(calls.some((c) => c.method === 'sendMessage' && c.body.chat_id === a.id)).toBe(false);
+    calls.length = 0;
+    await apiJson(`/api/events/${ev.id}/roles`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: { roles: [{ id: roleId, name: 'Техника', userIds: [aId] }] },
+    });
+    await new Promise((r) => setTimeout(r, 60));
+    expect(calls.some((c) => c.method === 'sendMessage')).toBe(false);
+  });
+});

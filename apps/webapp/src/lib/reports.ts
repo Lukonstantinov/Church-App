@@ -121,7 +121,7 @@ export async function treasuryXlsx(
   // Summary
   const s = wb.addWorksheet(t.reports.summary);
   s.columns = [{ width: 36 }, { width: 16 }];
-  s.addRow([`${t.reports.fileTreasury(data.groupName, data.year)}`]).font = {
+  s.addRow([`${t.reports.fileTreasury(data.groupName, data.label ?? data.year)}`]).font = {
     bold: true,
     size: 14,
   };
@@ -147,15 +147,15 @@ export async function treasuryXlsx(
     for (const [label, value] of rows) s.addRow([label, cents(value)]).getCell(2).numFmt = money;
   };
   block(
-    t.treasury.incomeByKind(data.year),
+    t.treasury.incomeByKind(data.label ?? data.year),
     sum.byKind.map(([k, v]) => [incomeLabel(t, k), v]),
   );
   block(
-    t.treasury.byCategory(data.year),
+    t.treasury.byCategory(data.label ?? data.year),
     sum.byCategory.map(([k, v]) => [categoryLabel(t, k), v]),
   );
   block(
-    t.treasury.donors(data.year),
+    t.treasury.donors(data.label ?? data.year),
     sum.donors.map(([k, v]) => [k || t.treasury.anonymous, v]),
   );
 
@@ -455,7 +455,7 @@ export async function treasuryPdf(
   const { t, f } = ctx;
   const m = (c: number, sign = false) => f.money(c, ctx.currency, { sign });
   const sum = totals(data);
-  const title = t.reports.fileTreasury(data.groupName, data.year);
+  const title = t.reports.fileTreasury(data.groupName, data.label ?? data.year);
   const kv = (rows: [string, string][]) => ({
     table: {
       widths: ['*', 'auto'],
@@ -479,15 +479,15 @@ export async function treasuryPdf(
     ]),
   ];
   if (sum.byKind.length) {
-    content.push({ text: t.treasury.incomeByKind(data.year), style: 'h2' });
+    content.push({ text: t.treasury.incomeByKind(data.label ?? data.year), style: 'h2' });
     content.push(kv(sum.byKind.map(([k, v]) => [incomeLabel(t, k), m(v)])));
   }
   if (sum.byCategory.length) {
-    content.push({ text: t.treasury.byCategory(data.year), style: 'h2' });
+    content.push({ text: t.treasury.byCategory(data.label ?? data.year), style: 'h2' });
     content.push(kv(sum.byCategory.map(([k, v]) => [categoryLabel(t, k), m(v)])));
   }
   if (sum.donors.length) {
-    content.push({ text: t.treasury.donors(data.year), style: 'h2' });
+    content.push({ text: t.treasury.donors(data.label ?? data.year), style: 'h2' });
     content.push(kv(sum.donors.map(([k, v]) => [k || t.treasury.anonymous, m(v)])));
   }
 
@@ -574,7 +574,7 @@ export async function treasuryPdf(
 
 export async function attendancePdf(ctx: ReportCtx, data: AttendanceExport): Promise<Blob> {
   const { t, f } = ctx;
-  const title = t.reports.fileAttendance(data.groupName, data.year);
+  const title = t.reports.fileAttendance(data.groupName, data.label ?? data.year);
   const content: Content[] = [
     { text: title, style: 'h1' },
     {

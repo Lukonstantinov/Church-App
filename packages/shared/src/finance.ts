@@ -224,9 +224,14 @@ export function parseAmount(input: string): number | null {
 /** Everything needed to build a year's report on the phone. */
 export interface TreasuryExport {
   year: number;
+  /** The period, local "YYYY-MM-DD" (inclusive). */
+  from: string;
+  to: string;
+  /** Title of the period for file and sheet names (filled in on the phone). */
+  label?: string;
   groupName: string;
   currency: string;
-  /** Balance before the year started, and at the end of it (or now). */
+  /** Balance before the period started, and at the end of it (or now). */
   openingCents: number;
   closingCents: number;
   transactions: TransactionRow[];

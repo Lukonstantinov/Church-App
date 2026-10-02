@@ -152,18 +152,31 @@ function EventBody({ e }: { e: EventDetail }) {
       )}
 
       {e.myRoles.length > 0 && (
-        <Card className="flex items-center gap-3 p-4">
-          <span className="brand-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white">
-            <IconUsers size={20} />
-          </span>
-          <span className="text-[16px] font-semibold">
-            {t.events.yourDuty(e.myRoles.join(', '))}
-          </span>
+        <Card className="flex flex-col gap-2 p-4">
+          <div className="flex items-center gap-3">
+            <span className="brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white">
+              <IconUsers size={20} />
+            </span>
+            <span className="text-[16px] font-semibold">
+              {t.events.yourDuty(e.myRoles.join(', '))}
+            </span>
+          </div>
+          {e.roles
+            .filter((r) => e.myRoles.includes(r.name) && r.description)
+            .map((r) => (
+              <p key={r.id} className="whitespace-pre-line text-[14px] leading-snug">
+                <b>{r.name}</b> — {r.description}
+              </p>
+            ))}
         </Card>
       )}
 
       {e.description && (
-        <Card className="whitespace-pre-line p-4 text-[16px] leading-relaxed">{e.description}</Card>
+        <Section title={t.events.description}>
+          <p className="whitespace-pre-line break-words px-4 py-3.5 text-[16px] leading-relaxed">
+            {e.description}
+          </p>
+        </Section>
       )}
 
       {e.features.rsvp && e.member && <RsvpBlock e={e} />}
@@ -339,6 +352,11 @@ function DutiesBlock({ e }: { e: EventDetail }) {
                   {t.events.assigned(r.assignees.length, r.slots)}
                 </span>
               </div>
+              {r.description && (
+                <p className="mt-1 whitespace-pre-line text-[14px] leading-snug text-hint">
+                  {r.description}
+                </p>
+              )}
               <div className="mt-2">
                 {r.assignees.length ? (
                   <People people={r.assignees} />
@@ -393,6 +411,8 @@ function AssignSheet({
   const members = useMembers(e.groupId, role !== null);
   const setRoles = useSetRoles(e.id);
   const [picked, setPicked] = useState<number[]>([]);
+  // Whoever is newly picked gets a message naming their duty (on by default).
+  const [notify, setNotify] = useState(true);
   const [forRole, setForRole] = useState<number | null>(null);
   if (role && forRole !== role.id) {
     setForRole(role.id);
@@ -408,14 +428,16 @@ function AssignSheet({
   async function save() {
     if (!role) return;
     try {
-      await setRoles.mutateAsync(
-        e.roles.map((r) => ({
+      await setRoles.mutateAsync({
+        roles: e.roles.map((r) => ({
           id: r.id,
           name: r.name,
+          description: r.description,
           slots: r.slots,
           userIds: r.id === role.id ? picked : r.assignees.map((a) => a.id),
         })),
-      );
+        notify,
+      });
       haptic.success();
       onClose();
     } catch {
@@ -449,6 +471,8 @@ function AssignSheet({
             );
           })}
           <div className="px-5 pt-2">
+            <Toggle label={t.events.notifyDuties} checked={notify} onChange={setNotify} />
+            <p className="pb-2 text-[12px] text-hint">{t.events.notifyDutiesHint}</p>
             <Button onClick={() => void save()} disabled={setRoles.isPending}>
               {t.common.save}
             </Button>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   displayName,
   resolveBrand,
@@ -12,11 +13,12 @@ import { TasksPill } from '../components/Assignments';
 import { BrandHeader } from '../components/BrandHeader';
 import { BackdropLayer, PatternLayer, onBrandStyle } from '../components/PatternLayer';
 import { UnreadBadges } from '../components/FeedEntry';
-import { IconPlus, IconSettings, IconUsers } from '../components/icons';
+import { IconChevronDown, IconPlus, IconSettings, IconUsers } from '../components/icons';
+import { MyAssignments } from '../components/MyAssignments';
 import { Badge, Card, EmptyState, Loading, Row, Screen, Section } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useGroups, usePinnedEvents } from '../lib/queries';
+import { useAssignments, useGroups, useMyEvents, usePinnedEvents } from '../lib/queries';
 import { useEventWhen } from '../components/EventCard';
 
 /** Main page: every ministry the person belongs to (admins: all), two per row. */
@@ -25,6 +27,13 @@ export function Hub({ me }: { me: MeResponse }) {
   const { push } = useNav();
   const groups = useGroups();
   const pinned = usePinnedEvents();
+  const myEvents = useMyEvents();
+  const myJobs = useAssignments();
+  const [showMine, setShowMine] = useState(false);
+  // Open duties: at events, plus meetings that still need an answer.
+  const mine =
+    (myEvents.data ?? []).filter((e) => e.myDuties.length > 0 && e.status !== 'cancelled').length +
+    (myJobs.data ?? []).length;
   if (groups.isPending) return <Loading />;
   const list = groups.data ?? [];
   const pending = me.memberships.filter((m) => m.status === 'pending');
@@ -98,6 +107,8 @@ export function Hub({ me }: { me: MeResponse }) {
         </Section>
       )}
 
+      {showMine && <MyAssignments me={me} onClose={() => setShowMine(false)} />}
+
       <Section>
         <Row
           before={
@@ -105,7 +116,20 @@ export function Hub({ me }: { me: MeResponse }) {
           }
           title={displayName(me.user)}
           subtitle={me.user.username ? `@${me.user.username}` : undefined}
-          onClick={() => push({ name: 'member', userId: me.user.id })}
+          after={
+            <span className="flex items-center gap-1.5">
+              {mine > 0 && (
+                <span className="min-w-[22px] rounded-full bg-[#ef4444] px-1.5 text-center text-[12px] font-bold leading-[22px] text-white">
+                  {mine}
+                </span>
+              )}
+              <IconChevronDown
+                size={18}
+                className={`text-hint transition ${showMine ? 'rotate-180' : ''}`}
+              />
+            </span>
+          }
+          onClick={() => setShowMine((v) => !v)}
         />
         {me.user.isDeveloper && (
           <Row

@@ -59,6 +59,7 @@ interface RoleDraft {
   key: string;
   id?: number;
   name: string;
+  description: string;
   slots: number;
   userIds: number[];
 }
@@ -131,6 +132,7 @@ function EventFormBody({
       key: String(r.id),
       id: r.id,
       name: r.name,
+      description: r.description ?? '',
       slots: r.slots,
       userIds: r.assignees.map((a) => a.id),
     })) ?? [],
@@ -169,7 +171,10 @@ function EventFormBody({
   }
 
   const addRole = (name = '') =>
-    setRoleDrafts((r) => [...r, { key: `n${Date.now()}${r.length}`, name, slots: 1, userIds: [] }]);
+    setRoleDrafts((r) => [
+      ...r,
+      { key: `n${Date.now()}${r.length}`, name, description: '', slots: 1, userIds: [] },
+    ]);
   const editRole = (key: string, patch: Partial<RoleDraft>) =>
     setRoleDrafts((r) => r.map((x) => (x.key === key ? { ...x, ...patch } : x)));
 
@@ -179,7 +184,13 @@ function EventFormBody({
     const cleanRoles = features.duties
       ? roles
           .filter((r) => r.name.trim())
-          .map((r) => ({ id: r.id, name: r.name.trim(), slots: r.slots, userIds: r.userIds }))
+          .map((r) => ({
+            id: r.id,
+            name: r.name.trim(),
+            description: r.description.trim() || null,
+            slots: r.slots,
+            userIds: r.userIds,
+          }))
       : [];
     const common = {
       title: title.trim(),
@@ -199,7 +210,7 @@ function EventFormBody({
     try {
       if (event) {
         await update.mutateAsync(common);
-        if (features.duties) await setRoles.mutateAsync(cleanRoles);
+        if (features.duties) await setRoles.mutateAsync({ roles: cleanRoles });
         haptic.success();
         toast(t.common.saved);
         back();
@@ -461,23 +472,33 @@ function EventFormBody({
       {features.duties && (
         <Section title={t.events.roles}>
           {roles.map((r) => (
-            <div key={r.key} className="flex items-center gap-2 border-b border-hairline px-4 py-2">
-              <input
-                value={r.name}
-                placeholder={t.events.roleName}
-                maxLength={40}
-                onChange={(e) => editRole(r.key, { name: e.target.value })}
-                className="min-w-0 flex-1 bg-transparent py-2 text-[17px] outline-none placeholder:text-hint"
+            <div key={r.key} className="flex flex-col border-b border-hairline px-4 py-2">
+              <div className="flex items-center gap-2">
+                <input
+                  value={r.name}
+                  placeholder={t.events.roleName}
+                  maxLength={40}
+                  onChange={(e) => editRole(r.key, { name: e.target.value })}
+                  className="min-w-0 flex-1 bg-transparent py-2 text-[17px] outline-none placeholder:text-hint"
+                />
+                <Stepper value={r.slots} onChange={(slots) => editRole(r.key, { slots })} />
+                <button
+                  type="button"
+                  aria-label="remove"
+                  onClick={() => setRoleDrafts((x) => x.filter((y) => y.key !== r.key))}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-hint active:bg-hairline"
+                >
+                  <IconX size={18} />
+                </button>
+              </div>
+              <textarea
+                value={r.description}
+                placeholder={t.events.roleDescription}
+                maxLength={600}
+                rows={2}
+                onChange={(e) => editRole(r.key, { description: e.target.value })}
+                className="mb-1 w-full resize-y rounded-xl bg-hairline px-3 py-2 text-[14px] leading-snug outline-none placeholder:text-hint"
               />
-              <Stepper value={r.slots} onChange={(slots) => editRole(r.key, { slots })} />
-              <button
-                type="button"
-                aria-label="remove"
-                onClick={() => setRoleDrafts((x) => x.filter((y) => y.key !== r.key))}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-hint active:bg-hairline"
-              >
-                <IconX size={18} />
-              </button>
             </div>
           ))}
           <button

@@ -706,6 +706,9 @@ export interface AnnouncementResult {
 
 export interface AttendanceExport {
   year: number;
+  from: string;
+  to: string;
+  label?: string;
   groupName: string;
   meetings: { id: number; startsAt: string; title: string; guestCount: number }[];
   rows: {

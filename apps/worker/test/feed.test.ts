@@ -301,10 +301,16 @@ describe('ministry feed', () => {
       zoom: 1.4,
       dim: -0.3,
       soft: 0.1,
+      tint: 0.4,
     };
     await apiJson(`/api/groups/${g.id}`, { method: 'PATCH', user: ADMIN, json: { backdrop } });
     const s = await summaryFor(ADMIN, g.id);
     expect(s.backdrop).toEqual(backdrop);
+    // A photo saved without a tint takes the default one, so it follows the theme colour.
+    const { tint: _t, ...old } = backdrop;
+    await apiJson(`/api/groups/${g.id}`, { method: 'PATCH', user: ADMIN, json: { backdrop: old } });
+    expect((await summaryFor(ADMIN, g.id)).backdrop?.tint).toBe(0.55);
+    await apiJson(`/api/groups/${g.id}`, { method: 'PATCH', user: ADMIN, json: { backdrop } });
     expect(s.backdropUrl).toMatch(new RegExp(`^/media/m/${mediaId}\\?e=`));
     expect((await api(s.backdropUrl!)).status).toBe(200);
     const bad = await api(`/api/groups/${g.id}`, {

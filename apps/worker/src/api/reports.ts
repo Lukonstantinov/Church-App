@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { InputFile } from 'grammy';
-import { and, asc, eq, gte, inArray, isNull, like, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import {
   DOCUMENT_MAX_BYTES,
+  addDays,
   zonedToUtc,
   type AttendanceExport,
   type TreasuryExport,
@@ -27,33 +28,57 @@ function yearParam(raw: string | undefined): number {
   return Number.isInteger(y) && y >= 2000 && y <= 2100 ? y : new Date().getUTCFullYear();
 }
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The period asked for: `from`..`to` (inclusive local dates), else the whole `year`. */
+function periodParam(c: { req: { query: (k: string) => string | undefined } }) {
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (
+    from &&
+    to &&
+    DAY.test(from) &&
+    DAY.test(to) &&
+    from <= to &&
+    from >= '2000-01-01' &&
+    to <= '2100-12-31'
+  )
+    return { from, to, year: Number(from.slice(0, 4)) };
+  const year = yearParam(c.req.query('year'));
+  return { from: `${year}-01-01`, to: `${year}-12-31`, year };
+}
+
 /** Data for reports, built on the phone (the Worker's CPU budget is too small for PDF/Excel). */
 export const groupReportRoutes = new Hono<App>();
 
 groupReportRoutes.get('/:id/treasury/export', async (c) => {
   const db = c.get('db');
   const group = await assertCan(db, c.get('user'), idParam(c), 'reports');
-  const year = yearParam(c.req.query('year'));
+  const { from, to, year } = periodParam(c);
   const church = await getChurch(db);
   const live = and(eq(transactions.groupId, group.id), isNull(transactions.voidedAt));
   const [rows, [opening], [closing]] = await Promise.all([
     db
       .select()
       .from(transactions)
-      .where(and(live, like(transactions.occurredOn, `${year}-%`)))
+      .where(
+        and(live, gte(transactions.occurredOn, from), lt(transactions.occurredOn, addDays(to, 1))),
+      )
       .orderBy(asc(transactions.occurredOn), asc(transactions.id))
       .limit(10_000),
     db
       .select({ total: signed })
       .from(transactions)
-      .where(and(live, lt(transactions.occurredOn, `${year}-01-01`))),
+      .where(and(live, lt(transactions.occurredOn, from))),
     db
       .select({ total: signed })
       .from(transactions)
-      .where(and(live, lt(transactions.occurredOn, `${year + 1}-01-01`))),
+      .where(and(live, lt(transactions.occurredOn, addDays(to, 1)))),
   ]);
   const body: TreasuryExport = {
     year,
+    from,
+    to,
     groupName: group.name,
     currency: church.currency,
     openingCents: Number(opening?.total ?? 0),
@@ -66,10 +91,11 @@ groupReportRoutes.get('/:id/treasury/export', async (c) => {
 groupReportRoutes.get('/:id/attendance/export', async (c) => {
   const db = c.get('db');
   const group = await assertCan(db, c.get('user'), idParam(c), 'reports');
-  const year = yearParam(c.req.query('year'));
+  const period = periodParam(c);
+  const { year } = period;
   const { timezone } = await getChurch(db);
-  const from = zonedToUtc(`${year}-01-01`, '00:00', timezone).toISOString();
-  const to = zonedToUtc(`${year + 1}-01-01`, '00:00', timezone).toISOString();
+  const from = zonedToUtc(period.from, '00:00', timezone).toISOString();
+  const to = zonedToUtc(addDays(period.to, 1), '00:00', timezone).toISOString();
   const held = await db
     .select({
       id: meetings.id,
@@ -115,6 +141,8 @@ groupReportRoutes.get('/:id/attendance/export', async (c) => {
   const byKey = new Map(marks.map((m) => [`${m.meetingId}:${m.userId}`, m.status]));
   const body: AttendanceExport = {
     year,
+    from: period.from,
+    to: period.to,
     groupName: group.name,
     meetings: held,
     rows: people.map((p) => ({

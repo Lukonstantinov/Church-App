@@ -36,6 +36,8 @@ export const roleInputSchema = z.object({
   /** Existing role id to keep its assignees; omit for a new role. */
   id: z.number().int().positive().optional(),
   name: z.string().trim().min(1).max(40),
+  /** What this duty involves. */
+  description: z.string().trim().max(600).nullish(),
   slots: z.number().int().min(1).max(50).default(1),
   userIds: z.array(z.number().int().positive()).max(50).default([]),
 });
@@ -50,7 +52,7 @@ const featuresSchema = z.object({
 
 export const createEventSchema = z.object({
   title: z.string().trim().min(1).max(80),
-  description: optionalText(2000),
+  description: optionalText(4000),
   /** Local date and time in the church time zone. */
   date,
   startTime: time,
@@ -68,12 +70,14 @@ export const createEventSchema = z.object({
   priceCents: z.number().int().min(0).max(10_000_000).nullish(),
   chatUrl: chatUrlSchema,
   roles: z.array(roleInputSchema).max(30).default([]),
+  /** Tell the people given a duty (bot message naming it). */
+  notifyAssigned: z.boolean().optional(),
 });
 export type CreateEventInput = z.input<typeof createEventSchema>;
 
 export const updateEventSchema = z.object({
   title: z.string().trim().min(1).max(80).optional(),
-  description: optionalText(2000).optional(),
+  description: optionalText(4000).optional(),
   date: date.optional(),
   startTime: time.optional(),
   endDate: date.nullish(),
@@ -92,7 +96,11 @@ export const updateEventSchema = z.object({
 });
 export type UpdateEventInput = z.input<typeof updateEventSchema>;
 
-export const setRolesSchema = z.object({ roles: z.array(roleInputSchema).max(30) });
+export const setRolesSchema = z.object({
+  roles: z.array(roleInputSchema).max(30),
+  /** Tell the people newly given a duty (bot message naming it). */
+  notify: z.boolean().optional(),
+});
 export type SetRolesInput = z.input<typeof setRolesSchema>;
 
 export const rsvpSchema = z.object({
@@ -145,11 +153,14 @@ export interface EventSummary {
   myRsvp: RsvpStatus | null;
   /** Duty names the requester is assigned to. */
   myRoles: string[];
+  /** The same duties with what each involves. */
+  myDuties: { name: string; description: string | null }[];
 }
 
 export interface EventRole {
   id: number;
   name: string;
+  description: string | null;
   slots: number;
   assignees: PersonRef[];
 }

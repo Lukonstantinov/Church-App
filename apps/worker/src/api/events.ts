@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, eq, isNull } from 'drizzle-orm';
 import {
@@ -28,6 +28,7 @@ import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
 import {
   eventAccess,
+  type DutyAdded,
   eventDetail,
   eventTimes,
   listEvents,
@@ -36,7 +37,7 @@ import {
   setRoles,
   setRsvp,
 } from '../lib/events';
-import { defaultReminderText, sendEventReminder } from '../lib/eventReminder';
+import { defaultReminderText, notifyDuties, sendEventReminder } from '../lib/eventReminder';
 import { assertGroupMedia } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi } from '../lib/telegram';
@@ -105,7 +106,10 @@ groupEventRoutes.post('/:id/events', async (c) => {
       createdBy: user.id,
     })
     .returning();
-  if (input.roles.length) await setRoles(db, row!, input.roles);
+  if (input.roles.length) {
+    const added = await setRoles(db, row!, input.roles);
+    if (input.notifyAssigned) await tellAssigned(c, db, user, row!, added);
+  }
   await audit(db, {
     actorUserId: user.id,
     action: 'event_created',
@@ -140,6 +144,29 @@ async function managed(c: { get: (k: 'db' | 'user') => unknown }, id: number) {
   const { canManage } = await eventAccess(db, user, event);
   if (!canManage) throw new HTTPException(403, { message: 'forbidden' });
   return { db, user, event };
+}
+
+/** Messages the people newly given a duty and sends it off in the background. */
+async function tellAssigned(
+  c: Context<App>,
+  db: AuthVariables['db'],
+  user: AuthVariables['user'],
+  event: typeof events.$inferSelect,
+  added: DutyAdded[],
+) {
+  const queued = await notifyDuties(db, {
+    event,
+    added,
+    sender: { id: user.id, name: displayName(user) },
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+  });
+  if (queued > 0)
+    c.executionCtx.waitUntil(
+      drainOutbox(db, botApi(c.env), { limit: 100 }).catch((err) =>
+        console.error('duty drain', err),
+      ),
+    );
 }
 
 /** The default reminder text, in the sender's language, to read and change before sending. */
@@ -236,8 +263,9 @@ eventRoutes.patch('/:id', async (c) => {
 
 eventRoutes.put('/:id/roles', async (c) => {
   const { db, user, event } = await managed(c, idParam(c));
-  const { roles } = await parseBody(c, setRolesSchema);
-  await setRoles(db, event, roles);
+  const { roles, notify } = await parseBody(c, setRolesSchema);
+  const added = await setRoles(db, event, roles);
+  if (notify) await tellAssigned(c, db, user, event, added);
   const row =
     roles.length && !event.hasDuties
       ? (

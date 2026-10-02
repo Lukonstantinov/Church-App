@@ -921,8 +921,8 @@ export function useUpdateEvent(id: number) {
 }
 
 export function useSetRoles(id: number) {
-  return useEventMutation((roles: RoleInput[]) =>
-    apiFetch<EventDetail>(`/events/${id}/roles`, send('PUT', { roles })),
+  return useEventMutation((input: { roles: RoleInput[]; notify?: boolean }) =>
+    apiFetch<EventDetail>(`/events/${id}/roles`, send('PUT', input)),
   );
 }
 
@@ -971,12 +971,15 @@ export function useUpdateGroup(groupId: number) {
 
 // ---------- reports ----------
 
-export const fetchTreasuryExport = (groupId: number, year: number) =>
-  apiFetch<TreasuryExport>(`/groups/${groupId}/treasury/export?year=${year}`);
+/** A report period: a whole year, a month ("YYYY-MM") or from..to (local dates). */
+export type ReportPeriod = { from: string; to: string };
+const periodQuery = (p: ReportPeriod) => `from=${p.from}&to=${p.to}`;
+export const fetchTreasuryExport = (groupId: number, p: ReportPeriod) =>
+  apiFetch<TreasuryExport>(`/groups/${groupId}/treasury/export?${periodQuery(p)}`);
 export const fetchDues = (groupId: number, year: number) =>
   apiFetch<DuesSheet>(`/groups/${groupId}/dues?year=${year}`);
-export const fetchAttendanceExport = (groupId: number, year: number) =>
-  apiFetch<AttendanceExport>(`/groups/${groupId}/attendance/export?year=${year}`);
+export const fetchAttendanceExport = (groupId: number, p: ReportPeriod) =>
+  apiFetch<AttendanceExport>(`/groups/${groupId}/attendance/export?${periodQuery(p)}`);
 
 /** The bot sends the file to the user's own chat. */
 export const sendDocumentToChat = (file: Blob, name: string) =>

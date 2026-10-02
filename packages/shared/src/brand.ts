@@ -255,6 +255,8 @@ export interface BackdropConfig {
   zoom: number;
   dim: number;
   soft: number;
+  /** How strongly the theme colour tints the photo (0 = untouched photo). */
+  tint: number;
 }
 
 export const DEFAULT_BACKDROP: Omit<BackdropConfig, 'mediaId'> = {
@@ -265,6 +267,7 @@ export const DEFAULT_BACKDROP: Omit<BackdropConfig, 'mediaId'> = {
   zoom: 1,
   dim: -0.25,
   soft: 0.12,
+  tint: 0.55,
 };
 
 export const backdropSchema = z.object({
@@ -276,6 +279,8 @@ export const backdropSchema = z.object({
   zoom: z.number().min(1).max(3),
   dim: z.number().min(-0.8).max(0.7),
   soft: z.number().min(0).max(0.4),
+  // Photos saved before the tint existed pick up the theme colour too.
+  tint: z.number().min(0).max(1).default(0.55),
 });
 
 /** Parses a stored backdrop (JSON) defensively; null when absent or invalid. */

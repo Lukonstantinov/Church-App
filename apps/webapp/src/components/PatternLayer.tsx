@@ -119,6 +119,17 @@ export function BackdropLayer({
           transformOrigin: focus,
         }}
       />
+      {backdrop.tint > 0 && (
+        // The theme colour recolours the photo (hue and saturation, keeping its light and shade).
+        <span
+          className="absolute inset-0"
+          style={{
+            background: 'var(--brand)',
+            mixBlendMode: 'color',
+            opacity: backdrop.tint,
+          }}
+        />
+      )}
       {backdrop.dim !== 0 && (
         <span
           className="absolute inset-0"

@@ -99,3 +99,65 @@ export async function sendEventReminder(
   }
   return list.length;
 }
+
+/**
+ * Tells each newly assigned person which duty(ies) they were given (with what it
+ * involves), naming who assigned them, with a button to the event. Returns how many
+ * people were queued.
+ */
+export async function notifyDuties(
+  db: Db,
+  args: {
+    event: Event;
+    added: { userId: number; roleName: string; description: string | null }[];
+    sender: { id: number; name: string };
+    envAppUrl?: string;
+    fallbackUrl: string | null;
+  },
+): Promise<number> {
+  const fallback = await churchDefaultLocale(db);
+  const appUrl = ((await getAppUrl(db, args.envAppUrl)) ?? args.fallbackUrl)?.replace(/\/+$/, '');
+  const byUser = new Map<number, typeof args.added>();
+  for (const a of args.added) {
+    if (a.userId === args.sender.id) continue;
+    byUser.set(a.userId, [...(byUser.get(a.userId) ?? []), a]);
+  }
+  if (byUser.size === 0) return 0;
+  const people = await db
+    .select({
+      id: users.id,
+      chatId: users.telegramId,
+      locale: users.locale,
+      reach: users.isReachable,
+    })
+    .from(users)
+    .where(inArray(users.id, [...byUser.keys()]));
+  let queued = 0;
+  for (const p of people) {
+    if (!p.chatId || !p.reach) continue;
+    const locale = localeOf({ locale: p.locale }, fallback);
+    const t = messages(locale);
+    const duties = byUser
+      .get(p.id)!
+      .map(
+        (d) =>
+          `• <b>${escapeHtml(d.roleName)}</b>${d.description ? ` — ${escapeHtml(d.description)}` : ''}`,
+      )
+      .join('\n');
+    const when = await whenOf(db, args.event, locale);
+    let html = t.bot.eventDuty(escapeHtml(args.event.title), when, duties);
+    if (args.event.location) html += `\n📍 ${escapeHtml(args.event.location)}`;
+    html += `\n\n<i>${escapeHtml(t.bot.sentBy(args.sender.name))}</i>`;
+    const reply_markup = appUrl
+      ? new InlineKeyboard().webApp(t.bot.eventButton, `${appUrl}/?event=${args.event.id}`)
+      : undefined;
+    await enqueue(db, {
+      chatId: p.chatId,
+      method: 'sendMessage',
+      payload: { chat_id: p.chatId, text: html, parse_mode: 'HTML', reply_markup },
+      dedupeKey: `evduty:${args.event.id}:${p.chatId}:${Date.now()}`,
+    });
+    queued++;
+  }
+  return queued;
+}

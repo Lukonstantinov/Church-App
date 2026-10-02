@@ -467,6 +467,10 @@ export const events = sqliteTable(
     countdown: integer('countdown', { mode: 'boolean' }).notNull().default(false),
     /** When the automatic reminder went out (null = not yet). */
     remindedAt: text('reminded_at'),
+    /** A Telegram chat of its own, managed by the bot (see lib/eventChats). */
+    tgChatId: integer('tg_chat_id'),
+    tgChatTitle: text('tg_chat_title'),
+    chatLinkCode: text('chat_link_code'),
     templateId: integer('template_id'),
     status: text('status', { enum: ['scheduled', 'cancelled'] })
       .notNull()
@@ -522,6 +526,8 @@ export const eventRoles = sqliteTable(
       .notNull()
       .references(() => events.id),
     name: text('name').notNull(),
+    /** What this duty involves, shown to the people who serve in it. */
+    description: text('description'),
     slots: integer('slots').notNull().default(1),
     sort: integer('sort').notNull().default(0),
   },
@@ -729,4 +735,21 @@ export const messageTemplates = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [index('message_templates_group').on(t.groupId, t.role)],
+);
+
+/** The in-app chat of an event (a thread for the people taking part). */
+export const eventMessages = sqliteTable(
+  'event_messages',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    text: text('text').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('event_messages_event').on(t.eventId, t.id)],
 );
