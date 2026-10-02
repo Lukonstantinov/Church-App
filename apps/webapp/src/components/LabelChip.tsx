@@ -1,56 +1,12 @@
-import type { CSSProperties } from 'react';
 import { useLabels, useSetMemberLabels } from '../lib/queries';
 import { useNav } from '../lib/nav';
 import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
 import { useToast } from './Toast';
-import type { LabelAnimation, LabelRef } from '@church/shared';
+import type { LabelLook, LabelRef } from '@church/shared';
+import { LabelChip, lookColors } from './LabelLook';
 
-const isLight = (hex: string) => {
-  const v = parseInt(hex.slice(1), 16);
-  return 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255) > 170;
-};
-
-/** One custom label: its colour and its own animation. */
-const RAINBOW = 'linear-gradient(100deg,#ef4444,#f97316,#eab308,#22c55e,#3b82f6,#a855f7,#ec4899)';
-
-/** The label's fill: one colour, a two-colour gradient, or a rainbow. */
-export function labelBackground(l: Pick<LabelRef, 'color' | 'color2' | 'style'>): string {
-  if (l.style === 'rainbow') return RAINBOW;
-  if (l.style === 'gradient' && l.color2) return `linear-gradient(100deg, ${l.color}, ${l.color2})`;
-  return l.color;
-}
-
-export function LabelChip({
-  label,
-  small,
-}: {
-  label: Pick<LabelRef, 'name' | 'color' | 'color2' | 'style'> & { animation: LabelAnimation };
-  small?: boolean;
-}) {
-  const anim = label.animation === 'none' ? '' : `label-${label.animation}`;
-  // Gradients and rainbows slowly drift along their colours.
-  const fill =
-    label.style === 'rainbow' || (label.style === 'gradient' && label.color2) ? 'label-fill' : '';
-  return (
-    <span
-      className={`inline-flex max-w-full items-center whitespace-nowrap rounded-full font-semibold ${
-        small ? 'px-1.5 py-px text-[11px]' : 'px-2.5 py-0.5 text-[12px]'
-      } ${anim} ${fill}`}
-      style={
-        {
-          '--label-color': label.color,
-          background: labelBackground(label),
-          color:
-            label.style === 'rainbow' ? '#ffffff' : isLight(label.color) ? '#111827' : '#ffffff',
-          textShadow: label.style === 'rainbow' ? '0 1px 2px rgba(0,0,0,0.45)' : undefined,
-        } as CSSProperties
-      }
-    >
-      <span className="truncate">{label.name}</span>
-    </span>
-  );
-}
+export { LabelChip };
 
 /** Everything that tags a person here: leader, position, and their custom labels. */
 export function PersonTags({
@@ -60,7 +16,10 @@ export function PersonTags({
   leaderText,
   labels,
   inline,
+  positionLook,
 }: {
+  /** The position drawn like a label (null = the plain chip). */
+  positionLook?: LabelLook | null;
   /** Sits on the name's line (no top gap). */
   inline?: boolean;
   role: 'leader' | 'member';
@@ -80,11 +39,14 @@ export function PersonTags({
           {leaderText}
         </span>
       )}
-      {showPosition && (
-        <span className="inline-flex rounded-full bg-brand/15 px-1.5 py-px text-[11px] font-semibold text-accent">
-          {positionName}
-        </span>
-      )}
+      {showPosition &&
+        (positionLook ? (
+          <LabelChip label={{ ...positionLook, name: positionName }} small />
+        ) : (
+          <span className="inline-flex rounded-full bg-brand/15 px-1.5 py-px text-[11px] font-semibold text-accent">
+            {positionName}
+          </span>
+        ))}
       {labels.map((l) => (
         <LabelChip key={l.id} label={l} small />
       ))}
@@ -183,7 +145,12 @@ export function LabelPicker({
                 >
                   <span
                     className="h-2.5 w-2.5 rounded-full"
-                    style={{ background: labelBackground(l) }}
+                    style={{
+                      background:
+                        lookColors(l).length > 1
+                          ? `linear-gradient(90deg, ${lookColors(l).join(', ')})`
+                          : l.color,
+                    }}
                   />
                   + {l.name}
                 </button>

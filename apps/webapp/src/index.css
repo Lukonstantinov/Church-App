@@ -533,15 +533,240 @@ html[data-motion='lively'] body::before {
     transform: translateX(320%) skewX(-18deg);
   }
 }
-/* A rainbow or gradient label drifts along its colours. */
-.label-fill {
-  background-size: 220% 100% !important;
-  animation: label-fill 4s linear infinite;
+/* Gradient, rainbow and metal fills flow: the colours loop (first = last) over twice the
+   width, and sliding exactly one length repeats without a seam. */
+.lk-flow {
+  animation: lk-flow 7s linear infinite;
 }
-@keyframes label-fill {
-  to {
-    background-position: -220% 0;
+.lk-flow.lk-fast {
+  animation-duration: 2.6s;
+}
+@keyframes lk-flow {
+  from {
+    background-position: 0% 50%;
   }
+  to {
+    background-position: 200% 50%;
+  }
+}
+/* A label's own movement runs alongside the flow (two animations at once). */
+.lk-flow.label-pulse {
+  animation:
+    lk-flow 7s linear infinite,
+    label-pulse 1.8s ease-in-out infinite;
+}
+.lk-flow.label-glow {
+  animation:
+    lk-flow 7s linear infinite,
+    label-glow 2s ease-in-out infinite;
+}
+.lk-flow.label-wave {
+  animation:
+    lk-flow 7s linear infinite,
+    label-wave 1.4s ease-in-out infinite;
+}
+.lk-flow.label-bounce {
+  animation:
+    lk-flow 7s linear infinite,
+    label-bounce 1.6s ease-in-out infinite;
+}
+.lk-flow.label-float {
+  animation:
+    lk-flow 7s linear infinite,
+    label-float 3s ease-in-out infinite;
+}
+.lk-flow.label-heartbeat {
+  animation:
+    lk-flow 7s linear infinite,
+    label-heartbeat 1.5s ease-in-out infinite;
+}
+.lk-flow.label-flicker {
+  animation:
+    lk-flow 7s linear infinite,
+    label-flicker 3.2s linear infinite;
+}
+.lk-flow.label-jelly {
+  animation:
+    lk-flow 7s linear infinite,
+    label-jelly 2.2s ease-in-out infinite;
+}
+.lk-flow.label-rainbow {
+  animation:
+    lk-flow 7s linear infinite,
+    label-rainbow 6s linear infinite;
+}
+.label-float {
+  animation: label-float 3s ease-in-out infinite;
+}
+@keyframes label-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2.5px);
+  }
+}
+.label-heartbeat {
+  animation: label-heartbeat 1.5s ease-in-out infinite;
+}
+@keyframes label-heartbeat {
+  0%,
+  40%,
+  100% {
+    transform: scale(1);
+  }
+  10% {
+    transform: scale(1.12);
+  }
+  20% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.08);
+  }
+}
+.label-flicker {
+  animation: label-flicker 3.2s linear infinite;
+}
+@keyframes label-flicker {
+  0%,
+  18%,
+  22%,
+  25%,
+  53%,
+  57%,
+  100% {
+    opacity: 1;
+  }
+  20%,
+  24%,
+  55% {
+    opacity: 0.45;
+  }
+}
+.label-jelly {
+  animation: label-jelly 2.2s ease-in-out infinite;
+}
+@keyframes label-jelly {
+  0%,
+  60%,
+  100% {
+    transform: scale(1, 1);
+  }
+  10% {
+    transform: scale(1.12, 0.9);
+  }
+  20% {
+    transform: scale(0.92, 1.08);
+  }
+  30% {
+    transform: scale(1.05, 0.96);
+  }
+  40% {
+    transform: scale(0.98, 1.02);
+  }
+}
+
+/* Patterns over a label's fill, in its text colour. */
+.lk-tex {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  color: inherit;
+  opacity: 0.22;
+}
+.lk-tex-stripes {
+  background: repeating-linear-gradient(-45deg, currentColor 0 3px, transparent 3px 7px);
+}
+.lk-tex-dots {
+  background: radial-gradient(currentColor 0.9px, transparent 1.3px) 0 0 / 5px 5px;
+}
+.lk-tex-checks {
+  background: conic-gradient(currentColor 25%, transparent 0 50%, currentColor 0 75%, transparent 0)
+    0 0 / 8px 8px;
+  opacity: 0.14;
+}
+.lk-tex-waves {
+  background: radial-gradient(
+      circle at 50% 0,
+      transparent 3px,
+      currentColor 3.6px,
+      transparent 4.4px
+    )
+    0 0 / 8px 5px;
+  opacity: 0.3;
+}
+.lk-tex-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2'/%3E%3C/filter%3E%3Crect width='60' height='60' filter='url(%23n)' opacity='0.9'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+  opacity: 0.55;
+}
+.lk-tex-sparkle {
+  background:
+    radial-gradient(circle, currentColor 0.8px, transparent 1.2px) 1px 2px / 9px 7px,
+    radial-gradient(circle, currentColor 0.6px, transparent 1px) 5px 4px / 13px 9px;
+  opacity: 0.45;
+  animation: lk-twinkle 2.4s ease-in-out infinite;
+}
+@keyframes lk-twinkle {
+  50% {
+    opacity: 0.15;
+  }
+}
+/* Sparks: little stars that light up across the label. */
+.lk-sparkles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle, #fff 0.9px, transparent 1.6px) 12% 30% / 100% 100% no-repeat,
+    radial-gradient(circle, #fff 0.7px, transparent 1.3px) 48% 70% / 100% 100% no-repeat,
+    radial-gradient(circle, #fff 0.9px, transparent 1.6px) 82% 25% / 100% 100% no-repeat;
+  background-size: 18px 12px;
+  animation: lk-sparks 1.6s steps(1) infinite;
+}
+@keyframes lk-sparks {
+  0% {
+    background-position:
+      10% 20%,
+      55% 80%,
+      90% 30%;
+  }
+  33% {
+    background-position:
+      30% 70%,
+      75% 20%,
+      15% 60%;
+  }
+  66% {
+    background-position:
+      60% 40%,
+      20% 30%,
+      80% 80%;
+  }
+}
+
+/* Label and name fonts. */
+.lk-font-serif {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.lk-font-mono {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.lk-font-script {
+  font-family: 'Snell Roundhand', 'Segoe Script', 'Brush Script MT', 'Dancing Script', cursive;
+  font-weight: 700;
+}
+.lk-font-rounded {
+  font-family: ui-rounded, 'SF Pro Rounded', 'Arial Rounded MT Bold', 'Nunito', system-ui;
+}
+.lk-font-condensed {
+  font-family: 'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', sans-serif;
+  font-stretch: condensed;
+  letter-spacing: -0.01em;
 }
 .label-pulse {
   animation: label-pulse 1.8s ease-in-out infinite;
@@ -564,6 +789,7 @@ html[data-motion='calm'] .sheen::after,
 html[data-motion='calm'] .breathe,
 html[data-motion='calm'] .bob,
 html[data-motion='calm'] [class*='label-'],
+html[data-motion='calm'] [class*='lk-'],
 html[data-motion='calm'] .label-shimmer::after {
   animation: none;
 }

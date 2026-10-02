@@ -9,6 +9,7 @@ import {
   type GroupDetail,
   type MeetingDetail,
   type MeetingRow,
+  type LabelRef,
   type MemberRow,
   type MyAttendanceResponse,
   type RollResponse,
@@ -1431,5 +1432,105 @@ describe('event messages: poster, duty colours, who serves where', () => {
       json: { text: 'Последний сбор', userIds: [bId] },
     });
     expect(await sentTo(b.id, 'Последний сбор')).toBeDefined();
+  });
+});
+
+describe('label looks and position looks', () => {
+  it('labels keep many colours, pattern, font and a styled name; positions look like labels', async () => {
+    const g = await createEnv('Вид меток');
+    const a = fakeUser('Стильный');
+    const aId = await join(a, g);
+    const label = await apiJson<LabelRef>(`/api/groups/${g.id}/labels`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        name: 'Огонь',
+        color: '#EF4444',
+        colors: ['#ef4444', '#f97316', '#eab308'],
+        style: 'gradient',
+        animation: 'heartbeat',
+        texture: 'sparkle',
+        font: 'script',
+        caps: true,
+        emoji: '🔥',
+        nameStyle: true,
+      },
+    });
+    expect(label).toMatchObject({
+      color: '#ef4444',
+      color2: '#f97316',
+      colors: ['#ef4444', '#f97316', '#eab308'],
+      texture: 'sparkle',
+      font: 'script',
+      caps: true,
+      italic: false,
+      emoji: '🔥',
+      nameStyle: true,
+    });
+    // Too many colours, an unknown pattern: refused.
+    expect(
+      (
+        await api(`/api/groups/${g.id}/labels`, {
+          method: 'POST',
+          user: ADMIN,
+          json: { name: 'x', color: '#000000', colors: Array(6).fill('#000000') },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await api(`/api/groups/${g.id}/labels`, {
+          method: 'POST',
+          user: ADMIN,
+          json: { name: 'x', color: '#000000', texture: 'leopard' },
+        })
+      ).status,
+    ).toBe(400);
+    await api(`/api/groups/${g.id}/members/${aId}/labels`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: { labelIds: [label.id] },
+    });
+
+    // A position with its own look shows it in the people list and contacts.
+    const list = await apiJson<{ id: number; name: string; look: unknown }[]>(
+      `/api/groups/${g.id}/positions`,
+      {
+        method: 'POST',
+        user: ADMIN,
+        json: {
+          name: 'Звукорежиссёр',
+          permissions: [],
+          look: { color: '#3B82F6', style: 'neon', animation: 'flicker' },
+        },
+      },
+    );
+    const pos = list.find((p) => p.name === 'Звукорежиссёр')!;
+    expect(pos.look).toMatchObject({ color: '#3b82f6', style: 'neon', animation: 'flicker' });
+    const membershipId = (
+      await apiJson<MemberRow[]>(`/api/groups/${g.id}/members`, { user: ADMIN })
+    ).find((m) => m.userId === aId)!.membershipId;
+    await apiJson(`/api/memberships/${membershipId}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { positionId: pos.id },
+    });
+    const row = (await apiJson<MemberRow[]>(`/api/groups/${g.id}/members`, { user: ADMIN })).find(
+      (m) => m.userId === aId,
+    )!;
+    expect(row.labels[0]).toMatchObject({ name: 'Огонь', nameStyle: true });
+    expect(row.positionLook).toMatchObject({ style: 'neon' });
+    const contact = (await apiJson<ContactRow[]>(`/api/groups/${g.id}/contacts`, { user: a })).find(
+      (c) => c.id === aId,
+    )!;
+    expect(contact.positionLook).toMatchObject({ style: 'neon' });
+
+    // Back to the plain chip.
+    const plain = await apiJson<{ id: number; look: unknown }[]>(`/api/positions/${pos.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { name: 'Звукорежиссёр', permissions: [], look: null },
+    });
+    expect(plain.find((p) => p.id === pos.id)!.look).toBeNull();
   });
 });

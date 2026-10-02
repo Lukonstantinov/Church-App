@@ -19,8 +19,6 @@ import {
   type GroupDetail,
   type GroupRole,
   type GroupSummary,
-  type LabelAnimation,
-  type LabelStyle,
   type MemberRow,
   type ContactRow,
 } from '@church/shared';
@@ -300,7 +298,12 @@ groupRoutes.get('/:id/members', async (c) => {
       ? (['pending', 'active', 'left', 'rejected'] as const)
       : (['pending', 'active'] as const);
   const rows = await db
-    .select({ m: memberships, u: users, positionName: positions.name })
+    .select({
+      m: memberships,
+      u: users,
+      positionName: positions.name,
+      positionLook: positions.look,
+    })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
     .leftJoin(positions, eq(positions.id, memberships.positionId))
@@ -334,15 +337,7 @@ groupRoutes.get('/:id/members', async (c) => {
   }
   const labelRows = rows.length
     ? await db
-        .select({
-          userId: memberLabels.userId,
-          id: groupLabels.id,
-          name: groupLabels.name,
-          color: groupLabels.color,
-          color2: groupLabels.color2,
-          style: groupLabels.style,
-          animation: groupLabels.animation,
-        })
+        .select({ userId: memberLabels.userId, label: groupLabels })
         .from(memberLabels)
         .innerJoin(groupLabels, eq(groupLabels.id, memberLabels.labelId))
         .where(
@@ -356,20 +351,12 @@ groupRoutes.get('/:id/members', async (c) => {
         )
         .orderBy(asc(groupLabels.sort), asc(groupLabels.id))
     : [];
-  const result: MemberRow[] = rows.map(({ m, u, positionName }) => ({
-    labels: labelRows
-      .filter((l) => l.userId === u.id)
-      .map((l) => ({
-        id: l.id,
-        name: l.name,
-        color: l.color,
-        color2: l.color2,
-        style: l.style as LabelStyle,
-        animation: l.animation as LabelAnimation,
-      })),
+  const result: MemberRow[] = rows.map(({ m, u, positionName, positionLook }) => ({
+    labels: labelRows.filter((l) => l.userId === u.id).map((l) => toLabelRef(l.label)),
     membershipId: m.id,
     positionId: m.positionId,
     positionName,
+    positionLook: positionLook ?? null,
     userId: u.id,
     firstName: u.firstName,
     lastName: u.lastName,
@@ -590,6 +577,7 @@ groupRoutes.get('/:id/contacts', async (c) => {
       telegramId: users.telegramId,
       isAdmin: users.isAdmin,
       positionName: positions.name,
+      positionLook: positions.look,
     })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))

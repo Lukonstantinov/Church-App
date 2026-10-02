@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { LabelExtra, LabelLook } from '@church/shared';
 import {
   check,
   customType,
@@ -573,6 +574,8 @@ export const positions = sqliteTable(
     /** JSON array of Permission keys. */
     permissions: text('permissions', { mode: 'json' }).$type<string[]>().notNull(),
     isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+    /** LabelLook JSON: the position's chip looks like a label (null = plain chip). */
+    look: text('look', { mode: 'json' }).$type<LabelLook>(),
     sort: integer('sort').notNull().default(0),
     createdAt: createdAt(),
   },
@@ -777,6 +780,8 @@ export const groupLabels = sqliteTable(
     /** solid | gradient | rainbow */
     style: text('style').notNull().default('solid'),
     animation: text('animation').notNull().default('none'),
+    /** LabelExtra JSON: more colours, texture, font, emoji, styled name. */
+    look: text('look', { mode: 'json' }).$type<Partial<LabelExtra>>(),
     sort: integer('sort').notNull().default(0),
     createdBy: integer('created_by').references(() => users.id),
     createdAt: createdAt(),

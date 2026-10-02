@@ -1,3 +1,4 @@
+import { labelLookSchema, type LabelLook } from './labels';
 import { z } from 'zod';
 
 /**
@@ -62,6 +63,8 @@ export interface PositionRow {
   /** New members get this position. */
   isDefault: boolean;
   memberCount: number;
+  /** How its chip looks next to people's names (null = the plain chip). */
+  look: LabelLook | null;
 }
 
 export const positionInputSchema = z.object({
@@ -77,6 +80,7 @@ export const positionInputSchema = z.object({
     .max(PERMISSIONS.length * 2)
     .transform(normalizePermissions),
   isDefault: z.boolean().optional(),
+  look: labelLookSchema.nullish(),
 });
 export type PositionInput = z.input<typeof positionInputSchema>;
 

@@ -3,6 +3,7 @@ import { displayName, type GroupSummary, type MemberRow } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { GroupSwitcher } from '../components/GroupSwitcher';
 import { LabelPicker, PersonTags } from '../components/LabelChip';
+import { PersonName } from '../components/LabelLook';
 import { IconSearch, IconTag, IconTelegram, IconUserPlus, IconUsers } from '../components/icons';
 import { LinkShare } from '../components/LinkShare';
 import { PercentChip } from '../components/Status';
@@ -89,13 +90,16 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
         <Avatar id={m.userId} firstName={m.firstName} lastName={m.lastName} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-            <span
-              className={`min-w-0 truncate text-[17px] font-medium ${m.isAdmin ? 'admin-name' : ''}`}
-            >
-              {displayName(m)}
-            </span>
+            <PersonName
+              name={displayName(m)}
+              labels={m.labels}
+              positionLook={m.positionLook}
+              isAdmin={m.isAdmin}
+              className="min-w-0 truncate text-[17px] font-medium"
+            />
             <PersonTags
               inline
+              positionLook={m.positionLook}
               role={m.role}
               positionName={m.positionName}
               defaultPosition={m.positionId === defaultId}

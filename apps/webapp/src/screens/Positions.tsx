@@ -3,10 +3,14 @@ import {
   PERMISSIONS,
   PERMISSION_GROUPS,
   normalizePermissions,
+  type LabelLook,
   type Permission,
   type PositionRow,
 } from '@church/shared';
 import { IconCheck, IconPlus, IconTrash } from '../components/icons';
+import { LabelChip } from '../components/LabelLook';
+import { Pill } from '../components/LookControls';
+import { LookEditor, defaultLook } from '../components/LookEditor';
 import { useToast } from '../components/Toast';
 import {
   Badge,
@@ -48,7 +52,9 @@ export function Positions({ groupId }: { groupId: number }) {
             className="p-4"
           >
             <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-[17px] font-semibold">{p.name}</span>
+              <span className="min-w-0 flex-1 truncate text-[17px] font-semibold">
+                {p.look ? <LabelChip label={{ ...p.look, name: p.name }} /> : p.name}
+              </span>
               {p.isDefault && <Badge tone="hint">{t.positions.defaultBadge}</Badge>}
               <span className="text-[13px] text-hint">{t.positions.people(p.memberCount)}</span>
             </div>
@@ -108,6 +114,8 @@ function EditorBody({ groupId, existing }: { groupId: number; existing?: Positio
   const [description, setDescription] = useState(existing?.description ?? '');
   const [isDefault, setIsDefault] = useState(existing?.isDefault ?? false);
   const [perms, setPerms] = useState<Permission[]>(existing?.permissions ?? []);
+  // Null = the plain chip; otherwise the position looks like a label next to names.
+  const [look, setLook] = useState<LabelLook | null>(existing?.look ?? null);
   // Rights the editor doesn't hold can be neither given nor taken away.
   const locked = (p: Permission) => !can(p);
   const editable = !existing || existing.permissions.every((p) => can(p));
@@ -136,6 +144,7 @@ function EditorBody({ groupId, existing }: { groupId: number; existing?: Positio
         description,
         permissions: normalizePermissions(perms),
         isDefault,
+        look,
       });
       haptic.success();
       toast(t.common.saved);
@@ -202,6 +211,22 @@ function EditorBody({ groupId, existing }: { groupId: number; existing?: Positio
           disabled={existing?.isDefault}
           onChange={setIsDefault}
         />
+      </Section>
+
+      <Section title={t.labels.positionLook} footer={t.labels.positionLookHint}>
+        <div className="flex flex-col gap-4 p-4">
+          <div className="flex gap-2">
+            <Pill on={!look} onClick={() => setLook(null)} label={t.labels.plainLook} />
+            <Pill
+              on={!!look}
+              onClick={() => setLook(look ?? { ...defaultLook(), animation: 'flow' })}
+              label={t.labels.customLook}
+            />
+          </div>
+          {look && (
+            <LookEditor value={look} onChange={setLook} name={name.trim() || t.positions.name} />
+          )}
+        </div>
       </Section>
 
       <h2 className="-mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">

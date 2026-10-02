@@ -1,3 +1,4 @@
+import { labelLookSchema, type LabelLook } from './labels';
 import { z } from 'zod';
 import {
   ENTER_ANIMATIONS,
@@ -176,39 +177,14 @@ export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 
 // ---------- Members ----------
 
-/** How a custom label moves. */
-export const LABEL_ANIMATIONS = [
-  'none',
-  'shimmer',
-  'pulse',
-  'glow',
-  'wave',
-  'rainbow',
-  'bounce',
-] as const;
-export type LabelAnimation = (typeof LABEL_ANIMATIONS)[number];
-
-export const LABEL_STYLES = ['solid', 'gradient', 'rainbow'] as const;
-export type LabelStyle = (typeof LABEL_STYLES)[number];
-
-const hex = z.string().regex(/^#[0-9a-f]{6}$/i);
-export const labelInputSchema = z.object({
+export const labelInputSchema = labelLookSchema.extend({
   name: z.string().trim().min(1).max(24),
-  color: hex,
-  /** Gradient labels fade from `color` to this one. */
-  color2: hex.nullish(),
-  style: z.enum(LABEL_STYLES).default('solid'),
-  animation: z.enum(LABEL_ANIMATIONS).default('none'),
 });
 export type LabelInput = z.input<typeof labelInputSchema>;
 
-export interface LabelRef {
+export interface LabelRef extends LabelLook {
   id: number;
   name: string;
-  color: string;
-  color2: string | null;
-  style: LabelStyle;
-  animation: LabelAnimation;
 }
 
 /** Which of the ministry's labels a person has. */
@@ -223,6 +199,8 @@ export interface MemberRow {
   membershipId: number;
   positionId: number | null;
   positionName: string | null;
+  /** The position's chip look (null = plain). */
+  positionLook: LabelLook | null;
   userId: number;
   firstName: string;
   lastName: string | null;
@@ -248,6 +226,7 @@ export interface ContactRow {
   lastName: string | null;
   username: string | null;
   positionName: string | null;
+  positionLook: LabelLook | null;
   offline: boolean;
   /** A church administrator (the name is shown in red). */
   isAdmin: boolean;
@@ -273,6 +252,7 @@ export interface MemberDetail {
     joinedAt: string | null;
     /** The person's custom labels in that ministry. */
     labels: LabelRef[];
+    positionLook: LabelLook | null;
   })[];
   /** Attendance in the groups the requester may see (leaders: theirs; the user: own). */
   attendance: MemberAttendance[];

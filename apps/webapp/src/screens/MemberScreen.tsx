@@ -10,7 +10,8 @@ import { Sheet, SheetOption } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import { AttendanceSummary } from '../components/AttendanceSummary';
 import { Avatar } from '../components/Avatar';
-import { LabelChip, LabelPicker } from '../components/LabelChip';
+import { LabelPicker } from '../components/LabelChip';
+import { LabelChip, PersonName } from '../components/LabelLook';
 import { GroupDot } from '../components/GroupSwitcher';
 import { LinkShare } from '../components/LinkShare';
 import {
@@ -88,10 +89,16 @@ export function MemberScreen({ userId }: { userId: number }) {
     <Screen>
       <header className="flex flex-col items-center gap-2 pt-4 text-center">
         <Avatar id={user.id} firstName={user.firstName} lastName={user.lastName} size={84} />
-        <h1
-          className={`text-[26px] font-bold leading-tight tracking-tight ${user.isAdmin ? 'admin-name' : ''}`}
-        >
-          {displayName(user)}
+        <h1 className="text-[26px] font-bold leading-tight tracking-tight">
+          <PersonName
+            name={displayName(user)}
+            labels={headerLabels}
+            positionLook={
+              memberships.find((m) => m.status === 'active' && m.positionLook?.nameStyle)
+                ?.positionLook
+            }
+            isAdmin={user.isAdmin}
+          />
         </h1>
         <div className="flex flex-wrap items-center justify-center gap-1.5 text-[15px] text-hint">
           {user.username && <span>@{user.username}</span>}
@@ -148,7 +155,15 @@ export function MemberScreen({ userId }: { userId: number }) {
                 before={<GroupDot id={m.groupId} theme={m.brandColor} />}
                 title={m.groupName}
                 subtitle={m.status === 'pending' ? t.member.statusPending : undefined}
-                after={m.positionName ? <Badge>{m.positionName}</Badge> : undefined}
+                after={
+                  m.positionName ? (
+                    m.positionLook ? (
+                      <LabelChip label={{ ...m.positionLook, name: m.positionName }} />
+                    ) : (
+                      <Badge>{m.positionName}</Badge>
+                    )
+                  ) : undefined
+                }
               />
               {m.status === 'active' && canIn(m.groupId, 'people.manage') && (
                 <div className="px-4 pb-3">

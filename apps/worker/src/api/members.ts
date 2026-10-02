@@ -170,6 +170,7 @@ userRoutes.get('/:id', async (c) => {
       brandColor: groups.brandColor,
       logoMediaId: groups.logoMediaId,
       positionName: positions.name,
+      positionLook: positions.look,
       permissions: positions.permissions,
     })
     .from(memberships)
@@ -229,13 +230,14 @@ userRoutes.get('/:id', async (c) => {
       hasActiveClaimCode: target.claimCode !== null && (target.claimExpiresAt ?? '') > now,
     },
     memberships: rows.map(
-      ({ m, groupName, brandColor, logoMediaId, positionName, permissions }) => ({
+      ({ m, groupName, brandColor, logoMediaId, positionName, positionLook, permissions }) => ({
         membershipId: m.id,
         groupId: m.groupId,
         groupName,
         brandColor,
         logoUrl: groupLogoUrl({ id: m.groupId, logoMediaId }),
         positionName,
+        positionLook: positionLook ?? null,
         permissions: effectivePermissions(false, { role: m.role, permissions }),
         role: m.role,
         status: m.status,

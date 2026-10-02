@@ -1060,7 +1060,9 @@ function usePositionsSaved(groupId: number) {
   const qc = useQueryClient();
   return (list: PositionRow[]) => {
     qc.setQueryData(keys.positions(groupId), list);
-    void qc.invalidateQueries({ queryKey: keys.members(groupId) });
+    // Position chips show in the people list, contacts and profiles.
+    void qc.invalidateQueries({ queryKey: ['groups', groupId] });
+    void qc.invalidateQueries({ queryKey: ['users'] });
     void qc.invalidateQueries({ queryKey: keys.groups });
     void qc.invalidateQueries({ queryKey: keys.me });
   };

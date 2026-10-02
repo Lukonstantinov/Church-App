@@ -1,7 +1,14 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, eq, ne } from 'drizzle-orm';
-import { positionInputSchema, type Permission } from '@church/shared';
+import {
+  labelExtra,
+  readLabelLook,
+  positionInputSchema,
+  type labelLookSchema,
+  type Permission,
+} from '@church/shared';
+import type { z } from 'zod';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { memberships, positions } from '../db/schema';
@@ -9,6 +16,18 @@ import { accessIn, assertCan } from '../lib/access';
 import { audit } from '../lib/audit';
 import { listPositions, permsOf } from '../lib/positions';
 import { idParam, parseBody } from './util';
+
+/** A position's look as stored: the full look, colours in lower case. */
+const lookOf = (l: z.output<typeof labelLookSchema>) =>
+  readLabelLook(
+    {
+      color: l.color.toLowerCase(),
+      color2: l.colors?.[1] ?? l.color2 ?? null,
+      style: l.style,
+      animation: l.animation,
+    },
+    labelExtra(l),
+  );
 
 type App = { Bindings: Env; Variables: AuthVariables };
 
@@ -38,6 +57,7 @@ groupPositionRoutes.post('/:id/positions', async (c) => {
     .values({
       groupId: group.id,
       name: input.name,
+      look: input.look ? lookOf(input.look) : null,
       description: input.description,
       permissions: input.permissions,
       isDefault: false,
@@ -84,7 +104,12 @@ positionRoutes.patch('/:id', async (c) => {
   assertNoEscalation(mine, [...permsOf(pos), ...input.permissions]);
   await db
     .update(positions)
-    .set({ name: input.name, description: input.description, permissions: input.permissions })
+    .set({
+      name: input.name,
+      description: input.description,
+      permissions: input.permissions,
+      ...(input.look !== undefined ? { look: input.look ? lookOf(input.look) : null } : {}),
+    })
     .where(eq(positions.id, pos.id));
   if (input.isDefault && !pos.isDefault) await makeDefault(db, pos.groupId, pos.id);
   await audit(db, {

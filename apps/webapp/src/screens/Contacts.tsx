@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { displayName } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { IconSearch, IconTelegram } from '../components/icons';
-import { LabelChip } from '../components/LabelChip';
+import { LabelChip, PersonName } from '../components/LabelLook';
 import { useToast } from '../components/Toast';
 import { Badge, Screen, Skeleton, Title } from '../components/ui';
 import { useT } from '../lib/i18n';
@@ -56,11 +56,13 @@ export function Contacts({ groupId }: { groupId: number }) {
               <Avatar id={c.id} firstName={c.firstName} lastName={c.lastName} size={40} />
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                  <span
-                    className={`min-w-0 truncate text-[16px] font-medium ${c.isAdmin ? 'admin-name' : ''}`}
-                  >
-                    {displayName(c)}
-                  </span>
+                  <PersonName
+                    name={displayName(c)}
+                    labels={c.labels}
+                    positionLook={c.positionLook}
+                    isAdmin={c.isAdmin}
+                    className="min-w-0 truncate text-[16px] font-medium"
+                  />
                   {c.labels.map((l) => (
                     <LabelChip key={l.id} label={l} small />
                   ))}
@@ -69,7 +71,12 @@ export function Contacts({ groupId }: { groupId: number }) {
                   {c.username ? `@${c.username}` : c.offline ? t.people.offline : '—'}
                 </span>
               </span>
-              {c.positionName && <Badge>{c.positionName}</Badge>}
+              {c.positionName &&
+                (c.positionLook ? (
+                  <LabelChip label={{ ...c.positionLook, name: c.positionName }} />
+                ) : (
+                  <Badge>{c.positionName}</Badge>
+                ))}
               {c.username && <IconTelegram size={20} className="shrink-0 text-link" />}
             </button>
           ))}

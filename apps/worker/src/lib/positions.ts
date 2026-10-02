@@ -66,6 +66,7 @@ export async function listPositions(db: Db, groupId: number): Promise<PositionRo
     permissions: permsOf(p),
     isDefault: p.isDefault,
     memberCount: countBy.get(p.id) ?? 0,
+    look: p.look ?? null,
   }));
 }
 

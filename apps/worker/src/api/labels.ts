@@ -2,12 +2,13 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import {
+  labelExtra,
   labelInputSchema,
+  readLabelLook,
   setMemberLabelsSchema,
-  type LabelAnimation,
-  type LabelStyle,
   type LabelRef,
 } from '@church/shared';
+import type { z } from 'zod';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { groupLabels, memberLabels, memberships } from '../db/schema';
@@ -19,11 +20,21 @@ type App = { Bindings: Env; Variables: AuthVariables };
 export const toLabelRef = (r: typeof groupLabels.$inferSelect): LabelRef => ({
   id: r.id,
   name: r.name,
-  color: r.color,
-  color2: r.color2,
-  style: r.style as LabelStyle,
-  animation: r.animation as LabelAnimation,
+  ...readLabelLook(r, r.look),
 });
+
+/** The stored columns of a label from what the editor sent. */
+function columns(input: z.output<typeof labelInputSchema>) {
+  const colors = input.colors ?? (input.color2 ? [input.color, input.color2] : null);
+  return {
+    name: input.name,
+    color: (colors?.[0] ?? input.color).toLowerCase(),
+    color2: (colors?.[1] ?? input.color2)?.toLowerCase() ?? null,
+    style: input.style,
+    animation: input.animation,
+    look: labelExtra({ ...input, colors }),
+  };
+}
 const toRef = toLabelRef;
 
 /** /api/groups/:id/labels */
@@ -53,11 +64,7 @@ groupLabelRoutes.post('/:id/labels', async (c) => {
     .insert(groupLabels)
     .values({
       groupId: group.id,
-      name: input.name,
-      color: input.color.toLowerCase(),
-      color2: input.color2?.toLowerCase() ?? null,
-      style: input.style,
-      animation: input.animation,
+      ...columns(input),
       sort: existing.length,
       createdBy: c.get('user').id,
     })
@@ -114,13 +121,7 @@ labelRoutes.patch('/:id', async (c) => {
   const input = await parseBody(c, labelInputSchema);
   const [row] = await db
     .update(groupLabels)
-    .set({
-      name: input.name,
-      color: input.color.toLowerCase(),
-      color2: input.color2?.toLowerCase() ?? null,
-      style: input.style,
-      animation: input.animation,
-    })
+    .set(columns(input))
     .where(eq(groupLabels.id, label.id))
     .returning();
   return c.json(toRef(row!));
