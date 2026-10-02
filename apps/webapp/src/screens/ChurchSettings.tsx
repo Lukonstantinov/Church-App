@@ -105,6 +105,18 @@ export function ChurchSettings() {
         </div>
       </div>
 
+      <Section title={t.appBg.title}>
+        <BackgroundEditor
+          church
+          value={church.appBackground}
+          look={{ brandColor: church.brandColor, pattern: null, logoUrl: church.logoUrl }}
+          saving={update.isPending}
+          onSave={async (appBackground) => {
+            await update.mutateAsync({ appBackground });
+          }}
+        />
+      </Section>
+
       <Section title={t.settings.name}>
         <TextField label={t.settings.name} value={name} onChange={setName} maxLength={80} />
         <div className="p-3">
@@ -169,18 +181,6 @@ export function ChurchSettings() {
 
       <Section title={t.settings.color} footer={t.settings.colorHint}>
         <ThemePicker value={church.brandColor} onChange={(v) => v && void pickColor(v)} />
-      </Section>
-
-      <Section title={t.appBg.title}>
-        <BackgroundEditor
-          church
-          value={church.appBackground}
-          look={{ brandColor: church.brandColor, pattern: null, logoUrl: church.logoUrl }}
-          saving={update.isPending}
-          onSave={async (appBackground) => {
-            await update.mutateAsync({ appBackground });
-          }}
-        />
       </Section>
 
       <Section title={t.settings.defaultLanguage} footer={t.settings.defaultLanguageHint}>

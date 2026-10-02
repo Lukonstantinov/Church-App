@@ -165,15 +165,6 @@ function Form({ g }: { g: GroupDetail }) {
         <ThemePicker value={g.brandColor} onChange={(v) => v && void patchNow({ brandColor: v })} />
       </Section>
 
-      <Section title={t.env.look} sticky>
-        <PatternDesigner
-          env={g}
-          fallbackTheme={churchTheme}
-          saving={update.isPending}
-          onSave={(look) => void patchNow(look)}
-        />
-      </Section>
-
       <Section title={t.appBg.title}>
         <BackgroundEditor
           value={g.pageBackground}
@@ -182,6 +173,15 @@ function Form({ g }: { g: GroupDetail }) {
           onSave={async (pageBackground) => {
             await update.mutateAsync({ pageBackground });
           }}
+        />
+      </Section>
+
+      <Section title={t.env.look} sticky>
+        <PatternDesigner
+          env={g}
+          fallbackTheme={churchTheme}
+          saving={update.isPending}
+          onSave={(look) => void patchNow(look)}
         />
       </Section>
 
