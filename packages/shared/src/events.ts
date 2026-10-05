@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { PosterLook } from './api';
-import { postDesignSchema, type PostDesign } from './posts';
+import { postDesignSchema, speakersSchema, type PostDesign, type Speaker } from './posts';
 import type { PersonRef, TransactionRow } from './finance';
 
 /** Optional sections of an event, switched on when creating or later when editing. */
@@ -70,6 +70,8 @@ export const createEventSchema = z.object({
   templateId: z.number().int().positive().nullish(),
   /** Show a "🔥 N days left" countdown. */
   countdown: z.boolean().default(false),
+  /** Up to four speakers, shown on the poster. */
+  speakers: speakersSchema.default([]),
   features: featuresSchema.default({ gallery: false, rsvp: false, duties: false, cost: false }),
   priceCents: z.number().int().min(0).max(10_000_000).nullish(),
   chatUrl: chatUrlSchema,
@@ -92,6 +94,7 @@ export const updateEventSchema = z.object({
   design: postDesignSchema.nullable().optional(),
   templateId: z.number().int().positive().nullable().optional(),
   countdown: z.boolean().optional(),
+  speakers: speakersSchema.optional(),
   features: featuresSchema.partial().optional(),
   priceCents: z.number().int().min(0).max(10_000_000).nullable().optional(),
   chatUrl: chatUrlSchema.optional(),
@@ -152,6 +155,8 @@ export interface EventSummary {
   design: PostDesign | null;
   templateId: number | null;
   countdown: boolean;
+  /** Up to four speakers shown on the poster. */
+  speakers: Speaker[];
   createdAt: string;
   /** The cover's look when there is no cover photo. */
   look: PosterLook | null;

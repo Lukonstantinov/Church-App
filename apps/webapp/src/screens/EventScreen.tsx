@@ -1,5 +1,7 @@
 import { CountdownBadge, CountdownOnCover, hasCountdown } from '../components/Countdown';
 import { BurnFrame } from '../components/Burn';
+import { LiveNow } from '../components/Live';
+import { isLiveWindow } from '../lib/live';
 import { EventChat } from '../components/EventChat';
 import { EventExport } from '../components/EventExport';
 import { EventCover } from '../components/EventCard';
@@ -142,9 +144,10 @@ function EventBody({ e }: { e: EventDetail }) {
       ) : (
         <BurnFrame e={e} radius="var(--radius-card)">
           <HeroCard>
-            {hasCountdown(e) && (
-              <div className="mb-3">
-                <CountdownBadge startsAt={e.startsAt} design={e.design} />
+            {(hasCountdown(e) || isLiveWindow(e.startsAt, e.endsAt)) && (
+              <div className="mb-3 flex gap-2">
+                {hasCountdown(e) && <CountdownBadge startsAt={e.startsAt} design={e.design} />}
+                <LiveNow startsAt={e.startsAt} endsAt={e.endsAt} cancelled={e.status === 'cancelled'} />
               </div>
             )}
             {header}

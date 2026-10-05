@@ -1367,6 +1367,11 @@ export const ru = {
     meetingSnack: (titleHtml: string, groupHtml: string, date: string, budget: string) =>
       `🍕 <b>Вы отвечаете за снеки</b>\n«${titleHtml}» · ${groupHtml}\n${date}\n\nМожно потратить до <b>${budget}</b>. Сохраните чек — расход внесут в кассу этой встречи.`,
     sentBy: (name: string) => `Отправил(а): ${name}`,
+    eventLive: (titleHtml: string, placeHtml: string | null) =>
+      `🔴 <b>Прямо сейчас</b>\n«${titleHtml}»${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
+    notifLiveTitle: (title: string) => `🔴 LIVE: «${title}»`,
+    meetingLive: (titleHtml: string, placeHtml: string | null) =>
+      `🔴 <b>Встреча началась</b>\n«${titleHtml}»${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     eventReminder: (titleHtml: string, when: string, placeHtml: string | null) =>
       `⏰ <b>Напоминание</b>\n«${titleHtml}»\n${when}${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     eventButton: 'Открыть событие',

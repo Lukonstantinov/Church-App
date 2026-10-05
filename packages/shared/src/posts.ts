@@ -142,6 +142,54 @@ export function readPostDesign(raw: unknown): PostDesign | null {
   return r.success ? r.data : null;
 }
 
+// ---------- Speakers ----------
+
+/** Most speakers one poster shows. */
+export const MAX_SPEAKERS = 4;
+
+/** A speaker on a poster: name, what they speak about or do, and an optional photo. */
+export const speakerInputSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  role: z
+    .string()
+    .trim()
+    .max(60)
+    .nullish()
+    .transform((v) => v || null),
+  /** An uploaded photo of the ministry. */
+  mediaId: z
+    .number()
+    .int()
+    .positive()
+    .nullish()
+    .transform((v) => v ?? null),
+});
+export const speakersSchema = z.array(speakerInputSchema).max(MAX_SPEAKERS);
+export type SpeakerInput = z.input<typeof speakerInputSchema>;
+
+/** A speaker as shown: `photoUrl` is the signed link of the photo (null = none). */
+export interface Speaker {
+  name: string;
+  role: string | null;
+  mediaId: number | null;
+  photoUrl: string | null;
+}
+
+/** Parses stored speakers defensively (empty when absent or invalid). */
+export function readSpeakers(raw: unknown): Omit<Speaker, 'photoUrl'>[] {
+  if (!raw) return [];
+  let v: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      v = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  const r = speakersSchema.safeParse(v);
+  return r.success ? r.data : [];
+}
+
 // ---------- Content blocks ----------
 
 const blockId = z.string().regex(/^[a-z0-9]{4,16}$/);

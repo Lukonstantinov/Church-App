@@ -31,6 +31,7 @@ import { MeetingHeroLines } from '../screens/MeetingScreen';
 import { canRollNow } from '../screens/Overview';
 import { Button, DateBadge, HeroCard } from './ui';
 import { BurnFrame } from './Burn';
+import { LiveNow } from './Live';
 import { LookTop } from './LookTop';
 import { PosterCard, PosterMedia, hasCover } from './Poster';
 
@@ -392,6 +393,7 @@ function EventRow({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
           </span>
         </span>
         <CountdownBadge startsAt={e.startsAt} design={e.design} compact muted={!hasCountdown(e)} />
+        <LiveNow startsAt={e.startsAt} endsAt={e.endsAt} cancelled={e.status === 'cancelled'} compact />
       </button>
     </BurnFrame>
   );

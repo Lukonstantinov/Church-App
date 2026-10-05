@@ -18,8 +18,9 @@ import {
 } from '@church/shared';
 import { getDb } from '../src/db/client';
 import { eq } from 'drizzle-orm';
-import { events } from '../src/db/schema';
+import { events, meetings } from '../src/db/schema';
 import { remindUpcomingEvents } from '../src/jobs/tick';
+import { sendLiveNotices } from '../src/lib/liveNotice';
 import { generateMeetings } from '../src/lib/meetings';
 import { drainOutbox } from '../src/lib/outbox';
 import { botApi } from '../src/lib/telegram';
@@ -1626,7 +1627,7 @@ describe('announcing a meeting and resending a post with an edited text', () => 
   });
 });
 
-describe('leaders meetings: ask who comes, time changes and cancellation', () => {
+describe('meetings for chosen people: ask who comes, time changes and cancellation', () => {
   it('only chosen people get it; answers reach the sender; changed and cancelled notices', async () => {
     const g = await createEnv('Лидерская');
     const a = fakeUser('Лидер Аня');
@@ -1642,15 +1643,13 @@ describe('leaders meetings: ask who comes, time changes and cancellation', () =>
         startTime: '18:00',
         durationMin: 90,
         title: 'Совет лидеров',
-        kind: 'leaders',
         audience: [aId],
       },
     });
-    expect(m.kind).toBe('leaders');
     const def = await apiJson<{ text: string }>(`/api/meetings/${m.id}/announce-text`, {
       user: ADMIN,
     });
-    expect(def.text).toContain('👑 Встреча лидеров');
+    expect(def.text).toContain('Совет лидеров');
 
     // Asked "Will you come?": only the chosen person gets it, with the two buttons.
     calls.length = 0;
@@ -1764,5 +1763,106 @@ describe('app backgrounds', () => {
       (await apiJson<GroupDetail>(`/api/groups/${g.id}`, { user: ADMIN })).pageBackground,
     ).toBeNull();
     await apiJson('/api/church', { method: 'PATCH', user: ADMIN, json: { appBackground: null } });
+  });
+});
+
+describe('live messages, speakers and repeating meetings', () => {
+  it('tells people once, when an event and a meeting begin', async () => {
+    const g = await createEnv('Прямой эфир');
+    const a = fakeUser('Зритель');
+    await join(a, g);
+    const date = localDate(new Date(), TZ);
+    const ev = await apiJson<EventSummary>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'Концерт', date, startTime: '12:00', location: 'Зал' },
+    });
+    const m = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, startTime: '12:00', durationMin: 60, title: 'Молитва' },
+    });
+    const db = getDb(env.DB);
+    // Both began 5 minutes ago and nobody has been told yet.
+    const began = new Date(Date.now() - 5 * 60_000);
+    await db
+      .update(events)
+      .set({ startsAt: began.toISOString(), liveNotifiedAt: null })
+      .where(eq(events.id, ev.id));
+    await db
+      .update(meetings)
+      .set({
+        startsAt: began.toISOString(),
+        endsAt: new Date(began.getTime() + 3_600_000).toISOString(),
+        liveNotifiedAt: null,
+      })
+      .where(eq(meetings.id, m.id));
+    await sendLiveNotices(db, env as never, new Date());
+    await sendLiveNotices(db, env as never, new Date());
+    await drainOutbox(db, botApi(env as never), { limit: 100 });
+    const texts = calls
+      .filter((c) => c.method === 'sendMessage' && c.body.chat_id === a.id)
+      .map((c) => String(c.body.text));
+    expect(texts.filter((x) => x.includes('Концерт') && x.includes('Прямо сейчас'))).toHaveLength(1);
+    expect(texts.filter((x) => x.includes('Молитва') && x.includes('Встреча началась'))).toHaveLength(
+      1,
+    );
+  });
+
+  it('does not announce an event that began long ago', async () => {
+    const g = await createEnv('Давно');
+    const a = fakeUser('Поздний');
+    await join(a, g);
+    const ev = await apiJson<EventSummary>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'Старое', date: localDate(new Date(), TZ), startTime: '12:00' },
+    });
+    const db = getDb(env.DB);
+    await db
+      .update(events)
+      .set({ startsAt: new Date(Date.now() - 3 * 3_600_000).toISOString(), liveNotifiedAt: null })
+      .where(eq(events.id, ev.id));
+    await sendLiveNotices(db, env as never, new Date());
+    await drainOutbox(db, botApi(env as never), { limit: 100 });
+    expect(calls.some((c) => String(c.body.text).includes('Старое'))).toBe(false);
+  });
+
+  it('a repeating meeting fills the calendar; speakers and the poster look are kept', async () => {
+    const g = await createEnv('Серия');
+    const date = addDays(localDate(new Date(), TZ), 2);
+    const m = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        date,
+        startTime: '19:00',
+        durationMin: 90,
+        title: 'Служение',
+        repeat: { every: 'weekly', count: 4 },
+        speakers: [{ name: 'Пётр', role: 'Проповедь' }, { name: 'Анна' }],
+        design: { banner: true, brandColor: 'ocean' },
+      },
+    });
+    expect(m.speakers.map((x) => x.name)).toEqual(['Пётр', 'Анна']);
+    expect(m.design?.brandColor).toBe('ocean');
+    expect(m.repeat).toEqual({ every: 'weekly', count: 4 });
+    const cal = await apiJson<{ meetings: MeetingRow[] }>(`/api/groups/${g.id}/calendar`, {
+      user: ADMIN,
+    });
+    const series = cal.meetings.filter((x) => x.seriesId === m.seriesId);
+    expect(series).toHaveLength(4);
+    // A week apart each, in order.
+    const gaps = series.slice(1).map((x, i) => Date.parse(x.startsAt) - Date.parse(series[i]!.startsAt));
+    expect(gaps.every((ms) => Math.abs(ms - 7 * 86_400_000) <= 3_600_000)).toBe(true);
+    // Change the look of this one and all later ones.
+    await patch(series[1]!.id, { speakers: [{ name: 'Лука' }], applyToSeries: true });
+    const after = await apiJson<{ meetings: MeetingRow[] }>(`/api/groups/${g.id}/calendar`, {
+      user: ADMIN,
+    });
+    const names = after.meetings
+      .filter((x) => x.seriesId === m.seriesId)
+      .map((x) => x.speakers.map((s) => s.name).join(','));
+    expect(names).toEqual(['Пётр,Анна', 'Лука', 'Лука', 'Лука']);
   });
 });

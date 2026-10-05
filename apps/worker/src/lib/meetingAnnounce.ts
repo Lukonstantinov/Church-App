@@ -3,6 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import {
   INTL_LOCALE,
   displayName,
+  readSpeakers,
   messages,
   type Locale,
   type MeetingNotice,
@@ -51,17 +52,15 @@ export async function defaultMeetingAnnouncement(
 ): Promise<string> {
   const t = messages(locale).bot;
   const when = await whenText(db, meeting.startsAt, meeting.endsAt, locale);
-  const tag = meeting.kind === 'leaders' ? t.leadersMeetingTag : null;
   if (notice === 'cancelled')
-    return [`❌ ${t.meetingCancelled}`, tag, `«${meeting.title}»`, `🗓 ${when}`]
+    return [`❌ ${t.meetingCancelled}`, `«${meeting.title}»`, `🗓 ${when}`]
       .filter(Boolean)
       .join('\n');
   if (notice === 'changed') {
     const was = previousStartsAt ? await whenText(db, previousStartsAt, null, locale) : null;
     return [
       `🕒 ${t.meetingChanged}`,
-      tag,
-      `«${meeting.title}»`,
+        `«${meeting.title}»`,
       '',
       was ? `${t.meetingWas}: ${was}` : null,
       `${t.meetingNow}: ${when}`,
@@ -73,14 +72,15 @@ export async function defaultMeetingAnnouncement(
   const leader = meeting.leaderUserId
     ? await db.query.users.findFirst({ where: eq(users.id, meeting.leaderUserId) })
     : null;
+  const speakers = readSpeakers(meeting.speakers);
   return [
     `📣 ${meeting.title}`,
-    tag,
     meeting.topic ? `«${meeting.topic}»` : null,
     '',
     `🗓 ${when}`,
     meeting.location ? `📍 ${meeting.location}` : null,
     leader ? `🎤 ${t.whoLeads}: ${displayName(leader)}` : null,
+    speakers.length ? `🎙 ${speakers.map((sp) => sp.name).join(', ')}` : null,
     meeting.notes ? `\n${meeting.notes.trim()}` : null,
   ]
     .filter((x) => x !== null)

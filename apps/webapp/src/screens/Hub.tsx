@@ -8,6 +8,7 @@ import {
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { BurnFrame } from '../components/Burn';
+import { LiveNow } from '../components/Live';
 import { CountdownBadge, hasCountdown } from '../components/Countdown';
 import { LookTop } from '../components/LookTop';
 import { TasksPill } from '../components/Assignments';
@@ -270,13 +271,10 @@ function PinnedEventCard({
               <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
             </>
           )}
-          {hasCountdown(e) ? (
-            <span className="self-start">
-              <CountdownBadge startsAt={e.startsAt} design={e.design} />
-            </span>
-          ) : (
-            <span />
-          )}
+          <span className="flex gap-1.5 self-start">
+            {hasCountdown(e) && <CountdownBadge startsAt={e.startsAt} design={e.design} />}
+            <LiveNow startsAt={e.startsAt} endsAt={e.endsAt} cancelled={e.status === 'cancelled'} />
+          </span>
           <span className="relative flex flex-col">
             <span className="text-[12px] font-bold uppercase tracking-wider opacity-80">
               {e.groupName}

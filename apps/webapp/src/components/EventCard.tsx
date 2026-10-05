@@ -1,6 +1,7 @@
 import type { EventSummary } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { BurnFrame } from './Burn';
+import { LiveNow } from './Live';
 import { CountdownBadge, CountdownOnCover, hasCountdown } from './Countdown';
 import { useT } from '../lib/i18n';
 import { IconCheck, IconMapPin, IconUsers } from './icons';
@@ -78,11 +79,10 @@ export function EventCard({
             <CountdownOnCover e={e} />
           </div>
         ) : (
-          hasCountdown(e) && (
-            <div className="px-4 pt-3">
-              <CountdownBadge startsAt={e.startsAt} design={e.design} />
-            </div>
-          )
+          <div className="flex gap-2 px-4 pt-3 empty:hidden">
+            {hasCountdown(e) && <CountdownBadge startsAt={e.startsAt} design={e.design} />}
+            <LiveNow startsAt={e.startsAt} endsAt={e.endsAt} cancelled={cancelled} />
+          </div>
         )}
         <div className="flex items-start gap-3 p-4">
           <DateBadge {...f.dateBadge(e.startsAt)} muted={cancelled} />

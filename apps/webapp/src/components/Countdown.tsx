@@ -1,28 +1,12 @@
-import { useSyncExternalStore } from 'react';
 import type { EventSummary, PostDesign } from '@church/shared';
 import { useT } from '../lib/i18n';
+import { useNowSecond } from '../lib/live';
+import { LiveOnCover } from './Live';
 
 /** Whole days from one local "YYYY-MM-DD" date to another. */
 export function daysUntil(date: string, today: string) {
   return Math.round((Date.parse(`${date}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 864e5);
 }
-
-// One timer for every counter on screen, ticking each second.
-const listeners = new Set<() => void>();
-let timer: ReturnType<typeof setInterval> | undefined;
-function subscribe(cb: () => void) {
-  listeners.add(cb);
-  timer ??= setInterval(() => listeners.forEach((l) => l()), 1000);
-  return () => {
-    listeners.delete(cb);
-    if (listeners.size === 0 && timer) {
-      clearInterval(timer);
-      timer = undefined;
-    }
-  };
-}
-const nowSecond = () => Math.floor(Date.now() / 1000);
-const useNowSecond = () => useSyncExternalStore(subscribe, nowSecond);
 
 export const COUNTDOWN_SIZES = ['s', 'm', 'l'] as const;
 /** Colours to choose from; null = the flame gradient. */
@@ -108,13 +92,24 @@ export function CountdownOnCover({
   e,
   compact,
 }: {
-  e: Pick<EventSummary, 'countdown' | 'status' | 'startsAt' | 'design'>;
+  e: Pick<EventSummary, 'countdown' | 'status' | 'startsAt' | 'endsAt' | 'design'>;
   compact?: boolean;
 }) {
-  if (!hasCountdown(e)) return null;
+  const live = (
+    <LiveOnCover
+      startsAt={e.startsAt}
+      endsAt={e.endsAt}
+      cancelled={e.status === 'cancelled'}
+      compact={compact}
+    />
+  );
+  if (!hasCountdown(e)) return live;
   return (
-    <div className="pointer-events-none absolute left-2.5 top-2.5 z-10">
-      <CountdownBadge startsAt={e.startsAt} design={e.design} compact={compact} />
-    </div>
+    <>
+      <div className="pointer-events-none absolute left-2.5 top-2.5 z-10">
+        <CountdownBadge startsAt={e.startsAt} design={e.design} compact={compact} />
+      </div>
+      {live}
+    </>
   );
 }

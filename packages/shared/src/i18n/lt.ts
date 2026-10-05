@@ -1367,6 +1367,11 @@ export const lt: Messages = {
     meetingSnack: (titleHtml: string, groupHtml: string, date: string, budget: string) =>
       `🍕 <b>Jūs perkate užkandžius</b>\n„${titleHtml}“ · ${groupHtml}\n${date}\n\nGalite išleisti iki <b>${budget}</b>. Išsaugokite čekį — išlaidos bus įrašytos į šio susitikimo kasą.`,
     sentBy: (name: string) => `Išsiuntė ${name}`,
+    eventLive: (titleHtml: string, placeHtml: string | null) =>
+      `🔴 <b>Vyksta dabar</b>\n„${titleHtml}“${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
+    notifLiveTitle: (title: string) => `🔴 LIVE: „${title}“`,
+    meetingLive: (titleHtml: string, placeHtml: string | null) =>
+      `🔴 <b>Susitikimas prasidėjo</b>\n„${titleHtml}“${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     eventReminder: (titleHtml: string, when: string, placeHtml: string | null) =>
       `⏰ <b>Priminimas</b>\n„${titleHtml}“\n${when}${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     eventButton: 'Atidaryti renginį',

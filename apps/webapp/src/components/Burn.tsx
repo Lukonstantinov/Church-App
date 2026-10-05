@@ -1,19 +1,22 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { EventSummary, PostDesign } from '@church/shared';
+import { isLiveWindow, useNowSecond } from '../lib/live';
 
 export const BURN_STYLES = ['flame', 'glow', 'pulse', 'orbit', 'off'] as const;
 export const BURN_COLORS = ['#ff7a18', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'];
 
 /** How the event's outline burns now, or null: it isn't near, is over, cancelled or switched off. */
 export function burnOf(
-  e: Pick<EventSummary, 'startsAt' | 'status' | 'design'>,
+  e: Pick<EventSummary, 'startsAt' | 'endsAt' | 'status' | 'design'>,
   now = Date.now(),
 ): { style: 'flame' | 'glow' | 'pulse' | 'orbit'; color: string } | null {
   const d: Partial<PostDesign> = e.design ?? {};
   const style = d.burnStyle ?? 'flame';
   if (style === 'off' || e.status === 'cancelled') return null;
   const left = Date.parse(e.startsAt) - now;
-  if (left <= 0 || left >= (d.burnDays ?? 3) * 864e5) return null;
+  // The outline keeps burning while the event is live.
+  if (left <= 0 ? !isLiveWindow(e.startsAt, e.endsAt, now) : left >= (d.burnDays ?? 3) * 864e5)
+    return null;
   return { style, color: d.burnColor ?? '#ff7a18' };
 }
 
@@ -24,12 +27,13 @@ export function BurnFrame({
   className = '',
   children,
 }: {
-  e: Pick<EventSummary, 'startsAt' | 'status' | 'design'>;
+  e: Pick<EventSummary, 'startsAt' | 'endsAt' | 'status' | 'design'>;
   /** Corner radius of what it wraps, so the fire follows the shape. */
   radius?: number | string;
   className?: string;
   children: ReactNode;
 }) {
+  useNowSecond();
   const b = burnOf(e);
   if (!b) return <div className={className}>{children}</div>;
   return (

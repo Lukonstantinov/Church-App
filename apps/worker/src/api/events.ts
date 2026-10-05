@@ -49,7 +49,7 @@ import {
 } from '../lib/events';
 import { defaultReminderText, notifyDuties, sendEventReminder } from '../lib/eventReminder';
 import { startEventChatLink, unlinkEventChat } from '../lib/eventChats';
-import { assertGroupMedia } from '../lib/media';
+import { assertGroupMedia, assertSpeakerPhotos } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi, botUsername } from '../lib/telegram';
 import { displayName } from '@church/shared';
@@ -97,6 +97,7 @@ groupEventRoutes.post('/:id/events', async (c) => {
   if (input.coverMediaId) await assertGroupMedia(db, group.id, input.coverMediaId);
   if (input.posterMediaId) await assertGroupMedia(db, group.id, input.posterMediaId);
   await assertDesign(db, group.id, input.design, input.templateId);
+  await assertSpeakerPhotos(db, group.id, input.speakers);
   const [row] = await db
     .insert(events)
     .values({
@@ -110,6 +111,7 @@ groupEventRoutes.post('/:id/events', async (c) => {
       design: input.design ? JSON.stringify(input.design) : null,
       templateId: input.templateId ?? null,
       countdown: input.countdown ?? false,
+      speakers: input.speakers.length ? JSON.stringify(input.speakers) : null,
       hasGallery: input.features.gallery,
       hasRsvp: input.features.rsvp,
       hasDuties: input.features.duties || input.roles.length > 0,
@@ -337,6 +339,10 @@ eventRoutes.patch('/:id', async (c) => {
     if (input.templateId !== undefined) patch.templateId = input.templateId;
   }
   if (input.countdown !== undefined) patch.countdown = input.countdown;
+  if (input.speakers !== undefined) {
+    await assertSpeakerPhotos(db, event.groupId, input.speakers);
+    patch.speakers = input.speakers.length ? JSON.stringify(input.speakers) : null;
+  }
   if (input.coverMediaId !== undefined) {
     if (input.coverMediaId) await assertGroupMedia(db, event.groupId, input.coverMediaId);
     patch.coverMediaId = input.coverMediaId;
@@ -360,6 +366,9 @@ eventRoutes.patch('/:id', async (c) => {
         timezone,
       ),
     );
+    // Moved: the reminder and the "live" message go out again for the new time.
+    patch.remindedAt = null;
+    patch.liveNotifiedAt = null;
   }
   const f = input.features;
   if (f?.gallery !== undefined) patch.hasGallery = f.gallery;

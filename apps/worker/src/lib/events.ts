@@ -30,6 +30,7 @@ import {
 import { accessIn, can } from './access';
 import { posterLook, lookSources } from './looks';
 import { signedMediaUrl } from './media';
+import { speakersOf } from './meetings';
 import { toTransactionRows } from './treasury';
 
 const DAY = 86_400_000;
@@ -306,6 +307,7 @@ async function summarize(
         design,
         templateId: e.templateId,
         countdown: e.countdown,
+        speakers: await speakersOf(e.speakers, secret),
         createdAt: e.createdAt,
         look: brand ? await posterLook(secret, brand, design, tpl) : null,
       };

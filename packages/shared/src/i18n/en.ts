@@ -1344,6 +1344,11 @@ export const en: Messages = {
     meetingSnack: (titleHtml: string, groupHtml: string, date: string, budget: string) =>
       `🍕 <b>You are buying snacks</b>\n“${titleHtml}” · ${groupHtml}\n${date}\n\nYou can spend up to <b>${budget}</b>. Keep the receipt — the expense goes into this meeting’s treasury.`,
     sentBy: (name: string) => `Sent by ${name}`,
+    eventLive: (titleHtml: string, placeHtml: string | null) =>
+      `🔴 <b>LIVE now</b>\n“${titleHtml}”${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
+    notifLiveTitle: (title: string) => `🔴 LIVE: “${title}”`,
+    meetingLive: (titleHtml: string, placeHtml: string | null) =>
+      `🔴 <b>The meeting is live</b>\n“${titleHtml}”${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     eventReminder: (titleHtml: string, when: string, placeHtml: string | null) =>
       `⏰ <b>Reminder</b>\n“${titleHtml}”\n${when}${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     eventButton: 'Open event',

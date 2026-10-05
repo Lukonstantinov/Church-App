@@ -16,7 +16,12 @@ import {
   type MeetingPerson,
   type MeetingRow,
   type MemberAttendance,
+  type MeetingRepeat,
   type RollEntry,
+  type Speaker,
+  readPostDesign,
+  readSpeakers,
+  repeatSchema,
 } from '@church/shared';
 import type { Db } from '../db/client';
 import {
@@ -29,6 +34,7 @@ import {
   users,
   type Meeting,
 } from '../db/schema';
+import { signedMediaUrl } from './media';
 
 const emptyCounts = (): Record<AttendanceStatus, number> => ({
   present: 0,
@@ -36,6 +42,39 @@ const emptyCounts = (): Record<AttendanceStatus, number> => ({
   excused: 0,
   absent: 0,
 });
+
+// ---------- repeating meetings ----------
+
+export const readRepeat = (raw: string | null): MeetingRepeat | null => {
+  if (!raw) return null;
+  try {
+    const r = repeatSchema.safeParse(JSON.parse(raw));
+    return r.success ? r.data : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Local dates of a repeating meeting: the first, then every week / two weeks / month. */
+export function repeatDates(first: string, repeat: MeetingRepeat): string[] {
+  const out: string[] = [];
+  const [y, m, d] = first.split('-').map(Number) as [number, number, number];
+  for (let i = 0; i < repeat.count; i++) {
+    if (repeat.every === 'monthly') {
+      const total = m - 1 + i;
+      const year = y + Math.floor(total / 12);
+      const month = total % 12;
+      // The same day number, or the month's last day when it is shorter.
+      const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      out.push(
+        `${year}-${String(month + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`,
+      );
+    } else {
+      out.push(addDays(first, i * (repeat.every === 'weekly' ? 7 : 14)));
+    }
+  }
+  return out;
+}
 
 // ---------- generation ----------
 
@@ -99,7 +138,22 @@ export async function generateMeetings(
 
 // ---------- rows & counts ----------
 
-export async function toMeetingRows(db: Db, list: Meeting[]): Promise<MeetingRow[]> {
+/** Speakers with their photo links; `secret` signs them (without it `photoUrl` stays null). */
+export async function speakersOf(raw: string | null, secret?: string): Promise<Speaker[]> {
+  return Promise.all(
+    readSpeakers(raw).map(async (sp) => ({
+      ...sp,
+      photoUrl: sp.mediaId && secret ? await signedMediaUrl(secret, sp.mediaId) : null,
+    })),
+  );
+}
+
+/** Meeting rows for the app; pass the signing `secret` to include speaker photo links. */
+export async function toMeetingRows(
+  db: Db,
+  list: Meeting[],
+  secret?: string,
+): Promise<MeetingRow[]> {
   const counts = new Map<number, Record<AttendanceStatus, number>>();
   const doneIds = list.filter((m) => m.status === 'done').map((m) => m.id);
   if (doneIds.length > 0) {
@@ -128,7 +182,8 @@ export async function toMeetingRows(db: Db, list: Meeting[]): Promise<MeetingRow
       list.map((m) => m.id),
     ),
   ]);
-  return list.map((m) => ({
+  const speakers = await Promise.all(list.map((m) => speakersOf(m.speakers, secret)));
+  return list.map((m, i) => ({
     id: m.id,
     groupId: m.groupId,
     scheduleId: m.scheduleId,
@@ -151,6 +206,10 @@ export async function toMeetingRows(db: Db, list: Meeting[]): Promise<MeetingRow
     leaderAcceptedAt: m.leaderAcceptedAt,
     snackAcceptedAt: m.snackAcceptedAt,
     counts: counts.get(m.id) ?? emptyCounts(),
+    design: readPostDesign(m.design),
+    speakers: speakers[i]!,
+    seriesId: m.seriesId,
+    repeat: readRepeat(m.repeatRule),
   }));
 }
 

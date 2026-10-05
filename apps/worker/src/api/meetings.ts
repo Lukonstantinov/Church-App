@@ -53,7 +53,7 @@ import {
   notifyMeetingRole,
   toTemplate,
 } from '../lib/meetingNotify';
-import { assertGroupMedia } from '../lib/media';
+import { assertGroupMedia, assertSpeakerPhotos } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
 import {
   announceMeeting,
@@ -74,6 +74,7 @@ import {
   memberAttendance,
   rosterFor,
   toMeetingRows,
+  repeatDates,
 } from '../lib/meetings';
 import { idParam, parseBody } from './util';
 
@@ -148,7 +149,7 @@ groupMeetingRoutes.get('/:id/calendar', async (c) => {
     .from(meetings)
     .where(and(eq(meetings.groupId, group.id), gte(meetings.endsAt, now)))
     .orderBy(asc(meetings.startsAt))
-    .limit(100);
+    .limit(400);
   const audience = await audienceOf(
     db,
     coming.map((m) => m.id),
@@ -156,7 +157,7 @@ groupMeetingRoutes.get('/:id/calendar', async (c) => {
   const visible = manage ? coming : coming.filter((m) => meetingIsFor(audience, m.id, user.id));
   const today = localDate(new Date(), (await getChurch(db)).timezone);
   const body: CalendarData = {
-    meetings: await toMeetingRows(db, visible),
+    meetings: await toMeetingRows(db, visible, c.env.WEBHOOK_SECRET),
     events: await listEvents(db, c.env.WEBHOOK_SECRET, [group.id], user.id, 'upcoming'),
     notes: manage
       ? (
@@ -244,7 +245,7 @@ groupMeetingRoutes.get('/:id/meetings', async (c) => {
           .where(and(eq(meetings.groupId, group.id), gte(meetings.endsAt, now)))
           .orderBy(asc(meetings.startsAt))
           .limit(limit);
-  return c.json(await toMeetingRows(db, list));
+  return c.json(await toMeetingRows(db, list, c.env.WEBHOOK_SECRET));
 });
 
 /** One-off meeting (event, camp, a missed date being recorded after the fact). */
@@ -254,30 +255,46 @@ groupMeetingRoutes.post('/:id/meetings', async (c) => {
   const group = await assertCan(db, user, idParam(c), 'meetings.manage');
   const input = await parseBody(c, createMeetingSchema);
   const { timezone } = await getChurch(db);
-  const startsAt = zonedToUtc(input.date, input.startTime, timezone);
-  if (Number.isNaN(startsAt.getTime()))
+  await assertSpeakerPhotos(db, group.id, input.speakers);
+  const design = input.design?.custom?.backdrop?.mediaId;
+  if (design) await assertGroupMedia(db, group.id, design);
+  // A repeating meeting: every date is made now, so the calendar is full right away.
+  const dates = input.repeat ? repeatDates(input.date, input.repeat) : [input.date];
+  const seriesId = input.repeat ? crypto.randomUUID() : null;
+  const starts = dates.map((d) => zonedToUtc(d, input.startTime, timezone));
+  if (starts.some((d) => Number.isNaN(d.getTime())))
     throw new HTTPException(400, { message: 'validation_error' });
-  const endsAt = new Date(startsAt.getTime() + input.durationMin * 60_000);
-  const [row] = await db
-    .insert(meetings)
-    .values({
-      groupId: group.id,
-      title: input.title,
-      kind: input.kind ?? null,
-      startsAt: startsAt.toISOString(),
-      endsAt: endsAt.toISOString(),
-    })
-    .returning();
-  if (input.audience?.length) await setAudience(db, group.id, row!.id, input.audience);
+  const made = [];
+  for (const start of starts) {
+    const [created] = await db
+      .insert(meetings)
+      .values({
+        groupId: group.id,
+        title: input.title,
+        kind: input.kind ?? null,
+        startsAt: start.toISOString(),
+        endsAt: new Date(start.getTime() + input.durationMin * 60_000).toISOString(),
+        design: input.design ? JSON.stringify(input.design) : null,
+        speakers: input.speakers?.length ? JSON.stringify(input.speakers) : null,
+        seriesId,
+        repeatRule: input.repeat ? JSON.stringify(input.repeat) : null,
+        // Already underway when it is made: nobody needs a "live" message for it.
+        liveNotifiedAt: start <= new Date() ? new Date().toISOString() : null,
+      })
+      .returning();
+    made.push(created!);
+    if (input.audience?.length) await setAudience(db, group.id, created!.id, input.audience);
+  }
+  const row = made[0]!;
   await audit(db, {
     actorUserId: user.id,
     action: 'meeting_created',
     entity: 'group',
     entityId: group.id,
     groupId: group.id,
-    data: { meetingId: row!.id },
+    data: { meetingId: row.id, count: made.length },
   });
-  return c.json((await toMeetingRows(db, [row!]))[0], 201);
+  return c.json((await toMeetingRows(db, [row], c.env.WEBHOOK_SECRET))[0], 201);
 });
 
 // ---------- /api/schedules ----------
@@ -436,7 +453,7 @@ meetingRoutes.get('/:id', async (c) => {
   if (!a.edit && !meetingIsFor(await audienceOf(db, [meeting.id]), meeting.id, user.id))
     throw new HTTPException(404, { message: 'not_found' });
   const group = (await db.query.groups.findFirst({ where: eq(groups.id, meeting.groupId) }))!;
-  const [row] = await toMeetingRows(db, [meeting]);
+  const [row] = await toMeetingRows(db, [meeting], c.env.WEBHOOK_SECRET);
   const rsvp = await meetingRsvpLists(db, meeting.id);
   const seeRoll = a.roll || a.edit;
   const detail: MeetingDetail = {
@@ -582,6 +599,15 @@ meetingRoutes.patch('/:id', async (c) => {
   if (input.location !== undefined) patch.location = input.location;
   if (input.topic !== undefined) patch.topic = input.topic;
   if (input.kind !== undefined) patch.kind = input.kind;
+  if (input.design !== undefined) {
+    const photo = input.design?.custom?.backdrop?.mediaId;
+    if (photo) await assertGroupMedia(db, meeting.groupId, photo);
+    patch.design = input.design ? JSON.stringify(input.design) : null;
+  }
+  if (input.speakers !== undefined) {
+    await assertSpeakerPhotos(db, meeting.groupId, input.speakers);
+    patch.speakers = input.speakers.length ? JSON.stringify(input.speakers) : null;
+  }
   // A new person hasn't been told yet; the message is sent separately, when chosen.
   if (input.leaderUserId !== undefined && input.leaderUserId !== meeting.leaderUserId) {
     patch.leaderUserId = input.leaderUserId;
@@ -617,9 +643,28 @@ meetingRoutes.patch('/:id', async (c) => {
       throw new HTTPException(400, { message: 'validation_error' });
     patch.startsAt = startsAt.toISOString();
     patch.endsAt = new Date(startsAt.getTime() + duration * 60_000).toISOString();
+    // Moved: the "live" message goes out again for the new time.
+    patch.liveNotifiedAt = null;
   }
   if (Object.keys(patch).length > 0) {
     await db.update(meetings).set(patch).where(eq(meetings.id, meeting.id));
+    // "This and all later meetings": the look and wording follow along (not the times).
+    if (input.applyToSeries && meeting.seriesId) {
+      const shared: Partial<typeof meetings.$inferInsert> = {};
+      for (const k of ['title', 'topic', 'location', 'design', 'speakers', 'kind'] as const)
+        if (k in patch) (shared as Record<string, unknown>)[k] = patch[k];
+      if (Object.keys(shared).length > 0)
+        await db
+          .update(meetings)
+          .set(shared)
+          .where(
+            and(
+              eq(meetings.seriesId, meeting.seriesId),
+              gte(meetings.startsAt, meeting.startsAt),
+              eq(meetings.status, 'scheduled'),
+            ),
+          );
+    }
     await audit(db, {
       actorUserId: user.id,
       action: 'meeting_updated',
@@ -631,7 +676,7 @@ meetingRoutes.patch('/:id', async (c) => {
   }
   const updated = (await db.query.meetings.findFirst({ where: eq(meetings.id, meeting.id) }))!;
 
-  return c.json((await toMeetingRows(db, [updated]))[0]);
+  return c.json((await toMeetingRows(db, [updated], c.env.WEBHOOK_SECRET))[0]);
 });
 
 /** Who may message whom: managers the leader; managers and the leader the snack person. */
@@ -903,7 +948,7 @@ meetingRoutes.get('/:id/roll', async (c) => {
   const { timezone } = await getChurch(db);
   const win = editWindow(meeting);
   const body: RollResponse = {
-    meeting: (await toMeetingRows(db, [meeting]))[0]!,
+    meeting: (await toMeetingRows(db, [meeting], c.env.WEBHOOK_SECRET))[0]!,
     roster: await rosterFor(db, meeting, timezone),
     editable:
       meeting.status !== 'cancelled' && (meeting.status !== 'done' || win.open || user.isAdmin),
@@ -975,7 +1020,7 @@ meetingRoutes.put('/:id/roll', async (c) => {
   });
 
   const updated = await db.query.meetings.findFirst({ where: eq(meetings.id, meeting.id) });
-  return c.json((await toMeetingRows(db, [updated!]))[0] as MeetingRow);
+  return c.json((await toMeetingRows(db, [updated!], c.env.WEBHOOK_SECRET))[0] as MeetingRow);
 });
 
 /** The assigned person answers "Agree" / "Can't" in the app (as with the bot buttons). */

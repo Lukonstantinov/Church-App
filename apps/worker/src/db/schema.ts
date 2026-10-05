@@ -249,6 +249,15 @@ export const meetings = sqliteTable(
     askRsvp: integer('ask_rsvp', { mode: 'boolean' }).notNull().default(false),
     /** The schedule slot it was made for; stays put when the meeting is moved. */
     slotAt: text('slot_at'),
+    /** Poster look (PostDesign JSON): colours, fonts, pattern, photo. */
+    design: text('design'),
+    /** Up to four speakers shown on the poster: JSON [{name, role, mediaId}]. */
+    speakers: text('speakers'),
+    /** Meetings made together by "repeats" share this id; repeatRule says how often. */
+    seriesId: text('series_id'),
+    repeatRule: text('repeat_rule'),
+    /** When the "it's live" message went out (null = not yet). */
+    liveNotifiedAt: text('live_notified_at'),
     rollTakenBy: integer('roll_taken_by'),
     rollTakenAt: text('roll_taken_at'),
     createdAt: createdAt(),
@@ -499,6 +508,10 @@ export const events = sqliteTable(
     countdown: integer('countdown', { mode: 'boolean' }).notNull().default(false),
     /** When the automatic reminder went out (null = not yet). */
     remindedAt: text('reminded_at'),
+    /** When the "it's live" message went out (null = not yet). */
+    liveNotifiedAt: text('live_notified_at'),
+    /** Up to four speakers shown on the poster: JSON [{name, role, mediaId}]. */
+    speakers: text('speakers'),
     /** A Telegram chat of its own, managed by the bot (see lib/eventChats). */
     tgChatId: integer('tg_chat_id'),
     tgChatTitle: text('tg_chat_title'),

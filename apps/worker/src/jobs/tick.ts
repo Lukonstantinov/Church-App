@@ -5,6 +5,7 @@ import type { Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { events, groups, jobRuns, meetings, outbox } from '../db/schema';
 import { sendEventReminder } from '../lib/eventReminder';
+import { sendLiveNotices } from '../lib/liveNotice';
 import { pruneNotifications } from '../lib/notifications';
 import { getAppUrl, getChurch } from '../lib/church';
 import { escapeHtml } from '../lib/html';
@@ -26,6 +27,13 @@ async function claim(db: Db, job: string, scope: string, period: string): Promis
   return rows.length > 0;
 }
 
+/** Every 5 minutes: "it's live" messages and event reminders that have come due. */
+export async function minuteTick(env: Env, now = new Date()): Promise<void> {
+  const db = getDb(env.DB);
+  await sendLiveNotices(db, env, now);
+  await remindUpcomingEvents(db, env, now);
+}
+
 /** Hourly: create upcoming meetings, nudge leaders about missing roll calls, tidy up. */
 export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
   const db = getDb(env.DB);
@@ -34,6 +42,7 @@ export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
   await generateMeetings(db, church.timezone, { now });
   await remindMissingRollCalls(db, env, church.timezone, now);
   await remindUpcomingEvents(db, env, now);
+  await sendLiveNotices(db, env, now);
 
   if (await claim(db, 'housekeeping', 'all', now.toISOString().slice(0, 10))) {
     const cutoff = new Date(now.getTime() - 7 * DAY_MS).toISOString();
@@ -93,8 +102,9 @@ export async function remindMissingRollCalls(db: Db, env: Env, timezone: string,
 
 /**
  * Ministries can ask the bot to remind everyone about an event a set number of hours
- * ahead. Each event is reminded once, at the first hourly run inside that window; events
- * made less than an hour earlier wait so a new event isn't announced twice at once.
+ * ahead. Each event is reminded once, at the first run (every 5 minutes) inside that
+ * window; events made less than 10 minutes earlier wait so a new event isn't announced
+ * twice at once.
  */
 export async function remindUpcomingEvents(db: Db, env: Env, now: Date) {
   const rules = await db
@@ -114,7 +124,7 @@ export async function remindUpcomingEvents(db: Db, env: Env, now: Date) {
           isNull(events.remindedAt),
           gte(events.startsAt, now.toISOString()),
           lte(events.startsAt, until),
-          lte(events.createdAt, new Date(now.getTime() - HOUR_MS).toISOString()),
+          lte(events.createdAt, new Date(now.getTime() - 10 * 60_000).toISOString()),
         ),
       );
     for (const event of due) {
@@ -139,6 +149,7 @@ export async function remindUpcomingEvents(db: Db, env: Env, now: Date) {
 
 export async function runScheduled(cron: string, env: Env, now = new Date()): Promise<void> {
   if (cron === CRON_HOURLY) await hourlyTick(env, now);
+  else await minuteTick(env, now);
   // Both schedules end by sending whatever is due (the hourly one just queued reminders).
   await drainOutbox(getDb(env.DB), botApi(env), { now });
 }

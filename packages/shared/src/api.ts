@@ -14,7 +14,14 @@ import {
 } from './brand';
 import type { Permission } from './permissions';
 import { chatUrlSchema, type EventSummary } from './events';
-import { postBlocksSchema, postDesignSchema, type PostBlockView, type PostDesign } from './posts';
+import {
+  postBlocksSchema,
+  postDesignSchema,
+  speakersSchema,
+  type PostBlockView,
+  type PostDesign,
+  type Speaker,
+} from './posts';
 import { LOCALES, type Locale } from './i18n/locales';
 
 /** Roles within a single group. Church-wide admin is a separate flag on the user. */
@@ -347,7 +354,6 @@ export const MEETING_KINDS = [
   'outside',
   'guest',
   'prophetic',
-  'leaders',
 ] as const;
 export type MeetingKind = (typeof MEETING_KINDS)[number];
 
@@ -387,7 +393,24 @@ export interface MeetingRow {
   snackAcceptedAt: string | null;
   /** Counts are filled for meetings that have a saved roll call. */
   counts: Record<AttendanceStatus, number>;
+  /** Poster look (colours, fonts, pattern); null = the ministry's own. */
+  design: PostDesign | null;
+  /** Up to four speakers shown on the poster and the meeting screen. */
+  speakers: Speaker[];
+  /** Set when the meeting is one of a repeating series. */
+  seriesId: string | null;
+  repeat: MeetingRepeat | null;
 }
+
+/** How often a meeting comes back. */
+export const REPEATS = ['weekly', 'biweekly', 'monthly'] as const;
+export type RepeatEvery = (typeof REPEATS)[number];
+export const repeatSchema = z.object({
+  every: z.enum(REPEATS),
+  /** How many meetings in all, the first included. */
+  count: z.number().int().min(2).max(52),
+});
+export type MeetingRepeat = z.infer<typeof repeatSchema>;
 
 export const createMeetingSchema = z.object({
   /** Local calendar date in the church time zone. */
@@ -398,6 +421,10 @@ export const createMeetingSchema = z.object({
   /** Only these people (user ids); omitted or empty = everyone in the ministry. */
   audience: z.array(z.number().int().positive()).max(500).optional(),
   kind: z.enum(MEETING_KINDS).nullable().optional(),
+  design: postDesignSchema.nullish(),
+  speakers: speakersSchema.optional(),
+  /** Make it a repeating meeting: the calendar is filled for all of them. */
+  repeat: repeatSchema.nullish(),
 });
 export type CreateMeetingInput = z.input<typeof createMeetingSchema>;
 
@@ -412,6 +439,10 @@ export const updateMeetingSchema = z.object({
   location: optionalText(120).optional(),
   topic: optionalText(200).optional(),
   kind: z.enum(MEETING_KINDS).nullable().optional(),
+  design: postDesignSchema.nullable().optional(),
+  speakers: speakersSchema.optional(),
+  /** With a series: apply the change to this and all the later meetings of it. */
+  applyToSeries: z.boolean().optional(),
   leaderUserId: z.number().int().positive().nullable().optional(),
   snackUserId: z.number().int().positive().nullable().optional(),
   budgetCents: z.number().int().min(0).max(1_000_000).nullable().optional(),

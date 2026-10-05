@@ -173,3 +173,12 @@ export async function mediaFile(db: Db, id: number): Promise<InputFile | null> {
   if (!row) return null;
   return new InputFile(fromBase64(row.data), `picture.${EXT[row.mime] ?? 'jpg'}`);
 }
+
+/** Every speaker photo must be one of the ministry's own pictures. */
+export async function assertSpeakerPhotos(
+  db: Db,
+  groupId: number,
+  speakers: { mediaId?: number | null }[] | undefined,
+): Promise<void> {
+  for (const sp of speakers ?? []) if (sp.mediaId) await assertGroupMedia(db, groupId, sp.mediaId);
+}

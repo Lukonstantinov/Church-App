@@ -232,6 +232,13 @@
       "when": 1790951287589,
       "tag": "0032_app_background",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1791213338394,
+      "tag": "0033_meetings_speakers_live",
+      "breakpoints": true
     }
   ]
 }

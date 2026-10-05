@@ -159,6 +159,8 @@ export async function sendEventReminder(
     roster?: boolean;
     /** With the event's picture (default yes). */
     poster?: boolean;
+    /** "It's live now" instead of a reminder. */
+    live?: boolean;
   },
 ): Promise<{ total: number; bot: number }> {
   const fallback = await churchDefaultLocale(db);
@@ -176,7 +178,14 @@ export async function sendEventReminder(
     let html: string;
     let title = t.bot.notifReminderTitle(args.event.title);
     let body: string;
-    if (args.text) {
+    if (args.live) {
+      html = t.bot.eventLive(
+        escapeHtml(args.event.title),
+        args.event.location ? escapeHtml(args.event.location) : null,
+      );
+      title = t.bot.notifLiveTitle(args.event.title);
+      body = [when, args.event.location].filter(Boolean).join('\n');
+    } else if (args.text) {
       const [first, ...rest] = escapeHtml(args.text).split('\n');
       html = [`<b>${first}</b>`, ...rest].join('\n');
       title = args.text.split('\n')[0]!;
@@ -191,7 +200,7 @@ export async function sendEventReminder(
       if (more.duty) html += `\n\n🛠 ${escapeHtml(more.duty)}`;
       body = [when, args.event.location, more.description, more.duty].filter(Boolean).join('\n');
     }
-    if (args.roster && roster.length)
+    if (args.roster && !args.live && roster.length)
       html += `\n\n👥 <b>${t.bot.responsible}</b>\n${rosterLines(roster, locale).join('\n')}`;
     if (args.senderName) html += `\n\n<i>${escapeHtml(t.bot.sentBy(args.senderName))}</i>`;
     await recordNotification(db, {
