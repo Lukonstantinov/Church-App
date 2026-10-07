@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import {
   MEETING_KINDS,
+  MEETING_MOTIONS,
+  type MeetingMotion,
   displayName,
   type MeetingDetail,
   type MeetingKind,
@@ -149,8 +151,8 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
 
   return (
     <Screen>
-      <SoonPulse startsAt={m.startsAt} cancelled={cancelled}>
-        <HeroCard living={!cancelled} live={live} look={meetingLook(m)}>
+      <SoonPulse startsAt={m.startsAt} cancelled={cancelled} motion={m.motion}>
+        <HeroCard living={cancelled ? 'off' : m.motion} live={live} look={meetingLook(m)}>
           <div className="mb-3 flex items-center justify-between gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">
             <span className="truncate">{m.groupName}</span>
             <span className="flex shrink-0 items-center gap-1.5 normal-case tracking-normal">
@@ -699,11 +701,14 @@ function PosterSheet({ m, onClose }: { m: MeetingDetail; onClose: () => void }) 
   const [poster, setPoster] = useState(() => initMeetingPoster(m));
   const { templateId } = useCoverLook(poster.cover, group.data);
   const [toSeries, setToSeries] = useState(false);
+  // This meeting's animation level; null = like the ministry.
+  const [motion, setMotion] = useState<MeetingMotion | null>(m.ownMotion);
   async function save() {
     try {
       await update.mutateAsync({
         id: m.id,
         ...meetingPosterPayload(poster, templateId),
+        motion,
         ...(toSeries ? { applyToSeries: true } : {}),
       });
       haptic.success();
@@ -723,6 +728,19 @@ function PosterSheet({ m, onClose }: { m: MeetingDetail; onClose: () => void }) 
           state={poster}
           onChange={setPoster}
         />
+        <div>
+          <div className="mb-2 text-[13px] text-hint">{t.meetings.motionTitle}</div>
+          <div className="flex flex-wrap gap-2">
+            <Pill
+              on={motion === null}
+              onClick={() => setMotion(null)}
+              label={t.meetings.motionMinistry}
+            />
+            {MEETING_MOTIONS.map((x) => (
+              <Pill key={x} on={motion === x} onClick={() => setMotion(x)} label={t.motion[x]} />
+            ))}
+          </div>
+        </div>
         {m.seriesId && (
           <Toggle label={t.meetings.applyToSeries} checked={toSeries} onChange={setToSeries} />
         )}

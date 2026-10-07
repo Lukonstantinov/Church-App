@@ -276,6 +276,11 @@ export const en: Messages = {
       'The bot reminds everyone the meeting is for. 2 hours before the start unless you choose otherwise.',
     remindOff: 'Don’t remind',
     startsIn: 'Starts in',
+    minutesBefore: (m: number) => `${m} min before`,
+    motionTitle: 'Meeting animation',
+    motionHint:
+      'How much the meetings’ background moves and how a meeting pulses before it starts. Each meeting can have its own.',
+    motionMinistry: 'Like the ministry',
     speakerService: 'Speaker',
     pickService: 'Which service?',
     newService: 'New service',

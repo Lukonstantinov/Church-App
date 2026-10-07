@@ -640,6 +640,7 @@ meetingRoutes.patch('/:id', async (c) => {
     patch.design = input.design ? JSON.stringify(input.design) : null;
   }
   if (input.templateId !== undefined) patch.templateId = input.templateId;
+  if (input.motion !== undefined) patch.motion = input.motion;
   if (input.peopleLook !== undefined) {
     if (input.peopleLook?.photoMediaId)
       await assertGroupMedia(db, meeting.groupId, input.peopleLook.photoMediaId);
@@ -686,9 +687,8 @@ meetingRoutes.patch('/:id', async (c) => {
       throw new HTTPException(400, { message: 'validation_error' });
     patch.startsAt = startsAt.toISOString();
     patch.endsAt = new Date(startsAt.getTime() + duration * 60_000).toISOString();
-    // Moved: the reminder and the "live" message go out again for the new time.
+    // Moved: the "live" message goes again for the new time (reminders follow the time anyway).
     patch.liveNotifiedAt = null;
-    patch.remindedAt = null;
   }
   if (Object.keys(patch).length > 0) {
     await db.update(meetings).set(patch).where(eq(meetings.id, meeting.id));

@@ -198,9 +198,10 @@ export const GUIDE: GuideSection[] = [
       {
         title: 'Meeting reminders and the timer',
         steps: [
-          'The bot reminds everyone the meeting is for 2 hours before it (with who serves).',
-          'Change or switch off: «Ещё» → «Настройки служения» → «Напоминание о встречах» (off, 1, 2, 3 or 24 h).',
+          'The bot reminds everyone the meeting is for 2 hours and 1 hour before it (with who serves).',
+          'Change: «Ещё» → «Настройки служения» → «Напоминание о встречах» — tap the times you want (15 min … 1 day), or «Не напоминать».',
           'In the last 2 hours a ⏳ timer shows on the meeting and its card pulses slowly; at the start it turns LIVE.',
+          'Animation for all meetings: «Настройки служения» → «Анимация встреч» (off / calm / lively). One meeting: «🎨 Постер» → «Анимация встреч».',
         ],
       },
       {

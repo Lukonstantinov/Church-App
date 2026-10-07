@@ -138,7 +138,14 @@ export type MeetingTileData = Pick<
   Partial<
     Pick<
       MeetingRow,
-      'status' | 'snackPerson' | 'helpers' | 'peopleLook' | 'design' | 'templateId' | 'look'
+      | 'status'
+      | 'snackPerson'
+      | 'helpers'
+      | 'peopleLook'
+      | 'design'
+      | 'templateId'
+      | 'look'
+      | 'motion'
     >
   >;
 
@@ -520,7 +527,12 @@ function MeetingTile({
   const t = useT();
   const f = useFmt();
   return (
-    <SoonPulse startsAt={m.startsAt} cancelled={m.status === 'cancelled'} className="h-full">
+    <SoonPulse
+      startsAt={m.startsAt}
+      cancelled={m.status === 'cancelled'}
+      motion={m.motion}
+      className="h-full"
+    >
       <Tile onToggle={onToggle}>
         <LookTop look={meetingLook(m) ?? g} className="flex aspect-[16/10] flex-col p-2.5">
           <span className="flex items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
@@ -565,7 +577,7 @@ function MeetingDayTile({
   const next = list.find((m) => Date.parse(m.startsAt) > now) ?? list[0]!;
   const soon = useStartsSoon(next.startsAt);
   return (
-    <SoonPulse startsAt={next.startsAt} className="h-full">
+    <SoonPulse startsAt={next.startsAt} motion={next.motion} className="h-full">
       <Tile onToggle={onToggle}>
         <LookTop look={meetingLook(list[0]!) ?? g} className="flex flex-col gap-1.5 p-2">
           <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
@@ -615,8 +627,8 @@ function MeetingExpanded({
   const { push } = useNav();
   const rollable = onRoll && canRollNow({ status: m.status ?? 'scheduled', startsAt: m.startsAt });
   return (
-    <SoonPulse startsAt={m.startsAt} cancelled={m.status === 'cancelled'}>
-      <HeroCard living look={meetingLook(m)}>
+    <SoonPulse startsAt={m.startsAt} cancelled={m.status === 'cancelled'} motion={m.motion}>
+      <HeroCard living={m.motion ?? 'calm'} look={meetingLook(m)}>
         <SoonTimer startsAt={m.startsAt} className="mb-2" />
         <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
           {t.overview.nextMeeting}

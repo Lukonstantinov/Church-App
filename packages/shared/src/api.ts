@@ -147,8 +147,10 @@ export interface GroupDetail extends GroupSummary {
   /** Usual place of the ministry's meetings. */
   defaultLocation: string;
   eventReminderHours: number | null;
-  /** Hours before a meeting its reminder goes out (null = 2, 0 = never). */
-  meetingReminderHours: number | null;
+  /** Minutes before each meeting a reminder goes out (empty = none). */
+  meetingReminders: number[];
+  /** How lively the ministry's meetings move. */
+  meetingMotion: MeetingMotion;
   /** Services saved for meetings (name, icon, speaker). */
   meetingServices: MeetingService[];
   /** Chat managed by the bot (members-only): its title; null when not linked. */
@@ -170,6 +172,14 @@ export const createGroupSchema = z.object({
 });
 export type CreateGroupInput = z.input<typeof createGroupSchema>;
 
+/** Reminder times before a meeting to choose from (minutes), and the usual ones. */
+export const REMINDER_MINUTES = [15, 30, 60, 120, 180, 1440] as const;
+export const DEFAULT_MEETING_REMINDERS = [120, 60];
+
+/** How much a meeting's background moves: not at all, gently, or fully. */
+export const MEETING_MOTIONS = ['off', 'calm', 'lively'] as const;
+export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
+
 export const updateGroupSchema = z.object({
   brandColor: z.string().refine(isBrandValue, 'theme').nullable().optional(),
   pattern: patternSchema.nullable().optional(),
@@ -190,8 +200,10 @@ export const updateGroupSchema = z.object({
   defaultLocation: z.string().trim().max(120).optional(),
   /** Remind everyone this many hours before an event (null = don't). */
   eventReminderHours: z.number().int().min(1).max(168).nullable().optional(),
-  /** Remind about meetings this many hours ahead (null = 2 h, 0 = never). */
-  meetingReminderHours: z.number().int().min(0).max(48).nullable().optional(),
+  /** Minutes before each meeting a reminder goes (null = 2 h and 1 h, [] = none). */
+  meetingReminders: z.array(z.number().int().min(5).max(2880)).max(6).nullable().optional(),
+  /** How lively meetings' backgrounds move (null = calm). */
+  meetingMotion: z.enum(MEETING_MOTIONS).nullable().optional(),
 });
 export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 
@@ -496,6 +508,10 @@ export interface MeetingRow {
   look: PosterLook | null;
   /** Up to four speakers shown on the poster and the meeting screen. */
   speakers: Speaker[];
+  /** How its background moves (its own choice, else the ministry's). */
+  motion: MeetingMotion;
+  /** Its own choice only (null = follows the ministry). */
+  ownMotion: MeetingMotion | null;
   /** Set when the meeting is one of a repeating series. */
   seriesId: string | null;
   repeat: MeetingRepeat | null;
@@ -543,6 +559,8 @@ export const updateMeetingSchema = z.object({
   templateId: z.number().int().positive().nullable().optional(),
   speakers: speakersSchema.optional(),
   peopleLook: peopleLookSchema.nullable().optional(),
+  /** This meeting's animation level (null = the ministry's). */
+  motion: z.enum(MEETING_MOTIONS).nullable().optional(),
   /** With a series: apply the change to this and all the later meetings of it. */
   applyToSeries: z.boolean().optional(),
   leaderUserId: z.number().int().positive().nullable().optional(),

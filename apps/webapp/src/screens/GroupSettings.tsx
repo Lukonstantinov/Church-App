@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { BackgroundEditor } from '../components/BackgroundEditor';
-import type { GroupDetail } from '@church/shared';
+import { MEETING_MOTIONS, REMINDER_MINUTES, type GroupDetail } from '@church/shared';
 import { IconImage, IconTelegram, IconTrash } from '../components/icons';
 import { PatternDesigner } from '../components/PatternDesigner';
 import { Pill } from '../components/LookControls';
@@ -194,16 +194,37 @@ function Form({ g }: { g: GroupDetail }) {
       <Section title={t.meetings.remindTitle} footer={t.meetings.remindHint}>
         <div className="flex flex-wrap gap-2 p-3">
           <Pill
-            on={g.meetingReminderHours === 0}
-            onClick={() => void patchNow({ meetingReminderHours: 0 })}
+            on={g.meetingReminders.length === 0}
+            onClick={() => void patchNow({ meetingReminders: [] })}
             label={t.meetings.remindOff}
           />
-          {[1, 2, 3, 24].map((h) => (
+          {REMINDER_MINUTES.map((m) => {
+            const on = g.meetingReminders.includes(m);
+            return (
+              <Pill
+                key={m}
+                on={on}
+                onClick={() =>
+                  void patchNow({
+                    meetingReminders: on
+                      ? g.meetingReminders.filter((x) => x !== m)
+                      : [...g.meetingReminders, m].sort((x, y) => y - x),
+                  })
+                }
+                label={m < 60 ? t.meetings.minutesBefore(m) : t.events.remindAutoHours(m / 60)}
+              />
+            );
+          })}
+        </div>
+      </Section>
+      <Section title={t.meetings.motionTitle} footer={t.meetings.motionHint}>
+        <div className="flex flex-wrap gap-2 p-3">
+          {MEETING_MOTIONS.map((m) => (
             <Pill
-              key={h}
-              on={(g.meetingReminderHours ?? 2) === h}
-              onClick={() => void patchNow({ meetingReminderHours: h })}
-              label={t.events.remindAutoHours(h)}
+              key={m}
+              on={g.meetingMotion === m}
+              onClick={() => void patchNow({ meetingMotion: m })}
+              label={t.motion[m]}
             />
           ))}
         </div>

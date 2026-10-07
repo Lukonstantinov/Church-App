@@ -91,14 +91,21 @@ export function SoonTimer({
 export function SoonPulse({
   startsAt,
   cancelled,
+  motion = 'calm',
   className = '',
   children,
 }: {
   startsAt: string;
   cancelled?: boolean;
+  /** The meeting's animation level: off = no pulse, calm = a faint slow one. */
+  motion?: 'off' | 'calm' | 'lively';
   className?: string;
   children: ReactNode;
 }) {
-  const soon = useStartsSoon(startsAt, cancelled);
-  return <div className={`${soon ? 'soon-pulse' : ''} ${className}`}>{children}</div>;
+  const soon = useStartsSoon(startsAt, cancelled) && motion !== 'off';
+  return (
+    <div className={`${soon ? `soon-pulse ${motion === 'calm' ? 'calm' : ''}` : ''} ${className}`}>
+      {children}
+    </div>
+  );
 }

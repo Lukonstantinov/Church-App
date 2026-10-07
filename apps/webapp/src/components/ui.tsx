@@ -390,8 +390,11 @@ export function HeroCard({
   className?: string;
   /** A look of its own (a meeting's poster look) instead of the ministry's. */
   look?: PosterLook | null;
-  /** A living wallpaper: drifting colour, moving texture and twinkling light. */
-  living?: boolean;
+  /**
+   * A living wallpaper: drifting colour, moving texture and twinkling light — fully
+   * ("lively"), gently ("calm") or not at all. `true` = lively.
+   */
+  living?: boolean | 'off' | 'calm' | 'lively';
   /** Something is on right now: the living wallpaper turns warm and quickens. */
   live?: boolean;
 }) {
@@ -416,8 +419,13 @@ export function HeroCard({
     >
       <PatternLayer pattern={src?.pattern} logoUrl={src?.logoUrl} />
       <BackdropLayer backdrop={src?.backdrop} url={src?.backdropUrl} />
-      {living && (
-        <span aria-hidden="true" className="living-bg" data-live={live ? 'true' : 'false'}>
+      {living && living !== 'off' && (
+        <span
+          aria-hidden="true"
+          className="living-bg"
+          data-live={live ? 'true' : 'false'}
+          data-level={living === 'calm' ? 'calm' : 'lively'}
+        >
           <i className="living-blob b1" />
           <i className="living-blob b2" />
           <i className="living-blob b3" />

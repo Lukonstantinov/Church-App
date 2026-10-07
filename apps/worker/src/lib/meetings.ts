@@ -23,6 +23,9 @@ import {
   readSpeakers,
   repeatSchema,
   meetingServicesSchema,
+  DEFAULT_MEETING_REMINDERS,
+  MEETING_MOTIONS,
+  type MeetingMotion,
   peopleLookSchema,
   type MeetingService,
   type MeetingHelper,
@@ -93,6 +96,24 @@ export async function helpersOf(
   }
   return out;
 }
+
+// ---------- reminders & motion ----------
+
+/** Minutes before a meeting its reminders go (the ministry's list, else 2 h and 1 h). */
+export function readReminders(raw: string | null): number[] {
+  if (raw === null) return DEFAULT_MEETING_REMINDERS;
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return Array.isArray(v)
+      ? v.filter((x): x is number => Number.isInteger(x) && x > 0).sort((a, b) => b - a)
+      : DEFAULT_MEETING_REMINDERS;
+  } catch {
+    return DEFAULT_MEETING_REMINDERS;
+  }
+}
+
+export const readMotion = (v: string | null): MeetingMotion | null =>
+  (MEETING_MOTIONS as readonly string[]).includes(v ?? '') ? (v as MeetingMotion) : null;
 
 // ---------- services & people look ----------
 
@@ -275,6 +296,17 @@ export async function toMeetingRows(
     list.map((m) => m.id),
     secret,
   );
+  const groupIds = [...new Set(list.map((m) => m.groupId))];
+  const motions = new Map(
+    groupIds.length
+      ? (
+          await db
+            .select({ id: groups.id, motion: groups.meetingMotion })
+            .from(groups)
+            .where(inArray(groups.id, groupIds))
+        ).map((g) => [g.id, readMotion(g.motion)])
+      : [],
+  );
   const peopleLooks = await Promise.all(list.map((m) => readPeopleLook(m.peopleLook, secret)));
   const looks = await Promise.all(
     list.map(async (m) => {
@@ -315,6 +347,8 @@ export async function toMeetingRows(
       (!m.leaderUserId && m.leaderDeclinedBy && people.get(m.leaderDeclinedBy)) || null,
     peopleLook: peopleLooks[i]!,
     helpers: helpers.get(m.id) ?? [],
+    motion: readMotion(m.motion) ?? motions.get(m.groupId) ?? 'calm',
+    ownMotion: readMotion(m.motion),
     snackDeclined: (!m.snackUserId && m.snackDeclinedBy && people.get(m.snackDeclinedBy)) || null,
     counts: counts.get(m.id) ?? emptyCounts(),
     design: readPostDesign(m.design),

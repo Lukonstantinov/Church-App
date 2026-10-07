@@ -1,4 +1,4 @@
-import { readServices } from '../lib/meetings';
+import { readMotion, readReminders, readServices } from '../lib/meetings';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -218,7 +218,8 @@ groupRoutes.get('/:id', async (c) => {
     chatUrl: group.chatUrl,
     defaultLocation: group.defaultLocation,
     eventReminderHours: group.eventReminderHours,
-    meetingReminderHours: group.meetingReminderHours,
+    meetingReminders: readReminders(group.meetingReminders),
+    meetingMotion: readMotion(group.meetingMotion) ?? 'calm',
     meetingServices: readServices(group.meetingServices),
     managedChat: group.tgChatId
       ? { title: group.tgChatTitle, pending: group.chatLinkCode !== null }
@@ -237,11 +238,14 @@ groupRoutes.patch('/:id', async (c) => {
   const input = await parseBody(c, updateGroupSchema);
   if (input.logoMediaId) await assertGroupMedia(db, group.id, input.logoMediaId);
   if (input.backdrop) await assertGroupMedia(db, group.id, input.backdrop.mediaId);
-  const { pattern, backdrop, ...rest } = input;
+  const { pattern, backdrop, meetingReminders, ...rest } = input;
   await db
     .update(groups)
     .set({
       ...rest,
+      ...(meetingReminders !== undefined
+        ? { meetingReminders: meetingReminders && JSON.stringify(meetingReminders) }
+        : {}),
       ...(pattern !== undefined ? { pattern: pattern && JSON.stringify(pattern) } : {}),
       ...(backdrop !== undefined ? { backdrop: backdrop && JSON.stringify(backdrop) } : {}),
     })

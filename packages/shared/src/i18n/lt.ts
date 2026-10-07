@@ -277,6 +277,11 @@ export const lt: Messages = {
       'Botas primins visiems, kam skirtas susitikimas. Likus 2 valandoms, jei nepasirinksite kitaip.',
     remindOff: 'Nepriminti',
     startsIn: 'Iki pradžios',
+    minutesBefore: (m: number) => `prieš ${m} min.`,
+    motionTitle: 'Susitikimų animacija',
+    motionHint:
+      'Kiek juda susitikimų fonas ir kaip susitikimas pulsuoja prieš pradžią. Kiekvienam susitikimui galima pasirinkti savo.',
+    motionMinistry: 'Kaip tarnystės',
     speakerService: 'Pranešėjas',
     pickService: 'Kokia tarnystė?',
     newService: 'Nauja tarnystė',

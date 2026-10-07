@@ -3,11 +3,11 @@ import { InlineKeyboard } from 'grammy';
 import { INTL_LOCALE, messages } from '@church/shared';
 import type { Env } from '../env';
 import type { Db } from '../db/client';
-import { events, groups, meetings, memberships, users } from '../db/schema';
+import { events, groups, jobRuns, meetings, memberships, users } from '../db/schema';
 import { churchDefaultLocale, getAppUrl, getChurch, localeOf } from './church';
 import { sendEventReminder } from './eventReminder';
 import { escapeHtml } from './html';
-import { audienceOf } from './meetings';
+import { audienceOf, readReminders } from './meetings';
 import { meetingRosterLines } from './meetingRoster';
 import { recordNotification } from './notifications';
 import { enqueue } from './outbox';
@@ -122,46 +122,52 @@ export async function sendLiveNotices(db: Db, env: Env, now: Date) {
   }
 }
 
-/** Hours before a meeting its reminder goes: the ministry's choice, 2 by default, 0 = off. */
-const reminderHours = (v: number | null) => v ?? 2;
-
 /**
- * "⏰ Meeting soon": a set time before each meeting (2 hours unless the ministry chose
- * otherwise), to everyone it is for, with who serves and a button into it. Once per
- * meeting (marked first); a meeting made in the last 10 minutes waits a little, so its
- * own announcement isn't followed at once by a reminder.
+ * "⏰ Meeting soon": at each time the ministry chose before a meeting (2 hours and 1 hour
+ * unless it chose otherwise), to everyone it is for, with who serves and a button into
+ * it. Each reminder goes once per meeting time (claimed first, so a moved meeting is
+ * reminded again); when several are due at once only one message goes. A meeting made
+ * in the last 10 minutes waits a little, so its own announcement isn't followed at once
+ * by a reminder.
  */
 export async function sendMeetingReminders(db: Db, env: Env, now: Date) {
   const nowIso = now.toISOString();
   const rows = await db
-    .select({ meeting: meetings, hours: groups.meetingReminderHours, groupName: groups.name })
+    .select({ meeting: meetings, reminders: groups.meetingReminders })
     .from(meetings)
     .innerJoin(groups, eq(groups.id, meetings.groupId))
     .where(
       and(
         eq(meetings.status, 'scheduled'),
-        isNull(meetings.remindedAt),
         gte(meetings.startsAt, nowIso),
         lte(meetings.startsAt, new Date(now.getTime() + 48 * 3_600_000).toISOString()),
         lte(meetings.createdAt, new Date(now.getTime() - 10 * 60_000).toISOString()),
         isNull(groups.archivedAt),
       ),
     );
-  const due = rows.filter(({ meeting, hours }) => {
-    const h = reminderHours(hours);
-    return h > 0 && Date.parse(meeting.startsAt) - now.getTime() <= h * 3_600_000;
-  });
+  const due: (typeof rows)[number]['meeting'][] = [];
+  for (const { meeting, reminders } of rows) {
+    const left = (Date.parse(meeting.startsAt) - now.getTime()) / 60_000;
+    let send = false;
+    for (const minutes of readReminders(reminders).filter((m) => left <= m)) {
+      const fresh = await db
+        .insert(jobRuns)
+        .values({
+          job: 'meeting_remind',
+          scope: String(meeting.id),
+          period: `${minutes}:${meeting.startsAt}`,
+        })
+        .onConflictDoNothing()
+        .returning({ job: jobRuns.job });
+      if (fresh.length) send = true;
+    }
+    if (send) due.push(meeting);
+  }
   if (due.length === 0) return;
   const appUrl = (await getAppUrl(db, env.APP_URL))?.replace(/\/+$/, '');
   const fallback = await churchDefaultLocale(db);
   const { timezone } = await getChurch(db);
-  for (const { meeting } of due) {
-    const claimed = await db
-      .update(meetings)
-      .set({ remindedAt: nowIso })
-      .where(and(eq(meetings.id, meeting.id), isNull(meetings.remindedAt)))
-      .returning({ id: meetings.id });
-    if (claimed.length === 0) continue;
+  for (const meeting of due) {
     const audience = (await audienceOf(db, [meeting.id])).get(meeting.id);
     const people = await db
       .select({
@@ -212,7 +218,7 @@ export async function sendMeetingReminders(db: Db, env: Env, now: Date) {
             ? new InlineKeyboard().webApp(t.bot.meetingButton, `${appUrl}/?meeting=${meeting.id}`)
             : undefined,
         },
-        dedupeKey: `mtgremind:${meeting.id}:${p.chatId}`,
+        dedupeKey: `mtgremind:${meeting.id}:${p.chatId}:${nowIso}`,
       });
     }
   }

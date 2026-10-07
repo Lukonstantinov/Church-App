@@ -2004,7 +2004,7 @@ describe('bot photo', () => {
 });
 
 describe('meeting reminders', () => {
-  it('reminds once, two hours ahead by default; a ministry can switch it off', async () => {
+  it('reminds two hours and one hour ahead by default; a ministry can change or stop it', async () => {
     const g = await createEnv('Напомни');
     const a = fakeUser('Забывчивый');
     await join(a, g);
@@ -2039,14 +2039,26 @@ describe('meeting reminders', () => {
     await sendMeetingReminders(db, env as never, new Date());
     await sendMeetingReminders(db, env as never, new Date());
     await drainOutbox(db, botApi(env as never), { limit: 100 });
-    expect(
-      calls.filter((c) => c.body.chat_id === a.id && String(c.body.text).includes('Скоро встреча')),
-    ).toHaveLength(1);
+    const reminders = () =>
+      calls.filter((c) => c.body.chat_id === a.id && String(c.body.text).includes('Скоро встреча'));
+    expect(reminders()).toHaveLength(1);
+    // An hour before: the second one (same time of the meeting, so not the first again).
+    await db
+      .update(meetings)
+      .set({ createdAt: new Date(Date.now() - 3 * 3_600_000).toISOString() })
+      .where(eq(meetings.id, m.id));
+    const at = new Date(Date.now() + 40 * 60_000);
+    await sendMeetingReminders(db, env as never, at);
+    await sendMeetingReminders(db, env as never, at);
+    await drainOutbox(db, botApi(env as never), { limit: 100 });
+    expect(reminders()).toHaveLength(2);
+    const detail = await apiJson<GroupDetail>(`/api/groups/${g.id}`, { user: ADMIN });
+    expect(detail.meetingReminders).toEqual([120, 60]);
     // Switched off.
     await api(`/api/groups/${g.id}`, {
       method: 'PATCH',
       user: ADMIN,
-      json: { meetingReminderHours: 0 },
+      json: { meetingReminders: [] },
     });
     calls.length = 0;
     await soon(60);
