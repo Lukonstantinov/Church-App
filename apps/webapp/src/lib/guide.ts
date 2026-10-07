@@ -177,7 +177,8 @@ export const GUIDE: GuideSection[] = [
           'Meeting → people block → «🎨 Оформление».',
           'Style: dark, see-through (ministry background shows), one colour, or different tints per person. The chips on the main page follow it.',
           'Role icons: tap a role (leader, snacks, any service) → pick an icon.',
-          'Background: the ministry’s or a photo. Can apply to the whole series.',
+          'Background: the ministry’s or a photo, with or without the ministry’s icon pattern («Узор служения»). Can apply to the whole series.',
+          'A meeting with its own poster colour wears it everywhere: its screen, the people block and its card on the main page.',
         ],
       },
       {
@@ -309,7 +310,8 @@ export const GUIDE: GuideSection[] = [
           'Android: Telegram asks “Add to Home screen?” → «Добавить». No window: in the app ⋯ (top right) → “Add to Home Screen”.',
           'iPhone: Safari opens → Share (square with arrow) → “Add to Home Screen” → «Добавить».',
           'The card shows these steps for the person’s own phone, and a message when it worked or failed.',
-          'Needs a recent Telegram. The icon Telegram uses is the bot’s Mini App icon — set it in @BotFather → /mybots → bot → Bot Settings → Configure Mini App (upload the church photo).',
+          'Needs a recent Telegram.',
+          'Icon: «Настройки церкви» → «Фото бота и иконка на экране телефона» → use the church logo or choose a photo. Icons already added may update later.',
         ],
       },
       {

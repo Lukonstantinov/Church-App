@@ -270,6 +270,7 @@ export const en: Messages = {
     styleColor: 'One colour',
     styleMixed: 'Different tints',
     roleIcons: 'Role icons',
+    patternToggle: 'Ministry pattern (icon)',
     speakerService: 'Speaker',
     pickService: 'Which service?',
     newService: 'New service',
@@ -633,6 +634,13 @@ export const en: Messages = {
     archiveConfirm: 'Archive this group? Members will no longer see it.',
   },
   settings: {
+    botPhoto: 'Bot photo and phone icon',
+    botPhotoHint:
+      'Telegram shows this photo on the bot and on the app’s icon on the phone’s home screen. Icons already added may update later.',
+    botPhotoFromLogo: 'Use the church logo',
+    botPhotoPick: 'Choose a photo',
+    botPhotoDone: 'Bot photo updated ✅',
+    botPhotoFailed: 'Telegram didn’t accept the photo. Try another one',
     sheetLabel: 'Label on posters and PDFs',
     sheetLabelHint: 'Printed top right on event posters and PDFs. Empty = the church’s name.',
     title: 'Church settings',

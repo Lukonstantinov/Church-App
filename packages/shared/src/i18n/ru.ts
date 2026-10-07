@@ -274,6 +274,7 @@ export const ru = {
     styleColor: 'Один цвет',
     styleMixed: 'Разные оттенки',
     roleIcons: 'Иконки ролей',
+    patternToggle: 'Узор служения (иконка)',
     speakerService: 'Спикер',
     pickService: 'Какое служение?',
     newService: 'Новое служение',
@@ -641,6 +642,13 @@ export const ru = {
     archiveConfirm: 'Архивировать группу? Участники больше не будут её видеть.',
   },
   settings: {
+    botPhoto: 'Фото бота и иконка на экране телефона',
+    botPhotoHint:
+      'Telegram показывает это фото у бота и на иконке приложения на экране телефона. Уже добавленные иконки могут обновиться не сразу.',
+    botPhotoFromLogo: 'Взять логотип церкви',
+    botPhotoPick: 'Выбрать фото',
+    botPhotoDone: 'Фото бота обновлено ✅',
+    botPhotoFailed: 'Telegram не принял фото. Попробуйте другое',
     sheetLabel: 'Подпись на афишах и PDF',
     sheetLabelHint:
       'Печатается справа вверху на афишах событий и в PDF. Если пусто — название церкви.',

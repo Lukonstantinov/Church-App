@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { resolveBrand, type PosterLook } from '@church/shared';
 import { useEnv } from '../lib/env';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
@@ -383,9 +384,12 @@ export function HeroCard({
   className = '',
   living,
   live,
+  look,
 }: {
   children: ReactNode;
   className?: string;
+  /** A look of its own (a meeting's poster look) instead of the ministry's. */
+  look?: PosterLook | null;
   /** A living wallpaper: drifting colour, moving texture and twinkling light. */
   living?: boolean;
   /** Something is on right now: the living wallpaper turns warm and quickens. */
@@ -393,14 +397,25 @@ export function HeroCard({
 }) {
   // Inside a ministry, its pattern decorates the hero blocks too.
   const { env } = useEnv();
-  const on = onBrandStyle(env?.textColor, !!env?.pattern || !!env?.backdropUrl);
+  const src = look ?? env;
+  const on = onBrandStyle(src?.textColor, !!src?.pattern || !!src?.backdropUrl);
+  const brand = look?.brandColor ? resolveBrand(look.brandColor) : null;
   return (
     <div
       className={`brand-gradient flow sheen relative overflow-hidden rounded-[var(--radius-card)] p-5 shadow-cta ${on.className} ${className}`}
-      style={on.style}
+      style={
+        brand
+          ? ({
+              ...on.style,
+              '--brand': brand.light,
+              '--brand-dark': brand.dark,
+              '--brand-partner': brand.partner,
+            } as React.CSSProperties)
+          : on.style
+      }
     >
-      <PatternLayer pattern={env?.pattern} logoUrl={env?.logoUrl} />
-      <BackdropLayer backdrop={env?.backdrop} url={env?.backdropUrl} />
+      <PatternLayer pattern={src?.pattern} logoUrl={src?.logoUrl} />
+      <BackdropLayer backdrop={src?.backdrop} url={src?.backdropUrl} />
       {living && (
         <span aria-hidden="true" className="living-bg" data-live={live ? 'true' : 'false'}>
           <i className="living-blob b1" />

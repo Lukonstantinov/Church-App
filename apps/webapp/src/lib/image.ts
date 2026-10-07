@@ -81,3 +81,32 @@ export async function preparePhoto(file: File, maxSide = 1600): Promise<Blob> {
     URL.revokeObjectURL(url);
   }
 }
+
+/**
+ * A square JPEG (640×640, centre-cropped, white behind transparency) from a picked file
+ * or an image link — what Telegram takes as the bot's profile photo.
+ */
+export async function squareJpeg(src: File | string, side = 640): Promise<Blob> {
+  const url = typeof src === 'string' ? src : URL.createObjectURL(src);
+  try {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = url;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = side;
+    canvas.height = side;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, side, side);
+    const w = img.naturalWidth || side;
+    const h = img.naturalHeight || side;
+    const k = Math.max(side / w, side / h);
+    ctx.drawImage(img, (side - w * k) / 2, (side - h * k) / 2, w * k, h * k);
+    const blob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
+    if (!blob) throw new Error('canvas');
+    return blob;
+  } finally {
+    if (typeof src !== 'string') URL.revokeObjectURL(url);
+  }
+}

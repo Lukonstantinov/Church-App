@@ -1975,3 +1975,30 @@ describe('more people at a meeting', () => {
     expect(left).toHaveLength(0);
   });
 });
+
+describe('bot photo', () => {
+  it('admins send a JPEG to Telegram as the bot photo; others may not', async () => {
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 0xff, 0xd9]);
+    const res = await api('/api/church/bot-photo', {
+      method: 'PUT',
+      user: ADMIN,
+      body: jpeg,
+      headers: { 'content-type': 'image/jpeg' },
+    });
+    expect(res.status).toBe(200);
+    const call = calls.find((c) => c.method === 'setMyProfilePhoto');
+    expect(call).toBeDefined();
+    expect(String(call!.body.photo)).toContain('"static"');
+    const someone = fakeUser('Не админ');
+    expect(
+      (
+        await api('/api/church/bot-photo', {
+          method: 'PUT',
+          user: someone,
+          body: jpeg,
+          headers: { 'content-type': 'image/jpeg' },
+        })
+      ).status,
+    ).toBe(403);
+  });
+});

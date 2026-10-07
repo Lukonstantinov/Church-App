@@ -271,6 +271,7 @@ export const lt: Messages = {
     styleColor: 'Viena spalva',
     styleMixed: 'Skirtingi atspalviai',
     roleIcons: 'Vaidmenų piktogramos',
+    patternToggle: 'Tarnystės raštas (piktograma)',
     speakerService: 'Pranešėjas',
     pickService: 'Kokia tarnystė?',
     newService: 'Nauja tarnystė',
@@ -637,6 +638,13 @@ export const lt: Messages = {
     archiveConfirm: 'Archyvuoti grupę? Nariai jos nebematys.',
   },
   settings: {
+    botPhoto: 'Boto nuotrauka ir piktograma telefone',
+    botPhotoHint:
+      'Telegram rodo šią nuotrauką prie boto ir ant programėlės piktogramos telefono ekrane. Jau pridėtos piktogramos gali atsinaujinti vėliau.',
+    botPhotoFromLogo: 'Naudoti bažnyčios logotipą',
+    botPhotoPick: 'Pasirinkti nuotrauką',
+    botPhotoDone: 'Boto nuotrauka atnaujinta ✅',
+    botPhotoFailed: 'Telegram nepriėmė nuotraukos. Pabandykite kitą',
     sheetLabel: 'Parašas plakatuose ir PDF',
     sheetLabelHint:
       'Spausdinama viršuje dešinėje renginių plakatuose ir PDF. Tuščia = bažnyčios pavadinimas.',

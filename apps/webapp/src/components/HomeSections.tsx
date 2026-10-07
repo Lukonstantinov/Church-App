@@ -32,7 +32,7 @@ import { canRollNow } from '../screens/Overview';
 import { Button, DateBadge, HeroCard } from './ui';
 import { BurnFrame } from './Burn';
 import { LiveNow } from './Live';
-import { TeamChips } from './TeamChips';
+import { TeamChips, meetingLook } from './TeamChips';
 import { LookTop } from './LookTop';
 import { PosterCard, PosterMedia, hasCover } from './Poster';
 
@@ -134,7 +134,12 @@ export type MeetingTileData = Pick<
   MeetingRow,
   'id' | 'title' | 'startsAt' | 'endsAt' | 'location' | 'topic' | 'kind' | 'leader'
 > &
-  Partial<Pick<MeetingRow, 'status' | 'snackPerson' | 'helpers' | 'peopleLook'>>;
+  Partial<
+    Pick<
+      MeetingRow,
+      'status' | 'snackPerson' | 'helpers' | 'peopleLook' | 'design' | 'templateId' | 'look'
+    >
+  >;
 
 type Item =
   | { kind: 'calendar' }
@@ -515,7 +520,7 @@ function MeetingTile({
   const f = useFmt();
   return (
     <Tile onToggle={onToggle}>
-      <LookTop look={g} className="flex aspect-[16/10] flex-col p-2.5">
+      <LookTop look={meetingLook(m) ?? g} className="flex aspect-[16/10] flex-col p-2.5">
         <span className="flex items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
           <span className="opacity-80">{t.meetings.details}</span>
           <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} compact />
@@ -553,7 +558,7 @@ function MeetingDayTile({
   const shown = list.slice(0, 4);
   return (
     <Tile onToggle={onToggle}>
-      <LookTop look={g} className="flex flex-col gap-1.5 p-2">
+      <LookTop look={meetingLook(list[0]!) ?? g} className="flex flex-col gap-1.5 p-2">
         <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
           <span>{f.relativeDay(list[0]!.startsAt)}</span>
           <span>{t.meetings.meetingsToday(list.length)}</span>
@@ -596,7 +601,7 @@ function MeetingExpanded({
   const { push } = useNav();
   const rollable = onRoll && canRollNow({ status: m.status ?? 'scheduled', startsAt: m.startsAt });
   return (
-    <HeroCard>
+    <HeroCard living look={meetingLook(m)}>
       <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
         {t.overview.nextMeeting}
       </div>

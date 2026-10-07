@@ -6,7 +6,7 @@ import { IconImage, IconTrash } from '../components/icons';
 import { useToast } from '../components/Toast';
 import { ActionRow, Button, Row, Screen, Section, TextField, Title } from '../components/ui';
 import { useT } from '../lib/i18n';
-import { prepareLogo } from '../lib/image';
+import { prepareLogo, squareJpeg } from '../lib/image';
 import { ThemePicker } from '../components/ThemePicker';
 import { GroupDot } from '../components/GroupSwitcher';
 import {
@@ -14,6 +14,7 @@ import {
   useMe,
   useRemoveLogo,
   useRestoreGroup,
+  useSetBotPhoto,
   useUpdateChurch,
   useUploadLogo,
 } from '../lib/queries';
@@ -179,6 +180,8 @@ export function ChurchSettings() {
         />
       </Section>
 
+      <BotPhotoSection />
+
       <Section title={t.settings.color} footer={t.settings.colorHint}>
         <ThemePicker value={church.brandColor} onChange={(v) => v && void pickColor(v)} />
       </Section>
@@ -249,6 +252,56 @@ function ArchivedMinistries() {
           }
         />
       ))}
+    </Section>
+  );
+}
+
+/** The bot's profile photo, which is also the icon of the app on phones' home screens. */
+function BotPhotoSection() {
+  const t = useT();
+  const toast = useToast();
+  const me = useMe();
+  const church = me.data!.church;
+  const set = useSetBotPhoto();
+  const file = useRef<HTMLInputElement>(null);
+  async function send(src: File | string) {
+    try {
+      await set.mutateAsync(await squareJpeg(src));
+      haptic.success();
+      toast(t.settings.botPhotoDone);
+    } catch {
+      haptic.error();
+      toast(t.settings.botPhotoFailed, 'error');
+    }
+  }
+  return (
+    <Section title={t.settings.botPhoto} footer={t.settings.botPhotoHint}>
+      <div className="flex flex-wrap gap-2 p-3">
+        {church.logoUrl && (
+          <Button small disabled={set.isPending} onClick={() => void send(church.logoUrl!)}>
+            {t.settings.botPhotoFromLogo}
+          </Button>
+        )}
+        <Button
+          small
+          variant="glass"
+          disabled={set.isPending}
+          onClick={() => file.current?.click()}
+        >
+          <IconImage size={17} /> {t.settings.botPhotoPick}
+        </Button>
+      </div>
+      <input
+        ref={file}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) void send(f);
+        }}
+      />
     </Section>
   );
 }

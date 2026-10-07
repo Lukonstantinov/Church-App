@@ -608,6 +608,18 @@ export function useUpdateChurch() {
   });
 }
 
+/** Sets the bot's profile photo (the phone shortcut's icon) from a square JPEG. */
+export function useSetBotPhoto() {
+  return useMutation({
+    mutationFn: (file: Blob) =>
+      apiFetch<{ ok: true }>('/church/bot-photo', {
+        method: 'PUT',
+        body: file,
+        headers: { 'content-type': 'image/jpeg' },
+      }),
+  });
+}
+
 export function useUploadLogo() {
   const setChurch = useSetChurch();
   return useMutation({

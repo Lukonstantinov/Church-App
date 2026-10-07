@@ -438,6 +438,8 @@ export const peopleLookSchema = z.object({
    */
   style: z.enum(PEOPLE_STYLES).optional(),
   /** Icons of the leader and the snack person (others keep their service's icon). */
+  /** The ministry's icon pattern over the background, also over a photo (default yes). */
+  pattern: z.boolean().optional(),
   leaderIcon: z.string().trim().min(1).max(8).nullish(),
   snackIcon: z.string().trim().min(1).max(8).nullish(),
 });

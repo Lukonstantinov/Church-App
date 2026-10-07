@@ -1,5 +1,19 @@
 import type { CSSProperties } from 'react';
-import { displayName, type MeetingRow, type PeopleLook, type PeopleStyle } from '@church/shared';
+import {
+  displayName,
+  type MeetingRow,
+  type PeopleLook,
+  type PeopleStyle,
+  type PosterLook,
+} from '@church/shared';
+
+/**
+ * A meeting's own look (from its poster: colour, pattern, photo) when it has one; null
+ * means it wears its ministry's look.
+ */
+export const meetingLook = (
+  m: Partial<Pick<MeetingRow, 'design' | 'templateId' | 'look'>>,
+): PosterLook | null => (m.design || m.templateId ? (m.look ?? null) : null);
 
 /** Tints for "different tints": each person gets the next one. */
 export const MIXED_TINTS = [

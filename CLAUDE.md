@@ -96,8 +96,8 @@ home tiles (drag to reorder, expand), several meetings of a day share one tile.
 **Money** — income / expense / donation, receipts, dues, voiding, meeting & event money,
 PDF/Excel reports delivered by the bot, statistics.
 
-**Phone** — "Add to home screen" (Telegram `addToHomeScreen`, icon from BotFather's Mini
-App settings), dynamic `/manifest.webmanifest` + `/apple-touch-icon.png` from the church
+**Phone** — "Add to home screen" (Telegram `addToHomeScreen`; icon = the bot's profile photo,
+set from church settings via `setMyProfilePhoto`, `PUT /api/church/bot-photo`), dynamic `/manifest.webmanifest` + `/apple-touch-icon.png` from the church
 logo. Phone notifications = bot messages (Telegram push).
 
 **Developer** — Telemetry screen and the Instructions screen (`screens/Guide.tsx`,

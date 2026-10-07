@@ -19,7 +19,7 @@ import { useMoney } from '../components/money';
 import { NotifySheet } from '../components/NotifySheet';
 import { MeetingAnnounceSheet } from '../components/MeetingAnnounceSheet';
 import { MeetingPeople } from '../components/MeetingPeople';
-import { TeamChips } from '../components/TeamChips';
+import { TeamChips, meetingLook } from '../components/TeamChips';
 import { useCoverLook } from '../components/CoverDesigner';
 import {
   MeetingPosterDesigner,
@@ -149,7 +149,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
 
   return (
     <Screen>
-      <HeroCard living={!cancelled} live={live}>
+      <HeroCard living={!cancelled} live={live} look={meetingLook(m)}>
         <div className="mb-3 flex items-center justify-between gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">
           <span className="truncate">{m.groupName}</span>
           <span className="flex shrink-0 items-center gap-1.5 normal-case tracking-normal">

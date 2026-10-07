@@ -1225,8 +1225,8 @@ html[data-motion='off'] [class*='app-bg-'] {
 }
 /* See-through: the panel's background (the ministry's or a photo) shows through. */
 .people-panel[data-style='glass'] .metal-card {
-  --card-a: rgba(255, 255, 255, 0.22);
-  --card-b: rgba(255, 255, 255, 0.06);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
 }

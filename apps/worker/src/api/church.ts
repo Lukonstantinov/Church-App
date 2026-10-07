@@ -1,7 +1,12 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { eq } from 'drizzle-orm';
-import { LOGO_MAX_BYTES, updateChurchSchema, updateMeSchema } from '@church/shared';
+import {
+  LOGO_MAX_BYTES,
+  MEDIA_MAX_BYTES,
+  updateChurchSchema,
+  updateMeSchema,
+} from '@church/shared';
 import { isDeveloper, type Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { getDb } from '../db/client';
@@ -76,6 +81,32 @@ churchRoutes.put('/logo', async (c) => {
     entityId: 0,
   });
   return c.json(await getChurch(db));
+});
+
+/**
+ * The bot's own profile photo, which Telegram also uses as the icon of the app's phone
+ * shortcut. Body: a square JPEG (made in the browser). Sent straight to Telegram.
+ */
+churchRoutes.put('/bot-photo', async (c) => {
+  requireAdmin(c);
+  const { bytes, mime } = await readImageUpload(c.req, MEDIA_MAX_BYTES);
+  if (mime !== 'image/jpeg') throw new HTTPException(400, { message: 'jpeg_only' });
+  const form = new FormData();
+  form.append('photo', JSON.stringify({ type: 'static', photo: 'attach://file' }));
+  form.append('file', new Blob([bytes], { type: 'image/jpeg' }), 'photo.jpg');
+  const res = await fetch(`https://api.telegram.org/bot${c.env.BOT_TOKEN}/setMyProfilePhoto`, {
+    method: 'POST',
+    body: form,
+  });
+  const out = (await res.json().catch(() => ({ ok: false }))) as { ok: boolean };
+  if (!out.ok) throw new HTTPException(502, { message: 'telegram_failed' });
+  await audit(c.get('db'), {
+    actorUserId: c.get('user').id,
+    action: 'bot_photo_updated',
+    entity: 'group',
+    entityId: 0,
+  });
+  return c.json({ ok: true });
 });
 
 churchRoutes.delete('/logo', async (c) => {

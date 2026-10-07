@@ -1,7 +1,9 @@
 import { useRef, useState, type ReactNode } from 'react';
 import {
+  DEFAULT_PATTERN,
   SERVICE_ICONS,
   displayName,
+  resolveBrand,
   type MeetingDetail,
   type MeetingPerson,
   type MeetingService,
@@ -28,7 +30,15 @@ import { Pill } from './LookControls';
 import { BackdropLayer, PatternLayer } from './PatternLayer';
 import { PersonPicker } from './PersonPicker';
 import { Sheet } from './Sheet';
-import { MIXED_TINTS, leaderIconOf, peopleStyleOf, snackIconOf, teamOf, tintOf } from './TeamChips';
+import {
+  MIXED_TINTS,
+  leaderIconOf,
+  meetingLook,
+  peopleStyleOf,
+  snackIconOf,
+  teamOf,
+  tintOf,
+} from './TeamChips';
 import { useToast } from './Toast';
 import { Button, TextField, Toggle } from './ui';
 
@@ -238,7 +248,10 @@ export function MeetingPeople({
   const t = useT();
   const toast = useToast();
   const me = useMe();
-  const { env } = useEnv();
+  const { env: ministry } = useEnv();
+  // The block wears the meeting's own look (its poster colours) when it has one.
+  const own = meetingLook(m);
+  const env = own ?? ministry;
   const myId = me.data?.user.id;
   const helpers = useMeetingHelpers(m.id);
   const photo = usePersonPhoto(m.id);
@@ -343,10 +356,29 @@ export function MeetingPeople({
         />
       ) : (
         <>
-          <span aria-hidden="true" className="brand-gradient absolute inset-0 opacity-90" />
-          <PatternLayer pattern={env?.pattern} logoUrl={env?.logoUrl} />
+          <span
+            aria-hidden="true"
+            className="brand-gradient absolute inset-0 opacity-90"
+            style={
+              own?.brandColor
+                ? ({
+                    '--brand': resolveBrand(own.brandColor).light,
+                    '--brand-partner': resolveBrand(own.brandColor).partner,
+                  } as React.CSSProperties)
+                : undefined
+            }
+          />
           <BackdropLayer backdrop={env?.backdrop} url={env?.backdropUrl} />
         </>
+      )}
+      {look?.pattern !== false && (
+        <PatternLayer
+          pattern={
+            env?.pattern ??
+            (env?.logoUrl ? { ...DEFAULT_PATTERN, kind: 'logo', value: '' } : DEFAULT_PATTERN)
+          }
+          logoUrl={env?.logoUrl}
+        />
       )}
       <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black/25" />
       <div className="relative flex flex-col gap-2.5">
@@ -704,6 +736,7 @@ function PeopleLookSheet({
       : null,
   );
   const [toSeries, setToSeries] = useState(false);
+  const [pattern, setPattern] = useState(m.peopleLook?.pattern !== false);
   const [busy, setBusy] = useState(false);
   const [iconFor, setIconFor] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
@@ -832,6 +865,7 @@ function PeopleLookSheet({
             }}
           />
         </div>
+        <Toggle label={t.meetings.patternToggle} checked={pattern} onChange={setPattern} />
         {m.seriesId && (
           <Toggle label={t.meetings.applyToSeries} checked={toSeries} onChange={setToSeries} />
         )}
@@ -843,6 +877,7 @@ function PeopleLookSheet({
                 style,
                 color: style === 'color' ? color : null,
                 photoMediaId: photo?.id ?? null,
+                pattern,
                 leaderIcon,
                 snackIcon,
               },
