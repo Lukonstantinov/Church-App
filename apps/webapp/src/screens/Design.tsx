@@ -492,17 +492,20 @@ function ApplySheet({
   const thing = item.kind === 'meeting' ? item.m : item.e;
   const start: Choice = thing.templateId ?? (thing.design?.custom ? 'own' : 'ministry');
   const [choice, setChoice] = useState<Choice>(start);
+  // This meeting's own animation (null = its template's or the ministry's).
+  const startMotion = item.kind === 'meeting' ? item.m.ownMotion : null;
+  const [ownMotion, setOwnMotion] = useState<MeetingMotion | null>(startMotion);
   const tpl = typeof choice === 'number' ? templates.data?.find((x) => x.id === choice) : null;
   const look: PosterLook =
     choice === 'own' ? (thing.look ?? groupLook(g)) : tpl ? templateLook(tpl) : groupLook(g);
   const motion: MeetingMotion =
     item.kind === 'meeting'
-      ? (item.m.ownMotion ?? tpl?.motion ?? (choice === start ? item.m.motion : 'calm'))
+      ? (ownMotion ?? tpl?.motion ?? (choice === start ? item.m.motion : 'calm'))
       : (tpl?.motion ?? 'calm');
   const pending = updateMeeting.isPending || updateEvent.isPending;
 
   async function save() {
-    if (choice === start) return onClose();
+    if (choice === start && ownMotion === startMotion) return onClose();
     // A template or the ministry's look replaces the own look and own colour.
     const design = {
       ...initCover(thing.design, null, null, true).design,
@@ -514,10 +517,9 @@ function ApplySheet({
       if (item.kind === 'meeting')
         await updateMeeting.mutateAsync({
           id: item.m.id,
-          templateId,
-          design,
-          // The template's animation shows unless this meeting has its own.
-          ...(templateId ? { motion: null } : {}),
+          // Only a new choice of look replaces it; the animation alone leaves it be.
+          ...(choice !== start ? { templateId, design } : {}),
+          motion: ownMotion,
         });
       else await updateEvent.mutateAsync({ templateId, design });
       haptic.success();
@@ -538,6 +540,11 @@ function ApplySheet({
           title={thing.title}
           design={thing.design}
         />
+        {item.kind === 'meeting' && (
+          <Group title={t.meetings.motionTitle}>
+            <MotionPicker value={ownMotion} onChange={setOwnMotion} allowInherit />
+          </Group>
+        )}
         <Group title={t.design.apply}>
           <div className="flex flex-wrap gap-2">
             <Pill

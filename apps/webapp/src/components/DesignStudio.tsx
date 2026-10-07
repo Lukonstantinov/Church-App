@@ -1,13 +1,15 @@
 import { useState, type ReactNode } from 'react';
 import {
   ENTER_ANIMATIONS,
-  MEETING_MOTIONS,
+  MOTION_GROUPS,
   MODULE_SURFACES,
   resolveBrand,
   type EnterAnimation,
   type GroupSummary,
   type MeetingMotion,
   type ModuleLook,
+  type MotionIcon,
+  type MotionTune,
   type ScreenLook,
   type ScreenModule,
 } from '@church/shared';
@@ -20,7 +22,9 @@ import {
   useMe,
   useSaveChurchStudio,
   useSaveMinistryStudio,
+  useUploadMedia,
 } from '../lib/queries';
+import { preparePhoto } from '../lib/image';
 import { haptic } from '../lib/telegram';
 import { EnvCard } from '../screens/Hub';
 import { AppBackdrop } from './AppBackdrop';
@@ -263,9 +267,15 @@ function MeetingPiece({ g, motion }: { g: GroupSummary; motion: MeetingMotion })
         className={`glass relative flex flex-col overflow-hidden rounded-2xl shadow-card ${skinClass(look)}`}
         style={skinStyle(look)}
       >
-        <SkinLayer look={look} />
+        {/* Layers cover the tile; the main animation sits in its coloured top. */}
+        <SkinLayer look={{ ...look, motion: null }} />
         <LookTop look={g} className="isolate flex aspect-[16/10] flex-col p-2.5">
-          <LivingLayer kind={motion} behind />
+          <LivingLayer
+            kind={look.own ? (look.motion ?? 'off') : motion}
+            behind
+            tune={look.tune}
+            icon={look.icon}
+          />
           <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
             {t.meetings.details}
           </span>
@@ -524,37 +534,72 @@ function ModuleSheet({
         )}
 
         {spot === 'meetings' && (
-          <Group title={t.studio.meetingsMotion}>
-            <MotionPicker value={meetings} onChange={(m) => setMeetings(m ?? 'calm')} />
+          <>
+            <Group title={t.studio.meetingsMotion}>
+              <MotionPicker
+                value={meetings}
+                onChange={(m) => setMeetings(m ?? 'calm')}
+                icon={draft.icon}
+              />
+            </Group>
+            <div>
+              <Toggle
+                label={t.studio.ownTile}
+                checked={!!draft.own}
+                onChange={(v) => set({ own: v })}
+              />
+              <p className="mt-1 px-1 text-[12px] text-hint">{t.studio.ownTileHint}</p>
+            </div>
+          </>
+        )}
+
+        {(spot !== 'meetings' || draft.own) && (
+          <Group title={t.studio.animation}>
+            <MotionPicker
+              value={draft.motion ?? 'off'}
+              onChange={(m) => set({ motion: !m || m === 'off' ? null : m })}
+              icon={draft.icon}
+            />
+            <p className="mt-2 text-[12px] text-hint">{t.studio.tip}</p>
           </Group>
         )}
 
-        <Group title={t.studio.animation}>
-          <MotionPicker
-            value={draft.motion ?? 'off'}
-            onChange={(m) => set({ motion: !m || m === 'off' ? null : m })}
-          />
-          <p className="mt-2 text-[12px] text-hint">{t.studio.tip}</p>
-        </Group>
+        <TuneControls tune={draft.tune ?? {}} onChange={(tune) => set({ tune })} />
+
+        <IconControls
+          icon={draft.icon ?? null}
+          groupId={scope === 'ministry' ? g.id : null}
+          logoUrl={scope === 'ministry' ? g.logoUrl : null}
+          onChange={(icon) => set({ icon })}
+        />
 
         <Group title={t.studio.layers}>
           <p className="mb-2 text-[12px] text-hint">{t.studio.layersHint}</p>
-          <div className="flex flex-wrap gap-2">
-            {MEETING_MOTIONS.filter((m) => m !== 'off').map((m) => {
-              const on = layers.includes(m);
-              return (
-                <Pill
-                  key={m}
-                  on={on}
-                  onClick={() =>
-                    set({
-                      layers: on ? layers.filter((x) => x !== m) : [...layers, m].slice(-2),
-                    })
-                  }
-                  label={t.meetings.motions[m]}
-                />
-              );
-            })}
+          <div className="flex flex-col gap-2.5">
+            {MOTION_GROUPS.map((group) => (
+              <div key={group.key}>
+                <div className="mb-1.5 text-[12px] font-semibold text-hint">
+                  {t.meetings.motionGroups[group.key]}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {group.items.map((m) => {
+                    const on = layers.includes(m);
+                    return (
+                      <Pill
+                        key={m}
+                        on={on}
+                        onClick={() =>
+                          set({
+                            layers: on ? layers.filter((x) => x !== m) : [...layers, m].slice(-2),
+                          })
+                        }
+                        label={t.meetings.motions[m]}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </Group>
 
@@ -662,5 +707,182 @@ function EntranceSheet({ g, onClose }: { g: GroupSummary; onClose: () => void })
         </Button>
       </div>
     </Sheet>
+  );
+}
+
+const DIRECTIONS = [0, 45, 90, 135, 180, 225, 270, 315];
+const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+
+/** Speed, size, direction and colour of a part's animations. */
+function TuneControls({ tune, onChange }: { tune: MotionTune; onChange: (t: MotionTune) => void }) {
+  const t = useT();
+  const set = (patch: Partial<MotionTune>) => onChange({ ...tune, ...patch });
+  const slider = (
+    label: string,
+    value: number,
+    min: number,
+    max: number,
+    step: number,
+    put: (v: number) => void,
+  ) => (
+    <label className="flex flex-col gap-1">
+      <span className="flex justify-between text-[14px]">
+        <span>{label}</span>
+        <span className="font-semibold tabular-nums text-hint">×{value.toFixed(2)}</span>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => put(Number(e.target.value))}
+        className="w-full accent-[var(--brand)]"
+      />
+    </label>
+  );
+  return (
+    <Group title={t.studio.tune}>
+      <div className="flex flex-col gap-4">
+        {slider(t.studio.speed, tune.speed ?? 1, 0.25, 3, 0.25, (speed) => set({ speed }))}
+        {slider(t.studio.size, tune.size ?? 1, 0.5, 2, 0.1, (size) => set({ size }))}
+        <div>
+          <div className="mb-2 text-[14px]">{t.studio.direction}</div>
+          <div className="flex flex-wrap gap-2">
+            {DIRECTIONS.map((a, i) => (
+              <Pill
+                key={a}
+                on={(tune.angle ?? 0) === a}
+                onClick={() => set({ angle: a })}
+                label={ARROWS[i]!}
+              />
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="mb-2 text-[14px]">{t.studio.color}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Pill
+              on={!tune.color}
+              onClick={() => set({ color: null })}
+              label={t.studio.colorAuto}
+            />
+            {PALETTE.map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-label={c}
+                onClick={() => set({ color: c })}
+                className={`h-8 w-8 rounded-full ring-1 ring-black/10 active:scale-90 ${
+                  tune.color === c ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
+                }`}
+                style={{ background: c }}
+              />
+            ))}
+            <label
+              className="relative h-8 w-8 cursor-pointer overflow-hidden rounded-full"
+              style={{
+                background:
+                  tune.color && !PALETTE.includes(tune.color)
+                    ? tune.color
+                    : 'conic-gradient(#ef4444,#f59e0b,#22c55e,#06b6d4,#6366f1,#d946ef,#ef4444)',
+              }}
+            >
+              <input
+                type="color"
+                value={tune.color ?? '#6366f1'}
+                onChange={(e) => set({ color: e.target.value })}
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+    </Group>
+  );
+}
+
+/** What the icon animations show: the logo, an emoji, or an uploaded picture (ministries). */
+function IconControls({
+  icon,
+  groupId,
+  logoUrl,
+  onChange,
+}: {
+  icon: MotionIcon | null;
+  groupId: number | null;
+  logoUrl: string | null;
+  onChange: (i: MotionIcon | null) => void;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const upload = useUploadMedia(groupId ?? 0, 'event');
+  const usesLogo = !icon?.emoji && !icon?.mediaId;
+  return (
+    <Group title={t.studio.icon}>
+      <p className="mb-2 text-[12px] text-hint">{t.studio.iconHint}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className={`flex h-11 items-center gap-2 rounded-xl bg-hairline px-3 text-[14px] font-semibold ${
+            usesLogo ? 'ring-2 ring-[var(--brand)]' : ''
+          }`}
+        >
+          {logoUrl && <img src={logoUrl} alt="" className="h-7 w-7 rounded-md object-contain" />}
+          {t.studio.iconLogo}
+        </button>
+        {['✝️', '🔥', '🕊️', '⭐', '❤️', '🙏', '🎵', '✨'].map((e) => (
+          <button
+            key={e}
+            type="button"
+            onClick={() => onChange({ emoji: e })}
+            className={`h-11 w-11 rounded-xl bg-hairline text-[22px] ${
+              icon?.emoji === e ? 'ring-2 ring-[var(--brand)]' : ''
+            }`}
+          >
+            {e}
+          </button>
+        ))}
+        <input
+          value={
+            icon?.emoji && !['✝️', '🔥', '🕊️', '⭐', '❤️', '🙏', '🎵', '✨'].includes(icon.emoji)
+              ? icon.emoji
+              : ''
+          }
+          onChange={(e) =>
+            onChange(e.target.value.trim() ? { emoji: e.target.value.trim().slice(0, 8) } : null)
+          }
+          placeholder="😊"
+          maxLength={8}
+          className="h-11 w-16 rounded-xl bg-hairline text-center text-[20px] outline-none"
+        />
+        {groupId && (
+          <label
+            className={`flex h-11 cursor-pointer items-center gap-2 rounded-xl bg-hairline px-3 text-[14px] font-semibold ${
+              icon?.mediaId ? 'ring-2 ring-[var(--brand)]' : ''
+            }`}
+          >
+            {icon?.url && <img src={icon.url} alt="" className="h-7 w-7 rounded-md object-cover" />}
+            {upload.isPending ? '…' : `🖼 ${t.studio.iconUpload}`}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const media = await upload.mutateAsync(await preparePhoto(file));
+                  onChange({ mediaId: media.id, url: media.url });
+                } catch {
+                  toast(t.common.saveFailed, 'error');
+                }
+              }}
+            />
+          </label>
+        )}
+      </div>
+    </Group>
   );
 }

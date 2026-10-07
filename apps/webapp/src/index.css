@@ -1910,3 +1910,237 @@ html[data-motion='calm'] .skin-liquid::after {
     animation: none;
   }
 }
+
+/* ---------- More living wallpapers: fireflies, confetti, star warp, drops, ripples, icons ---------- */
+/* A chosen animation colour paints the particles too. */
+.living-bg[data-kind='embers'] .living-p {
+  background: radial-gradient(
+    circle,
+    #fff7d6,
+    var(--p-color, #fbbf24) 45%,
+    var(--p-color, #f97316) 70%,
+    transparent 72%
+  );
+}
+.living-bg[data-kind='snow'] .living-p {
+  background: var(--p-color, rgba(255, 255, 255, 0.85));
+}
+/* Fireflies: soft glows wandering and blinking at their own pace. */
+.living-bg[data-kind='fireflies'] .living-p {
+  top: var(--y);
+  bottom: auto;
+  width: calc(var(--s) * 0.9);
+  height: calc(var(--s) * 0.9);
+  background: var(--p-color, #fde68a);
+  box-shadow:
+    0 0 6px 2px var(--p-color, #fde047),
+    0 0 14px 4px color-mix(in srgb, var(--p-color, #facc15) 50%, transparent);
+  animation:
+    living-wander calc(var(--d) * 1.6) ease-in-out var(--t) infinite alternate,
+    living-blink calc(var(--d) / 3) ease-in-out var(--t) infinite;
+}
+@keyframes living-wander {
+  0% {
+    transform: translate(0, 0);
+  }
+  33% {
+    transform: translate(calc(var(--w) * 1.6), -14px);
+  }
+  66% {
+    transform: translate(calc(var(--w) * -1), 10px);
+  }
+  100% {
+    transform: translate(calc(var(--w) * 0.6), -22px);
+  }
+}
+@keyframes living-blink {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+/* Confetti: little coloured papers tumbling down. */
+.living-bg[data-kind='confetti'] .living-p {
+  top: -10%;
+  bottom: auto;
+  width: var(--s);
+  height: calc(var(--s) * 1.8);
+  border-radius: 1px;
+  background: var(--p-color, hsl(calc(var(--i) * 47deg) 90% 62%));
+  animation: living-tumble calc(var(--d) * 1.1) linear var(--t) infinite;
+}
+@keyframes living-tumble {
+  0% {
+    transform: translate(0, 0) rotate(0deg) rotateY(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(var(--w), 60cqh) rotate(220deg) rotateY(180deg);
+  }
+  100% {
+    transform: translate(0, 125cqh) rotate(480deg) rotateY(360deg);
+    opacity: 0.9;
+  }
+}
+/* Star warp: streaks flying out of the centre, as if travelling through space. */
+.living-warp {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--p-color, #fff));
+  transform-origin: 0 50%;
+  animation: living-warp var(--d) cubic-bezier(0.55, 0, 1, 0.45) var(--t) infinite;
+}
+@keyframes living-warp {
+  0% {
+    transform: rotate(var(--a)) translateX(4px) scaleX(0.1);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--a)) translateX(75cqmax) scaleX(1.4);
+    opacity: 0;
+  }
+}
+/* Drops: soft blobs that melt into each other and part again. */
+.living-goo {
+  position: absolute;
+  inset: 0;
+  filter: url(#living-goo);
+  opacity: 0.55;
+}
+.living-goo i {
+  position: absolute;
+  width: 34%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--live-a);
+  animation: living-goo 9s ease-in-out infinite alternate;
+}
+.living-goo .g0 {
+  left: 8%;
+  top: 20%;
+}
+.living-goo .g1 {
+  left: 40%;
+  top: 45%;
+  background: var(--live-b);
+  animation-duration: 11s;
+  animation-direction: alternate-reverse;
+}
+.living-goo .g2 {
+  left: 65%;
+  top: 10%;
+  width: 26%;
+  animation-duration: 7s;
+}
+.living-goo .g3 {
+  left: 25%;
+  top: 60%;
+  width: 22%;
+  background: var(--live-c);
+  animation-duration: 13s;
+}
+.living-goo .g4 {
+  left: 70%;
+  top: 55%;
+  width: 30%;
+  animation-duration: 10s;
+  animation-direction: alternate-reverse;
+}
+@keyframes living-goo {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(40%, -25%) scale(1.15);
+  }
+  100% {
+    transform: translate(-30%, 20%) scale(0.85);
+  }
+}
+/* Ripples: rings spreading from a corner like circles on water. */
+.living-ripple {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 60cqmax;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--p-color, #fff) 55%, transparent);
+  transform: translate(-50%, 50%) scale(0);
+  animation: living-ripple 8s ease-out infinite;
+}
+.living-ripple.r1 {
+  animation-delay: -2s;
+}
+.living-ripple.r2 {
+  animation-delay: -4s;
+}
+.living-ripple.r3 {
+  animation-delay: -6s;
+}
+@keyframes living-ripple {
+  0% {
+    transform: translate(-50%, 50%) scale(0);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, 50%) scale(2.6);
+    opacity: 0;
+  }
+}
+/* Icons: the logo, an emoji or a picture rising, raining or circling. */
+.living-icon {
+  position: absolute;
+  left: var(--x);
+  bottom: -14%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--s);
+  height: var(--s);
+  font-size: calc(var(--s) * 0.85);
+  font-style: normal;
+  line-height: 1;
+  opacity: 0.85;
+  animation: living-rise var(--d) linear var(--t) infinite;
+}
+.living-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 22%;
+}
+.living-bg[data-kind='iconrain'] .living-icon {
+  top: -14%;
+  bottom: auto;
+  animation-name: living-fall;
+}
+.living-bg[data-kind='iconorbit'] .living-icon {
+  left: 50%;
+  top: 50%;
+  bottom: auto;
+  margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2);
+  animation: living-orbit 16s linear infinite;
+  animation-delay: var(--t);
+}
+@keyframes living-orbit {
+  from {
+    transform: rotate(0deg) translateX(34cqmin) rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg) translateX(34cqmin) rotate(-360deg);
+  }
+}

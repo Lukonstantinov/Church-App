@@ -6,6 +6,7 @@ import {
   type AnnouncementRow,
   type EventSummary,
   type GroupSummary,
+  type MeetingMotion,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
@@ -441,6 +442,16 @@ function EventRow({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
   );
 }
 
+/**
+ * A meeting tile's animation: the meeting's own (as on its screen), or the tile's own when
+ * the Design studio separates them; tuned there (speed, size, direction, colour, icon).
+ */
+function TileMotion({ motion, live }: { motion?: MeetingMotion; live?: boolean }) {
+  const look = useModuleLook('meetings');
+  const kind = look.own ? (look.motion ?? 'off') : (motion ?? 'calm');
+  return <LivingLayer kind={kind} live={live} behind tune={look.tune} icon={look.icon} />;
+}
+
 function Tile({
   onToggle,
   live,
@@ -455,7 +466,9 @@ function Tile({
   children: ReactNode;
 }) {
   const t = useT();
-  const look = useModuleLook(module);
+  const own = useModuleLook(module);
+  // A meeting tile's main animation sits in its coloured top (TileMotion); layers cover all.
+  const look = module === 'meetings' ? { ...own, motion: null } : own;
   return (
     <button
       type="button"
@@ -559,7 +572,7 @@ function MeetingTile({
       <Tile onToggle={onToggle} live={live} module="meetings">
         <LookTop look={meetingLook(m) ?? g} className="isolate flex aspect-[16/10] flex-col p-2.5">
           {/* The meeting's living animation, as on its own screen. */}
-          <LivingLayer kind={m.motion ?? 'calm'} live={live} behind />
+          <TileMotion motion={m.motion} live={live} />
           <span className="flex min-w-0 items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
             {/* While live the badge takes the label's place, so nothing spills out. */}
             {live ? (
@@ -611,7 +624,7 @@ function MeetingDayTile({
     <SoonPulse startsAt={next.startsAt} motion={next.motion} className="h-full">
       <Tile onToggle={onToggle} live={shown.some(isLive)} module="meetings">
         <LookTop look={meetingLook(list[0]!) ?? g} className="isolate flex flex-col gap-1.5 p-2">
-          <LivingLayer kind={next.motion ?? 'calm'} behind />
+          <TileMotion motion={next.motion} />
           <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
             <span>{f.relativeDay(list[0]!.startsAt)}</span>
             {soon ? (
@@ -657,13 +670,21 @@ function MeetingExpanded({
   meeting: MeetingTileData;
   onRoll?: (id: number) => void;
 }) {
+  // The meeting screen's animation, tuned in the Design studio (unless tiles have their own).
+  const meetingsLook = useModuleLook('meetings');
+  const meetingTune = meetingsLook.own ? {} : meetingsLook;
   const t = useT();
   const f = useFmt();
   const { push } = useNav();
   const rollable = onRoll && canRollNow({ status: m.status ?? 'scheduled', startsAt: m.startsAt });
   return (
     <SoonPulse startsAt={m.startsAt} cancelled={m.status === 'cancelled'} motion={m.motion}>
-      <HeroCard living={m.motion ?? 'calm'} look={meetingLook(m)}>
+      <HeroCard
+        living={m.motion ?? 'calm'}
+        look={meetingLook(m)}
+        tune={meetingTune.tune}
+        icon={meetingTune.icon}
+      >
         <SoonTimer startsAt={m.startsAt} className="mb-2" />
         <LiveNow
           startsAt={m.startsAt}

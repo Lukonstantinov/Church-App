@@ -25,6 +25,7 @@ import {
   type LiveItem,
   readScreenLook,
   ministryStudioSchema,
+  type ScreenLook,
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
@@ -135,6 +136,22 @@ async function liveItems(db: Db, ids: number[], user: User) {
 /** How long before the start the main page shows the "starting soon" button. */
 const SOON_AHEAD_MS = 2 * 3_600_000;
 
+/** Adds signed links to the uploaded icon pictures of a page's parts. */
+async function signScreenLook(look: ScreenLook, secret: string): Promise<ScreenLook> {
+  const out: ScreenLook = { ...look };
+  for (const [key, part] of Object.entries(look) as [
+    keyof ScreenLook,
+    ScreenLook[keyof ScreenLook],
+  ][]) {
+    if (part?.icon?.mediaId)
+      out[key] = {
+        ...part,
+        icon: { ...part.icon, url: await signedMediaUrl(secret, part.icon.mediaId) },
+      };
+  }
+  return out;
+}
+
 async function summarize(
   db: Db,
   user: User,
@@ -227,7 +244,7 @@ async function summarize(
         backdrop,
         backdropUrl: backdrop ? await signedMediaUrl(secret, backdrop.mediaId) : null,
         pageBackground: g.pageBackground ?? null,
-        screenLook: readScreenLook(g.screenLook),
+        screenLook: await signScreenLook(readScreenLook(g.screenLook), secret),
         live: live.get(g.id) ?? [],
         soon: soon.get(g.id) ?? [],
       };
@@ -359,6 +376,11 @@ groupRoutes.put('/:id/studio', async (c) => {
   if (!perms.has('design') && !perms.has('settings'))
     throw new HTTPException(403, { message: 'forbidden' });
   const input = await parseBody(c, ministryStudioSchema);
+  // Uploaded icon pictures must be this ministry's; their links are made when reading.
+  for (const part of Object.values(input.screenLook ?? {})) {
+    if (part?.icon?.mediaId) await assertGroupMedia(db, group.id, part.icon.mediaId);
+    if (part?.icon) part.icon.url = null;
+  }
   const patch: Partial<typeof groups.$inferInsert> = {};
   if (input.screenLook !== undefined) patch.screenLook = input.screenLook;
   if (input.animation !== undefined) patch.animation = input.animation;

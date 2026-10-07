@@ -26,6 +26,7 @@ import {
   initMeetingPoster,
   meetingPosterPayload,
 } from '../components/MeetingPosterDesigner';
+import { useMeetingTune } from '../components/ModuleSkin';
 import { PersonPicker } from '../components/PersonPicker';
 import { Sheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
@@ -111,6 +112,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
   const money = useMoney();
   const toast = useToast();
   const { push } = useNav();
+  const meetingTune = useMeetingTune(m.groupId);
   const update = useUpdateMeeting();
   // The assigned leader lands straight in the form while the place or topic is missing.
   const [editing, setEditing] = useState(
@@ -151,7 +153,13 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
   return (
     <Screen>
       <SoonPulse startsAt={m.startsAt} cancelled={cancelled} motion={m.motion}>
-        <HeroCard living={cancelled ? 'off' : m.motion} live={live} look={meetingLook(m)}>
+        <HeroCard
+          living={cancelled ? 'off' : m.motion}
+          live={live}
+          look={meetingLook(m)}
+          tune={meetingTune.tune}
+          icon={meetingTune.icon}
+        >
           <div className="mb-3 flex items-center justify-between gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">
             <span className="truncate">{m.groupName}</span>
             <span className="flex shrink-0 items-center gap-1.5 normal-case tracking-normal">

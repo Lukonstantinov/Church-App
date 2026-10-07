@@ -1,7 +1,7 @@
 import { createContext, useContext, type CSSProperties } from 'react';
 import type { MeetingMotion, ModuleLook, ScreenLook, ScreenModule } from '@church/shared';
 import { useEnv } from '../lib/env';
-import { useMe } from '../lib/queries';
+import { useGroups, useMe } from '../lib/queries';
 import { LivingLayer } from './ui';
 
 /** The Design studio shows its draft instead of what is saved. */
@@ -49,8 +49,18 @@ export function SkinLayer({ look }: { look: ModuleLook }) {
   return (
     <>
       {skinMotions(look).map((m, i) => (
-        <LivingLayer key={`${m}${i}`} kind={m} behind />
+        <LivingLayer key={`${m}${i}`} kind={m} behind tune={look.tune} icon={look.icon} />
       ))}
     </>
   );
+}
+
+/**
+ * The tuning a ministry gives its meeting animation on the meeting screen (shared with the
+ * tiles unless the tiles have their own).
+ */
+export function useMeetingTune(groupId: number): Pick<ModuleLook, 'tune' | 'icon'> {
+  const groups = useGroups();
+  const look = groups.data?.find((x) => x.id === groupId)?.screenLook.meetings;
+  return look && !look.own ? { tune: look.tune, icon: look.icon } : {};
 }

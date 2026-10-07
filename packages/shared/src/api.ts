@@ -217,8 +217,31 @@ export const MEETING_MOTIONS = [
   'lines',
   'grid',
   'grain',
+  'fireflies',
+  'confetti',
+  'warp',
+  'goo',
+  'ripples',
+  'iconfloat',
+  'iconrain',
+  'iconorbit',
 ] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
+
+/** The animations sorted by type, for the pickers. */
+export const MOTION_GROUPS: {
+  key: 'light' | 'particles' | 'liquid' | 'texture' | 'icons';
+  items: MeetingMotion[];
+}[] = [
+  { key: 'light', items: ['calm', 'lively', 'mesh', 'aurora', 'silk', 'rays'] },
+  {
+    key: 'particles',
+    items: ['stars', 'bokeh', 'embers', 'fireflies', 'bubbles', 'snow', 'confetti', 'warp'],
+  },
+  { key: 'liquid', items: ['waves', 'goo', 'ripples'] },
+  { key: 'texture', items: ['lines', 'grid', 'grain'] },
+  { key: 'icons', items: ['iconfloat', 'iconrain', 'iconorbit'] },
+];
 
 export const updateGroupSchema = z.object({
   brandColor: z.string().refine(isBrandValue, 'theme').nullable().optional(),

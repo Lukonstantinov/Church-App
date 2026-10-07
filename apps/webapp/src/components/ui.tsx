@@ -1,5 +1,11 @@
-import type { CSSProperties, ReactNode } from 'react';
-import { resolveBrand, type MeetingMotion, type PosterLook } from '@church/shared';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import {
+  resolveBrand,
+  type MeetingMotion,
+  type MotionIcon,
+  type MotionTune,
+  type PosterLook,
+} from '@church/shared';
 import { useEnv } from '../lib/env';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
@@ -390,24 +396,65 @@ export function Card({
 
 /** Solid brand-gradient card for the one most important thing on a screen. */
 /**
- * The moving wallpaper behind a card: colour drift (calm or lively), twinkling stars,
- * waves, floating lights or turning rays. Nothing for "off". Parent: relative + overflow-hidden.
+ * The moving wallpaper behind a card: colour and light (drift, aurora, silk, rays),
+ * particles (stars, lights, embers, fireflies, bubbles, snow, confetti, star warp),
+ * liquid (waves, drops, ripples), textures (lines, grid, grain) or icons (the logo, an
+ * emoji or a picture rising, raining or circling). `tune` sets its speed, size, direction
+ * and colour. Nothing for "off". Parent: relative + overflow-hidden.
  */
 export function LivingLayer({
   kind,
   live,
   behind,
+  tune,
+  icon,
 }: {
   kind: MeetingMotion;
   live?: boolean;
   /** Under the content of a block that doesn't position its children (see `skin-host`). */
   behind?: boolean;
+  tune?: MotionTune | null;
+  /** What the icon animations show (default: the ministry's or church's logo). */
+  icon?: MotionIcon | null;
 }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const { env } = useEnv();
+  const speed = tune?.speed ?? 1;
+  // Speed for every kind at once: the browser's own playback rate of its animations.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || speed === 1) return;
+    const id = requestAnimationFrame(() => {
+      for (const a of el.getAnimations({ subtree: true })) a.playbackRate = speed;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [speed, kind]);
   if (kind === 'off') return null;
+  const size = tune?.size ?? 1;
+  const angle = tune?.angle ?? 0;
+  // Turned or shrunk, the layer grows so it still covers the card.
+  const grow = angle % 180 !== 0 || size < 1 ? '-40%' : angle ? '-10%' : undefined;
+  const c = tune?.color;
+  const style = {
+    ...(behind ? { zIndex: -1 } : {}),
+    ...(grow ? { inset: grow } : {}),
+    ...(angle || size !== 1 ? { transform: `rotate(${angle}deg) scale(${size})` } : {}),
+    ...(c
+      ? {
+          '--live-a': `color-mix(in srgb, ${c} 80%, #fff)`,
+          '--live-b': c,
+          '--live-c': `color-mix(in srgb, ${c} 70%, #000)`,
+          '--p-color': c,
+        }
+      : {}),
+  } as CSSProperties;
+  const iconUrl = icon?.url ?? (icon?.emoji ? null : (env?.logoUrl ?? null));
+  const iconEmoji = icon?.emoji ?? '✨';
   return (
     <span
+      ref={ref}
       aria-hidden="true"
-      style={behind ? { zIndex: -1 } : undefined}
+      style={style}
       className="living-bg"
       data-kind={kind}
       data-live={live ? 'true' : 'false'}
@@ -452,7 +499,11 @@ export function LivingLayer({
         </>
       )}
       {kind === 'mesh' && <i className="living-mesh" />}
-      {(kind === 'embers' || kind === 'bubbles' || kind === 'snow') &&
+      {(kind === 'embers' ||
+        kind === 'bubbles' ||
+        kind === 'snow' ||
+        kind === 'fireflies' ||
+        kind === 'confetti') &&
         PARTICLES.map((p, i) => (
           <i
             key={i}
@@ -460,14 +511,46 @@ export function LivingLayer({
             style={
               {
                 '--x': `${p.x}%`,
-                '--s': `${kind === 'bubbles' ? p.s * 2.2 : p.s}px`,
+                '--y': `${(p.t * 9) % 90}%`,
+                '--s': `${kind === 'bubbles' ? p.s * 2.2 : kind === 'confetti' ? p.s * 1.4 : p.s}px`,
                 '--d': `${p.d}s`,
                 '--t': `${-p.t}s`,
                 '--w': `${p.w}px`,
+                '--i': i,
               } as CSSProperties
             }
           />
         ))}
+      {kind === 'warp' &&
+        PARTICLES.map((p, i) => (
+          <i
+            key={i}
+            className="living-warp"
+            style={
+              {
+                '--a': `${i * 30 + p.w}deg`,
+                '--d': `${p.d / 3}s`,
+                '--t': `${-p.t / 3}s`,
+              } as CSSProperties
+            }
+          />
+        ))}
+      {kind === 'goo' && (
+        <span className="living-goo">
+          {/* Blur, then a sharp alpha cut: touching drops melt into one ("metaballs"). */}
+          <svg width="0" height="0" className="absolute">
+            <filter id="living-goo">
+              <feGaussianBlur stdDeviation="7" />
+              <feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8" />
+            </filter>
+          </svg>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <i key={i} className={`g${i}`} />
+          ))}
+        </span>
+      )}
+      {kind === 'ripples' &&
+        [0, 1, 2, 3].map((i) => <i key={i} className={`living-ripple r${i}`} />)}
       {kind === 'lines' && <i className="living-lines" />}
       {kind === 'grid' && <i className="living-grid" />}
       {kind === 'grain' && (
@@ -476,13 +559,32 @@ export function LivingLayer({
           <i className="living-sweep" />
         </>
       )}
+      {(kind === 'iconfloat' || kind === 'iconrain' || kind === 'iconorbit') &&
+        PARTICLES.slice(0, kind === 'iconorbit' ? 6 : 9).map((p, i) => (
+          <i
+            key={i}
+            className="living-icon"
+            style={
+              {
+                '--x': `${p.x}%`,
+                '--s': `${10 + p.s * 3}px`,
+                '--d': `${p.d * 1.3}s`,
+                '--t': `${-p.t * 1.3}s`,
+                '--w': `${p.w}px`,
+                '--a': `${i * 60}deg`,
+              } as CSSProperties
+            }
+          >
+            {iconUrl ? <img src={iconUrl} alt="" /> : iconEmoji}
+          </i>
+        ))}
     </span>
   );
 }
 
 /**
- * Fixed spots for rising or falling particles (embers, bubbles, snow): place across, size,
- * how long one trip takes, where in its trip it starts, and how far it sways.
+ * Fixed spots for particles (embers, bubbles, snow, fireflies, confetti, icons): place
+ * across, size, how long one trip takes, where in its trip it starts, and how far it sways.
  */
 const PARTICLES = [
   { x: 6, s: 4, d: 9, t: 1, w: 14 },
@@ -504,6 +606,8 @@ export function HeroCard({
   className = '',
   living,
   live,
+  tune,
+  icon,
   look,
 }: {
   children: ReactNode;
@@ -517,6 +621,9 @@ export function HeroCard({
   living?: boolean | MeetingMotion;
   /** Something is on right now: the living wallpaper turns warm and quickens. */
   live?: boolean;
+  /** Speed, size, direction and colour of the living wallpaper (from the Design studio). */
+  tune?: MotionTune | null;
+  icon?: MotionIcon | null;
 }) {
   // Inside a ministry, its pattern decorates the hero blocks too.
   const { env } = useEnv();
@@ -539,7 +646,12 @@ export function HeroCard({
     >
       <PatternLayer pattern={src?.pattern} logoUrl={src?.logoUrl} />
       <BackdropLayer backdrop={src?.backdrop} url={src?.backdropUrl} />
-      <LivingLayer kind={living === true ? 'lively' : living || 'off'} live={live} />
+      <LivingLayer
+        kind={living === true ? 'lively' : living || 'off'}
+        live={live}
+        tune={tune}
+        icon={icon}
+      />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/15 blur-2xl"

@@ -39,6 +39,28 @@ export type ModuleSurface = (typeof MODULE_SURFACES)[number];
 
 const hex = z.string().regex(/^#[0-9a-f]{6}$/i);
 
+/** Fine-tuning of a part's animations: speed, size, direction and colour. */
+export const motionTuneSchema = z.object({
+  /** 1 = as designed; 0.25 (slow) … 3 (fast). */
+  speed: z.number().min(0.25).max(3).nullish(),
+  /** 1 = as designed; 0.5 (smaller) … 2 (bigger). */
+  size: z.number().min(0.5).max(2).nullish(),
+  /** Turns the whole animation (e.g. 90 = rising becomes sideways). */
+  angle: z.number().int().min(0).max(359).nullish(),
+  /** One colour the animation is drawn in, instead of the ministry's. */
+  color: hex.nullish(),
+});
+export type MotionTune = z.output<typeof motionTuneSchema>;
+
+/** What the icon animations show: an emoji, the logo, or an uploaded picture. */
+export const motionIconSchema = z.object({
+  emoji: z.string().trim().max(8).nullish(),
+  mediaId: z.number().int().positive().nullish(),
+  /** Filled by the server when reading (a signed link to the picture). */
+  url: z.string().max(600).nullish(),
+});
+export type MotionIcon = z.output<typeof motionIconSchema>;
+
 export const moduleLookSchema = z.object({
   /** A living animation inside the part's blocks; null/absent = none. */
   motion: z.enum(MEETING_MOTIONS).nullish(),
@@ -51,6 +73,10 @@ export const moduleLookSchema = z.object({
   angle: z.number().int().min(0).max(360).nullish(),
   /** The gradient's colours flow slowly along it. */
   flow: z.boolean().nullish(),
+  tune: motionTuneSchema.nullish(),
+  icon: motionIconSchema.nullish(),
+  /** Meetings: the tile has its own animation instead of the meeting screen's. */
+  own: z.boolean().nullish(),
 });
 export type ModuleLook = z.output<typeof moduleLookSchema>;
 
