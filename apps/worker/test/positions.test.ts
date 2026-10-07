@@ -385,6 +385,8 @@ describe('adding people and environment look', () => {
           icon: { emoji: '🔥' },
           motion: 'iconorbit',
           layers: ['goo', 'fireflies'],
+          textScale: 0.85,
+          shine: 'glint',
         },
       },
     };

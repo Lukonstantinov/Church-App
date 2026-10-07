@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import {
   ENTER_ANIMATIONS,
   MOTION_GROUPS,
@@ -40,7 +40,14 @@ import { HomeActionRow, useHomeActions } from './HomeSections';
 import { IconCalendar, IconHome, IconMenu, IconPalette, IconUsers, IconWallet } from './icons';
 import { Group, Pill } from './LookControls';
 import { LookTop } from './LookTop';
-import { ScreenLookPreview, SkinLayer, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
+import {
+  PartPhoto,
+  ScreenLookPreview,
+  SkinLayer,
+  skinClass,
+  skinStyle,
+  useModuleLook,
+} from './ModuleSkin';
 import { MotionPicker } from './MotionPicker';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
@@ -519,8 +526,9 @@ function ModuleSheet({
         {scope === 'ministry' && (
           <PhotoControls
             photo={draft.photo ?? null}
+            photo2={draft.photo2 ?? null}
             groupId={g.id}
-            onChange={(photo) => set({ photo })}
+            onChange={(photo, photo2) => set({ photo, photo2 })}
           />
         )}
 
@@ -530,6 +538,23 @@ function ModuleSheet({
             value={isFontKey(draft.font) ? draft.font : null}
             onChange={(font) => set({ font })}
           />
+          <label className="mt-3 flex flex-col gap-1">
+            <span className="flex justify-between text-[14px]">
+              <span>{t.studio.textSize}</span>
+              <span className="font-semibold tabular-nums text-hint">
+                {Math.round((draft.textScale ?? 1) * 100)}%
+              </span>
+            </span>
+            <input
+              type="range"
+              min={0.7}
+              max={1.3}
+              step={0.05}
+              value={draft.textScale ?? 1}
+              onChange={(e) => set({ textScale: Number(e.target.value) })}
+              className="w-full accent-[var(--brand)]"
+            />
+          </label>
         </Group>
 
         {draft.surface === 'gradient' && (
@@ -965,8 +990,60 @@ function IconControls({
   );
 }
 
-/** A picture inside the part, under its content, with how see-through it is. */
+/**
+ * Pictures inside the part, under its content: upload, drag to choose the spot kept in
+ * view, zoom, fill or show whole, see-through, and split into halves with a second picture.
+ */
 function PhotoControls({
+  photo,
+  photo2,
+  groupId,
+  onChange,
+}: {
+  photo: ModulePhoto | null;
+  photo2: ModulePhoto | null;
+  groupId: number;
+  onChange: (p: ModulePhoto | null, p2: ModulePhoto | null) => void;
+}) {
+  const t = useT();
+  const split = photo?.split ?? 'full';
+  return (
+    <Group title={t.studio.photo}>
+      <p className="mb-2 text-[12px] text-hint">{t.studio.photoHint}</p>
+      <div className="flex flex-col gap-4">
+        <OnePhoto
+          photo={photo}
+          groupId={groupId}
+          onChange={(p) => onChange(p, p ? photo2 : null)}
+        />
+        {photo && (
+          <div>
+            <div className="mb-2 text-[14px]">{t.studio.split}</div>
+            <div className="flex flex-wrap gap-2">
+              {(['full', 'left', 'right', 'top', 'bottom'] as const).map((x) => (
+                <Pill
+                  key={x}
+                  on={split === x}
+                  onClick={() => onChange({ ...photo, split: x }, x === 'full' ? null : photo2)}
+                  label={t.studio.splits[x]}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+        {photo && split !== 'full' && (
+          <div>
+            <div className="mb-2 text-[14px] font-semibold">{t.studio.photo2}</div>
+            <OnePhoto photo={photo2} groupId={groupId} onChange={(p) => onChange(photo, p)} />
+          </div>
+        )}
+      </div>
+    </Group>
+  );
+}
+
+/** One picture: upload or remove it, then place it (drag), zoom, fit and opacity. */
+function OnePhoto({
   photo,
   groupId,
   onChange,
@@ -978,43 +1055,105 @@ function PhotoControls({
   const t = useT();
   const toast = useToast();
   const upload = useUploadMedia(groupId, 'event');
+  const set = (patch: Partial<ModulePhoto>) => photo && onChange({ ...photo, ...patch });
+  // Dragging on the preview moves the picture: the spot kept in view follows the finger.
+  const drag = useRef<{ x: number; y: number; fx: number; fy: number } | null>(null);
   return (
-    <Group title={t.studio.photo}>
-      <p className="mb-2 text-[12px] text-hint">{t.studio.photoHint}</p>
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {photo?.url && (
-            <img src={photo.url} alt="" className="h-12 w-12 rounded-xl object-cover" />
-          )}
-          <label className="flex h-11 cursor-pointer items-center rounded-xl bg-hairline px-3 text-[14px] font-semibold">
-            {upload.isPending ? '…' : `🖼 ${t.studio.photoAdd}`}
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex h-11 cursor-pointer items-center rounded-xl bg-hairline px-3 text-[14px] font-semibold">
+          {upload.isPending ? '…' : `🖼 ${t.studio.photoAdd}`}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              try {
+                const media = await upload.mutateAsync(await preparePhoto(file));
+                onChange({
+                  ...(photo ?? { opacity: 0.35 }),
+                  mediaId: media.id,
+                  url: media.url,
+                });
+              } catch {
+                toast(t.common.saveFailed, 'error');
+              }
+            }}
+          />
+        </label>
+        {photo && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="h-11 rounded-xl bg-hairline px-3 text-[14px] font-semibold text-absent"
+          >
+            {t.studio.photoRemove}
+          </button>
+        )}
+      </div>
+      {photo?.url && (
+        <>
+          <div className="text-[12px] text-hint">{t.studio.place}</div>
+          <div
+            className="relative isolate aspect-[16/8] w-full touch-none overflow-hidden rounded-2xl bg-hairline"
+            onPointerDown={(e) => {
+              (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+              drag.current = {
+                x: e.clientX,
+                y: e.clientY,
+                fx: photo.focusX ?? 50,
+                fy: photo.focusY ?? 50,
+              };
+            }}
+            onPointerMove={(e) => {
+              const d = drag.current;
+              if (!d) return;
+              const box = e.currentTarget.getBoundingClientRect();
+              const clamp = (v: number) => Math.round(Math.max(0, Math.min(100, v)));
+              set({
+                focusX: clamp(d.fx - ((e.clientX - d.x) / box.width) * 100),
+                focusY: clamp(d.fy - ((e.clientY - d.y) / box.height) * 100),
+              });
+            }}
+            onPointerUp={() => (drag.current = null)}
+            onPointerCancel={() => (drag.current = null)}
+          >
+            <PartPhoto photo={{ ...photo, split: 'full', opacity: 1 }} />
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[22px] text-white/70">
+              ✥
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Pill
+              on={(photo.fit ?? 'cover') === 'cover'}
+              onClick={() => set({ fit: 'cover' })}
+              label={t.studio.fitCover}
+            />
+            <Pill
+              on={photo.fit === 'contain'}
+              onClick={() => set({ fit: 'contain' })}
+              label={t.studio.fitContain}
+            />
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="flex justify-between text-[14px]">
+              <span>{t.studio.zoom}</span>
+              <span className="font-semibold tabular-nums text-hint">
+                ×{(photo.zoom ?? 1).toFixed(2)}
+              </span>
+            </span>
             <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                try {
-                  const media = await upload.mutateAsync(await preparePhoto(file));
-                  onChange({ mediaId: media.id, url: media.url, opacity: photo?.opacity ?? 0.35 });
-                } catch {
-                  toast(t.common.saveFailed, 'error');
-                }
-              }}
+              type="range"
+              min={0.5}
+              max={3}
+              step={0.05}
+              value={photo.zoom ?? 1}
+              onChange={(e) => set({ zoom: Number(e.target.value) })}
+              className="w-full accent-[var(--brand)]"
             />
           </label>
-          {photo && (
-            <button
-              type="button"
-              onClick={() => onChange(null)}
-              className="h-11 rounded-xl bg-hairline px-3 text-[14px] font-semibold text-absent"
-            >
-              {t.studio.photoRemove}
-            </button>
-          )}
-        </div>
-        {photo && (
           <label className="flex flex-col gap-1">
             <span className="flex justify-between text-[14px]">
               <span>{t.studio.opacity}</span>
@@ -1028,12 +1167,12 @@ function PhotoControls({
               max={1}
               step={0.05}
               value={photo.opacity}
-              onChange={(e) => onChange({ ...photo, opacity: Number(e.target.value) })}
+              onChange={(e) => set({ opacity: Number(e.target.value) })}
               className="w-full accent-[var(--brand)]"
             />
           </label>
-        )}
-      </div>
-    </Group>
+        </>
+      )}
+    </div>
   );
 }

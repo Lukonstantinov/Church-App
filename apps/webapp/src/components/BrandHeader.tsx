@@ -1,4 +1,4 @@
-import { SkinLayer, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
+import { SkinLayer, fs, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
 import { useState, type ReactNode } from 'react';
 import { LOCALE_NAMES, LOCALES, type Locale } from '@church/shared';
 import { useEnv } from '../lib/env';
@@ -75,7 +75,10 @@ export function BrandHeader({
       <SkinLayer look={look} />
       <ChurchLogo />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] font-semibold uppercase tracking-wider text-accent">
+        <div
+          className="truncate text-[12px] font-semibold uppercase tracking-wider text-accent"
+          style={fs(12)}
+        >
           {me.data?.church.name}
         </div>
         {onTitleClick ? (
@@ -85,13 +88,27 @@ export function BrandHeader({
             aria-haspopup="dialog"
             className="-ml-0.5 flex max-w-full items-center gap-1 rounded-lg text-left active:opacity-70"
           >
-            <h1 className="truncate text-[24px] font-bold leading-tight tracking-tight">{title}</h1>
+            <h1
+              className="truncate text-[24px] font-bold leading-tight tracking-tight"
+              style={fs(24)}
+            >
+              {title}
+            </h1>
             <IconChevronDown size={20} className="mt-0.5 shrink-0 text-hint" />
           </button>
         ) : (
-          <h1 className="truncate text-[24px] font-bold leading-tight tracking-tight">{title}</h1>
+          <h1
+            className="truncate text-[24px] font-bold leading-tight tracking-tight"
+            style={fs(24)}
+          >
+            {title}
+          </h1>
         )}
-        {subtitle && <div className="truncate text-[14px] text-hint">{subtitle}</div>}
+        {subtitle && (
+          <div className="truncate text-[14px] text-hint" style={fs(14)}>
+            {subtitle}
+          </div>
+        )}
       </div>
       <BellButton />
       <LanguageButton />

@@ -691,6 +691,20 @@ export const lt: Messages = {
     archiveConfirm: 'Archyvuoti grupę? Nariai jos nebematys.',
   },
   studio: {
+    textSize: 'Teksto dydis',
+    place: 'Tempkite paveikslėlį pirštu – pasirinkite, kuri dalis matosi.',
+    zoom: 'Mastelis',
+    fitCover: 'Užpildyti',
+    fitContain: 'Visą',
+    split: 'Kur paveikslėlis',
+    splits: {
+      full: 'Visur',
+      left: 'Kairėje',
+      right: 'Dešinėje',
+      top: 'Viršuje',
+      bottom: 'Apačioje',
+    },
+    photo2: 'Antras paveikslėlis (kita pusė)',
     shine: 'Blizgesys',
     shines: {
       none: 'Be blizgesio',

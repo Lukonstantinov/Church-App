@@ -152,6 +152,9 @@ async function signScreenLook(look: ScreenLook, secret: string): Promise<ScreenL
       ...(part.photo
         ? { photo: { ...part.photo, url: await signedMediaUrl(secret, part.photo.mediaId) } }
         : {}),
+      ...(part.photo2
+        ? { photo2: { ...part.photo2, url: await signedMediaUrl(secret, part.photo2.mediaId) } }
+        : {}),
     };
   }
   return out;
@@ -385,9 +388,10 @@ groupRoutes.put('/:id/studio', async (c) => {
   for (const part of Object.values(input.screenLook ?? {})) {
     if (part?.icon?.mediaId) await assertGroupMedia(db, group.id, part.icon.mediaId);
     if (part?.icon) part.icon.url = null;
-    if (part?.photo) {
-      await assertGroupMedia(db, group.id, part.photo.mediaId);
-      part.photo.url = null;
+    for (const pic of [part?.photo, part?.photo2]) {
+      if (!pic) continue;
+      await assertGroupMedia(db, group.id, pic.mediaId);
+      pic.url = null;
     }
   }
   const patch: Partial<typeof groups.$inferInsert> = {};

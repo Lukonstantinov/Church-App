@@ -310,6 +310,7 @@ export const GUIDE: GuideSection[] = [
         steps: [
           '«Дизайн» → «Студия экранов»: a live copy of the ministry page (or, for church admins, the church main page). Tap any outlined part: header, quick buttons, calendar, meetings, posts, bottom bar (main page: header, ministry cards, profile and menu).',
           'Each part: surface (as in the app, glass, liquid glass, ministry colour, own gradient of 2–5 colours with direction and flowing, colour flow, dark, burning), edge (liquid, metal, gold, neon, rainbow, fire, glass), a picture inside with opacity (ministries), a font, an animation plus up to 2 animation layers, and tuning: speed, size, direction, colour; the icon animations show the logo, an emoji or an uploaded picture.',
+          'Pictures inside a part: drag the preview to pick the visible spot, zoom 0.5–3×, fill or whole, opacity, and split (left/right/top/bottom) with a second picture in the other half. Text size per part (70–130 %) so long names fit. Shine: soft, glint, holographic, sparkles. Tap a chosen option again to remove it.',
           'Meetings part: the meetings’ animation (meeting screen and tiles); switch «У плитки своя анимация» to give the tiles a different one.',
           'Above the copy: «Фон экрана» (page background) and «Анимация входа» (how the ministry page appears).',
           'All animation settings live here now; ministry settings and the poster sheet point to Design. Each person can still turn motion down or off for themselves in «Ещё».',

@@ -1,4 +1,4 @@
-import { SkinLayer, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
+import { SkinLayer, fs, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
 import { useState, type ReactNode } from 'react';
 import {
   fontFamily,
@@ -67,7 +67,10 @@ export function HomeActionRow({ actions }: { actions: HomeAction[] }) {
           <span className="brand-gradient flex h-9 w-9 items-center justify-center rounded-xl text-white">
             {a.icon}
           </span>
-          <span className="w-full truncate text-center text-[10px] font-semibold tracking-tight">
+          <span
+            className="w-full truncate text-center text-[10px] font-semibold tracking-tight"
+            style={fs(10)}
+          >
             {a.label}
           </span>
           {a.badge && <span className="absolute -right-1 -top-1.5">{a.badge}</span>}
@@ -588,7 +591,9 @@ function MeetingTile({
           </div>
         </LookTop>
         <div className="flex flex-col gap-0.5 p-2.5">
-          <span className="truncate text-[14px] font-semibold">{m.title}</span>
+          <span className="truncate text-[14px] font-semibold" style={fs(14)}>
+            {m.title}
+          </span>
           <span className="truncate text-[12px] text-hint">
             {f.relativeDay(m.startsAt)} · {f.time(m.startsAt)}
           </span>
@@ -654,7 +659,9 @@ function MeetingDayTile({
           </div>
         </LookTop>
         <div className="flex flex-col gap-0.5 p-2.5">
-          <span className="truncate text-[14px] font-semibold">{list[0]!.title}</span>
+          <span className="truncate text-[14px] font-semibold" style={fs(14)}>
+            {list[0]!.title}
+          </span>
           <span className="truncate text-[12px] text-hint">{t.meetings.showAllMeetings}</span>
         </div>
       </Tile>

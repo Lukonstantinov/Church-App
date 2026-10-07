@@ -70,6 +70,15 @@ export const modulePhotoSchema = z.object({
   url: z.string().max(600).nullish(),
   /** 0.05 (faint) … 1 (full). */
   opacity: z.number().min(0.05).max(1).default(0.35),
+  /** The spot of the picture kept in view, in % across and down. */
+  focusX: z.number().min(0).max(100).nullish(),
+  focusY: z.number().min(0).max(100).nullish(),
+  /** 0.5 (smaller) … 3 (zoomed in). */
+  zoom: z.number().min(0.5).max(3).nullish(),
+  /** Fill the area (cut to fit) or show the whole picture. */
+  fit: z.enum(['cover', 'contain']).nullish(),
+  /** Only part of the block: a half on one side (the other half can hold a second picture). */
+  split: z.enum(['full', 'left', 'right', 'top', 'bottom']).nullish(),
 });
 export type ModulePhoto = z.output<typeof modulePhotoSchema>;
 
@@ -114,6 +123,10 @@ export const moduleLookSchema = z.object({
   edge: z.enum(MODULE_EDGES).nullish(),
   shine: z.enum(MODULE_SHINES).nullish(),
   photo: modulePhotoSchema.nullish(),
+  /** With a split picture: a second one in the other half. */
+  photo2: modulePhotoSchema.nullish(),
+  /** Text size of the part: 0.7 (smaller, long names fit) … 1.3 (bigger). */
+  textScale: z.number().min(0.7).max(1.3).nullish(),
   /** A font for the part's text (a key of FONTS). */
   font: z.string().max(40).refine(isFontKey, 'font').nullish(),
 });

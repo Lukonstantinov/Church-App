@@ -58,6 +58,7 @@ churchRoutes.put('/studio', async (c) => {
       if (part.icon) part.icon = { emoji: part.icon.emoji ?? null };
       // No uploaded pictures on the main page (they belong to a ministry).
       delete part.photo;
+      delete part.photo2;
     }
   const patch: Partial<typeof churchSettings.$inferInsert> = {};
   if (input.screenLook !== undefined) patch.screenLook = input.screenLook;

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { SkinLayer, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
+import { SkinLayer, fs, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
 
 export interface TabDef<K extends string> {
   key: K;
@@ -49,7 +49,9 @@ export function TabBar<K extends string>({
                   </span>
                 ) : null}
               </span>
-              <span className="max-w-full truncate px-1">{t.label}</span>
+              <span className="max-w-full truncate px-1" style={fs(11)}>
+                {t.label}
+              </span>
             </button>
           );
         })}

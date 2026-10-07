@@ -687,6 +687,14 @@ export const en: Messages = {
     archiveConfirm: 'Archive this group? Members will no longer see it.',
   },
   studio: {
+    textSize: 'Text size',
+    place: 'Drag the picture with your finger to choose which part shows.',
+    zoom: 'Zoom',
+    fitCover: 'Fill',
+    fitContain: 'Whole',
+    split: 'Where the picture goes',
+    splits: { full: 'Everywhere', left: 'Left', right: 'Right', top: 'Top', bottom: 'Bottom' },
+    photo2: 'Second picture (the other half)',
     shine: 'Shine',
     shines: {
       none: 'No shine',

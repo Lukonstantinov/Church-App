@@ -8,7 +8,7 @@ import {
   type MeResponse,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
-import { SkinLayer, skinClass, skinStyle, useModuleLook } from '../components/ModuleSkin';
+import { SkinLayer, fs, skinClass, skinStyle, useModuleLook } from '../components/ModuleSkin';
 import { BurnFrame } from '../components/Burn';
 import { LiveBadge, LiveNow } from '../components/Live';
 import { CountdownBadge, hasCountdown } from '../components/Countdown';
@@ -258,8 +258,12 @@ export function EnvCard({
         </span>
       </div>
       <div className="relative mt-auto pt-4">
-        <div className="line-clamp-2 text-[18px] font-bold leading-tight">{g.name}</div>
-        <div className="mt-1 text-[13px] text-white/80">{t.common.members(g.activeCount)}</div>
+        <div className="line-clamp-2 text-[18px] font-bold leading-tight" style={fs(18)}>
+          {g.name}
+        </div>
+        <div className="mt-1 text-[13px] text-white/80" style={fs(13)}>
+          {t.common.members(g.activeCount)}
+        </div>
         {g.positionName && (
           <span className="mt-2 inline-block max-w-full truncate rounded-full bg-white/20 px-2.5 py-0.5 text-[12px] font-semibold backdrop-blur">
             {g.positionName}
