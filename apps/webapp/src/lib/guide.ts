@@ -248,7 +248,7 @@ export const GUIDE: GuideSection[] = [
           'Manual reminder: «Ещё» → «Напоминания о событиях», or the event → remind.',
           '“🔴 LIVE now” goes to everyone automatically when an event or meeting starts.',
           'That message is pinned at the top of each chat while it is on, and unpinned + deleted when it ends (checked every 5 min; worker: live_pins table, clearEndedLive in lib/outbox.ts). In group chats the bot must be an admin with “Pin messages”.',
-          'In the app: on the main page the ministry card gets a LIVE badge and a pulsing red outline (nothing else is added there); on the ministry page the meeting tile is tinted red (a red cell in a day tile).',
+          'In the app: on the main page the ministry card gets a LIVE badge and a pulsing red outline (nothing else is added there). In the 2 hours before, the card shows a red burning 🔥 button with a countdown that opens the meeting (GroupSummary.soon, SoonButton in screens/Hub.tsx); on the ministry page the meeting tile is tinted red (a red cell in a day tile).',
         ],
         note: 'Reminders are OFF for a new ministry until you choose a time.',
       },

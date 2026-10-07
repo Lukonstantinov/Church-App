@@ -59,9 +59,14 @@ export const groupRoutes = new Hono<{ Bindings: Env; Variables: AuthVariables }>
  * What is going on right now in these ministries: meetings (only those meant for the
  * person, unless they manage meetings) and events (until they end, or 3 hours).
  */
+/**
+ * Meetings and events going on now (`live`) or starting within two hours (`soon`), per
+ * ministry, for the main page. Meetings for chosen people only show to them.
+ */
 async function liveItems(db: Db, ids: number[], user: User) {
   const now = new Date().toISOString();
   const since = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  const ahead = new Date(Date.now() + SOON_AHEAD_MS).toISOString();
   const [ms, evs] = await Promise.all([
     db
       .select()
@@ -70,7 +75,7 @@ async function liveItems(db: Db, ids: number[], user: User) {
         and(
           inArray(meetings.groupId, ids),
           eq(meetings.status, 'scheduled'),
-          lte(meetings.startsAt, now),
+          lte(meetings.startsAt, ahead),
           gte(meetings.endsAt, now),
         ),
       ),
@@ -81,7 +86,7 @@ async function liveItems(db: Db, ids: number[], user: User) {
         and(
           inArray(events.groupId, ids),
           eq(events.status, 'scheduled'),
-          lte(events.startsAt, now),
+          lte(events.startsAt, ahead),
           gte(events.startsAt, since),
         ),
       ),
@@ -90,9 +95,12 @@ async function liveItems(db: Db, ids: number[], user: User) {
     db,
     ms.map((m) => m.id),
   );
-  const out = new Map<number, LiveItem[]>();
-  const add = (groupId: number, item: LiveItem) =>
+  const live = new Map<number, LiveItem[]>();
+  const soon = new Map<number, LiveItem[]>();
+  const add = (groupId: number, item: LiveItem) => {
+    const out = item.startsAt <= now ? live : soon;
     out.set(groupId, [...(out.get(groupId) ?? []), item]);
+  };
   for (const m of ms) {
     if (
       !meetingIsFor(audience, m.id, user.id) &&
@@ -118,8 +126,12 @@ async function liveItems(db: Db, ids: number[], user: User) {
       endsAt: e.endsAt,
     });
   }
-  return out;
+  for (const list of soon.values()) list.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  return { live, soon };
 }
+
+/** How long before the start the main page shows the "starting soon" button. */
+const SOON_AHEAD_MS = 2 * 3_600_000;
 
 async function summarize(
   db: Db,
@@ -172,7 +184,7 @@ async function summarize(
       ),
     unreadCounts(db, user.id, ids),
   ]);
-  const live = await liveItems(db, ids, user);
+  const { live, soon } = await liveItems(db, ids, user);
   const countBy = new Map(counts.map((c) => [c.groupId, c]));
   const mineBy = new Map(mine.map((m) => [m.groupId, m]));
   return Promise.all(
@@ -214,6 +226,7 @@ async function summarize(
         backdropUrl: backdrop ? await signedMediaUrl(secret, backdrop.mediaId) : null,
         pageBackground: g.pageBackground ?? null,
         live: live.get(g.id) ?? [],
+        soon: soon.get(g.id) ?? [],
       };
     }),
   );

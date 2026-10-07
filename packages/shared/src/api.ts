@@ -141,6 +141,8 @@ export interface GroupSummary {
   pageBackground: AppBackground | null;
   /** Meetings and events going on right now (for the LIVE marks on the main screen). */
   live: LiveItem[];
+  /** Starting within the next two hours (earliest first). */
+  soon: LiveItem[];
 }
 
 export interface LiveItem {

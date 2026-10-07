@@ -1515,3 +1515,37 @@ html[data-theme='dark'] .live-tint {
     animation: none;
   }
 }
+
+/* "Starting soon" button on a ministry card: red-orange fire that flickers, with a burning outline. */
+.soon-fire {
+  background: linear-gradient(100deg, #dc2626, #ef4444 40%, #f97316 75%, #dc2626);
+  background-size: 220% 100%;
+  animation:
+    burn-flame 1.6s ease-in-out infinite,
+    flow 3.5s linear infinite;
+}
+.soon-fire-icon {
+  display: inline-block;
+  animation: soon-flicker 1.1s ease-in-out infinite;
+  transform-origin: 50% 90%;
+}
+@keyframes soon-flicker {
+  0%,
+  100% {
+    transform: scale(1) rotate(-4deg);
+  }
+  50% {
+    transform: scale(1.18) rotate(5deg);
+  }
+}
+html[data-motion='calm'] .soon-fire,
+html[data-motion='off'] .soon-fire,
+html[data-motion='off'] .soon-fire-icon {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .soon-fire,
+  .soon-fire-icon {
+    animation: none;
+  }
+}

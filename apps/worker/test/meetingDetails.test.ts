@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { env } from 'cloudflare:workers';
 import {
   addDays,
+  type GroupSummary,
   localDate,
   DEFAULT_PATTERN,
   type ContactRow,
@@ -1821,6 +1822,32 @@ describe('live messages, speakers and repeating meetings', () => {
       pinned.map((c) => c.body.message_id).sort(),
     );
     expect(calls.filter((c) => c.method === 'unpinChatMessage')).toHaveLength(removed.length);
+  });
+
+  it('the main page knows what starts within two hours and what is live', async () => {
+    const g = await createEnv('Скоро');
+    const date = addDays(localDate(new Date(), TZ), 1);
+    const m = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, startTime: '12:00', durationMin: 60, title: 'Через час' },
+    });
+    const db = getDb(env.DB);
+    const at = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
+    const move = (from: number, to: number) =>
+      db
+        .update(meetings)
+        .set({ startsAt: at(from), endsAt: at(to) })
+        .where(eq(meetings.id, m.id));
+    const summary = async () =>
+      (await apiJson<GroupSummary[]>('/api/groups', { user: ADMIN })).find((x) => x.id === g.id)!;
+    await move(1, 2);
+    expect(await summary()).toMatchObject({ soon: [{ title: 'Через час' }], live: [] });
+    await move(-0.5, 1);
+    expect(await summary()).toMatchObject({ soon: [], live: [{ title: 'Через час' }] });
+    // More than two hours ahead: nothing yet.
+    await move(3, 4);
+    expect(await summary()).toMatchObject({ soon: [], live: [] });
   });
 
   it('does not announce an event that began long ago', async () => {

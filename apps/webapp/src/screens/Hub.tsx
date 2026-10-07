@@ -4,6 +4,7 @@ import {
   resolveBrand,
   type EventSummary,
   type GroupSummary,
+  type LiveItem,
   type MeResponse,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
@@ -22,6 +23,8 @@ import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import { useAssignments, useGroups, useMyEvents, usePinnedEvents } from '../lib/queries';
 import { useEventWhen } from '../components/EventCard';
+import { useFmt } from '../lib/format';
+import { isLiveWindow, useNowSecond } from '../lib/live';
 
 /** Main page: every ministry the person belongs to (admins: all), two per row. */
 export function Hub({ me }: { me: MeResponse }) {
@@ -191,6 +194,10 @@ export function EnvCard({
   const t = useT();
   const theme = resolveBrand(g.brandColor ?? fallbackTheme);
   const on = onBrandStyle(g.textColor, !!g.pattern || !!g.backdropUrl);
+  const now = useNowSecond() * 1000;
+  // A "starting soon" meeting becomes live by itself when its time comes.
+  const isLive = g.live.length > 0 || g.soon.some((x) => isLiveWindow(x.startsAt, x.endsAt, now));
+  const next = isLive ? undefined : g.soon.find((x) => Date.parse(x.startsAt) > now);
   const initials = g.name
     .split(/\s+/)
     .filter(Boolean)
@@ -203,7 +210,7 @@ export function EnvCard({
       type="button"
       onClick={onClick}
       className={`reveal sheen spring relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left shadow-cta ${
-        g.live.length > 0 ? 'live-ring' : ''
+        isLive ? 'live-ring' : ''
       } ${on.className}`}
       style={
         {
@@ -232,7 +239,7 @@ export function EnvCard({
           </span>
         )}
         <span className="flex items-center gap-1">
-          {g.live.length > 0 && <LiveBadge compact />}
+          {isLive && <LiveBadge compact />}
           {g.pendingCount > 0 && (
             <span className="min-w-[22px] rounded-full bg-white px-1.5 text-center text-[12px] font-bold leading-[22px] text-[var(--brand)]">
               +{g.pendingCount}
@@ -249,8 +256,56 @@ export function EnvCard({
             {g.positionName}
           </span>
         )}
+        {next && <SoonButton item={next} now={now} />}
       </div>
     </button>
+  );
+}
+
+/**
+ * On a ministry card: the next meeting or event starting within two hours, as a red
+ * burning button with a countdown. Tapping it opens that meeting (not the ministry).
+ */
+function SoonButton({ item, now }: { item: LiveItem; now: number }) {
+  const { push } = useNav();
+  const f = useFmt();
+  const left = Math.max(0, Math.floor((Date.parse(item.startsAt) - now) / 1000));
+  const h = Math.floor(left / 3600);
+  const m = Math.floor((left % 3600) / 60);
+  const s = left % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const open = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    push(
+      item.kind === 'meeting'
+        ? { name: 'meeting', meetingId: item.id }
+        : { name: 'event', eventId: item.id },
+    );
+  };
+  return (
+    // Inside the card's own button, so it is a span that behaves like a button.
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') open(e);
+      }}
+      className="soon-fire burn burn-flame mt-2.5 flex flex-col gap-0.5 rounded-2xl px-3 py-2 text-white active:scale-95"
+      style={{ '--burn': '#ff5a1f' } as React.CSSProperties}
+    >
+      <span className="flex items-center gap-1.5">
+        <span className="soon-fire-icon text-[14px]" aria-hidden="true">
+          🔥
+        </span>
+        <span className="text-[15px] font-extrabold tabular-nums">
+          {h}:{pad(m)}:{pad(s)}
+        </span>
+      </span>
+      <span className="truncate text-[12px] font-semibold opacity-95">
+        {item.title} · {f.time(item.startsAt)}
+      </span>
+    </span>
   );
 }
 
