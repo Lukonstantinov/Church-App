@@ -54,6 +54,11 @@ Deploy → Run workflow → production.
 - Comments explain _why_ in plain sentences; match the existing style and density.
 - Respect `html[data-motion]` (off / calm / lively) and `prefers-reduced-motion` for
   animations; colours via CSS vars (`--brand`, `--brand-partner`), both themes.
+- Animation performance: keyframes use fixed values only (no `var()` inside keyframes — it
+  keeps them off the GPU; vary particles by `nth-child` variants instead); animate
+  transform/opacity, not box-shadow or custom properties; animated layers live in
+  `.living-clip` (contain: strict, paused off screen via `watchOffscreen`, `lib/perf.ts`);
+  weaker phones get `html[data-lite]` (fewer particles, no SVG filters, lighter blur).
 - New public worker paths outside `/api`, `/bot`, `/media` must be added to
   `assets.run_worker_first` in `apps/worker/wrangler.jsonc`.
 

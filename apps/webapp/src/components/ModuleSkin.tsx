@@ -1,4 +1,5 @@
-import { createContext, useContext, type CSSProperties } from 'react';
+import { createContext, useContext, useEffect, useRef, type CSSProperties } from 'react';
+import { watchOffscreen } from '../lib/perf';
 import {
   fontFamily,
   type MeetingMotion,
@@ -68,8 +69,15 @@ export function skinStyle(look: ModuleLook): CSSProperties | undefined {
 
 /** The part's picture and living animations, stacked under the block's content. */
 export function SkinLayer({ look }: { look: ModuleLook }) {
+  // The block itself (edges, flowing surfaces) also pauses while off screen.
+  const marker = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const block = marker.current?.parentElement;
+    return block ? watchOffscreen(block) : undefined;
+  }, []);
   return (
     <>
+      <span ref={marker} hidden />
       {look.photo?.url && <PartPhoto photo={look.photo} />}
       {look.photo2?.url && look.photo?.split && look.photo.split !== 'full' && (
         <PartPhoto photo={{ ...look.photo2, split: OTHER_HALF[look.photo.split] }} />

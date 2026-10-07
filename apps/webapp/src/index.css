@@ -1668,7 +1668,26 @@ html[data-motion='off'] .soon-fire-icon {
     opacity: 1;
   }
   50% {
-    transform: translate(var(--w), -60cqh);
+    transform: translate(14px, -60cqh);
+  }
+  90% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(0, -125cqh);
+    opacity: 0;
+  }
+}
+@keyframes living-rise-b {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-16px, -60cqh);
   }
   90% {
     opacity: 0.9;
@@ -1687,7 +1706,23 @@ html[data-motion='off'] .soon-fire-icon {
     opacity: 1;
   }
   50% {
-    transform: translate(var(--w), 60cqh);
+    transform: translate(14px, 60cqh);
+  }
+  100% {
+    transform: translate(0, 125cqh);
+    opacity: 0.8;
+  }
+}
+@keyframes living-fall-b {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-16px, 60cqh);
   }
   100% {
     transform: translate(0, 125cqh);
@@ -1944,13 +1979,13 @@ html[data-motion='calm'] .skin-liquid::after {
     transform: translate(0, 0);
   }
   33% {
-    transform: translate(calc(var(--w) * 1.6), -14px);
+    transform: translate(22px, -14px);
   }
   66% {
-    transform: translate(calc(var(--w) * -1), 10px);
+    transform: translate(-14px, 10px);
   }
   100% {
-    transform: translate(calc(var(--w) * 0.6), -22px);
+    transform: translate(8px, -22px);
   }
 }
 @keyframes living-blink {
@@ -1981,7 +2016,7 @@ html[data-motion='calm'] .skin-liquid::after {
     opacity: 1;
   }
   50% {
-    transform: translate(var(--w), 60cqh) rotate(220deg) rotateY(180deg);
+    transform: translate(16px, 60cqh) rotate(220deg) rotateY(180deg);
   }
   100% {
     transform: translate(0, 125cqh) rotate(480deg) rotateY(360deg);
@@ -2002,14 +2037,14 @@ html[data-motion='calm'] .skin-liquid::after {
 }
 @keyframes living-warp {
   0% {
-    transform: rotate(var(--a)) translateX(4px) scaleX(0.1);
+    transform: translateX(4px) scaleX(0.1);
     opacity: 0;
   }
   20% {
     opacity: 1;
   }
   100% {
-    transform: rotate(var(--a)) translateX(75cqmax) scaleX(1.4);
+    transform: translateX(75cqmax) scaleX(1.4);
     opacity: 0;
   }
 }
@@ -2171,18 +2206,38 @@ html[data-motion='calm'] .skin-liquid::after {
 }
 /* Metallic: brushed silver with a slow glint. */
 .edge-metal::before {
-  background: linear-gradient(var(--edge-a), #f8fafc, #8b929c, #ffffff, #5b616b, #d9dde3, #8b929c);
-  animation: edge-turn 9s linear infinite;
+  background: linear-gradient(
+    115deg,
+    #f8fafc,
+    #8b929c,
+    #ffffff,
+    #5b616b,
+    #d9dde3,
+    #8b929c,
+    #f8fafc
+  );
+  background-size: 300% 100%;
+  animation: edge-slide 9s linear infinite;
 }
 .edge-gold::before {
-  background: linear-gradient(var(--edge-a), #fff6d5, #c9932c, #fff1b8, #8a5a12, #f5d27a, #c9932c);
-  animation: edge-turn 9s linear infinite;
+  background: linear-gradient(
+    115deg,
+    #fff6d5,
+    #c9932c,
+    #fff1b8,
+    #8a5a12,
+    #f5d27a,
+    #c9932c,
+    #fff6d5
+  );
+  background-size: 300% 100%;
+  animation: edge-slide 9s linear infinite;
 }
 /* Rainbow: the colours run around the edge. */
 .edge-rainbow::before {
   padding: 2.5px;
   background: conic-gradient(
-    from var(--edge-a),
+    from 0deg,
     #ef4444,
     #f59e0b,
     #22c55e,
@@ -2191,7 +2246,8 @@ html[data-motion='calm'] .skin-liquid::after {
     #d946ef,
     #ef4444
   );
-  animation: edge-turn 5s linear infinite;
+  /* The colours run round by turning their hue: done by the graphics chip, no restyling. */
+  animation: edge-hue 5s linear infinite;
 }
 .edge-glass::before {
   padding: 1.5px;
@@ -2302,16 +2358,38 @@ html[data-motion='off'] .edge {
     opacity: 1;
   }
   25% {
-    transform: translate(var(--w), 30cqh) rotate(calc(var(--r) * 0.25));
+    transform: translate(24px, 30cqh) rotate(110deg);
   }
   50% {
-    transform: translate(calc(var(--w) * -0.6), 62cqh) rotate(calc(var(--r) * 0.5));
+    transform: translate(-14px, 62cqh) rotate(220deg);
   }
   75% {
-    transform: translate(calc(var(--w) * 0.8), 92cqh) rotate(calc(var(--r) * 0.75));
+    transform: translate(18px, 92cqh) rotate(330deg);
   }
   100% {
-    transform: translate(0, 125cqh) rotate(var(--r));
+    transform: translate(0, 125cqh) rotate(440deg);
+    opacity: 0.85;
+  }
+}
+@keyframes living-leaf-b {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  25% {
+    transform: translate(-22px, 30cqh) rotate(-120deg);
+  }
+  50% {
+    transform: translate(16px, 62cqh) rotate(-240deg);
+  }
+  75% {
+    transform: translate(-18px, 92cqh) rotate(-350deg);
+  }
+  100% {
+    transform: translate(0, 125cqh) rotate(-470deg);
     opacity: 0.85;
   }
 }
@@ -2508,4 +2586,66 @@ html[data-motion='off'] .shine {
     transform: scale(1.06, 0.96) translateY(0) skewX(4deg);
     opacity: 0.88;
   }
+}
+
+/* ---------- Performance ---------- */
+@keyframes edge-slide {
+  to {
+    background-position: 300% 0;
+  }
+}
+@keyframes edge-hue {
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+/* Each animation is fenced off: its work never spills into the rest of the page. */
+.living-clip {
+  contain: strict;
+}
+/* Off screen: everything inside stands still. */
+[data-off],
+[data-off] *,
+[data-off]::before,
+[data-off]::after,
+[data-off] *::before,
+[data-off] *::after {
+  animation-play-state: paused !important;
+}
+/* Lite mode (weaker phones): no heavy distortion or blur filters, lighter glass. */
+html[data-lite='true'] .living-flames,
+html[data-lite='true'] .living-goo {
+  filter: none;
+}
+html[data-lite='true'] .living-blob,
+html[data-lite='true'] .living-aurora,
+html[data-lite='true'] .living-mesh {
+  filter: blur(14px);
+}
+html[data-lite='true'] .skin-liquid,
+html[data-lite='true'] .skin-glass {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+html[data-lite='true'] .skin-liquid::after {
+  animation: none;
+}
+
+/* Every other particle takes the mirrored path, so they don't move in step. */
+.living-p:nth-child(even) {
+  animation-name: living-rise-b;
+}
+.living-bg[data-kind='snow'] .living-p:nth-child(even),
+.living-bg[data-kind='iconrain'] .living-icon:nth-child(even) {
+  animation-name: living-fall-b;
+}
+.living-icon:nth-child(even) {
+  animation-name: living-rise-b;
+}
+.living-fallitem:nth-child(even) {
+  animation-name: living-leaf-b;
+}
+/* Star warp: each streak points its own way (a fixed turn, then the shared flight). */
+.living-warp {
+  rotate: var(--a);
 }

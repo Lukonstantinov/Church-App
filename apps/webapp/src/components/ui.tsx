@@ -7,6 +7,7 @@ import {
   type PosterLook,
 } from '@church/shared';
 import { useEnv } from '../lib/env';
+import { LITE, watchOffscreen } from '../lib/perf';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 
@@ -418,7 +419,10 @@ export function LivingLayer({
   icon?: MotionIcon | null;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const clip = useRef<HTMLSpanElement>(null);
   const { env } = useEnv();
+  // Off screen, it stands still (no work for the phone).
+  useEffect(() => (clip.current ? watchOffscreen(clip.current) : undefined), [kind]);
   const speed = tune?.speed ?? 1;
   // Speed for every kind at once: the browser's own playback rate of its animations.
   useEffect(() => {
@@ -452,7 +456,12 @@ export function LivingLayer({
   return (
     // The frame clips the animation to its block even when it is enlarged or turned
     // (iPhones don't always clip moving layers to rounded corners on their own).
-    <span aria-hidden="true" className="living-clip" style={behind ? { zIndex: -1 } : undefined}>
+    <span
+      ref={clip}
+      aria-hidden="true"
+      className="living-clip"
+      style={behind ? { zIndex: -1 } : undefined}
+    >
       <span
         ref={ref}
         style={style}
@@ -505,7 +514,7 @@ export function LivingLayer({
           kind === 'snow' ||
           kind === 'fireflies' ||
           kind === 'confetti') &&
-          PARTICLES.map((p, i) => (
+          few(PARTICLES).map((p, i) => (
             <i
               key={i}
               className="living-p"
@@ -523,7 +532,7 @@ export function LivingLayer({
             />
           ))}
         {kind === 'warp' &&
-          PARTICLES.map((p, i) => (
+          few(PARTICLES).map((p, i) => (
             <i
               key={i}
               className="living-warp"
@@ -587,7 +596,7 @@ export function LivingLayer({
           </span>
         )}
         {(kind === 'leaves' || kind === 'snowfall' || kind === 'petals') &&
-          PARTICLES.map((p, i) => (
+          few(PARTICLES).map((p, i) => (
             <i
               key={i}
               className="living-fallitem"
@@ -606,7 +615,7 @@ export function LivingLayer({
             </i>
           ))}
         {(kind === 'iconfloat' || kind === 'iconrain' || kind === 'iconorbit') &&
-          PARTICLES.slice(0, kind === 'iconorbit' ? 6 : 9).map((p, i) => (
+          few(PARTICLES.slice(0, kind === 'iconorbit' ? 6 : 9)).map((p, i) => (
             <i
               key={i}
               className="living-icon"
@@ -635,6 +644,10 @@ const SEASON_ITEMS = {
   snowfall: ['❄️', '❅', '❆', '•'],
   petals: ['🌸', '💮', '🌸', '🏵️'],
 } as const;
+
+/** Weaker phones draw every other particle. */
+const few = <T,>(list: readonly T[]): readonly T[] =>
+  LITE ? list.filter((_, i) => i % 2 === 0) : list;
 
 /**
  * Fixed spots for particles (embers, bubbles, snow, fireflies, confetti, icons): place
