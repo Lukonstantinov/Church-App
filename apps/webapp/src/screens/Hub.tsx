@@ -216,7 +216,7 @@ export function EnvCard({
     <button
       type="button"
       onClick={onClick}
-      className={`reveal sheen spring relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left shadow-cta ${
+      className={`reveal spring relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left shadow-cta ${
         isLive ? 'live-ring' : ''
       } ${on.className} ${skinClass(look)}`}
       style={
@@ -228,13 +228,13 @@ export function EnvCard({
         } as React.CSSProperties
       }
     >
+      {/* The pictures sit in a rounded frame: iPhones otherwise let them poke past the corners. */}
+      <span aria-hidden="true" className="card-clip">
+        <PatternLayer pattern={g.pattern} logoUrl={g.logoUrl} />
+        <BackdropLayer backdrop={g.backdrop} url={g.backdropUrl} />
+        <span className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15 blur-2xl" />
+      </span>
       <SkinLayer look={look} />
-      <PatternLayer pattern={g.pattern} logoUrl={g.logoUrl} />
-      <BackdropLayer backdrop={g.backdrop} url={g.backdropUrl} />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15 blur-2xl"
-      />
       <div className="relative flex items-start justify-between">
         {g.logoUrl ? (
           <img

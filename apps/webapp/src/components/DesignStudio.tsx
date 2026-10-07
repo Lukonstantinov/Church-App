@@ -3,6 +3,7 @@ import {
   ENTER_ANIMATIONS,
   MOTION_GROUPS,
   MODULE_EDGES,
+  MODULE_SHINES,
   MODULE_SURFACES,
   isFontKey,
   resolveBrand,
@@ -435,7 +436,8 @@ function ModuleSheet({
                   type="button"
                   onClick={() => {
                     haptic.tap();
-                    set({ surface: s === 'default' ? null : s });
+                    // Tapping the chosen one again goes back to the app's own look.
+                    set({ surface: s === 'default' || on ? null : s });
                   }}
                   className={`flex flex-col items-center gap-1 rounded-2xl p-1 ${on ? 'ring-2 ring-[var(--brand)]' : ''}`}
                 >
@@ -468,7 +470,7 @@ function ModuleSheet({
                   type="button"
                   onClick={() => {
                     haptic.tap();
-                    set({ edge: e === 'none' ? null : e });
+                    set({ edge: e === 'none' || on ? null : e });
                   }}
                   className={`flex flex-col items-center gap-1 rounded-2xl p-1.5 ${on ? 'ring-2 ring-[var(--brand)]' : ''}`}
                 >
@@ -479,6 +481,34 @@ function ModuleSheet({
                     className={`text-center text-[11px] leading-tight ${on ? 'font-bold text-accent' : 'text-hint'}`}
                   >
                     {t.studio.edges[e]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </Group>
+
+        <Group title={t.studio.shine}>
+          <div className="grid grid-cols-5 gap-2">
+            {MODULE_SHINES.map((x) => {
+              const on = (draft.shine ?? 'none') === x;
+              return (
+                <button
+                  key={x}
+                  type="button"
+                  onClick={() => {
+                    haptic.tap();
+                    set({ shine: x === 'none' || on ? null : x });
+                  }}
+                  className={`flex flex-col items-center gap-1 rounded-2xl p-1 ${on ? 'ring-2 ring-[var(--brand)]' : ''}`}
+                >
+                  <span className="brand-gradient relative block h-10 w-full overflow-hidden rounded-xl">
+                    {x !== 'none' && <span className={`shine shine-${x}`} />}
+                  </span>
+                  <span
+                    className={`text-center text-[11px] leading-tight ${on ? 'font-bold text-accent' : 'text-hint'}`}
+                  >
+                    {t.studio.shines[x]}
                   </span>
                 </button>
               );
@@ -820,7 +850,7 @@ function TuneControls({ tune, onChange }: { tune: MotionTune; onChange: (t: Moti
                 key={c}
                 type="button"
                 aria-label={c}
-                onClick={() => set({ color: c })}
+                onClick={() => set({ color: tune.color === c ? null : c })}
                 className={`h-8 w-8 rounded-full ring-1 ring-black/10 active:scale-90 ${
                   tune.color === c ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
                 }`}
@@ -884,7 +914,7 @@ function IconControls({
           <button
             key={e}
             type="button"
-            onClick={() => onChange({ emoji: e })}
+            onClick={() => onChange(icon?.emoji === e ? null : { emoji: e })}
             className={`h-11 w-11 rounded-xl bg-hairline text-[22px] ${
               icon?.emoji === e ? 'ring-2 ring-[var(--brand)]' : ''
             }`}

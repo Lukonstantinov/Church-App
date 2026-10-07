@@ -695,6 +695,14 @@ export const ru = {
     archiveConfirm: 'Архивировать группу? Участники больше не будут её видеть.',
   },
   studio: {
+    shine: 'Блеск',
+    shines: {
+      none: 'Без блеска',
+      soft: 'Мягкий',
+      glint: 'Блик',
+      holo: 'Голограмма',
+      sparkle: 'Искорки',
+    },
     edge: 'Край',
     edges: {
       none: 'Без края',

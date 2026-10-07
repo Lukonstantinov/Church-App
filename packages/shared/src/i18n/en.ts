@@ -687,6 +687,14 @@ export const en: Messages = {
     archiveConfirm: 'Archive this group? Members will no longer see it.',
   },
   studio: {
+    shine: 'Shine',
+    shines: {
+      none: 'No shine',
+      soft: 'Soft',
+      glint: 'Glint',
+      holo: 'Holographic',
+      sparkle: 'Sparkles',
+    },
     edge: 'Edge',
     edges: {
       none: 'No edge',

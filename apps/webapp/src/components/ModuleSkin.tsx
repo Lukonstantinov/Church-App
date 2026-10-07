@@ -39,7 +39,8 @@ export function skinClass(look: ModuleLook): string {
   const flow = look.surface === 'gradient' && look.flow ? ' skin-flow' : '';
   const moving = skinMotions(look).length || look.photo ? ' skin-host' : '';
   const edge = look.edge && look.edge !== 'none' ? ` skin edge edge-${look.edge}` : '';
-  return `${surface}${flow}${moving}${edge}`.trim();
+  const shine = look.shine && look.shine !== 'none' ? ' skin-host' : '';
+  return `${surface}${flow}${moving}${edge}${shine}`.trim();
 }
 
 /** Inline values a block needs: the own gradient (as a CSS variable). */
@@ -68,6 +69,9 @@ export function SkinLayer({ look }: { look: ModuleLook }) {
           className="pointer-events-none absolute inset-0 h-full w-full object-cover"
           style={{ zIndex: -1, opacity: look.photo.opacity }}
         />
+      )}
+      {look.shine && look.shine !== 'none' && (
+        <span aria-hidden="true" className={`shine shine-${look.shine}`} />
       )}
       {skinMotions(look).map((m, i) => (
         <LivingLayer key={`${m}${i}`} kind={m} behind tune={look.tune} icon={look.icon} />

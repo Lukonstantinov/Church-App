@@ -691,6 +691,14 @@ export const lt: Messages = {
     archiveConfirm: 'Archyvuoti grupę? Nariai jos nebematys.',
   },
   studio: {
+    shine: 'Blizgesys',
+    shines: {
+      none: 'Be blizgesio',
+      soft: 'Švelnus',
+      glint: 'Žybsnis',
+      holo: 'Holograma',
+      sparkle: 'Kibirkštėlės',
+    },
     edge: 'Kraštas',
     edges: {
       none: 'Be krašto',

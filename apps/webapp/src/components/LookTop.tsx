@@ -33,11 +33,13 @@ export function LookTop({
     : on.style;
   return (
     <div
-      className={`brand-gradient flow sheen relative overflow-hidden ${on.className} ${className}`}
+      className={`brand-gradient flow relative overflow-hidden ${on.className} ${className}`}
       style={style}
     >
-      <PatternLayer pattern={look?.pattern} logoUrl={look?.logoUrl} />
-      <BackdropLayer backdrop={look?.backdrop} url={look?.backdropUrl} />
+      <span aria-hidden="true" className="card-clip">
+        <PatternLayer pattern={look?.pattern} logoUrl={look?.logoUrl} />
+        <BackdropLayer backdrop={look?.backdrop} url={look?.backdropUrl} />
+      </span>
       <div className="relative flex min-h-full flex-1 flex-col justify-between">{children}</div>
     </div>
   );

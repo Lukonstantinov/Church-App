@@ -31,7 +31,8 @@ export function MotionPicker({
         type="button"
         onClick={() => {
           haptic.tap();
-          onChange(m);
+          // Tapping the chosen one again takes it off.
+          onChange(on && m && m !== 'off' ? (allowInherit ? null : 'off') : m);
         }}
         className={`flex flex-col items-center gap-1 rounded-2xl p-1 transition active:scale-95 ${
           on ? 'ring-2 ring-[var(--brand)]' : ''

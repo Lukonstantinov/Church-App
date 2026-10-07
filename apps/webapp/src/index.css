@@ -2258,3 +2258,103 @@ html[data-motion='off'] .edge {
     animation: none !important;
   }
 }
+
+/* The frame of a living animation (or a card's pictures): never outside the rounded shape. */
+.card-clip,
+.living-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(white, black);
+}
+
+/* ---------- Shine over a part (Design studio), above its content, never catching taps ---------- */
+.shine {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+}
+/* Soft: a wide, gentle light drifting across. */
+.shine-soft {
+  background: linear-gradient(
+    110deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.16) 45%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.16) 55%,
+    transparent 80%
+  );
+  background-size: 300% 100%;
+  animation: shine-move 9s ease-in-out infinite;
+}
+/* Glint: a thin bright streak now and then, like light on polished glass. */
+.shine-glint {
+  background: linear-gradient(
+    115deg,
+    transparent 46%,
+    rgba(255, 255, 255, 0.75) 49.5%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(255, 255, 255, 0.75) 50.5%,
+    transparent 54%
+  );
+  background-size: 350% 100%;
+  mix-blend-mode: overlay;
+  animation: shine-glint 6s cubic-bezier(0.6, 0, 0.3, 1) infinite;
+}
+/* Holographic: rainbow light shifting across the surface. */
+.shine-holo {
+  background: linear-gradient(
+    125deg,
+    rgba(255, 0, 128, 0.18),
+    rgba(255, 200, 0, 0.18),
+    rgba(0, 255, 170, 0.18),
+    rgba(0, 140, 255, 0.18),
+    rgba(190, 0, 255, 0.18),
+    rgba(255, 0, 128, 0.18)
+  );
+  background-size: 400% 400%;
+  mix-blend-mode: color-dodge;
+  animation: shine-move 8s linear infinite;
+}
+/* Sparkle: tiny lights twinkling here and there. */
+.shine-sparkle {
+  background-image:
+    radial-gradient(circle at 15% 25%, #fff 0 1.2px, transparent 2px),
+    radial-gradient(circle at 72% 18%, #fff 0 1px, transparent 1.8px),
+    radial-gradient(circle at 40% 70%, #fff 0 1.4px, transparent 2.2px),
+    radial-gradient(circle at 85% 65%, #fff 0 1px, transparent 1.8px),
+    radial-gradient(circle at 58% 42%, #fff 0 0.9px, transparent 1.6px);
+  animation: living-twinkle 2.6s ease-in-out infinite;
+}
+@keyframes shine-move {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+@keyframes shine-glint {
+  0%,
+  55% {
+    background-position: 110% 0;
+  }
+  100% {
+    background-position: -10% 0;
+  }
+}
+html[data-motion='off'] .shine {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shine {
+    animation: none !important;
+  }
+}

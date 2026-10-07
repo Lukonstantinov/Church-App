@@ -436,7 +436,6 @@ export function LivingLayer({
   const grow = angle % 180 !== 0 || size < 1 ? '-40%' : angle ? '-10%' : undefined;
   const c = tune?.color;
   const style = {
-    ...(behind ? { zIndex: -1 } : {}),
     ...(grow ? { inset: grow } : {}),
     ...(angle || size !== 1 ? { transform: `rotate(${angle}deg) scale(${size})` } : {}),
     ...(c
@@ -451,133 +450,136 @@ export function LivingLayer({
   const iconUrl = icon?.url ?? (icon?.emoji ? null : (env?.logoUrl ?? null));
   const iconEmoji = icon?.emoji ?? '✨';
   return (
-    <span
-      ref={ref}
-      aria-hidden="true"
-      style={style}
-      className="living-bg"
-      data-kind={kind}
-      data-live={live ? 'true' : 'false'}
-      data-level={kind === 'calm' ? 'calm' : 'lively'}
-    >
-      {(kind === 'calm' || kind === 'lively') && (
-        <>
-          <i className="living-blob b1" />
-          <i className="living-blob b2" />
-          <i className="living-blob b3" />
-          <i className="living-rays" />
-          <i className="living-dots" />
-          <i className="living-dots far" />
-        </>
-      )}
-      {kind === 'stars' && (
-        <>
-          <i className="living-stars" />
-          <i className="living-stars far" />
-        </>
-      )}
-      {kind === 'waves' && (
-        <>
-          <i className="living-wave w1" />
-          <i className="living-wave w2" />
-          <i className="living-wave w3" />
-        </>
-      )}
-      {kind === 'bokeh' &&
-        [0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} className={`living-bokeh k${i}`} />)}
-      {kind === 'rays' && <i className="living-rays solo" />}
-      {kind === 'aurora' && (
-        <>
-          <i className="living-aurora a1" />
-          <i className="living-aurora a2" />
-        </>
-      )}
-      {kind === 'silk' && (
-        <>
-          <i className="living-silk s1" />
-          <i className="living-silk s2" />
-        </>
-      )}
-      {kind === 'mesh' && <i className="living-mesh" />}
-      {(kind === 'embers' ||
-        kind === 'bubbles' ||
-        kind === 'snow' ||
-        kind === 'fireflies' ||
-        kind === 'confetti') &&
-        PARTICLES.map((p, i) => (
-          <i
-            key={i}
-            className="living-p"
-            style={
-              {
-                '--x': `${p.x}%`,
-                '--y': `${(p.t * 9) % 90}%`,
-                '--s': `${kind === 'bubbles' ? p.s * 2.2 : kind === 'confetti' ? p.s * 1.4 : p.s}px`,
-                '--d': `${p.d}s`,
-                '--t': `${-p.t}s`,
-                '--w': `${p.w}px`,
-                '--i': i,
-              } as CSSProperties
-            }
-          />
-        ))}
-      {kind === 'warp' &&
-        PARTICLES.map((p, i) => (
-          <i
-            key={i}
-            className="living-warp"
-            style={
-              {
-                '--a': `${i * 30 + p.w}deg`,
-                '--d': `${p.d / 3}s`,
-                '--t': `${-p.t / 3}s`,
-              } as CSSProperties
-            }
-          />
-        ))}
-      {kind === 'goo' && (
-        <span className="living-goo">
-          {/* Blur, then a sharp alpha cut: touching drops melt into one ("metaballs"). */}
-          <svg width="0" height="0" className="absolute">
-            <filter id="living-goo">
-              <feGaussianBlur stdDeviation="7" />
-              <feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8" />
-            </filter>
-          </svg>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <i key={i} className={`g${i}`} />
+    // The frame clips the animation to its block even when it is enlarged or turned
+    // (iPhones don't always clip moving layers to rounded corners on their own).
+    <span aria-hidden="true" className="living-clip" style={behind ? { zIndex: -1 } : undefined}>
+      <span
+        ref={ref}
+        style={style}
+        className="living-bg"
+        data-kind={kind}
+        data-live={live ? 'true' : 'false'}
+        data-level={kind === 'calm' ? 'calm' : 'lively'}
+      >
+        {(kind === 'calm' || kind === 'lively') && (
+          <>
+            <i className="living-blob b1" />
+            <i className="living-blob b2" />
+            <i className="living-blob b3" />
+            <i className="living-rays" />
+            <i className="living-dots" />
+            <i className="living-dots far" />
+          </>
+        )}
+        {kind === 'stars' && (
+          <>
+            <i className="living-stars" />
+            <i className="living-stars far" />
+          </>
+        )}
+        {kind === 'waves' && (
+          <>
+            <i className="living-wave w1" />
+            <i className="living-wave w2" />
+            <i className="living-wave w3" />
+          </>
+        )}
+        {kind === 'bokeh' &&
+          [0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} className={`living-bokeh k${i}`} />)}
+        {kind === 'rays' && <i className="living-rays solo" />}
+        {kind === 'aurora' && (
+          <>
+            <i className="living-aurora a1" />
+            <i className="living-aurora a2" />
+          </>
+        )}
+        {kind === 'silk' && (
+          <>
+            <i className="living-silk s1" />
+            <i className="living-silk s2" />
+          </>
+        )}
+        {kind === 'mesh' && <i className="living-mesh" />}
+        {(kind === 'embers' ||
+          kind === 'bubbles' ||
+          kind === 'snow' ||
+          kind === 'fireflies' ||
+          kind === 'confetti') &&
+          PARTICLES.map((p, i) => (
+            <i
+              key={i}
+              className="living-p"
+              style={
+                {
+                  '--x': `${p.x}%`,
+                  '--y': `${(p.t * 9) % 90}%`,
+                  '--s': `${kind === 'bubbles' ? p.s * 2.2 : kind === 'confetti' ? p.s * 1.4 : p.s}px`,
+                  '--d': `${p.d}s`,
+                  '--t': `${-p.t}s`,
+                  '--w': `${p.w}px`,
+                  '--i': i,
+                } as CSSProperties
+              }
+            />
           ))}
-        </span>
-      )}
-      {kind === 'ripples' &&
-        [0, 1, 2, 3].map((i) => <i key={i} className={`living-ripple r${i}`} />)}
-      {kind === 'lines' && <i className="living-lines" />}
-      {kind === 'grid' && <i className="living-grid" />}
-      {kind === 'grain' && (
-        <>
-          <i className="living-grain" />
-          <i className="living-sweep" />
-        </>
-      )}
-      {(kind === 'iconfloat' || kind === 'iconrain' || kind === 'iconorbit') &&
-        PARTICLES.slice(0, kind === 'iconorbit' ? 6 : 9).map((p, i) => (
-          <i
-            key={i}
-            className="living-icon"
-            style={
-              {
-                '--x': `${p.x}%`,
-                '--s': `${10 + p.s * 3}px`,
-                '--d': `${p.d * 1.3}s`,
-                '--t': `${-p.t * 1.3}s`,
-                '--w': `${p.w}px`,
-                '--a': `${i * 60}deg`,
-              } as CSSProperties
-            }
-          >
-            {iconUrl ? <img src={iconUrl} alt="" /> : iconEmoji}
-          </i>
-        ))}
+        {kind === 'warp' &&
+          PARTICLES.map((p, i) => (
+            <i
+              key={i}
+              className="living-warp"
+              style={
+                {
+                  '--a': `${i * 30 + p.w}deg`,
+                  '--d': `${p.d / 3}s`,
+                  '--t': `${-p.t / 3}s`,
+                } as CSSProperties
+              }
+            />
+          ))}
+        {kind === 'goo' && (
+          <span className="living-goo">
+            {/* Blur, then a sharp alpha cut: touching drops melt into one ("metaballs"). */}
+            <svg width="0" height="0" className="absolute">
+              <filter id="living-goo">
+                <feGaussianBlur stdDeviation="7" />
+                <feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8" />
+              </filter>
+            </svg>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <i key={i} className={`g${i}`} />
+            ))}
+          </span>
+        )}
+        {kind === 'ripples' &&
+          [0, 1, 2, 3].map((i) => <i key={i} className={`living-ripple r${i}`} />)}
+        {kind === 'lines' && <i className="living-lines" />}
+        {kind === 'grid' && <i className="living-grid" />}
+        {kind === 'grain' && (
+          <>
+            <i className="living-grain" />
+            <i className="living-sweep" />
+          </>
+        )}
+        {(kind === 'iconfloat' || kind === 'iconrain' || kind === 'iconorbit') &&
+          PARTICLES.slice(0, kind === 'iconorbit' ? 6 : 9).map((p, i) => (
+            <i
+              key={i}
+              className="living-icon"
+              style={
+                {
+                  '--x': `${p.x}%`,
+                  '--s': `${10 + p.s * 3}px`,
+                  '--d': `${p.d * 1.3}s`,
+                  '--t': `${-p.t * 1.3}s`,
+                  '--w': `${p.w}px`,
+                  '--a': `${i * 60}deg`,
+                } as CSSProperties
+              }
+            >
+              {iconUrl ? <img src={iconUrl} alt="" /> : iconEmoji}
+            </i>
+          ))}
+      </span>
     </span>
   );
 }
@@ -632,7 +634,7 @@ export function HeroCard({
   const brand = look?.brandColor ? resolveBrand(look.brandColor) : null;
   return (
     <div
-      className={`brand-gradient flow sheen relative overflow-hidden rounded-[var(--radius-card)] p-5 shadow-cta ${on.className} ${className}`}
+      className={`brand-gradient flow relative overflow-hidden rounded-[var(--radius-card)] p-5 shadow-cta ${on.className} ${className}`}
       style={
         brand
           ? ({
@@ -644,8 +646,10 @@ export function HeroCard({
           : on.style
       }
     >
-      <PatternLayer pattern={src?.pattern} logoUrl={src?.logoUrl} />
-      <BackdropLayer backdrop={src?.backdrop} url={src?.backdropUrl} />
+      <span aria-hidden="true" className="card-clip">
+        <PatternLayer pattern={src?.pattern} logoUrl={src?.logoUrl} />
+        <BackdropLayer backdrop={src?.backdrop} url={src?.backdropUrl} />
+      </span>
       <LivingLayer
         kind={living === true ? 'lively' : living || 'off'}
         live={live}

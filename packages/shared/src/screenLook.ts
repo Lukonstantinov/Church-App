@@ -56,6 +56,13 @@ export const MODULE_EDGES = [
 ] as const;
 export type ModuleEdge = (typeof MODULE_EDGES)[number];
 
+/**
+ * Light passing over a part: none, a soft wide glow drifting across, a thin bright glint now
+ * and then, an iridescent (holographic) shimmer, or tiny twinkling sparkles.
+ */
+export const MODULE_SHINES = ['none', 'soft', 'glint', 'holo', 'sparkle'] as const;
+export type ModuleShine = (typeof MODULE_SHINES)[number];
+
 /** A picture under a part's content (ministries: an uploaded photo), see-through. */
 export const modulePhotoSchema = z.object({
   mediaId: z.number().int().positive(),
@@ -105,6 +112,7 @@ export const moduleLookSchema = z.object({
   /** Meetings: the tile has its own animation instead of the meeting screen's. */
   own: z.boolean().nullish(),
   edge: z.enum(MODULE_EDGES).nullish(),
+  shine: z.enum(MODULE_SHINES).nullish(),
   photo: modulePhotoSchema.nullish(),
   /** A font for the part's text (a key of FONTS). */
   font: z.string().max(40).refine(isFontKey, 'font').nullish(),
