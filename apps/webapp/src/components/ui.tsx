@@ -7,7 +7,7 @@ import {
   type PosterLook,
 } from '@church/shared';
 import { useEnv } from '../lib/env';
-import { LITE, watchOffscreen } from '../lib/perf';
+import { useQuality, watchOffscreen } from '../lib/perf';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 
@@ -421,8 +421,9 @@ export function LivingLayer({
   const ref = useRef<HTMLSpanElement>(null);
   const clip = useRef<HTMLSpanElement>(null);
   const { env } = useEnv();
-  // Off screen, it stands still (no work for the phone).
-  useEffect(() => (clip.current ? watchOffscreen(clip.current) : undefined), [kind]);
+  const quality = useQuality();
+  // Off screen it stands still, and only a few layers run at once (no work for the phone).
+  useEffect(() => (clip.current ? watchOffscreen(clip.current, true) : undefined), [kind, quality]);
   const speed = tune?.speed ?? 1;
   // Speed for every kind at once: the browser's own playback rate of its animations.
   useEffect(() => {
@@ -433,7 +434,11 @@ export function LivingLayer({
     });
     return () => cancelAnimationFrame(id);
   }, [speed, kind]);
-  if (kind === 'off') return null;
+  // On "still" phones the animation layers aren't drawn at all.
+  if (kind === 'off' || quality === 'still') return null;
+  // Weaker phones draw every other particle.
+  const few = <T,>(list: readonly T[]): readonly T[] =>
+    quality === 'lite' ? list.filter((_, i) => i % 2 === 0) : list;
   const size = tune?.size ?? 1;
   const angle = tune?.angle ?? 0;
   // Turned or shrunk, the layer grows so it still covers the card.
@@ -644,10 +649,6 @@ const SEASON_ITEMS = {
   snowfall: ['❄️', '❅', '❆', '•'],
   petals: ['🌸', '💮', '🌸', '🏵️'],
 } as const;
-
-/** Weaker phones draw every other particle. */
-const few = <T,>(list: readonly T[]): readonly T[] =>
-  LITE ? list.filter((_, i) => i % 2 === 0) : list;
 
 /**
  * Fixed spots for particles (embers, bubbles, snow, fireflies, confetti, icons): place

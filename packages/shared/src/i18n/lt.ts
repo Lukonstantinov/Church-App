@@ -128,6 +128,15 @@ export const lt: Messages = {
     lively: 'Gyvos',
     hint: 'Kaip juda programa: švelnūs pasirodymai, srūvantys gradientai, blizgesiai. „Išjungta“ viską sustabdo.',
   },
+  quality: {
+    title: 'Grafika šiame telefone',
+    auto: 'Auto',
+    full: 'Pilna',
+    lite: 'Lengva',
+    still: 'Be judesio',
+    hint: 'Silpnesniems telefonams. „Lengva“ – mažiau dalelių, nejuda spalvos, rėmeliai ir blizgesys. „Be judesio“ – dizainas lieka, bet niekas nejuda. „Auto“ persijungia pats, kai telefonas nespėja.',
+    lowered: 'Telefonas nespėjo – animacijos lengvesnės. Pakeisti: Daugiau → Grafika',
+  },
   appBg: {
     title: 'Programos fonas',
     churchHint: 'Pagrindinio lango fonas. Kiekviena tarnystė gali turėti savo — jos nustatymuose.',

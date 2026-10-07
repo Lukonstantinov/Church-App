@@ -1,8 +1,9 @@
 import { useEffect, useMemo } from 'react';
 import { messages, type MeResponse } from '@church/shared';
-import { ToastProvider } from './components/Toast';
+import { ToastProvider, useToast } from './components/Toast';
 import { CenterMessage, ErrorState, Loading } from './components/ui';
-import { I18nProvider } from './lib/i18n';
+import { I18nProvider, useT } from './lib/i18n';
+import { QUALITY_LOWERED } from './lib/perf';
 import { NavProvider, useNav, type Route } from './lib/nav';
 import { applyBrand } from './lib/theme';
 import { useGroups, useMe } from './lib/queries';
@@ -191,6 +192,7 @@ function Gate() {
     <I18nProvider locale={me.data.user.locale}>
       <NavProvider initial={initial}>
         <Themed me={me.data}>
+          <QualityNotice />
           <Router me={me.data} />
         </Themed>
       </NavProvider>
@@ -206,4 +208,16 @@ export function App() {
       <Gate />
     </ToastProvider>
   );
+}
+
+/** Says once when "auto" made the animations lighter because the phone couldn't keep up. */
+function QualityNotice() {
+  const toast = useToast();
+  const t = useT();
+  useEffect(() => {
+    const said = () => toast(t.quality.lowered);
+    window.addEventListener(QUALITY_LOWERED, said);
+    return () => window.removeEventListener(QUALITY_LOWERED, said);
+  }, [toast, t]);
+  return null;
 }

@@ -126,6 +126,15 @@ export const en: Messages = {
     lively: 'Lively',
     hint: 'How the app moves: soft entrances, flowing gradients, sheens. “Off” keeps everything still.',
   },
+  quality: {
+    title: 'Graphics on this phone',
+    auto: 'Auto',
+    full: 'Full',
+    lite: 'Light',
+    still: 'Still',
+    hint: 'For weaker phones. “Light” draws fewer particles and stops flowing colours, edges and shine. “Still” keeps the designs but nothing moves. “Auto” switches by itself when the phone can’t keep up.',
+    lowered: 'The phone was struggling — animations are lighter now. Change: More → Graphics',
+  },
   appBg: {
     title: 'App background',
     churchHint: 'The main window background. Each ministry can have its own — in its settings.',

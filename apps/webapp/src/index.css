@@ -367,9 +367,33 @@ body::before {
     background-position: 100% 50%;
   }
 }
+/* Done as a fade between the gradient's two ends: only opacity changes, which the graphics
+   chip handles alone (moving the background itself repaints the card every frame). */
 .flow {
   background-size: 220% 220%;
-  animation: flow 14s ease-in-out infinite;
+  background-position: 0% 50%;
+  isolation: isolate;
+}
+.flow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background-image: inherit;
+  background-size: inherit;
+  background-position: 100% 50%;
+  pointer-events: none;
+  animation: flow-fade 14s ease-in-out infinite;
+}
+@keyframes flow-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* A soft sheen passes over a card now and then. */
@@ -784,7 +808,7 @@ html[data-motion='lively'] body::before {
   animation: label-bounce 1.6s ease-in-out infinite;
 }
 
-html[data-motion='calm'] .flow,
+html[data-motion='calm'] .flow::before,
 html[data-motion='calm'] .sheen::after,
 html[data-motion='calm'] .breathe,
 html[data-motion='calm'] .bob,
@@ -925,12 +949,10 @@ html[data-motion='off'] .burn-orbit::before {
 }
 @keyframes app-bg-drift {
   from {
-    background-position: 0% 0%;
-    transform: rotate(0deg) scale(1);
+    transform: rotate(0deg) scale(1.05);
   }
   to {
-    background-position: 100% 100%;
-    transform: rotate(4deg) scale(1.05);
+    transform: rotate(4deg) scale(1.12);
   }
 }
 .app-bg-breathe {
@@ -1762,9 +1784,13 @@ html[data-motion='off'] .soon-fire-icon {
   mask-image: linear-gradient(to top, #000 20%, transparent 85%);
   animation: living-grid 2.4s linear infinite;
 }
+/* One square along the floor (a moved floor, not a moved background: no repainting). */
 @keyframes living-grid {
+  from {
+    transform: perspective(200px) rotateX(48deg) translateY(0);
+  }
   to {
-    background-position: 0 34px;
+    transform: perspective(200px) rotateX(48deg) translateY(34px);
   }
 }
 /* Grain: a paper-like texture with a slow sheen passing over it. */
@@ -1796,15 +1822,17 @@ html[data-motion='off'] .soon-fire-icon {
     rgba(255, 255, 255, 0.22) 50%,
     transparent 65%
   );
-  background-size: 250% 100%;
+  /* A strip 2.5× as wide sliding across (transform, not a moving background). */
+  right: auto;
+  width: 250%;
   animation: living-sweep 5s ease-in-out infinite;
 }
 @keyframes living-sweep {
   from {
-    background-position: 130% 0;
+    transform: translateX(-78%);
   }
   to {
-    background-position: -30% 0;
+    transform: translateX(18%);
   }
 }
 /* Particles measure their trip by the card's height. */
@@ -1886,17 +1914,25 @@ html[data-motion='off'] .soon-fire-icon {
     var(--brand)
   ) !important;
   background-size: 300% 300% !important;
-  animation: skin-fluid 9s ease-in-out infinite;
+  background-position: 0% 50%;
   color: #fff;
 }
-@keyframes skin-fluid {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
+/* The colours flow by fading to the gradient's other end (opacity only, see .flow). */
+.skin-fluid::after,
+.skin-flow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  border-radius: inherit;
+  background-image: inherit;
+  background-size: inherit;
+  background-position: 100% 50%;
+  pointer-events: none;
+  animation: flow-fade 9s ease-in-out infinite;
+}
+.skin-flow::after {
+  animation-duration: 10s;
 }
 .skin-dark {
   background: rgba(16, 18, 24, 0.9) !important;
@@ -1910,7 +1946,8 @@ html[data-motion='off'] .soon-fire-icon {
     radial-gradient(120% 80% at 50% 120%, rgba(255, 106, 31, 0.35), transparent 60%),
     rgba(20, 14, 12, 0.92) !important;
   color: #fff;
-  animation: burn-flame 1.8s ease-in-out infinite;
+  /* Ten changes a second look the same for a flicker and cost a fraction of the work. */
+  animation: burn-flame 1.8s steps(18) infinite;
 }
 .skin-gradient {
   background: var(
@@ -1922,7 +1959,7 @@ html[data-motion='off'] .soon-fire-icon {
 /* A flowing own gradient: the colour list repeats, so sliding it loops smoothly. */
 .skin-gradient.skin-flow {
   background-size: 300% 300% !important;
-  animation: skin-fluid 10s ease-in-out infinite;
+  background-position: 0% 50%;
 }
 .skin-gradient .text-hint,
 .skin-brand .text-hint,
@@ -1931,15 +1968,15 @@ html[data-motion='off'] .soon-fire-icon {
 .skin-fire .text-hint {
   color: rgba(255, 255, 255, 0.7);
 }
-html[data-motion='calm'] .skin-flow,
-html[data-motion='calm'] .skin-fluid,
+html[data-motion='calm'] .skin-flow::after,
+html[data-motion='calm'] .skin-fluid::after,
 html[data-motion='calm'] .skin-fire,
 html[data-motion='calm'] .skin-liquid::after {
   animation-duration: 18s;
 }
 @media (prefers-reduced-motion: reduce) {
-  .skin-flow,
-  .skin-fluid,
+  .skin-flow::after,
+  .skin-fluid::after,
   .skin-fire,
   .skin-liquid::after {
     animation: none;
@@ -2217,7 +2254,7 @@ html[data-motion='calm'] .skin-liquid::after {
     #f8fafc
   );
   background-size: 300% 100%;
-  animation: edge-slide 9s linear infinite;
+  animation: edge-slide 9s steps(90) infinite;
 }
 .edge-gold::before {
   background: linear-gradient(
@@ -2231,7 +2268,7 @@ html[data-motion='calm'] .skin-liquid::after {
     #fff6d5
   );
   background-size: 300% 100%;
-  animation: edge-slide 9s linear infinite;
+  animation: edge-slide 9s steps(90) infinite;
 }
 /* Rainbow: the colours run around the edge. */
 .edge-rainbow::before {
@@ -2270,7 +2307,7 @@ html[data-motion='calm'] .skin-liquid::after {
     0 0 0 1.5px var(--brand-partner),
     0 0 12px 2px color-mix(in srgb, var(--brand-partner) 70%, transparent),
     inset 0 0 10px color-mix(in srgb, var(--brand-partner) 40%, transparent) !important;
-  animation: edge-neon 2.6s ease-in-out infinite;
+  animation: edge-neon 2.6s steps(26) infinite;
 }
 @keyframes edge-neon {
   50% {
@@ -2283,11 +2320,11 @@ html[data-motion='calm'] .skin-liquid::after {
 /* Burning: a flickering fire outline. */
 .edge-fire {
   --burn: #ff6a1f;
-  animation: burn-flame 1.6s ease-in-out infinite;
+  animation: burn-flame 1.6s steps(16) infinite;
 }
 /* Liquid: the corners slowly melt and re-form, with a soft glossy rim. */
 .edge-liquid {
-  animation: edge-liquid 8s ease-in-out infinite;
+  animation: edge-liquid 8s steps(80) infinite;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.55),
     0 6px 22px color-mix(in srgb, var(--brand) 30%, transparent) !important;
@@ -2405,6 +2442,22 @@ html[data-motion='off'] .edge {
   border-radius: inherit;
   pointer-events: none;
   overflow: hidden;
+  /* Makes iPhones clip the sliding light to the rounded corners too. */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(white, black);
+}
+/* The light is a wide strip sliding across (transform: the graphics chip alone moves it). */
+.shine-soft::before,
+.shine-glint::before,
+.shine-holo::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: inherit;
+  background-size: 100% 100%;
+  will-change: transform;
 }
 /* Soft: a wide, gentle light drifting across. */
 .shine-soft {
@@ -2416,7 +2469,10 @@ html[data-motion='off'] .edge {
     rgba(255, 255, 255, 0.16) 55%,
     transparent 80%
   );
-  background-size: 300% 100%;
+  background-size: 0 0;
+}
+.shine-soft::before {
+  width: 300%;
   animation: shine-move 9s ease-in-out infinite;
 }
 /* Glint: a thin bright streak now and then, like light on polished glass. */
@@ -2429,8 +2485,11 @@ html[data-motion='off'] .edge {
     rgba(255, 255, 255, 0.75) 50.5%,
     transparent 54%
   );
-  background-size: 350% 100%;
+  background-size: 0 0;
   mix-blend-mode: overlay;
+}
+.shine-glint::before {
+  width: 350%;
   animation: shine-glint 6s cubic-bezier(0.6, 0, 0.3, 1) infinite;
 }
 /* Holographic: rainbow light shifting across the surface. */
@@ -2444,8 +2503,11 @@ html[data-motion='off'] .edge {
     rgba(190, 0, 255, 0.18),
     rgba(255, 0, 128, 0.18)
   );
-  background-size: 400% 400%;
+  background-size: 0 0;
   mix-blend-mode: color-dodge;
+}
+.shine-holo::before {
+  width: 400%;
   animation: shine-move 8s linear infinite;
 }
 /* Sparkle: tiny lights twinkling here and there. */
@@ -2458,29 +2520,33 @@ html[data-motion='off'] .edge {
     radial-gradient(circle at 58% 42%, #fff 0 0.9px, transparent 1.6px);
   animation: living-twinkle 2.6s ease-in-out infinite;
 }
+/* From the strip's left end to its right end showing (the strip is N× the part's width). */
 @keyframes shine-move {
   0%,
   100% {
-    background-position: 0% 50%;
+    transform: translateX(0);
   }
   50% {
-    background-position: 100% 50%;
+    transform: translateX(-66.67%);
   }
 }
+/* A thin streak crossing from right to left, then a pause. */
 @keyframes shine-glint {
   0%,
   55% {
-    background-position: 110% 0;
+    transform: translateX(-78.57%);
   }
   100% {
-    background-position: -10% 0;
+    transform: translateX(7.14%);
   }
 }
-html[data-motion='off'] .shine {
+html[data-motion='off'] .shine,
+html[data-motion='off'] .shine::before {
   animation: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  .shine {
+  .shine,
+  .shine::before {
     animation: none !important;
   }
 }
@@ -2627,8 +2693,46 @@ html[data-lite='true'] .skin-glass {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
-html[data-lite='true'] .skin-liquid::after {
-  animation: none;
+/* Lite also keeps the looks of panels but stops what makes them move: flowing colours,
+   edges, shine, flicker and the drifting app background. The animation layers still run
+   (at most a few at once, with half the particles) and wait while the page scrolls. */
+html[data-lite='true'] .skin-liquid::after,
+html[data-lite='true'] .skin-fluid::after,
+html[data-lite='true'] .skin-flow::after,
+html[data-lite='true'] .flow::before,
+html[data-lite='true'] .skin-fire,
+html[data-lite='true'] .edge,
+html[data-lite='true'] .edge::before,
+html[data-lite='true'] .shine,
+html[data-lite='true'] .shine::before,
+html[data-lite='true'] [class*='app-bg-'],
+html[data-lite='true'] body::before {
+  animation: none !important;
+}
+html[data-lite='true'][data-scrolling] .living-clip *,
+html[data-lite='true'][data-scrolling] .living-clip *::before,
+html[data-lite='true'][data-scrolling] .living-clip *::after {
+  animation-play-state: paused !important;
+}
+/* Still: the designs stay (colours, pictures, edges), nothing decorative moves. */
+html[data-quality='still'] .sheen::after,
+html[data-quality='still'] .breathe,
+html[data-quality='still'] .bob,
+html[data-quality='still'] [class*='label-'],
+html[data-quality='still'] [class*='lk-'],
+html[data-quality='still'] .label-shimmer::after {
+  animation: none !important;
+}
+/* Small blocks (chips, the tab bar) need only a third of the particles. */
+@container (max-height: 110px) {
+  .living-p:nth-child(3n + 1),
+  .living-p:nth-child(3n + 2),
+  .living-fallitem:nth-child(3n + 1),
+  .living-fallitem:nth-child(3n + 2),
+  .living-icon:nth-child(3n + 1),
+  .living-icon:nth-child(3n + 2) {
+    display: none;
+  }
 }
 
 /* Every other particle takes the mirrored path, so they don't move in step. */

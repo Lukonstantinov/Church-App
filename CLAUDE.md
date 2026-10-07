@@ -59,6 +59,11 @@ Deploy → Run workflow → production.
   transform/opacity, not box-shadow or custom properties; animated layers live in
   `.living-clip` (contain: strict, paused off screen via `watchOffscreen`, `lib/perf.ts`);
   weaker phones get `html[data-lite]` (fewer particles, no SVG filters, lighter blur).
+  Per-phone graphics quality (More → Graphics: auto / full / lite / still, `lib/perf.ts`,
+  `html[data-quality]`): auto steps down when frames drop; still = no animation layers.
+  Running `LivingLayer`s are capped (`watchOffscreen(el, true)`); never animate
+  `background-position` or `box-shadow` smoothly — fade a pseudo copy (`flow-fade`), slide a
+  strip with transform, or use `steps()`.
 - New public worker paths outside `/api`, `/bot`, `/media` must be added to
   `assets.run_worker_first` in `apps/worker/wrangler.jsonc`.
 
