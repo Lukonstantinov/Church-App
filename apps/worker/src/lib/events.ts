@@ -27,7 +27,7 @@ import {
   type EventRow,
   type User,
 } from '../db/schema';
-import { accessIn, can } from './access';
+import { accessIn, can, designRights } from './access';
 import { posterLook, lookSources } from './looks';
 import { signedMediaUrl } from './media';
 import { speakersOf } from './meetings';
@@ -365,6 +365,7 @@ export async function eventDetail(
   user: User,
 ): Promise<EventDetail> {
   const canManage = await can(db, user, event.groupId, 'events.manage');
+  const rights = await designRights(db, user, event.groupId);
   const group = await db.query.groups.findFirst({
     columns: { name: true, brandColor: true },
     where: eq(groups.id, event.groupId),
@@ -491,6 +492,7 @@ export async function eventDetail(
     finance,
     myPaidCents: paidBy.get(user.id) ?? 0,
     canManage,
+    canDesign: rights.designer || (!rights.locked && canManage),
     member,
   };
 }

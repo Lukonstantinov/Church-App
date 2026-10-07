@@ -60,6 +60,8 @@ export interface ChurchInfo {
   sheetLabel: string | null;
   /** The main window's background (null = the default). */
   appBackground: AppBackground | null;
+  /** Only people with the designer right may change the look of meetings, events and posts. */
+  designLock: boolean;
 }
 
 export const updateMeSchema = z.object({ locale: z.enum(LOCALES) });
@@ -76,6 +78,7 @@ export const updateChurchSchema = z.object({
   brandColor: z.string().refine(isBrandValue, 'theme').optional(),
   sheetLabel: z.string().trim().max(40).nullable().optional(),
   appBackground: appBackgroundSchema.nullable().optional(),
+  designLock: z.boolean().optional(),
 });
 export type UpdateChurchInput = z.input<typeof updateChurchSchema>;
 
@@ -599,6 +602,8 @@ export interface MeetingDetail extends MeetingRow {
   canEdit: boolean;
   /** May change everything incl. leader and time. */
   canManage: boolean;
+  /** May change the poster, template and animation (designers; others unless the look is locked). */
+  canDesign: boolean;
   /** Attendance (names) for people who take the roll; null otherwise. */
   attendance:
     { userId: number; firstName: string; lastName: string | null; present: boolean }[] | null;
@@ -933,6 +938,8 @@ export interface AnnouncementRow {
   editedAt: string | null;
   canPin: boolean;
   canEdit: boolean;
+  /** May change the post's look (designers; others unless the look is locked). */
+  canDesign: boolean;
   canDelete: boolean;
 }
 
@@ -954,6 +961,8 @@ export const templateInputSchema = z.object({
   textColor: z.string().refine(isTextColor, 'text colour').default('auto'),
   logoMediaId: z.number().int().positive().nullish(),
   backdrop: backdropSchema.nullish(),
+  /** The living wallpaper meetings with this template get (null = the ministry's). */
+  motion: z.enum(MEETING_MOTIONS).nullish(),
 });
 export type TemplateInput = z.input<typeof templateInputSchema>;
 
@@ -966,6 +975,7 @@ export interface DesignTemplate {
   logoUrl: string | null;
   backdrop: BackdropConfig | null;
   backdropUrl: string | null;
+  motion: MeetingMotion | null;
   mine: boolean;
 }
 

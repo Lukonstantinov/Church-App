@@ -255,6 +255,7 @@ async function toRows(
   viewer: User,
   rows: RawRow[],
   canModerate: (groupId: number) => boolean = () => false,
+  canDesign: (groupId: number, canEdit: boolean) => boolean = (_g, e) => e,
 ): Promise<AnnouncementRow[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.a.id);
@@ -452,6 +453,7 @@ async function toRows(
         editedAt: a.editedAt,
         canPin: canModerate(a.groupId),
         canEdit,
+        canDesign: canDesign(a.groupId, canEdit),
         canDelete: author?.id === viewer.id || canModerate(a.groupId),
       };
     }),
@@ -468,6 +470,8 @@ export async function listAnnouncements(
     limit?: number;
     before?: number;
     canModerate?: (groupId: number) => boolean;
+    /** May change a post's look, given whether they may edit it (the design lock). */
+    canDesign?: (groupId: number, canEdit: boolean) => boolean;
     /** 'first': pinned posts lead the first page and are left out of the rest. */
     pinned?: 'first' | 'only';
   },
@@ -517,6 +521,7 @@ export async function listAnnouncements(
       args.viewer,
       rows.map((r) => ({ ...r, author: r.author?.id ? r.author : null })),
       args.canModerate,
+      args.canDesign,
     )),
   ];
 }

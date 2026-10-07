@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   'reports',
   'settings',
   'positions',
+  'design',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -49,6 +50,7 @@ export const PERMISSION_GROUPS: { key: string; items: Permission[] }[] = [
   { key: 'money', items: ['money.view', 'money.manage', 'reports'] },
   { key: 'events', items: ['events.manage', 'announce'] },
   { key: 'admin', items: ['settings', 'positions'] },
+  { key: 'design', items: ['design'] },
 ];
 
 /** True when the rights allow using the leader app (any management right). */

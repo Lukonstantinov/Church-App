@@ -39,6 +39,7 @@ import {
   meetingHelpers,
   meetingSchedules,
   meetings,
+  designTemplates,
   memberships,
   users,
   type Meeting,
@@ -307,6 +308,18 @@ export async function toMeetingRows(
         ).map((g) => [g.id, readMotion(g.motion)])
       : [],
   );
+  // A template's animation sits between the meeting's own and the ministry's.
+  const templateIds = [...new Set(list.map((m) => m.templateId).filter((x): x is number => !!x))];
+  const templateMotions = new Map(
+    templateIds.length
+      ? (
+          await db
+            .select({ id: designTemplates.id, motion: designTemplates.motion })
+            .from(designTemplates)
+            .where(inArray(designTemplates.id, templateIds))
+        ).map((t) => [t.id, readMotion(t.motion)])
+      : [],
+  );
   const peopleLooks = await Promise.all(list.map((m) => readPeopleLook(m.peopleLook, secret)));
   const looks = await Promise.all(
     list.map(async (m) => {
@@ -347,7 +360,11 @@ export async function toMeetingRows(
       (!m.leaderUserId && m.leaderDeclinedBy && people.get(m.leaderDeclinedBy)) || null,
     peopleLook: peopleLooks[i]!,
     helpers: helpers.get(m.id) ?? [],
-    motion: readMotion(m.motion) ?? motions.get(m.groupId) ?? 'calm',
+    motion:
+      readMotion(m.motion) ??
+      (m.templateId ? templateMotions.get(m.templateId) : null) ??
+      motions.get(m.groupId) ??
+      'calm',
     ownMotion: readMotion(m.motion),
     snackDeclined: (!m.snackUserId && m.snackDeclinedBy && people.get(m.snackDeclinedBy)) || null,
     counts: counts.get(m.id) ?? emptyCounts(),

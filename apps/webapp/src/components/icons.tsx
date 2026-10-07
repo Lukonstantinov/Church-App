@@ -210,3 +210,10 @@ export const IconTag = make(
 export const IconStar = make(
   <path d="M12 3.8l2.5 5.1 5.6.8-4.05 3.95.95 5.6L12 16.6l-5 2.65.95-5.6L3.9 9.7l5.6-.8z" />,
 );
+/** A painter's palette: the Design tab. */
+export const IconPalette = make(
+  <>
+    <path d="M12 3.5a8.5 8.5 0 100 17c1.2 0 1.8-.8 1.6-1.8-.2-1 .4-1.9 1.5-1.9h1.6a3.8 3.8 0 003.8-3.8C20.5 7.6 16.7 3.5 12 3.5z" />
+    <path d="M7.5 11.5v.1M9.5 7.8v.1M14 7.3v.1M17 10.3v.1" />
+  </>,
+);

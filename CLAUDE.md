@@ -96,6 +96,13 @@ off by default; checked every 5 min) plus manual reminders. Meeting reminders
 (`groups.meeting_motion`, per meeting `meetings.motion`);
 a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).
 
+**Design** — the `design` right ("designer") gives a Design tab (`screens/Design.tsx`): church-wide
+templates (`design_templates`, with `motion` = the meeting animation; PUT to change) with live
+previews (meeting hero, home tile, poster) and restyling of upcoming meetings/events and posts.
+Church setting `designLock`: when on, only designers (and admins) change looks — enforced in the
+meeting/event/post PATCH routes via `designRights` / `assertMayDesign` / `lookDiffers`
+(`lib/access.ts`; unchanged values resent by forms don't count); rows carry `canDesign`.
+
 **Posts & home** — posts with photos, blocks, types, looks, reactions, comments, resend;
 home tiles (drag to reorder, expand), several meetings of a day share one tile.
 

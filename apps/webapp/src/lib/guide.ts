@@ -265,6 +265,45 @@ export const GUIDE: GuideSection[] = [
     ],
   },
   {
+    key: 'design',
+    icon: '🎨',
+    title: 'Design (designer)',
+    items: [
+      {
+        title: 'Make someone a designer',
+        steps: [
+          '«Люди» → «Должности» → a position (e.g. «Дизайнер») with the right «Дизайнер» → give it to the person.',
+          'They get the «Дизайн» tab in the bottom bar of that ministry (church admins see it too).',
+        ],
+      },
+      {
+        title: 'Only the designer changes looks',
+        steps: [
+          '«Дизайн» tab → «Только дизайнеры меняют оформление» (church admins switch it).',
+          'On: posters, covers, templates, colours, animation and the people block of meetings, events and posts can be changed only by designers (and admins). Others still edit text, times and people; their look controls are hidden or greyed out with 🔒.',
+          'Off: organisers may change looks as before; designers may change looks even without other rights.',
+          'Server: churchSettings.designLock, designRights / assertMayDesign / lookDiffers in worker lib/access.ts; checked in the meeting, event and post PATCH routes (only values that actually change count).',
+        ],
+      },
+      {
+        title: 'Templates with animation',
+        steps: [
+          '«Дизайн» → «Новый шаблон»: name, colour, pattern or photo, text colour and the meeting animation (stars, waves, …).',
+          'Live previews: the meeting screen, the small home tile and the poster.',
+          'Tap a template to change or delete it (its maker or an admin). Meetings and events using it change with it.',
+          'A meeting’s animation: its own → its template’s → the ministry’s.',
+        ],
+      },
+      {
+        title: 'Restyle a meeting or event',
+        steps: [
+          '«Дизайн» → a meeting or event in the list → choose the ministry look or a template → Save.',
+          '«Открыть полный редактор» opens it for the full poster designer; posts open the post editor.',
+        ],
+      },
+    ],
+  },
+  {
     key: 'posts',
     icon: '📢',
     title: 'Posts & home page',

@@ -32,7 +32,13 @@ import {
   transactions,
   users,
 } from '../db/schema';
-import { assertCan, assertCanViewGroup } from '../lib/access';
+import {
+  assertCan,
+  assertCanViewGroup,
+  assertMayDesign,
+  designRights,
+  lookDiffers,
+} from '../lib/access';
 import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
 import {
@@ -321,9 +327,27 @@ eventRoutes.post('/:id/remind', async (c) => {
   return c.json({ sent, bot });
 });
 
+/** An event's look: designed cover, template and pictures. */
+const EVENT_LOOK = ['design', 'templateId', 'coverMediaId'] as const;
+
 eventRoutes.patch('/:id', async (c) => {
-  const { db, user, event } = await managed(c, idParam(c));
+  const db = c.get('db');
+  const user = c.get('user');
+  const event = await loadEventOr404(db, idParam(c));
+  const { canManage } = await eventAccess(db, user, event);
+  const rights = await designRights(db, user, event.groupId);
+  // A designer may change only the look of an event they can't otherwise manage.
+  if (!canManage && !rights.designer) throw new HTTPException(403, { message: 'forbidden' });
   const input = await parseBody(c, updateEventSchema);
+  const given = (Object.keys(input) as (keyof typeof input)[]).filter(
+    (k) => input[k] !== undefined,
+  );
+  // The poster picture is drawn from the event on every save, so it isn't "the look".
+  const isLook = (k: string) =>
+    (EVENT_LOOK as readonly string[]).includes(k) || k === 'posterMediaId';
+  if (EVENT_LOOK.some((k) => lookDiffers(input[k], event[k]))) assertMayDesign(rights, canManage);
+  if (!canManage && given.some((k) => !isLook(k)))
+    throw new HTTPException(403, { message: 'forbidden' });
   const patch: Partial<typeof events.$inferInsert> = {};
   if (input.title !== undefined) patch.title = input.title;
   if (input.description !== undefined) patch.description = input.description;

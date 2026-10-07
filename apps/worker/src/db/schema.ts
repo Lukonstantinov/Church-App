@@ -44,6 +44,8 @@ export const churchSettings = sqliteTable(
     sheetLabel: text('sheet_label'),
     /** The main window's background (AppBackground JSON; NULL = the default). */
     appBackground: text('app_background', { mode: 'json' }).$type<AppBackground>(),
+    /** Only people with the designer right change the look of meetings, events and posts. */
+    designLock: integer('design_lock', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [check('church_settings_singleton', sql`${t.id} = 1`)],
 );
@@ -728,6 +730,8 @@ export const designTemplates = sqliteTable('design_templates', {
   logoMediaId: integer('logo_media_id'),
   /** Photo background (BackdropConfig JSON). */
   backdrop: text('backdrop'),
+  /** Living wallpaper for meetings using it (MeetingMotion; NULL = the ministry's). */
+  motion: text('motion'),
   createdBy: integer('created_by').references(() => users.id),
   createdAt: createdAt(),
 });

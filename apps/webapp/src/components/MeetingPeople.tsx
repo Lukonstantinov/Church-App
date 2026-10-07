@@ -382,9 +382,9 @@ export function MeetingPeople({
       )}
       <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black/25" />
       <div className="relative flex flex-col gap-2.5">
-        {m.canManage && (
+        {(m.canManage || m.canDesign) && (
           <div className="flex flex-wrap justify-end gap-1.5">
-            {teamOf(m).length > 0 && (
+            {m.canManage && teamOf(m).length > 0 && (
               <button
                 type="button"
                 onClick={() => setRosterOpen(true)}
@@ -393,14 +393,16 @@ export function MeetingPeople({
                 📤 {t.bot.meetingRosterTitle}
               </button>
             )}
-            <button
-              type="button"
-              aria-label={t.meetings.peopleLookTitle}
-              onClick={() => setLookOpen(true)}
-              className="metal-action rounded-full px-3 py-1 text-[12px] font-semibold text-white"
-            >
-              🎨 {t.env.look}
-            </button>
+            {m.canDesign && (
+              <button
+                type="button"
+                aria-label={t.meetings.peopleLookTitle}
+                onClick={() => setLookOpen(true)}
+                className="metal-action rounded-full px-3 py-1 text-[12px] font-semibold text-white"
+              >
+                🎨 {t.env.look}
+              </button>
+            )}
           </div>
         )}
         {(leader || m.canManage) && (

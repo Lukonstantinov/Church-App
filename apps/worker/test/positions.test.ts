@@ -275,4 +275,75 @@ describe('adding people and environment look', () => {
     });
     expect(bad.status).toBe(400);
   });
+
+  it('with the design lock on, only designers change the look of a meeting', async () => {
+    const g = await createEnv('Дизайн');
+    const made = await apiJson<PositionRow[]>(`/api/groups/${g.id}/positions`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Дизайнер', permissions: ['design'] },
+    });
+    const withManager = await apiJson<PositionRow[]>(`/api/groups/${g.id}/positions`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Организатор', permissions: ['meetings.manage'] },
+    });
+    const designer = fakeUser('Художник');
+    const manager = fakeUser('Организатор');
+    await assign(
+      (await join(designer, g)).membershipId,
+      made.find((p) => p.name === 'Дизайнер')!.id,
+    );
+    await assign(
+      (await join(manager, g)).membershipId,
+      withManager.find((p) => p.name === 'Организатор')!.id,
+    );
+    const m = await apiJson<{ id: number }>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date: '2031-03-01', startTime: '18:00', durationMin: 60, title: 'Встреча' },
+    });
+    const patch = (user: FakeTgUser, json: unknown) =>
+      api(`/api/meetings/${m.id}`, { method: 'PATCH', user, json });
+
+    // Lock off: the manager may still change the look.
+    expect((await patch(manager, { motion: 'stars' })).status).toBe(200);
+    await apiJson('/api/church', { method: 'PATCH', user: ADMIN, json: { designLock: true } });
+    try {
+      expect((await patch(manager, { motion: 'waves' })).status).toBe(403);
+      // Sending the same look again (as forms do) with other changes is fine.
+      expect((await patch(manager, { title: 'Новая', motion: 'stars' })).status).toBe(200);
+      // The designer changes the look, but not the meeting itself.
+      expect((await patch(designer, { motion: 'bokeh' })).status).toBe(200);
+      expect((await patch(designer, { title: 'Чужая' })).status).toBe(403);
+      const seen = await apiJson<{ canDesign: boolean; motion: string }>(`/api/meetings/${m.id}`, {
+        user: manager,
+      });
+      expect(seen).toMatchObject({ canDesign: false, motion: 'bokeh' });
+
+      // A template's animation shows on meetings using it, and follows its changes.
+      const tpl = { name: 'Звёзды', brandColor: null, pattern: null, motion: 'rays' };
+      const { id: tplId } = await apiJson<{ id: number }>('/api/templates', {
+        method: 'POST',
+        user: designer,
+        json: tpl,
+      });
+      expect((await patch(designer, { templateId: tplId, motion: null })).status).toBe(200);
+      const motionNow = async () =>
+        (await apiJson<{ motion: string }>(`/api/meetings/${m.id}`, { user: manager })).motion;
+      expect(await motionNow()).toBe('rays');
+      await apiJson(`/api/templates/${tplId}`, {
+        method: 'PUT',
+        user: designer,
+        json: { ...tpl, motion: 'waves' },
+      });
+      expect(await motionNow()).toBe('waves');
+      // Someone else's template can't be changed.
+      expect(
+        (await api(`/api/templates/${tplId}`, { method: 'PUT', user: manager, json: tpl })).status,
+      ).toBe(403);
+    } finally {
+      await apiJson('/api/church', { method: 'PATCH', user: ADMIN, json: { designLock: false } });
+    }
+  });
 });

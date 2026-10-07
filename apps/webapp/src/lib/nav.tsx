@@ -11,7 +11,7 @@ import {
 import { storage } from './storage';
 import { webApp } from './telegram';
 
-export type Tab = 'overview' | 'meetings' | 'treasury' | 'people' | 'more';
+export type Tab = 'overview' | 'meetings' | 'treasury' | 'people' | 'design' | 'more';
 
 export type Route =
   | { name: 'root' }

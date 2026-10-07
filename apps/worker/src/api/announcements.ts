@@ -29,7 +29,15 @@ import {
   pollVotes,
   users,
 } from '../db/schema';
-import { accessIn, assertCan, assertCanViewGroup, groupsWithPermission } from '../lib/access';
+import {
+  accessIn,
+  assertCan,
+  assertCanViewGroup,
+  assertMayDesign,
+  designRights,
+  groupsWithPermission,
+  lookDiffers,
+} from '../lib/access';
 import { assertGroupFile, storeFile } from '../lib/files';
 import {
   contentColumns,
@@ -44,6 +52,7 @@ import { audit } from '../lib/audit';
 import { getAppUrl } from '../lib/church';
 import { assertGroupMedia, signedFileUrl, signedMediaUrl } from '../lib/media';
 import { markPostRead } from '../lib/feed';
+import { readMotion } from '../lib/meetings';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi } from '../lib/telegram';
 import { idParam, parseBody } from './util';
@@ -83,6 +92,7 @@ groupAnnouncementRoutes.get('/:id/announcements', async (c) => {
   const user = c.get('user');
   const group = await assertCanViewGroup(db, user, idParam(c));
   const moderate = (await accessIn(db, user, group.id)).perms.has('announce');
+  const rights = await designRights(db, user, group.id);
   const before = Number(c.req.query('before')) || undefined;
   return c.json(
     await listAnnouncements(db, {
@@ -91,6 +101,7 @@ groupAnnouncementRoutes.get('/:id/announcements', async (c) => {
       secret: c.env.WEBHOOK_SECRET,
       before,
       canModerate: () => moderate,
+      canDesign: (_g, canEdit) => rights.designer || (!rights.locked && canEdit),
       pinned: 'first',
     }),
   );
@@ -161,6 +172,10 @@ myAnnouncementRoutes.get('/', async (c) => {
       ),
     );
   const moderated = new Set(await groupsWithPermission(db, user.id, 'announce'));
+  const designs = new Set(await groupsWithPermission(db, user.id, 'design'));
+  const locked =
+    (await db.query.churchSettings.findFirst({ columns: { designLock: true } }))?.designLock ??
+    false;
   return c.json(
     await listAnnouncements(db, {
       groupIds: rows.map((r) => r.groupId),
@@ -169,6 +184,7 @@ myAnnouncementRoutes.get('/', async (c) => {
       limit: 5,
       pinned: 'first',
       canModerate: (g) => user.isAdmin || moderated.has(g),
+      canDesign: (g, canEdit) => user.isAdmin || designs.has(g) || (!locked && canEdit),
     }),
   );
 });
@@ -269,13 +285,26 @@ announcementRoutes.post('/:id/resend', async (c) => {
 /** Edit a post (author or moderators). Members are not notified again. */
 announcementRoutes.patch('/:id', async (c) => {
   const { db, user, post, moderate } = await loadPost(c, idParam(c));
-  if (post.authorId !== user.id && !moderate)
-    throw new HTTPException(403, { message: 'forbidden' });
+  const canEdit = post.authorId === user.id || moderate;
+  const rights = await designRights(db, user, post.groupId);
+  // A designer may change only the look of a post they can't otherwise edit.
+  if (!canEdit && !rights.designer) throw new HTTPException(403, { message: 'forbidden' });
   const input = await parseBody(c, updateAnnouncementSchema);
   await assertContent(db, post.groupId, input);
+  const next = contentColumns(input);
+  const look = ['tintColor', 'tintStrength', 'templateId', 'design'] as const;
+  // Editing sends the whole post: only what actually changed counts. The poster picture
+  // is drawn from the post on every save, so it isn't "the look".
+  const changed = (Object.keys(next) as (keyof typeof next)[]).filter(
+    (k) => k !== 'posterMediaId' && lookDiffers(next[k], post[k]),
+  );
+  const isLook = (k: string) => (look as readonly string[]).includes(k);
+  if (changed.some(isLook)) assertMayDesign(rights, canEdit);
+  if (!canEdit && changed.some((k) => !isLook(k)))
+    throw new HTTPException(403, { message: 'forbidden' });
   await db
     .update(announcements)
-    .set({ ...contentColumns(input), editedAt: new Date().toISOString() })
+    .set({ ...next, editedAt: new Date().toISOString() })
     .where(eq(announcements.id, post.id));
   await audit(db, {
     actorUserId: user.id,
@@ -392,11 +421,12 @@ async function canDesign(c: { get: (k: 'db' | 'user') => unknown }) {
   const db = c.get('db') as AuthVariables['db'];
   const user = c.get('user') as AuthVariables['user'];
   if (user.isAdmin) return true;
-  const [a, b] = await Promise.all([
+  const [a, b, d] = await Promise.all([
     groupsWithPermission(db, user.id, 'settings'),
     groupsWithPermission(db, user.id, 'announce'),
+    groupsWithPermission(db, user.id, 'design'),
   ]);
-  return a.length + b.length > 0;
+  return a.length + b.length + d.length > 0;
 }
 
 templateRoutes.get('/', async (c) => {
@@ -416,6 +446,7 @@ templateRoutes.get('/', async (c) => {
       backdropUrl: readBackdrop(r.backdrop)
         ? await signedMediaUrl(c.env.WEBHOOK_SECRET, readBackdrop(r.backdrop)!.mediaId)
         : null,
+      motion: readMotion(r.motion),
       mine: r.createdBy === user.id,
     })),
   );
@@ -441,10 +472,42 @@ templateRoutes.post('/', async (c) => {
       textColor: input.textColor,
       logoMediaId: input.logoMediaId ?? null,
       backdrop: input.backdrop ? JSON.stringify(input.backdrop) : null,
+      motion: input.motion ?? null,
       createdBy: user.id,
     })
     .returning({ id: designTemplates.id });
   return c.json({ id: row!.id }, 201);
+});
+
+/** Change a template (its maker or a church admin); everything using it follows. */
+templateRoutes.put('/:id', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const row = await db.query.designTemplates.findFirst({
+    where: eq(designTemplates.id, idParam(c)),
+  });
+  if (!row) throw new HTTPException(404, { message: 'not_found' });
+  if (row.createdBy !== user.id && !user.isAdmin)
+    throw new HTTPException(403, { message: 'forbidden' });
+  const input = await parseBody(c, templateInputSchema);
+  for (const id of [input.logoMediaId, input.backdrop?.mediaId]) {
+    if (!id) continue;
+    const m = await db.query.media.findFirst({ columns: { id: true }, where: eq(media.id, id) });
+    if (!m) throw new HTTPException(400, { message: 'invalid_media' });
+  }
+  await db
+    .update(designTemplates)
+    .set({
+      name: input.name,
+      brandColor: input.brandColor,
+      pattern: input.pattern ? JSON.stringify(input.pattern) : null,
+      textColor: input.textColor,
+      logoMediaId: input.logoMediaId ?? null,
+      backdrop: input.backdrop ? JSON.stringify(input.backdrop) : null,
+      motion: input.motion ?? null,
+    })
+    .where(eq(designTemplates.id, row.id));
+  return c.json({ id: row.id });
 });
 
 templateRoutes.delete('/:id', async (c) => {

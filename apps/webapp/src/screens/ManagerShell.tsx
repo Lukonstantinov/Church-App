@@ -1,9 +1,17 @@
 import type { GroupSummary } from '@church/shared';
-import { IconCalendar, IconHome, IconMenu, IconUsers, IconWallet } from '../components/icons';
+import {
+  IconCalendar,
+  IconHome,
+  IconMenu,
+  IconPalette,
+  IconUsers,
+  IconWallet,
+} from '../components/icons';
 import { TabBar, type TabDef } from '../components/TabBar';
 import { useEnv } from '../lib/env';
 import { useT } from '../lib/i18n';
 import { useNav, type Tab } from '../lib/nav';
+import { Design } from './Design';
 import { Meetings } from './Meetings';
 import { More } from './More';
 import { Overview } from './Overview';
@@ -36,6 +44,10 @@ export function ManagerShell({ env }: { env: GroupSummary }) {
           },
         ]
       : []),
+    // The designer's workplace: templates, previews and restyling.
+    ...(can('design')
+      ? [{ key: 'design' as const, label: t.nav.design, icon: <IconPalette /> }]
+      : []),
     { key: 'more', label: t.nav.more, icon: <IconMenu /> },
   ];
   const current = tabs.some((x) => x.key === tab) ? tab : 'overview';
@@ -47,6 +59,8 @@ export function ManagerShell({ env }: { env: GroupSummary }) {
       <Meetings groups={groups} active={env} />
     ) : current === 'treasury' ? (
       <Treasury groups={groups} active={env} />
+    ) : current === 'design' ? (
+      <Design groups={groups} active={env} />
     ) : current === 'people' ? (
       <People groups={groups} active={env} />
     ) : (

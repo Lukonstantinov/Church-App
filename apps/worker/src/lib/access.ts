@@ -118,3 +118,45 @@ export async function canManageUser(db: Db, actor: User, targetUserId: number): 
 /** Environments whose people the user may see (for the member card). */
 export const visibleGroupIds = (db: Db, userId: number) =>
   groupsWithPermission(db, userId, 'people.view');
+
+/**
+ * Who may change the look (poster, colours, template, animation) of a meeting, event or
+ * post in a ministry. Designers always may. With the church's design lock on only they
+ * (and church admins) may; with it off, so may whoever may edit the thing itself.
+ */
+export async function designRights(
+  db: Db,
+  user: User,
+  groupId: number,
+): Promise<{ designer: boolean; locked: boolean }> {
+  const [access, church] = await Promise.all([
+    accessIn(db, user, groupId),
+    db.query.churchSettings.findFirst({ columns: { designLock: true } }),
+  ]);
+  return { designer: access.perms.has('design'), locked: church?.designLock ?? false };
+}
+
+/**
+ * Whether a sent value differs from the stored one. Forms send the whole look on every
+ * save, so an unchanged look must not count as "changing the design". Objects are stored
+ * as JSON text; undefined means "not sent".
+ */
+export function lookDiffers(sent: unknown, stored: unknown): boolean {
+  if (sent === undefined) return false;
+  const norm = (v: unknown) => (v === null || v === undefined ? null : v);
+  const a = norm(sent);
+  const b = norm(stored);
+  if (a === null || b === null) return a !== b;
+  if (typeof a === 'object')
+    return JSON.stringify(a) !== (typeof b === 'string' ? b : JSON.stringify(b));
+  return a !== b;
+}
+
+/** Throws unless the person may change the look, given whether they may edit the thing. */
+export function assertMayDesign(
+  rights: { designer: boolean; locked: boolean },
+  canEdit: boolean,
+): void {
+  if (rights.designer || (!rights.locked && canEdit)) return;
+  throw new HTTPException(403, { message: rights.locked ? 'design_locked' : 'forbidden' });
+}

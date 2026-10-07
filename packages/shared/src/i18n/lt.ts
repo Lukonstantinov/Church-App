@@ -43,6 +43,7 @@ export const lt: Messages = {
     more: 'Daugiau',
     group: 'Grupė',
     treasury: 'Kasa',
+    design: 'Dizainas',
   },
   language: {
     title: 'Kalba',
@@ -656,6 +657,43 @@ export const lt: Messages = {
     archive: 'Archyvuoti grupę',
     archiveConfirm: 'Archyvuoti grupę? Nariai jos nebematys.',
   },
+  design: {
+    title: 'Dizainas',
+    subtitle: 'Šablonai ir susitikimų, renginių bei įrašų išvaizda',
+    lockedHint: 'Išvaizdą keičia dizaineris',
+    lockOn: 'Išvaizdą keičia tik dizaineriai',
+    lockOff: 'Išvaizdą gali keisti ir organizatoriai',
+    lockToggle: 'Tik dizaineriai keičia išvaizdą',
+    lockHint:
+      'Dizaineris – pareigos su teise „Dizaineris“ (Žmonės → Pareigos). Bažnyčios administratoriai gali viską.',
+    templates: 'Šablonai',
+    templatesHint:
+      'Spalva, raštas, nuotrauka ir animacija. Susitikimai ir renginiai su šablonu keičiasi kartu.',
+    newTemplate: 'Naujas šablonas',
+    editTemplate: 'Šablonas',
+    templateName: 'Šablono pavadinimas',
+    color: 'Spalva',
+    motion: 'Susitikimo animacija',
+    motionInherit: 'Kaip tarnystės',
+    deleteTemplate: 'Ištrinti šabloną',
+    deleteConfirm:
+      'Ištrinti šabloną? Susitikimai ir renginiai su juo grįš prie tarnystės išvaizdos.',
+    previewApp: 'Programėlėje',
+    previewPoster: 'Plakatas',
+    previewTile: 'Plytelė',
+    sampleTitle: 'Jaunimo susitikimas',
+    sampleTopic: 'Pasaulio šviesa',
+    sampleLocation: 'Didžioji salė',
+    meetings: 'Artimiausi susitikimai',
+    events: 'Renginiai',
+    posts: 'Įrašai',
+    nothing: 'Kol kas nieko',
+    ministryLook: 'Kaip tarnystės',
+    ownLook: 'Sava išvaizda',
+    apply: 'Išvaizda',
+    openEditor: 'Atidaryti pilną redaktorių',
+    noRights: 'Nėra teisės keisti išvaizdos',
+  },
   settings: {
     botPhoto: 'Boto nuotrauka ir piktograma telefone',
     botPhotoHint:
@@ -1175,6 +1213,7 @@ export const lt: Messages = {
       money: 'Kasa',
       events: 'Renginiai ir skelbimai',
       admin: 'Valdymas',
+      design: 'Dizainas',
     },
     perm: {
       'people.view': 'Matyti narius',
@@ -1188,6 +1227,7 @@ export const lt: Messages = {
       announce: 'Siųsti skelbimus',
       settings: 'Tarnystės nustatymai (pavadinimas, tema, pokalbis)',
       positions: 'Pareigos ir teisės',
+      design: 'Dizaineris: plakatai, šablonai ir susitikimų, renginių bei įrašų išvaizda',
     },
   },
   env: {

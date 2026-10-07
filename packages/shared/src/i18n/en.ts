@@ -42,6 +42,7 @@ export const en: Messages = {
     more: 'More',
     group: 'Group',
     treasury: 'Money',
+    design: 'Design',
   },
   language: {
     title: 'Language',
@@ -652,6 +653,43 @@ export const en: Messages = {
     archive: 'Archive group',
     archiveConfirm: 'Archive this group? Members will no longer see it.',
   },
+  design: {
+    title: 'Design',
+    subtitle: 'Templates and the look of meetings, events and posts',
+    lockedHint: 'The look is changed by the designer',
+    lockOn: 'Only designers change the look',
+    lockOff: 'Organisers may change the look too',
+    lockToggle: 'Only designers change the look',
+    lockHint:
+      'A designer is a position with the “Designer” right (People → Positions). Church admins can do everything.',
+    templates: 'Templates',
+    templatesHint:
+      'Colour, pattern, photo and animation. Meetings and events using a template change with it.',
+    newTemplate: 'New template',
+    editTemplate: 'Template',
+    templateName: 'Template name',
+    color: 'Colour',
+    motion: 'Meeting animation',
+    motionInherit: 'Like the ministry',
+    deleteTemplate: 'Delete template',
+    deleteConfirm:
+      'Delete the template? Meetings and events using it go back to the ministry look.',
+    previewApp: 'In the app',
+    previewPoster: 'Poster',
+    previewTile: 'Tile',
+    sampleTitle: 'Youth meeting',
+    sampleTopic: 'Light of the world',
+    sampleLocation: 'Main hall',
+    meetings: 'Upcoming meetings',
+    events: 'Events',
+    posts: 'Posts',
+    nothing: 'Nothing yet',
+    ministryLook: 'Like the ministry',
+    ownLook: 'Own look',
+    apply: 'Look',
+    openEditor: 'Open the full editor',
+    noRights: 'No right to change the look',
+  },
   settings: {
     botPhoto: 'Bot photo and phone icon',
     botPhotoHint:
@@ -1161,6 +1199,7 @@ export const en: Messages = {
       money: 'Money',
       events: 'Events and announcements',
       admin: 'Management',
+      design: 'Design',
     },
     perm: {
       'people.view': 'See members',
@@ -1174,6 +1213,7 @@ export const en: Messages = {
       announce: 'Send announcements',
       settings: 'Ministry settings (name, theme, chat)',
       positions: 'Positions and rights',
+      design: 'Designer: posters, templates and the look of meetings, events and posts',
     },
   },
   env: {

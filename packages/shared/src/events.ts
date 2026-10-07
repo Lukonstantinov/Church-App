@@ -222,6 +222,8 @@ export interface EventDetail extends EventSummary {
   /** What the requester has paid for this event. */
   myPaidCents: number;
   canManage: boolean;
+  /** May change the cover and template (designers; others unless the look is locked). */
+  canDesign: boolean;
   /** Belongs to the ministry (can answer RSVP); false when seeing a pinned event. */
   member: boolean;
 }

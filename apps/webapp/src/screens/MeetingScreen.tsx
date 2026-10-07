@@ -197,7 +197,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           {m.speakers.length > 0 && (
             <SpeakerStrip speakers={m.speakers} size="md" onColor className="mt-4" />
           )}
-          {m.canManage && (
+          {m.canDesign && (
             <button
               type="button"
               onClick={() => setPosterOpen(true)}

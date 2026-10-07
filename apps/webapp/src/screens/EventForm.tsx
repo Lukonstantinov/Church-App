@@ -50,6 +50,7 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { preparePhoto } from '../lib/image';
+import { useMayDesign } from '../lib/env';
 import { useNav } from '../lib/nav';
 import {
   useCreateEvent,
@@ -112,6 +113,9 @@ function EventFormBody({
   const announce = useSendAnnouncement(groupId);
   const upload = useUploadMedia(groupId, 'event');
   const fileInput = useRef<HTMLInputElement>(null);
+  // With looks locked to designers, others keep the cover as it is.
+  const mayDesignHere = useMayDesign();
+  const mayDesign = event ? event.canDesign : mayDesignHere;
 
   const [title, setTitle] = useState(event?.title ?? '');
   const [description, setDescription] = useState(event?.description ?? '');
@@ -285,7 +289,7 @@ function EventFormBody({
       {cover ? (
         <div className="relative overflow-hidden rounded-[var(--radius-card)] shadow-card">
           <img src={cover.url} alt="" className="aspect-[16/9] w-full object-cover" />
-          <div className="absolute bottom-2 right-2 flex gap-2">
+          <div className={`absolute bottom-2 right-2 flex gap-2 ${mayDesign ? '' : 'hidden'}`}>
             <button
               type="button"
               onClick={() => fileInput.current?.click()}
@@ -318,13 +322,14 @@ function EventFormBody({
               type="button"
               onClick={() => fileInput.current?.click()}
               disabled={upload.isPending}
+              hidden={!mayDesign}
               className="absolute right-2 top-2 flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[13px] font-semibold text-white backdrop-blur"
             >
               <IconCamera size={16} /> {upload.isPending ? t.treasury.uploading : t.events.addCover}
             </button>
           </div>
         </div>
-      ) : (
+      ) : !mayDesign ? null : (
         <button
           type="button"
           onClick={() => fileInput.current?.click()}
@@ -354,7 +359,7 @@ function EventFormBody({
         </div>
       </div>
 
-      {!cover && (
+      {!cover && mayDesign && (
         <Section title={t.events.coverLook} footer={t.events.coverLookHint}>
           <Toggle
             label={t.feed.showCover}
@@ -433,7 +438,10 @@ function EventFormBody({
           onChange={setCountdown}
         />
         {countdown && (
-          <div className="flex flex-col gap-3.5 px-4 pb-4 pt-1">
+          <fieldset
+            disabled={!mayDesign}
+            className="flex flex-col gap-3.5 px-4 pb-4 pt-1 disabled:opacity-60"
+          >
             <div className="flex min-h-[44px] items-center">
               <CountdownBadge
                 startsAt={new Date(`${date}T${startTime || '00:00'}`).toISOString()}
@@ -479,12 +487,15 @@ function EventFormBody({
                 })}
               </div>
             </div>
-          </div>
+          </fieldset>
         )}
       </Section>
 
-      <Section title={t.events.burnTitle} footer={t.events.burnHint}>
-        <div className="flex flex-col gap-3.5 p-3">
+      <Section
+        title={t.events.burnTitle}
+        footer={mayDesign ? t.events.burnHint : `🔒 ${t.design.lockedHint}`}
+      >
+        <fieldset disabled={!mayDesign} className="flex flex-col gap-3.5 p-3 disabled:opacity-60">
           <div className="flex flex-wrap gap-2">
             {BURN_STYLES.map((b) => (
               <Pill
@@ -553,7 +564,7 @@ function EventFormBody({
               </div>
             </>
           )}
-        </div>
+        </fieldset>
       </Section>
 
       <section>

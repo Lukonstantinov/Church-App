@@ -43,6 +43,7 @@ import {
 } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { preparePhoto } from '../lib/image';
+import { useMayDesign } from '../lib/env';
 import { useNav } from '../lib/nav';
 import {
   useEditPost,
@@ -85,6 +86,9 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
   const publish = useSendAnnouncement(groupId);
   const save = useEditPost(groupId);
   const fileInput = useRef<HTMLInputElement>(null);
+  // With looks locked to designers, others keep the type, cover and tint as they are.
+  const mayDesignHere = useMayDesign();
+  const mayDesign = post ? post.canDesign : mayDesignHere;
   const [title, setTitle] = useState(post?.title ?? '');
   const [text, setText] = useState(post?.text ?? '');
   const [photos, setPhotos] = useState<{ id: number; url: string }[]>(post?.photos ?? []);
@@ -159,9 +163,19 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
       title: title.trim() || null,
       text: text.trim(),
       mediaIds: photos.map((p) => p.id),
-      tintColor: photos.length && tintColor ? tintColor : null,
-      tintStrength: photos.length && tintColor ? tintStrength : null,
-      ...coverPayload(cover, templateId),
+      ...(post && !mayDesign
+        ? // Not theirs to change: the look goes back exactly as it was.
+          {
+            tintColor: post.tint?.color ?? null,
+            tintStrength: post.tint?.strength ?? null,
+            templateId: post.templateId,
+            design: post.design,
+          }
+        : {
+            tintColor: photos.length && tintColor ? tintColor : null,
+            tintStrength: photos.length && tintColor ? tintStrength : null,
+            ...coverPayload(cover, templateId),
+          }),
       blocks: blockInput,
     };
     try {
@@ -220,8 +234,9 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
         </div>
       )}
 
+      {!mayDesign && <p className="px-4 text-[13px] text-hint">🔒 {t.design.lockedHint}</p>}
       <Section title={t.feed.kind}>
-        <div className="flex flex-wrap gap-2 p-3">
+        <fieldset disabled={!mayDesign} className="flex flex-wrap gap-2 p-3 disabled:opacity-60">
           <Pill on={!design.kind} onClick={() => pickKind(null)} label={t.feed.kindNone} />
           {POST_KIND_KEYS.map((k) => (
             <Pill
@@ -231,21 +246,23 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
               label={`${POST_KINDS[k].emoji} ${t.feed.kinds[k]}`}
             />
           ))}
-        </div>
+        </fieldset>
       </Section>
 
-      <Section title={t.feed.cover} footer={t.feed.coverHint}>
-        <Toggle
-          label={t.feed.showCover}
-          checked={design.banner}
-          onChange={(v) => set({ banner: v })}
-        />
-        {coverShown && (
-          <div className="border-t border-hairline p-4">
-            <CoverLookControls state={cover} onChange={setCover} g={g} groupId={groupId} />
-          </div>
-        )}
-      </Section>
+      {mayDesign && (
+        <Section title={t.feed.cover} footer={t.feed.coverHint}>
+          <Toggle
+            label={t.feed.showCover}
+            checked={design.banner}
+            onChange={(v) => set({ banner: v })}
+          />
+          {coverShown && (
+            <div className="border-t border-hairline p-4">
+              <CoverLookControls state={cover} onChange={setCover} g={g} groupId={groupId} />
+            </div>
+          )}
+        </Section>
+      )}
 
       <Section title={t.feed.headline}>
         <TextField label={t.feed.headline} value={title} onChange={setTitle} maxLength={120} />
@@ -316,7 +333,7 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
         </div>
       </Section>
 
-      {photos.length > 0 && (
+      {photos.length > 0 && mayDesign && (
         <Section title={t.feed.tint} footer={t.feed.tintHint}>
           <div className="flex flex-col gap-3 p-4">
             <div className="flex flex-wrap gap-2">

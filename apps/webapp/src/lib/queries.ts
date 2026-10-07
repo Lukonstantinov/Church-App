@@ -833,9 +833,17 @@ export function useTemplates(enabled = true) {
 export function useSaveTemplate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: TemplateInput) =>
-      apiFetch<{ id: number }>('/templates', send('POST', input)),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['templates'] }),
+    // With an id: change that template (meetings using it follow); without: a new one.
+    mutationFn: ({ id, ...input }: TemplateInput & { id?: number }) =>
+      id
+        ? apiFetch<{ id: number }>(`/templates/${id}`, send('PUT', input))
+        : apiFetch<{ id: number }>('/templates', send('POST', input)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['templates'] });
+      // Meetings show a template's animation, so they refresh too.
+      void qc.invalidateQueries({ queryKey: ['meeting'] });
+      void qc.invalidateQueries({ queryKey: ['groups'] });
+    },
   });
 }
 

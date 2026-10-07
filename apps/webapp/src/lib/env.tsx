@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { GroupSummary, MeResponse, Permission } from '@church/shared';
+import { useMe } from './queries';
 
 /**
  * The environment (ministry) the user is inside, with their rights there. Screens use
@@ -24,6 +25,17 @@ export function EnvProvider({ env, children }: { env: GroupSummary | null; child
 }
 
 export const useEnv = () => useContext(EnvContext);
+
+/**
+ * May the person change looks (posters, templates, animation) in this ministry? Designers
+ * always; others only while the church hasn't locked looks to designers. For something
+ * already saved, prefer its own `canDesign` from the server.
+ */
+export function useMayDesign(): boolean {
+  const { can } = useEnv();
+  const me = useMe();
+  return can('design') || !me.data?.church.designLock;
+}
 
 /** A person with exactly one environment (and not a church admin) skips the hub. */
 export function soloEnvironment(me: MeResponse): number | null {

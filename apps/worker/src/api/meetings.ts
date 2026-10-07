@@ -51,7 +51,15 @@ import {
   type Meeting,
   type MeetingSchedule,
 } from '../db/schema';
-import { accessIn, assertCan, assertCanViewGroup, can } from '../lib/access';
+import {
+  accessIn,
+  assertCan,
+  assertCanViewGroup,
+  assertMayDesign,
+  can,
+  designRights,
+  lookDiffers,
+} from '../lib/access';
 import { listEvents } from '../lib/events';
 import {
   answerMeetingRole,
@@ -419,6 +427,9 @@ scheduleRoutes.delete('/:id', async (c) => {
 export const meetingRoutes = new Hono<App>();
 
 /** Who may do what with a meeting: managers everything; its leader place/topic/snacks. */
+/** A meeting's look: the poster, its template, the living wallpaper and the people block. */
+const MEETING_LOOK = ['design', 'templateId', 'motion', 'peopleLook'] as const;
+
 async function meetingAccess(
   db: AuthVariables['db'],
   user: AuthVariables['user'],
@@ -484,6 +495,7 @@ meetingRoutes.get('/:id', async (c) => {
   if (!meeting) throw new HTTPException(404, { message: 'not_found' });
   const a = await meetingAccess(db, user, meeting);
   if (!a.member) throw new HTTPException(404, { message: 'not_found' });
+  const rights = await designRights(db, user, meeting.groupId);
   // A meeting for chosen people is hidden from everyone else (managers see all).
   if (!a.edit && !meetingIsFor(await audienceOf(db, [meeting.id]), meeting.id, user.id))
     throw new HTTPException(404, { message: 'not_found' });
@@ -500,6 +512,7 @@ meetingRoutes.get('/:id', async (c) => {
     defaultLocation: group.defaultLocation,
     canEdit: a.edit,
     canManage: a.manage,
+    canDesign: rights.designer || (!rights.locked && a.edit),
     myRole:
       meeting.leaderUserId === user.id
         ? 'leader'
@@ -604,8 +617,21 @@ meetingRoutes.patch('/:id', async (c) => {
   const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, idParam(c)) });
   if (!meeting) throw new HTTPException(404, { message: 'not_found' });
   const a = await meetingAccess(db, user, meeting);
-  if (!a.edit) throw new HTTPException(a.member ? 403 : 404, { message: 'forbidden' });
+  const rights = await designRights(db, user, meeting.groupId);
+  // A designer may change only the look of a meeting they can't otherwise edit.
+  if (!a.edit && !rights.designer)
+    throw new HTTPException(a.member ? 403 : 404, { message: 'forbidden' });
   const input = await parseBody(c, updateMeetingSchema);
+  const given = (Object.keys(input) as (keyof typeof input)[]).filter(
+    (k) => input[k] !== undefined && k !== 'applyToSeries',
+  );
+  if (MEETING_LOOK.some((k) => lookDiffers(input[k], meeting[k]))) assertMayDesign(rights, a.edit);
+  // Speakers are on the poster too, so a designer may set them.
+  if (
+    !a.edit &&
+    given.some((k) => !(MEETING_LOOK as readonly string[]).includes(k) && k !== 'speakers')
+  )
+    throw new HTTPException(403, { message: 'forbidden' });
   // The meeting's leader fills in place, topic, type, notes and who buys snacks.
   const managerOnly = [
     'status',
