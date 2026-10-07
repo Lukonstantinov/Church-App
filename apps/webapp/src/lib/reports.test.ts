@@ -52,5 +52,10 @@ describe('treasury pdf', () => {
       null,
     );
     expect(blob.size).toBeGreaterThan(1000);
+    if (process.env.PDF_OUT)
+      (await import('node:fs')).writeFileSync(
+        process.env.PDF_OUT,
+        Buffer.from(await blob.arrayBuffer()),
+      );
   }, 60000);
 });

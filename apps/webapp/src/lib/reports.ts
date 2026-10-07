@@ -524,41 +524,169 @@ function monthFlows(data: TreasuryExport) {
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
 }
 
-/** Green and red bars per month, drawn on the page, with month names underneath. */
+/** The infographic palette: each bar or point takes the next colour. */
+const PALETTE = ['#f2994a', '#eb6b4b', '#3fb0ac', '#3d8fd1', '#7b5ea7', '#d6527c', '#34495e'];
+const colorAt = (i: number) => PALETTE[i % PALETTE.length]!;
+
+/** Text safe inside SVG. */
+const xml = (v: string) =>
+  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** An SVG chart as a pdf element, full page width. */
+const svgChart = (height: number, body: string): Content => ({
+  svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${PAGE_W}" height="${height}" viewBox="0 0 ${PAGE_W} ${height}" font-family="Roboto">${body}</svg>`,
+  width: PAGE_W,
+  margin: [0, 4, 0, 8],
+});
+
+const text = (x: number, y: number, v: string, color: string, size = 8, bold = true) =>
+  `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${color}" font-size="${size}" font-weight="${bold ? 'bold' : 'normal'}" text-anchor="middle">${xml(v)}</text>`;
+
+const short = (name: string) => (name.length > 22 ? `${name.slice(0, 21)}…` : name);
+
+/** Light vertical bands and horizontal lines behind a chart, like graph paper. */
+function gridSvg(n: number, top: number, bottom: number): string {
+  const slot = PAGE_W / n;
+  let out = '';
+  for (let i = 0; i < n; i += 2)
+    out += `<rect x="${slot * i + 2}" y="${top}" width="${slot - 4}" height="${bottom - top}" fill="#f4f6fa"/>`;
+  for (let k = 0; k < 4; k++) {
+    const y = top + ((bottom - top) * k) / 4;
+    out += `<line x1="0" y1="${y}" x2="${PAGE_W}" y2="${y}" stroke="#e8ecf2" stroke-width="0.5"/>`;
+  }
+  return out;
+}
+
+/** The axis drawn over the bars' round bottoms, so bars stand on it. */
+const axisSvg = (bottom: number, cover: number) =>
+  `<rect x="0" y="${bottom + 0.6}" width="${PAGE_W}" height="${cover}" fill="#ffffff"/>` +
+  `<line x1="0" y1="${bottom}" x2="${PAGE_W}" y2="${bottom}" stroke="#374151" stroke-width="1.2"/>`;
+
+/**
+ * Capsule bars in the palette colours: each with a white dot near its top, its amount
+ * in a coloured pill above and its name underneath in the same colour.
+ */
+function capsuleBars(items: [string, number][], m: (c: number) => string): Content {
+  const rows = items.slice(0, 7);
+  const top = 34;
+  const bottom = 170;
+  // A few bars sit in the middle, not crowded to the left.
+  const slot = Math.min(PAGE_W / rows.length, 120);
+  const off = (PAGE_W - slot * rows.length) / 2;
+  const barW = Math.min(34, slot * 0.45);
+  const max = Math.max(1, ...rows.map(([, v]) => v));
+  let body = gridSvg(Math.max(rows.length, Math.round(PAGE_W / slot)), 6, bottom);
+  rows.forEach(([, v], i) => {
+    const c = colorAt(i);
+    const cx = off + slot * i + slot / 2;
+    const h = Math.max(barW, (v / max) * (bottom - top));
+    const y = bottom - h;
+    body += `<rect x="${cx - barW / 2}" y="${y}" width="${barW}" height="${h + barW / 2}" rx="${barW / 2}" fill="${c}"/>`;
+    body += `<circle cx="${cx}" cy="${y + barW / 2}" r="${barW * 0.27}" fill="#ffffff"/>`;
+    const label = m(v);
+    const pill = Math.min(slot - 8, Math.max(40, label.length * 5.2 + 12));
+    body += `<rect x="${cx - pill / 2}" y="${y - 24}" width="${pill}" height="17" rx="8.5" fill="${c}"/>`;
+    body += text(cx, y - 12.5, label, '#ffffff', 8);
+  });
+  body += axisSvg(bottom, barW / 2 + 1);
+  body += rows
+    .map(([name], i) => text(off + slot * i + slot / 2, bottom + 14, short(name), colorAt(i), 8))
+    .join('');
+  return svgChart(bottom + 22, body);
+}
+
+/**
+ * A line through the months with a coloured ring at each point, the amount above it in
+ * the same colour and the month underneath — like an infographic.
+ */
+function ringLine(points: [string, number][], m: (c: number) => string): Content {
+  const n = points.length;
+  const top = 30;
+  const bottom = 170;
+  const slot = PAGE_W / n;
+  const vals = points.map(([, v]) => v);
+  const min = Math.min(0, ...vals);
+  const max = Math.max(1, ...vals);
+  const yOf = (v: number) => bottom - 16 - ((v - min) / (max - min || 1)) * (bottom - top - 26);
+  let body = gridSvg(n, 6, bottom) + axisSvg(bottom, 0);
+  const pts = points.map(([, v], i) => `${(slot * i + slot / 2).toFixed(1)},${yOf(v).toFixed(1)}`);
+  body += `<polyline points="${pts.join(' ')}" fill="none" stroke="#2d3748" stroke-width="1.8" stroke-linejoin="round"/>`;
+  points.forEach(([label, v], i) => {
+    const c = colorAt(i);
+    const cx = slot * i + slot / 2;
+    const cy = yOf(v);
+    body += `<circle cx="${cx}" cy="${cy}" r="7.5" fill="${c}"/>`;
+    body += `<circle cx="${cx}" cy="${cy}" r="3.8" fill="#ffffff"/>`;
+    // Amounts alternate above and below the line so neighbours don't collide.
+    const above = i % 2 === 0 || cy > bottom - 34;
+    body += text(cx, above ? cy - 13 : cy + 21, m(v), c, n > 8 ? 7 : 8.5);
+    body += text(cx, bottom + 14, label, c, 8.5);
+  });
+  return svgChart(bottom + 22, body);
+}
+
+/** Green and red capsule bars per month (in and out), month names underneath. */
 function monthChart(
   months: [string, { inC: number; outC: number }][],
   label: (p: string) => string,
 ): Content {
-  const H = 110;
+  const H = 120;
   const max = Math.max(1, ...months.flatMap(([, v]) => [v.inC, v.outC]));
   const slot = PAGE_W / months.length;
-  const bar = Math.min(16, slot * 0.32);
-  const shapes: object[] = [
-    { type: 'line', x1: 0, y1: H, x2: PAGE_W, y2: H, lineWidth: 0.6, lineColor: '#d1d5db' },
-  ];
+  const bar = Math.min(16, slot * 0.3);
+  let body = gridSvg(months.length, 4, H);
   months.forEach(([, v], i) => {
     const cx = slot * i + slot / 2;
-    const hIn = (v.inC / max) * (H - 6);
-    const hOut = (v.outC / max) * (H - 6);
-    shapes.push({ type: 'rect', x: cx - bar - 1, y: H - hIn, w: bar, h: hIn, color: GOOD, r: 2 });
-    shapes.push({ type: 'rect', x: cx + 1, y: H - hOut, w: bar, h: hOut, color: BAD, r: 2 });
+    const pair: [number, number, string][] = [
+      [v.inC, cx - bar - 1.5, GOOD],
+      [v.outC, cx + 1.5, BAD],
+    ];
+    for (const [val, x, color] of pair) {
+      if (val <= 0) continue;
+      const h = Math.max(bar, (val / max) * (H - 10));
+      body += `<rect x="${x}" y="${H - h}" width="${bar}" height="${h + bar / 2}" rx="${bar / 2}" fill="${color}"/>`;
+      body += `<circle cx="${x + bar / 2}" cy="${H - h + bar / 2}" r="${bar * 0.26}" fill="#ffffff"/>`;
+    }
   });
-  return {
-    stack: [
-      { canvas: shapes as never },
-      {
-        columns: months.map(([p]) => ({
-          text: label(p),
-          width: slot,
-          alignment: 'center' as const,
-          fontSize: 7.5,
-          color: '#6b7280',
-        })),
-        columnGap: 0,
-        margin: [0, 3, 0, 0],
-      },
-    ],
-  };
+  // Cover the round bar bottoms below the axis, then redraw the axis and labels on top.
+  const labels = months
+    .map(([p], i) => text(slot * i + slot / 2, H + 13, label(p), colorAt(i), 8))
+    .join('');
+  body += axisSvg(H, bar / 2 + 1) + labels;
+  return svgChart(H + 20, body);
+}
+
+/** A heading kept on the same page as its chart. */
+const pdfSection = (title: string, body: Content): Content => ({
+  stack: [{ text: title, style: 'h2' }, body],
+  unbreakable: true,
+});
+
+/** Every month of the period (at most the last 12), with its money in and out (0 if none). */
+function monthsOfPeriod(
+  data: TreasuryExport,
+  flows: [string, { inC: number; outC: number }][],
+): [string, { inC: number; outC: number }][] {
+  const map = new Map(flows);
+  const out: [string, { inC: number; outC: number }][] = [];
+  let [y, mo] = data.from.slice(0, 7).split('-').map(Number) as [number, number];
+  const end = data.to.slice(0, 7);
+  for (let guard = 0; guard < 240; guard++) {
+    const p = `${y}-${String(mo).padStart(2, '0')}`;
+    if (p > end) break;
+    out.push([p, map.get(p) ?? { inC: 0, outC: 0 }]);
+    mo += 1;
+    if (mo > 12) {
+      mo = 1;
+      y += 1;
+    }
+  }
+  return out.slice(-12);
+}
+
+/** Capsule bars for a few items, plain rows with bars for a long list. */
+function pickBars(rows: [string, number][], m: (c: number) => string, color: string): Content {
+  return rows.length <= 7 ? capsuleBars(rows, m) : barRows(rows, m, color);
 }
 
 /** Rows of name, a coloured bar to scale and the amount. */
@@ -613,9 +741,28 @@ export async function treasuryPdf(
     ]),
   ];
   const months = monthFlows(data);
+  const all = monthsOfPeriod(data, months);
+  if (all.length > 1) {
+    // End-of-month balances, from the opening balance forward.
+    let running = data.openingCents;
+    const balances = all.map(([p, v]): [string, number] => {
+      running += v.inC - v.outC;
+      return [f.monthShort(p), running];
+    });
+    content.push(
+      pdfSection(
+        t.treasury.balanceChart,
+        ringLine(balances, (c) => m(c)),
+      ),
+    );
+  }
   if (months.length > 1) {
-    content.push({ text: t.treasury.flowTitle, style: 'h2' });
-    content.push(monthChart(months, (p) => f.monthShort(p)));
+    content.push(
+      pdfSection(
+        t.treasury.flowTitle,
+        monthChart(months, (p) => f.monthShort(p)),
+      ),
+    );
     content.push({
       columns: [
         { text: [{ text: '■ ', color: GOOD }, t.treasury.income], width: 'auto', fontSize: 8.5 },
@@ -626,32 +773,38 @@ export async function treasuryPdf(
     });
   }
   if (sum.byKind.length) {
-    content.push({ text: t.treasury.incomeByKind(data.label ?? data.year), style: 'h2' });
     content.push(
-      barRows(
-        sum.byKind.map(([k, v]) => [incomeLabel(t, k), v]),
-        m,
-        GOOD,
+      pdfSection(
+        t.treasury.incomeByKind(data.label ?? data.year),
+        pickBars(
+          sum.byKind.map(([k, v]) => [incomeLabel(t, k), v]),
+          m,
+          GOOD,
+        ),
       ),
     );
   }
   if (sum.byCategory.length) {
-    content.push({ text: t.treasury.byCategory(data.label ?? data.year), style: 'h2' });
     content.push(
-      barRows(
-        sum.byCategory.map(([k, v]) => [categoryLabel(t, k), v]),
-        m,
-        BAD,
+      pdfSection(
+        t.treasury.byCategory(data.label ?? data.year),
+        pickBars(
+          sum.byCategory.map(([k, v]) => [categoryLabel(t, k), v]),
+          m,
+          BAD,
+        ),
       ),
     );
   }
   if (sum.donors.length) {
-    content.push({ text: t.treasury.donors(data.label ?? data.year), style: 'h2' });
     content.push(
-      barRows(
-        sum.donors.map(([k, v]) => [k || t.treasury.anonymous, v]),
-        m,
-        ctx.brandHex,
+      pdfSection(
+        t.treasury.donors(data.label ?? data.year),
+        pickBars(
+          sum.donors.map(([k, v]) => [k || t.treasury.anonymous, v]),
+          m,
+          ctx.brandHex,
+        ),
       ),
     );
   }

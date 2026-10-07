@@ -248,14 +248,18 @@ export function FlowBars({ series }: { series: MonthFlow[] }) {
               <div
                 key={k}
                 title={money(m[k])}
-                className={`bar-grow w-full max-w-[16px] rounded-t-md transition-[height] duration-500 ${k === 'incomeCents' ? 'bg-present' : 'bg-absent/80'}`}
+                className={`bar-grow relative w-full max-w-[16px] rounded-full transition-[height] duration-500 ${k === 'incomeCents' ? 'bg-present' : 'bg-absent/80'}`}
                 style={
                   {
                     height: `${Math.max(m[k] ? 3 : 0, (m[k] / max) * 100)}%`,
                     '--i': i,
                   } as React.CSSProperties
                 }
-              />
+              >
+                {m[k] > 0 && (
+                  <span className="absolute left-1/2 top-[3px] h-[45%] max-h-[8px] w-[45%] max-w-[8px] -translate-x-1/2 rounded-full bg-white" />
+                )}
+              </div>
             ))}
           </div>
         ))}
@@ -302,9 +306,21 @@ export function HBars({
   );
 }
 
+/** The infographic palette for chart points (same as the PDF reports). */
+export const CHART_PALETTE = [
+  '#f2994a',
+  '#eb6b4b',
+  '#3fb0ac',
+  '#3d8fd1',
+  '#7b5ea7',
+  '#d6527c',
+  '#34495e',
+];
+
 /**
- * The balance at the end of each month as a line that draws itself in, with a soft area
- * under it and the latest amount marked. Worked out backwards from today's balance.
+ * The balance at the end of each month: a line that draws itself in over light grid
+ * bands, a coloured ring at each month with its amount in the same colour, and the
+ * months underneath in their colours. Worked out backwards from today's balance.
  */
 export function BalanceLine({
   series,
@@ -315,74 +331,94 @@ export function BalanceLine({
 }) {
   const f = useFmt();
   const money = useMoney();
-  // End-of-month balances: today's balance minus everything that came after each month.
   const points: number[] = [];
   let running = balanceCents;
   for (let i = series.length - 1; i >= 0; i--) {
     points.unshift(running);
     running -= series[i]!.incomeCents - series[i]!.expenseCents;
   }
-  const W = 320;
-  const H = 120;
+  const n = points.length;
+  const W = 360;
+  const H = 170;
+  const top = 26;
+  const bottom = 140;
+  const slot = W / n;
   const min = Math.min(0, ...points);
   const max = Math.max(1, ...points);
-  const x = (i: number) => (points.length > 1 ? (i / (points.length - 1)) * W : W / 2);
-  const y = (v: number) => H - 8 - ((v - min) / (max - min || 1)) * (H - 20);
+  const x = (i: number) => slot * i + slot / 2;
+  const y = (v: number) => bottom - 12 - ((v - min) / (max - min || 1)) * (bottom - top - 22);
   const line = points
     .map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
     .join(' ');
-  const area = `${line} L${W},${H} L0,${H} Z`;
-  const last = points[points.length - 1] ?? 0;
+  const color = (i: number) => CHART_PALETTE[i % CHART_PALETTE.length]!;
+  const short = (c: number) => {
+    const v = c / 100;
+    return Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v));
+  };
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-32 w-full overflow-visible" aria-hidden="true">
-        <defs>
-          <linearGradient id="balance-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="var(--brand)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {min < 0 && (
-          <line
-            x1="0"
-            x2={W}
-            y1={y(0)}
-            y2={y(0)}
-            stroke="currentColor"
-            strokeOpacity="0.2"
-            strokeDasharray="4 4"
-          />
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible" aria-hidden="true">
+        {points.map((_, i) =>
+          i % 2 === 0 ? (
+            <rect
+              key={i}
+              x={slot * i + 1.5}
+              y={4}
+              width={slot - 3}
+              height={bottom - 4}
+              rx="4"
+              fill="currentColor"
+              opacity="0.045"
+            />
+          ) : null,
         )}
-        <path d={area} fill="url(#balance-fill)" className="chart-fade" />
+        <line
+          x1="0"
+          x2={W}
+          y1={bottom}
+          y2={bottom}
+          stroke="currentColor"
+          strokeOpacity="0.55"
+          strokeWidth="1.2"
+        />
         <path
           d={line}
           fill="none"
-          stroke="var(--brand)"
-          strokeWidth="3"
-          strokeLinecap="round"
+          stroke="currentColor"
+          strokeOpacity="0.75"
+          strokeWidth="2"
           strokeLinejoin="round"
           pathLength={1}
           className="chart-draw"
         />
         {points.map((v, i) => (
-          <circle
-            key={i}
-            cx={x(i)}
-            cy={y(v)}
-            r={i === points.length - 1 ? 5 : 2.5}
-            fill={i === points.length - 1 ? 'var(--brand)' : 'white'}
-            stroke="var(--brand)"
-            strokeWidth="2"
-            className="chart-dot"
-            style={{ '--i': i } as React.CSSProperties}
-          />
+          <g key={i} className="chart-dot" style={{ '--i': i } as React.CSSProperties}>
+            <circle cx={x(i)} cy={y(v)} r="6.5" fill={color(i)} />
+            <circle cx={x(i)} cy={y(v)} r="3.2" fill="white" />
+            <text
+              x={x(i)}
+              y={i % 2 === 0 || y(v) > bottom - 28 ? y(v) - 11 : y(v) + 19}
+              textAnchor="middle"
+              fontSize="9"
+              fontWeight="700"
+              fill={color(i)}
+            >
+              {short(v)}
+            </text>
+            <text
+              x={x(i)}
+              y={bottom + 15}
+              textAnchor="middle"
+              fontSize="9"
+              fontWeight="700"
+              fill={color(i)}
+            >
+              {f.monthShort(series[i]!.month).slice(0, 3)}
+            </text>
+          </g>
         ))}
       </svg>
-      <div className="mt-1 flex justify-between text-[11px] font-medium text-hint">
-        <span>{f.monthShort(series[0]!.month)}</span>
-        <span className="font-bold text-[var(--text)]">{money(last)}</span>
-        <span>{f.monthShort(series[series.length - 1]!.month)}</span>
-      </div>
+      <div className="mt-1 text-center text-[13px] font-bold">{money(points[n - 1] ?? 0)}</div>
     </div>
   );
 }
