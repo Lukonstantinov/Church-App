@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { resolveBrand, type MeetingMotion, type PosterLook } from '@church/shared';
 import { useEnv } from '../lib/env';
 import { useT } from '../lib/i18n';
@@ -419,9 +419,65 @@ export function LivingLayer({ kind, live }: { kind: MeetingMotion; live?: boolea
       {kind === 'bokeh' &&
         [0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} className={`living-bokeh k${i}`} />)}
       {kind === 'rays' && <i className="living-rays solo" />}
+      {kind === 'aurora' && (
+        <>
+          <i className="living-aurora a1" />
+          <i className="living-aurora a2" />
+        </>
+      )}
+      {kind === 'silk' && (
+        <>
+          <i className="living-silk s1" />
+          <i className="living-silk s2" />
+        </>
+      )}
+      {kind === 'mesh' && <i className="living-mesh" />}
+      {(kind === 'embers' || kind === 'bubbles' || kind === 'snow') &&
+        PARTICLES.map((p, i) => (
+          <i
+            key={i}
+            className="living-p"
+            style={
+              {
+                '--x': `${p.x}%`,
+                '--s': `${kind === 'bubbles' ? p.s * 2.2 : p.s}px`,
+                '--d': `${p.d}s`,
+                '--t': `${-p.t}s`,
+                '--w': `${p.w}px`,
+              } as CSSProperties
+            }
+          />
+        ))}
+      {kind === 'lines' && <i className="living-lines" />}
+      {kind === 'grid' && <i className="living-grid" />}
+      {kind === 'grain' && (
+        <>
+          <i className="living-grain" />
+          <i className="living-sweep" />
+        </>
+      )}
     </span>
   );
 }
+
+/**
+ * Fixed spots for rising or falling particles (embers, bubbles, snow): place across, size,
+ * how long one trip takes, where in its trip it starts, and how far it sways.
+ */
+const PARTICLES = [
+  { x: 6, s: 4, d: 9, t: 1, w: 14 },
+  { x: 15, s: 6, d: 12, t: 7, w: -18 },
+  { x: 24, s: 3, d: 8, t: 4, w: 10 },
+  { x: 33, s: 5, d: 11, t: 9, w: -12 },
+  { x: 42, s: 4, d: 10, t: 2, w: 16 },
+  { x: 51, s: 7, d: 14, t: 11, w: -20 },
+  { x: 60, s: 3, d: 9, t: 6, w: 12 },
+  { x: 69, s: 5, d: 12, t: 3, w: -14 },
+  { x: 78, s: 4, d: 10, t: 8, w: 18 },
+  { x: 87, s: 6, d: 13, t: 5, w: -10 },
+  { x: 94, s: 3, d: 9, t: 10, w: 12 },
+  { x: 47, s: 2, d: 7, t: 5, w: -8 },
+];
 
 export function HeroCard({
   children,

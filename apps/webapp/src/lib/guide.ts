@@ -202,6 +202,8 @@ export const GUIDE: GuideSection[] = [
           'Change: «Ещё» → «Настройки служения» → «Напоминание о встречах» — tap the times you want (15 min … 1 day), or «Не напоминать».',
           'In the last 2 hours a ⏳ timer shows on the meeting and its card pulses slowly; at the start it turns LIVE.',
           'Animation for all meetings: «Настройки служения» → «Анимация встреч» (off / calm / lively). One meeting: «🎨 Постер» → «Анимация встреч».',
+          'Animations: off, calm, lively, stars, waves, lights, rays, aurora, silk, colour flow, embers, bubbles, snow, lines, grid, grain. Add one: a name in MEETING_MOTIONS (shared api.ts) + meetings.motions in ru/en/lt, a layer in LivingLayer (components/ui.tsx) and its CSS (.living-… in index.css).',
+          'The poster preview stays pinned at the top while you scroll its settings.',
         ],
       },
       {

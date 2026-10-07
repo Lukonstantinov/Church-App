@@ -106,10 +106,12 @@ describe('schedules → meetings', () => {
 
   it("shows new schedules' upcoming meetings straight away and removes them with the schedule", async () => {
     const group = await newGroup('Сразу');
+    // Not today: a meeting already under way is kept when its schedule goes.
+    const notToday = (new Date().getUTCDay() + 2) % 7;
     const schedule = await apiJson<ScheduleRow>(`/api/groups/${group}/schedules`, {
       method: 'POST',
       user: ADMIN,
-      json: { weekday: 2, startTime: '18:30', durationMin: 90, title: 'Среда' },
+      json: { weekday: notToday, startTime: '18:30', durationMin: 90, title: 'Среда' },
     });
     const upcoming = await apiJson<MeetingRow[]>(`/api/groups/${group}/meetings`, { user: ADMIN });
     expect(upcoming.length).toBeGreaterThanOrEqual(4);

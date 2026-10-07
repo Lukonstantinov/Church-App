@@ -93,7 +93,8 @@ pulsing red outline on the ministry card only; in the 2 h before, a red burning 
 button on the card from `GroupSummary.soon`; red-tinted tiles inside). Automatic event reminders per ministry (`groups.event_reminder_hours`,
 off by default; checked every 5 min) plus manual reminders. Meeting reminders
 (`groups.meeting_reminders`: minutes list, null = [120, 60], [] = off; claimed per time in
-`job_runs` as `meeting_remind`) with who serves; meeting animation level off / calm / lively
+`job_runs` as `meeting_remind`) with who serves; meeting animation (`MEETING_MOTIONS`: off / calm / lively / stars / waves / bokeh / rays /
+aurora / silk / mesh / embers / bubbles / snow / lines / grid / grain; `LivingLayer` + `.living-*` CSS)
 (`groups.meeting_motion`, per meeting `meetings.motion`);
 a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).
 

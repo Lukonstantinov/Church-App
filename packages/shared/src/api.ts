@@ -203,6 +203,15 @@ export const MEETING_MOTIONS = [
   'waves',
   'bokeh',
   'rays',
+  'aurora',
+  'silk',
+  'mesh',
+  'embers',
+  'bubbles',
+  'snow',
+  'lines',
+  'grid',
+  'grain',
 ] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
 
