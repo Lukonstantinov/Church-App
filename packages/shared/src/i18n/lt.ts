@@ -486,6 +486,15 @@ export const lt: Messages = {
     cancelConfirm: 'Atšaukti šį susitikimą?',
     cancelledToast: 'Susitikimas atšauktas',
     restoredToast: 'Susitikimas grąžintas',
+    markWhoCame: 'Kas buvo?',
+    cameCount: (people: number, guests: number) =>
+      `👥 ${people}${guests ? ` + ${guests} svečiai` : ''}`,
+    deleteForever: 'Ištrinti susitikimą visam laikui',
+    deleteForeverConfirm:
+      'Ištrinti susitikimą visam laikui? Dings lankomumas ir atsakymai. Pinigai liks kasoje.',
+    deleteForeverAgain: 'Tikrai ištrinti? To atšaukti negalima.',
+    deletedForever: 'Susitikimas ištrintas',
+    rollHere: 'Pažymėti, kas buvo',
     openRoll: 'Atidaryti žymėjimą',
     opensHourBefore: 'Atsidarys likus valandai iki pradžios',
     restore: 'Grąžinti susitikimą',

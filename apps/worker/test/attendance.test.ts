@@ -123,6 +123,20 @@ describe('schedules → meetings', () => {
     );
   });
 
+  it('a meeting with its roll call goes only when deleted for good', async () => {
+    const group = await newGroup('Навсегда');
+    const [anna] = await addMembers(group, ['Анна']);
+    const meeting = await pastMeeting(group);
+    await apiJson(`/api/meetings/${meeting.id}/roll`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: { entries: [{ userId: anna!, status: 'present' }], guestCount: 0 },
+    });
+    const del = await api(`/api/meetings/${meeting.id}`, { method: 'DELETE', user: ADMIN });
+    expect(del.status).toBe(200);
+    expect((await api(`/api/meetings/${meeting.id}`, { user: ADMIN })).status).toBe(404);
+  });
+
   it('rebuilds future meetings when the time changes', async () => {
     const group = await newGroup('Смена');
     const schedule = await apiJson<ScheduleRow>(`/api/groups/${group}/schedules`, {
@@ -183,6 +197,15 @@ describe('roll call', () => {
       },
     });
     expect(saved).toMatchObject({ status: 'done', guestCount: 2 });
+
+    // Past meetings stay in the calendar with their roll call…
+    const cal = await apiJson<{ meetings: MeetingRow[] }>(`/api/groups/${group}/calendar`, {
+      user: ADMIN,
+    });
+    expect(cal.meetings.find((x) => x.id === meeting.id)).toMatchObject({
+      status: 'done',
+      guestCount: 2,
+    });
     expect(saved.counts).toEqual({ present: 1, late: 1, excused: 1, absent: 1 }); // Глеб unmarked
 
     const after = await roll(meeting.id);

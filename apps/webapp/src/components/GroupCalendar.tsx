@@ -153,17 +153,25 @@ function MonthGrid({
               haptic.tap();
               onPick?.(day);
             }}
-            className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl text-[14px] transition active:scale-90 ${
-              m
-                ? m.leader
-                  ? 'brand-gradient font-bold text-white shadow-cta'
-                  : 'bg-brand/15 font-semibold text-accent ring-1 ring-[var(--brand)]/40'
-                : past
-                  ? 'text-hint/50'
-                  : ''
+            className={`relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl text-[14px] transition active:scale-90 ${
+              m && past
+                ? 'bg-hint/15 font-semibold text-text/75'
+                : m
+                  ? m.leader
+                    ? 'brand-gradient font-bold text-white shadow-cta'
+                    : 'bg-brand/15 font-semibold text-accent ring-1 ring-[var(--brand)]/40'
+                  : past
+                    ? 'text-hint/50'
+                    : ''
             } ${isToday ? 'outline outline-2 outline-offset-1 outline-[var(--brand)]' : ''}`}
           >
             <span className="leading-none">{i + 1}</span>
+            {/* A past day whose meeting has its roll call taken. */}
+            {past && d?.meetings.some((x) => x.status === 'done') && (
+              <span className="absolute right-0.5 top-0.5 text-[9px] leading-none text-present">
+                ✓
+              </span>
+            )}
             {d && d.meetings.length > 1 ? (
               <span className="text-[9px] font-bold leading-none">×{d.meetings.length}</span>
             ) : m?.leader ? (
@@ -197,6 +205,8 @@ function MonthGrid({
 export function GroupCalendar({ g }: { g: GroupSummary }) {
   const t = useT();
   const f = useFmt();
+  const { push } = useNav();
+  const { can } = useEnv();
   const q = useCalendar(g.id);
   const today = f.todayInput();
   const [month, setMonth] = useState(today.slice(0, 7));
@@ -209,7 +219,8 @@ export function GroupCalendar({ g }: { g: GroupSummary }) {
     setMonth(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`);
   };
   const min = (() => {
-    const d = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 2, 1));
+    // A year back: past meetings stay, with their roll call.
+    const d = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 13, 1));
     return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`;
   })();
 
@@ -238,6 +249,15 @@ export function GroupCalendar({ g }: { g: GroupSummary }) {
       </div>
       <MonthGrid month={month} days={days} today={today} onPick={setDay} />
       <p className="mt-2 px-1 text-[12px] text-hint">{t.meetings.calendarHint}</p>
+      {can('people.view') && (
+        <button
+          type="button"
+          onClick={() => push({ name: 'stats', groupId: g.id })}
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-hairline py-2.5 text-[14px] font-semibold text-accent active:scale-[0.98]"
+        >
+          📊 {t.stats.title}
+        </button>
+      )}
       {day && (
         <DaySheet
           g={g}
@@ -412,6 +432,27 @@ function DaySheet({
                       ) : null}
                     </span>
                   </button>
+                  {!upcoming &&
+                    m.status !== 'cancelled' &&
+                    // A past meeting: how many came, or the way to mark who was there.
+                    (m.status === 'done' ? (
+                      <button
+                        type="button"
+                        onClick={() => push({ name: 'roll', meetingId: m.id })}
+                        disabled={!can('attendance.take')}
+                        className="shrink-0 rounded-full bg-present/15 px-3 py-1.5 text-[13px] font-semibold text-present"
+                      >
+                        {t.meetings.cameCount(m.counts.present + m.counts.late, m.guestCount)}
+                      </button>
+                    ) : can('attendance.take') ? (
+                      <button
+                        type="button"
+                        onClick={() => push({ name: 'roll', meetingId: m.id })}
+                        className="brand-gradient shrink-0 rounded-full px-3 py-1.5 text-[13px] font-semibold text-white active:scale-95"
+                      >
+                        {t.meetings.markWhoCame}
+                      </button>
+                    ) : null)}
                   {manage && upcoming && (
                     <button
                       type="button"

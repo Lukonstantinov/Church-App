@@ -471,6 +471,15 @@ export function useAnnounceMeeting() {
   });
 }
 
+/** Deletes a meeting for good (the only way one disappears). */
+export function useDeleteMeeting() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (id: number) => apiFetch<{ ok: true }>(`/meetings/${id}`, send('DELETE')),
+    onSuccess: invalidate,
+  });
+}
+
 export function useUpdateMeeting() {
   const invalidate = useInvalidateAll();
   return useMutation({

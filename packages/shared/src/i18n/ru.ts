@@ -489,6 +489,15 @@ export const ru = {
     cancelConfirm: 'Отменить эту встречу?',
     cancelledToast: 'Встреча отменена',
     restoredToast: 'Встреча возвращена',
+    markWhoCame: 'Кто был?',
+    cameCount: (people: number, guests: number) =>
+      `👥 ${people}${guests ? ` + ${guests} гост.` : ''}`,
+    deleteForever: 'Удалить встречу навсегда',
+    deleteForeverConfirm:
+      'Удалить встречу навсегда? Пропадут отметки посещаемости и ответы. Деньги останутся в кассе.',
+    deleteForeverAgain: 'Точно удалить? Это нельзя отменить.',
+    deletedForever: 'Встреча удалена',
+    rollHere: 'Отметить, кто был',
     openRoll: 'Открыть перекличку',
     opensHourBefore: 'Откроется за час до начала',
     restore: 'Вернуть встречу',

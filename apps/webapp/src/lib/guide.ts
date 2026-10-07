@@ -203,7 +203,7 @@ export const GUIDE: GuideSection[] = [
           'In the last 2 hours a ⏳ timer shows on the meeting and its card pulses slowly; at the start it turns LIVE.',
           'Animation for all meetings: «Настройки служения» → «Анимация встреч» (off / calm / lively). One meeting: «🎨 Постер» → «Анимация встреч».',
           'Animations: off, calm, lively, stars, waves, lights, rays, aurora, silk, colour flow, embers, bubbles, snow, lines, grid, grain. Add one: a name in MEETING_MOTIONS (shared api.ts) + meetings.motions in ru/en/lt, a layer in LivingLayer (components/ui.tsx) and its CSS (.living-… in index.css).',
-          'The poster preview stays pinned at the top while you scroll its settings.',
+          'The poster preview stays pinned at the top while you scroll its settings. In the Design tab the three previews (app, tile, poster) are a pinned carousel: swipe or tap their names.',
         ],
       },
       {
@@ -216,6 +216,15 @@ export const GUIDE: GuideSection[] = [
         steps: [
           'Opens an hour before the start: Overview → «Начать перекличку», or the meeting.',
           'Mark people, add guests, save. Editable for a few days afterwards.',
+          'Past meeting: Calendar → its day → «Кто был?», or the meeting → «✅ Отметить, кто был». After saving the day shows ✓ and «👥 N + guests».',
+          'Statistics: Calendar → «📊 Статистика», or the «Статистика» button on the ministry page (counts meetings with a roll call).',
+        ],
+      },
+      {
+        title: 'Past meetings and deleting',
+        steps: [
+          'Past meetings are never removed by the app: the calendar shows the last 12 months (grey days, ✓ when the roll call is taken).',
+          'Delete one for good: the meeting → «🗑 Удалить встречу навсегда» → confirm twice (meetings rights). Its attendance goes; money stays in the treasury (DELETE /api/meetings/:id).',
         ],
       },
       {

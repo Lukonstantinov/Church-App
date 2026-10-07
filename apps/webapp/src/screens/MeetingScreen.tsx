@@ -55,6 +55,7 @@ import {
   useMeeting,
   useMeetingPeople,
   useMeetingRsvp,
+  useDeleteMeeting,
   useUpdateMeeting,
 } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
@@ -329,9 +330,18 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           }
         >
           {m.attendance.length === 0 ? (
-            <p className="flex items-center gap-2 px-4 py-3 text-[14px] text-hint">
-              <IconClock size={16} /> {t.meetings.noRollYet}
-            </p>
+            !cancelled && canRollNow(m) ? (
+              // The meeting has begun or is over: mark who was there right here.
+              <div className="p-3">
+                <Button onClick={() => push({ name: 'roll', meetingId: m.id })}>
+                  ✅ {t.meetings.rollHere}
+                </Button>
+              </div>
+            ) : (
+              <p className="flex items-center gap-2 px-4 py-3 text-[14px] text-hint">
+                <IconClock size={16} /> {t.meetings.noRollYet}
+              </p>
+            )
           ) : (
             (['present', 'absent'] as const).map((k) => {
               const list = m.attendance!.filter((a) => a.present === (k === 'present'));
@@ -374,6 +384,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           {cancelled ? t.meetings.restore : t.meetings.cancelMeeting}
         </Button>
       )}
+      {m.canManage && <DeleteForever meetingId={m.id} />}
 
       <PersonPicker
         open={picker !== null}
@@ -413,6 +424,38 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
         />
       )}
     </Screen>
+  );
+}
+
+/**
+ * The only way a meeting disappears: deleted for good after two confirmations. Past
+ * meetings otherwise stay for the calendar, roll call and statistics.
+ */
+function DeleteForever({ meetingId }: { meetingId: number }) {
+  const t = useT();
+  const toast = useToast();
+  const { back } = useNav();
+  const remove = useDeleteMeeting();
+  return (
+    <button
+      type="button"
+      disabled={remove.isPending}
+      onClick={async () => {
+        if (!(await confirmDialog(t.meetings.deleteForeverConfirm))) return;
+        if (!(await confirmDialog(t.meetings.deleteForeverAgain))) return;
+        try {
+          await remove.mutateAsync(meetingId);
+          haptic.success();
+          toast(t.meetings.deletedForever);
+          back();
+        } catch {
+          toast(t.common.actionFailed, 'error');
+        }
+      }}
+      className="mx-auto py-2 text-[14px] font-semibold text-absent active:opacity-60"
+    >
+      🗑 {t.meetings.deleteForever}
+    </button>
   );
 }
 

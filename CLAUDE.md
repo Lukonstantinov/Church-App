@@ -78,8 +78,9 @@ ministry (`groups.meeting_services`) and added via "+". Each person is asked by 
 Agree / Can't; card/chip style dark / glass / colour / mixed tints and role icons
 (`people_look`), chips on home meeting cards (`TeamChips`), "who serves" message
 (`lib/meetingRoster.ts`, also in announcements); marks ✓ / ✗ (`*_declined_by`, `declined_at`) / waiting. Announce,
-time-changed and cancelled notices with "Will you come?" answers. Roll call, expenses
-against a budget, calendar with notes. Meeting screen has a living animated hero.
+time-changed and cancelled notices with "Will you come?" answers. Roll call (also from the calendar day of a
+past meeting), expenses against a budget, calendar with notes (last 12 months + all coming;
+past meetings are never auto-removed, only `DELETE /api/meetings/:id` after two confirmations). Meeting screen has a living animated hero.
 
 **Events** — cover photo or designed cover, speakers, countdown, burning outline,
 RSVP, duties (with bot notices), cost and payments, gallery, programme, in-app chat or a

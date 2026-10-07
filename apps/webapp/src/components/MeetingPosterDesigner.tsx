@@ -68,7 +68,7 @@ export function MeetingPosterDesigner({
     <>
       {g && (
         // Stays at the top while scrolling through the settings, so every change is seen.
-        <div className="glass-strong sticky top-0 z-20 -mx-4 flex justify-center rounded-b-[22px] px-4 pb-3 pt-2">
+        <div className="sticky top-0 z-20 -mx-4 flex justify-center rounded-b-[22px] bg-[var(--color-section)] px-4 pb-3 pt-2 shadow-card">
           <div className="h-[257px] w-[205px] overflow-hidden rounded-xl shadow-card">
             <div className="origin-top-left scale-[0.38]">
               <MeetingPoster

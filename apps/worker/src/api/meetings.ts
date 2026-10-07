@@ -153,8 +153,9 @@ groupMeetingRoutes.get('/:id/stats', async (c) => {
 });
 
 /**
- * The ministry calendar for anyone in it: coming meetings (those meant for them; leaders
- * see all), coming events, and leaders' colour notes (leaders only).
+ * The ministry calendar for anyone in it: meetings of the past year and all coming ones
+ * (those meant for them; leaders see all), events likewise, and leaders' colour notes.
+ * Past meetings stay: they hold the roll call and the statistics.
  */
 groupMeetingRoutes.get('/:id/calendar', async (c) => {
   const db = c.get('db');
@@ -162,13 +163,13 @@ groupMeetingRoutes.get('/:id/calendar', async (c) => {
   const group = await assertCanViewGroup(db, user, idParam(c));
   const access = await accessIn(db, user, group.id);
   const manage = access.perms.has('meetings.manage');
-  const now = new Date().toISOString();
+  const yearAgo = new Date(Date.now() - 366 * 86_400_000).toISOString();
   const coming = await db
     .select()
     .from(meetings)
-    .where(and(eq(meetings.groupId, group.id), gte(meetings.endsAt, now)))
+    .where(and(eq(meetings.groupId, group.id), gte(meetings.endsAt, yearAgo)))
     .orderBy(asc(meetings.startsAt))
-    .limit(400);
+    .limit(800);
   const audience = await audienceOf(
     db,
     coming.map((m) => m.id),
@@ -177,7 +178,10 @@ groupMeetingRoutes.get('/:id/calendar', async (c) => {
   const today = localDate(new Date(), (await getChurch(db)).timezone);
   const body: CalendarData = {
     meetings: await toMeetingRows(db, visible, c.env.WEBHOOK_SECRET),
-    events: await listEvents(db, c.env.WEBHOOK_SECRET, [group.id], user.id, 'upcoming'),
+    events: [
+      ...(await listEvents(db, c.env.WEBHOOK_SECRET, [group.id], user.id, 'past', 100)).reverse(),
+      ...(await listEvents(db, c.env.WEBHOOK_SECRET, [group.id], user.id, 'upcoming')),
+    ],
     notes: manage
       ? (
           await db
@@ -335,6 +339,12 @@ async function removeMeetings(db: AuthVariables['db'], where: SQL) {
   for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90);
     await db.delete(meetingHelpers).where(inArray(meetingHelpers.meetingId, chunk));
+    await db.delete(attendance).where(inArray(attendance.meetingId, chunk));
+    // Money stays in the books, just no longer tied to the meeting.
+    await db
+      .update(transactions)
+      .set({ meetingId: null })
+      .where(inArray(transactions.meetingId, chunk));
     await db.delete(meetingAudience).where(inArray(meetingAudience.meetingId, chunk));
     await db.delete(meetingRsvps).where(inArray(meetingRsvps.meetingId, chunk));
     await db.delete(meetings).where(inArray(meetings.id, chunk));
@@ -1127,6 +1137,25 @@ async function managedMeeting(c: { get: (k: 'db' | 'user') => unknown }, id: num
   await assertCan(db, user, meeting.groupId, 'meetings.manage');
   return { db, user, meeting };
 }
+
+/**
+ * Deletes one meeting for good (people with meetings rights, after confirming twice in
+ * the app). Nothing else removes past meetings: they keep the roll call and statistics.
+ * Money linked to it stays in the books.
+ */
+meetingRoutes.delete('/:id', async (c) => {
+  const { db, user, meeting } = await managedMeeting(c, idParam(c));
+  await removeMeetings(db, eq(meetings.id, meeting.id));
+  await audit(db, {
+    actorUserId: user.id,
+    action: 'meeting_deleted',
+    entity: 'group',
+    entityId: meeting.groupId,
+    groupId: meeting.groupId,
+    data: { meetingId: meeting.id, title: meeting.title, startsAt: meeting.startsAt },
+  });
+  return c.json({ ok: true });
+});
 
 meetingRoutes.post('/:id/helpers', async (c) => {
   const { db, meeting } = await managedMeeting(c, idParam(c));

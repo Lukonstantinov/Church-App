@@ -484,6 +484,15 @@ export const en: Messages = {
     cancelConfirm: 'Cancel this meeting?',
     cancelledToast: 'Meeting cancelled',
     restoredToast: 'Meeting restored',
+    markWhoCame: 'Who came?',
+    cameCount: (people: number, guests: number) =>
+      `👥 ${people}${guests ? ` + ${guests} guests` : ''}`,
+    deleteForever: 'Delete the meeting for good',
+    deleteForeverConfirm:
+      'Delete this meeting for good? Its attendance and answers go too. Money stays in the treasury.',
+    deleteForeverAgain: 'Really delete? This cannot be undone.',
+    deletedForever: 'Meeting deleted',
+    rollHere: 'Mark who came',
     openRoll: 'Open roll call',
     opensHourBefore: 'Opens an hour before the start',
     restore: 'Restore meeting',

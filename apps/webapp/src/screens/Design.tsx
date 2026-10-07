@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type {
   AnnouncementRow,
   BackdropConfig,
@@ -228,8 +228,9 @@ function Thumb({
 }
 
 /**
- * A meeting in a look, three ways side by side (swipe): the meeting screen's living
- * hero, the small tile on the ministry's home page and the poster sent by the bot.
+ * A meeting in a look, three ways, as a carousel (swipe, or tap a name above): the
+ * meeting screen's living hero, the small tile on the ministry's home page and the poster
+ * sent by the bot. Pinned to the top of the sheet, so every change below shows at once.
  */
 export function DesignPreviews({
   look,
@@ -246,6 +247,8 @@ export function DesignPreviews({
 }) {
   const t = useT();
   const f = useFmt();
+  const track = useRef<HTMLDivElement>(null);
+  const [slide, setSlide] = useState(0);
   // A sample date three days ahead, 19:00–21:00, fixed while the sheet is open.
   const [when] = useState(() => {
     const d = new Date(Date.now() + 3 * 86_400_000);
@@ -253,28 +256,56 @@ export function DesignPreviews({
     return { startsAt: d.toISOString(), endsAt: new Date(d.getTime() + 7_200_000).toISOString() };
   });
   const name = title || t.design.sampleTitle;
+  const labels = [t.design.previewApp, t.design.previewTile, t.design.previewPoster];
+  const go = (i: number) => {
+    const el = track.current;
+    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
+  };
   return (
-    <div className="flex flex-col gap-3">
-      <div className="-mx-4 flex snap-x snap-mandatory items-start gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-        <Frame label={t.design.previewApp}>
-          <HeroCard look={look} living={motion}>
-            <div className="mb-3 truncate text-[12px] font-bold uppercase tracking-wider opacity-80">
-              {g.name}
-            </div>
-            <div className="flex items-center gap-3.5">
-              <DateBadge {...f.dateBadge(when.startsAt)} onBrand />
-              <div className="min-w-0">
-                <div className="truncate text-[20px] font-bold leading-tight">{name}</div>
-                <div className="text-[14px] opacity-85">
-                  {f.relativeDay(when.startsAt)} · {f.timeRange(when.startsAt, when.endsAt)}
+    <div className="sticky top-0 z-20 -mx-4 rounded-b-[22px] bg-[var(--color-section)] pb-2.5 pt-1 shadow-card">
+      <div className="flex justify-center gap-1.5 px-4 pb-2">
+        {labels.map((l, i) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => go(i)}
+            className={`rounded-full px-3 py-1 text-[12px] font-semibold transition ${
+              slide === i ? 'brand-gradient text-white shadow-cta' : 'bg-hairline text-hint'
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+      <div
+        ref={track}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setSlide(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+        }}
+        className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]"
+      >
+        <Slide>
+          <div className="w-full">
+            <HeroCard look={look} living={motion}>
+              <div className="mb-3 truncate text-[12px] font-bold uppercase tracking-wider opacity-80">
+                {g.name}
+              </div>
+              <div className="flex items-center gap-3.5">
+                <DateBadge {...f.dateBadge(when.startsAt)} onBrand />
+                <div className="min-w-0">
+                  <div className="truncate text-[20px] font-bold leading-tight">{name}</div>
+                  <div className="text-[14px] opacity-85">
+                    {f.relativeDay(when.startsAt)} · {f.timeRange(when.startsAt, when.endsAt)}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="mt-3 text-[16px] font-semibold">«{t.design.sampleTopic}»</div>
-          </HeroCard>
-        </Frame>
-        <Frame label={t.design.previewTile} narrow>
-          <div className="glass overflow-hidden rounded-2xl shadow-card">
+              <div className="mt-3 text-[16px] font-semibold">«{t.design.sampleTopic}»</div>
+            </HeroCard>
+          </div>
+        </Slide>
+        <Slide>
+          <div className="glass w-[58%] overflow-hidden rounded-2xl shadow-card">
             <LookTop look={look} className="flex aspect-[16/10] flex-col p-2.5">
               <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
                 {t.meetings.details}
@@ -290,54 +321,38 @@ export function DesignPreviews({
               </span>
             </div>
           </div>
-        </Frame>
-      </div>
-      {/* The poster on its own row: it is taller than the other two. */}
-      <Frame label={t.design.previewPoster} poster>
-        {/* Drawn at print size (540×675); shown here at half. */}
-        <div className="h-[338px] w-[270px] overflow-hidden rounded-xl shadow-card">
-          <div className="origin-top-left scale-50">
-            <MeetingPoster
-              m={{
-                title: name,
-                startsAt: when.startsAt,
-                endsAt: when.endsAt,
-                topic: t.design.sampleTopic,
-                location: t.design.sampleLocation,
-                leader: null,
-                kind: null,
-                look,
-                design: design ?? null,
-                speakers: [],
-              }}
-              g={g}
-            />
+        </Slide>
+        <Slide>
+          {/* Drawn at print size (540×675); shown here at 30%. */}
+          <div className="h-[203px] w-[162px] overflow-hidden rounded-xl shadow-card">
+            <div className="origin-top-left scale-[0.3]">
+              <MeetingPoster
+                m={{
+                  title: name,
+                  startsAt: when.startsAt,
+                  endsAt: when.endsAt,
+                  topic: t.design.sampleTopic,
+                  location: t.design.sampleLocation,
+                  leader: null,
+                  kind: null,
+                  look,
+                  design: design ?? null,
+                  speakers: [],
+                }}
+                g={g}
+              />
+            </div>
           </div>
-        </div>
-      </Frame>
+        </Slide>
+      </div>
     </div>
   );
 }
 
-function Frame({
-  label,
-  narrow,
-  poster,
-  children,
-}: {
-  label: string;
-  narrow?: boolean;
-  /** Sized by the small poster inside. */
-  poster?: boolean;
-  children: ReactNode;
-}) {
+/** One page of the preview carousel: full width, the same height for all three. */
+function Slide({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={`shrink-0 snap-start ${poster ? 'mx-auto w-[270px]' : narrow ? 'w-[52%]' : 'w-[86%]'}`}
-    >
-      <div className="mb-1.5 px-1 text-[12px] font-semibold uppercase tracking-wide text-hint">
-        {label}
-      </div>
+    <div className="flex h-[210px] w-full shrink-0 snap-center items-center justify-center px-4">
       {children}
     </div>
   );
