@@ -213,7 +213,8 @@ export async function treasurySummary(db: Db, group: Group): Promise<TreasurySum
   const church = await getChurch(db);
   const today = localDate(Date.now(), church.timezone);
   const current = periodOf(today);
-  const first = addMonths(current, -5);
+  // A year of months: the flow chart shows the last six, the balance line all twelve.
+  const first = addMonths(current, -11);
   const year = Number(today.slice(0, 4));
 
   const [balance, flows, yearRows, donorRows, payerRows, paidNow] = await Promise.all([
@@ -261,7 +262,7 @@ export async function treasurySummary(db: Db, group: Group): Promise<TreasurySum
   ]);
 
   const flowMap = new Map(flows.map((f) => [f.month, f]));
-  const series: MonthFlow[] = Array.from({ length: 6 }, (_, i) => {
+  const series: MonthFlow[] = Array.from({ length: 12 }, (_, i) => {
     const month = addMonths(first, i);
     const f = flowMap.get(month);
     return { month, incomeCents: Number(f?.income ?? 0), expenseCents: Number(f?.expense ?? 0) };

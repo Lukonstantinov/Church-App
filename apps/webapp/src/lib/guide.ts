@@ -297,13 +297,31 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
+        title: 'Set the current balance (cash count)',
+        steps: [
+          '«Касса» → on the balance card «✎ Указать текущий баланс» → type what is really there now.',
+          'The difference is saved as one entry «Корректировка баланса» (income or expense), so the history still adds up.',
+        ],
+      },
+      {
+        title: 'Delete ALL treasury data of a ministry (church admins)',
+        steps: [
+          '«Касса» → bottom of the screen «🗑 Удалить все данные кассы» → type the ministry’s name → confirm.',
+          'Every entry is deleted for good and the balance becomes 0. Download a report first if you need the history.',
+        ],
+      },
+      {
         title: 'Remove (void) a transaction',
         steps: ['«Касса» → tap the transaction → void → confirm.'],
         note: 'Voided entries stay visible as crossed out, for honest accounting.',
       },
       {
         title: 'Reports (PDF / Excel)',
-        steps: ['«Ещё» → «Отчёты» → period → attendance or treasury. The bot sends the file.'],
+        steps: [
+          '«Ещё» → «Отчёты» → period → attendance or treasury. The bot sends the file.',
+          'The treasury PDF has a coloured summary, a month-by-month chart and coloured bars for income, expenses and donors.',
+          'Charts in the app: «Касса» → «Статистика» — balance over the year and income/expenses per month.',
+        ],
       },
     ],
   },

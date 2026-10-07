@@ -135,7 +135,7 @@ export interface TreasurySummary {
   balanceCents: number;
   /** Current month in the church time zone. */
   month: MonthFlow;
-  /** Oldest → newest, the last 6 months including the current one. */
+  /** Oldest → newest, the last 12 months including the current one. */
   series: MonthFlow[];
   dues: {
     period: string;
@@ -241,3 +241,13 @@ export interface TreasuryExport {
 export const DOCUMENT_MAX_BYTES = 8_000_000;
 /** Largest picture the bot will send to a chat (Telegram's photo limit is 10 MB). */
 export const IMAGE_SEND_MAX_BYTES = 9_000_000;
+
+/** Sets the treasury to the money actually there now: a correction entry makes up the difference. */
+export const setBalanceSchema = z.object({
+  balanceCents: z.number().int().min(-100_000_000).max(100_000_000),
+  note: z.string().trim().max(200).nullish(),
+});
+export type SetBalanceInput = z.input<typeof setBalanceSchema>;
+
+/** Wiping a ministry's money records needs its name typed back, so it isn't done by mistake. */
+export const wipeTreasurySchema = z.object({ confirmName: z.string().trim().min(1).max(64) });

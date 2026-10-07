@@ -449,6 +449,146 @@ async function toBlob(doc: TDocumentDefinitions): Promise<Blob> {
   return pdfMake.createPdf(doc).getBlob();
 }
 
+const GOOD = '#16a34a';
+const BAD = '#dc2626';
+/** Usable page width (A4 portrait minus margins), in points. */
+const PAGE_W = 523;
+
+/** A colour mixed with white (pdf colours take plain #rrggbb only). */
+function tint(hex: string, k: number): string {
+  const v = parseInt(hex.slice(1, 7), 16);
+  const mix = (c: number) => Math.round(255 - (255 - c) * k);
+  const out = [(v >> 16) & 255, (v >> 8) & 255, v & 255].map(mix);
+  return `#${out.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** A brand-coloured band with the report's title and period. */
+function banner(ctx: ReportCtx, title: string, sub: string): Content {
+  return {
+    table: {
+      widths: ['*'],
+      body: [
+        [
+          {
+            stack: [
+              { text: title, fontSize: 17, bold: true, color: '#ffffff' },
+              { text: sub, fontSize: 9, color: '#f3f4f6', margin: [0, 3, 0, 0] },
+            ],
+            fillColor: ctx.brandHex,
+            margin: [12, 10, 12, 10],
+          },
+        ],
+      ],
+    },
+    layout: 'noBorders',
+    margin: [0, 0, 0, 12],
+  };
+}
+
+/** Coloured summary tiles side by side: a label and a big number each. */
+function tiles(items: { label: string; value: string; color: string }[]): Content {
+  return {
+    columns: items.map((x) => ({
+      table: {
+        widths: ['*'],
+        body: [
+          [
+            {
+              stack: [
+                { text: x.label.toUpperCase(), fontSize: 7, bold: true, color: x.color },
+                { text: x.value, fontSize: 13, bold: true, color: '#111827', margin: [0, 3, 0, 0] },
+              ],
+              fillColor: tint(x.color, 0.1),
+              margin: [8, 7, 8, 7],
+            },
+          ],
+        ],
+      },
+      layout: 'noBorders',
+    })),
+    columnGap: 8,
+    margin: [0, 0, 0, 4],
+  };
+}
+
+/** Money in and out per month of the period, from the entries. */
+function monthFlows(data: TreasuryExport) {
+  const map = new Map<string, { inC: number; outC: number }>();
+  for (const tx of data.transactions) {
+    const p = tx.occurredOn.slice(0, 7);
+    const v = map.get(p) ?? { inC: 0, outC: 0 };
+    if (isOutgoing(tx.kind)) v.outC += tx.amountCents;
+    else v.inC += tx.amountCents;
+    map.set(p, v);
+  }
+  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
+}
+
+/** Green and red bars per month, drawn on the page, with month names underneath. */
+function monthChart(
+  months: [string, { inC: number; outC: number }][],
+  label: (p: string) => string,
+): Content {
+  const H = 110;
+  const max = Math.max(1, ...months.flatMap(([, v]) => [v.inC, v.outC]));
+  const slot = PAGE_W / months.length;
+  const bar = Math.min(16, slot * 0.32);
+  const shapes: object[] = [
+    { type: 'line', x1: 0, y1: H, x2: PAGE_W, y2: H, lineWidth: 0.6, lineColor: '#d1d5db' },
+  ];
+  months.forEach(([, v], i) => {
+    const cx = slot * i + slot / 2;
+    const hIn = (v.inC / max) * (H - 6);
+    const hOut = (v.outC / max) * (H - 6);
+    shapes.push({ type: 'rect', x: cx - bar - 1, y: H - hIn, w: bar, h: hIn, color: GOOD, r: 2 });
+    shapes.push({ type: 'rect', x: cx + 1, y: H - hOut, w: bar, h: hOut, color: BAD, r: 2 });
+  });
+  return {
+    stack: [
+      { canvas: shapes as never },
+      {
+        columns: months.map(([p]) => ({
+          text: label(p),
+          width: slot,
+          alignment: 'center' as const,
+          fontSize: 7.5,
+          color: '#6b7280',
+        })),
+        columnGap: 0,
+        margin: [0, 3, 0, 0],
+      },
+    ],
+  };
+}
+
+/** Rows of name, a coloured bar to scale and the amount. */
+function barRows(rows: [string, number][], m: (c: number) => string, color: string): Content {
+  const max = Math.max(1, ...rows.map(([, v]) => v));
+  const W = 200;
+  return {
+    table: {
+      widths: ['*', W, 'auto'],
+      body: rows.map(([name, v]) => [
+        { text: name },
+        {
+          canvas: [
+            { type: 'rect', x: 0, y: 3, w: W, h: 7, color: '#f1f5f9', r: 3 },
+            { type: 'rect', x: 0, y: 3, w: Math.max(3, (v / max) * W), h: 7, color, r: 3 },
+          ] as never,
+        },
+        { text: m(v), alignment: 'right' as const, bold: true },
+      ]),
+    },
+    layout,
+  };
+}
+
+/** Lines with every other row tinted, easier to follow across a long list. */
+const zebra = {
+  ...layout,
+  fillColor: (i: number) => (i > 0 && i % 2 === 0 ? '#f8fafc' : null),
+};
+
 export async function treasuryPdf(
   ctx: ReportCtx,
   data: TreasuryExport,
@@ -458,39 +598,62 @@ export async function treasuryPdf(
   const m = (c: number, sign = false) => f.money(c, ctx.currency, { sign });
   const sum = totals(data);
   const title = t.reports.fileTreasury(data.groupName, data.label ?? data.year);
-  const kv = (rows: [string, string][]) => ({
-    table: {
-      widths: ['*', 'auto'],
-      body: rows.map(([a, b]) => [a, { text: b, alignment: 'right' as const }]),
-    },
-    layout,
-  });
 
   const content: Content[] = [
-    { text: title, style: 'h1' },
-    {
-      text: t.reports.generated(f.dayMonth(new Date().toISOString())),
-      style: 'muted',
-      margin: [0, 2, 0, 10],
-    },
-    kv([
-      [t.reports.opening, m(data.openingCents)],
-      [t.reports.totalIncome, m(sum.income, true)],
-      [t.reports.totalExpense, m(-sum.expense, true)],
-      [t.reports.closing, m(data.closingCents)],
+    banner(
+      ctx,
+      title,
+      `${f.dayMonth(`${data.from}T12:00:00Z`)} – ${f.dayMonth(`${data.to}T12:00:00Z`)} ${data.to.slice(0, 4)} · ${t.reports.generated(f.dayMonth(new Date().toISOString()))}`,
+    ),
+    tiles([
+      { label: t.reports.opening, value: m(data.openingCents), color: '#64748b' },
+      { label: t.reports.totalIncome, value: m(sum.income, true), color: GOOD },
+      { label: t.reports.totalExpense, value: m(-sum.expense, true), color: BAD },
+      { label: t.reports.closing, value: m(data.closingCents), color: ctx.brandHex },
     ]),
   ];
+  const months = monthFlows(data);
+  if (months.length > 1) {
+    content.push({ text: t.treasury.flowTitle, style: 'h2' });
+    content.push(monthChart(months, (p) => f.monthShort(p)));
+    content.push({
+      columns: [
+        { text: [{ text: '■ ', color: GOOD }, t.treasury.income], width: 'auto', fontSize: 8.5 },
+        { text: [{ text: '■ ', color: BAD }, t.treasury.expense], width: 'auto', fontSize: 8.5 },
+      ],
+      columnGap: 14,
+      margin: [0, 4, 0, 0],
+    });
+  }
   if (sum.byKind.length) {
     content.push({ text: t.treasury.incomeByKind(data.label ?? data.year), style: 'h2' });
-    content.push(kv(sum.byKind.map(([k, v]) => [incomeLabel(t, k), m(v)])));
+    content.push(
+      barRows(
+        sum.byKind.map(([k, v]) => [incomeLabel(t, k), v]),
+        m,
+        GOOD,
+      ),
+    );
   }
   if (sum.byCategory.length) {
     content.push({ text: t.treasury.byCategory(data.label ?? data.year), style: 'h2' });
-    content.push(kv(sum.byCategory.map(([k, v]) => [categoryLabel(t, k), m(v)])));
+    content.push(
+      barRows(
+        sum.byCategory.map(([k, v]) => [categoryLabel(t, k), v]),
+        m,
+        BAD,
+      ),
+    );
   }
   if (sum.donors.length) {
     content.push({ text: t.treasury.donors(data.label ?? data.year), style: 'h2' });
-    content.push(kv(sum.donors.map(([k, v]) => [k || t.treasury.anonymous, m(v)])));
+    content.push(
+      barRows(
+        sum.donors.map(([k, v]) => [k || t.treasury.anonymous, v]),
+        m,
+        ctx.brandHex,
+      ),
+    );
   }
 
   if (dues && dues.rows.length && dues.feeCents > 0) {
@@ -568,7 +731,7 @@ export async function treasuryPdf(
           }),
         ],
       },
-      layout,
+      layout: zebra,
     });
   }
   return toBlob(pdfDoc(ctx, title, content));

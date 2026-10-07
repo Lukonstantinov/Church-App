@@ -101,7 +101,7 @@ describe('treasury: cash book', () => {
     const s = await apiJson<TreasurySummary>(`/api/groups/${g.id}/treasury`, { user: ADMIN });
     expect(s.balanceCents).toBe(10_000 - 2_550 + 2_000);
     expect(s.month).toMatchObject({ incomeCents: 12_000, expenseCents: 2_550 });
-    expect(s.series).toHaveLength(6);
+    expect(s.series).toHaveLength(12);
     expect(s.expenseByCategory).toEqual([{ category: 'food', cents: 2_550 }]);
     expect(s.donors).toEqual([
       { member: { id: donor, firstName: 'Павел', lastName: null }, cents: 2_000, count: 1 },
@@ -324,5 +324,38 @@ describe('treasury: monthly dues', () => {
     });
     const after = await apiJson<MyFinanceGroup[]>('/api/me/finance', { user: member });
     expect(after.find((m) => m.groupId === g.id)!.balanceCents).toBe(1_200);
+  });
+});
+
+describe('treasury: set balance and wipe', () => {
+  it('sets the balance with one correction entry; only church admins can wipe, with the name', async () => {
+    const g = await createGroup('Касса тест');
+    await post(`/api/groups/${g.id}/transactions`, {
+      kind: 'income',
+      amountCents: 5000,
+      occurredOn: today(),
+    });
+    const after = await post<TreasurySummary>(`/api/groups/${g.id}/treasury/balance`, {
+      balanceCents: 12000,
+      note: 'Пересчитали наличные',
+    });
+    expect(after.balanceCents).toBe(12000);
+    const lower = await post<TreasurySummary>(`/api/groups/${g.id}/treasury/balance`, {
+      balanceCents: 2000,
+    });
+    expect(lower.balanceCents).toBe(2000);
+
+    const wrong = await api(`/api/groups/${g.id}/treasury`, {
+      method: 'DELETE',
+      user: ADMIN,
+      json: { confirmName: 'не то' },
+    });
+    expect(wrong.status).toBe(400);
+    const wiped = await apiJson<TreasurySummary>(`/api/groups/${g.id}/treasury`, {
+      method: 'DELETE',
+      user: ADMIN,
+      json: { confirmName: 'касса тест' },
+    });
+    expect(wiped.balanceCents).toBe(0);
   });
 });

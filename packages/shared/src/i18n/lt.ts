@@ -685,6 +685,18 @@ export const lt: Messages = {
     timezoneHint: 'Susitikimų ir priminimų laikui.',
   },
   treasury: {
+    setBalance: 'Nurodyti dabartinį likutį',
+    setBalanceHint: 'Kiek pinigų kasoje dabar. Skirtumas įrašomas vienu įrašu „Likučio pataisa“.',
+    setBalanceNote: 'Komentaras (nebūtina)',
+    balanceSet: 'Likutis atnaujintas',
+    balanceChart: 'Likutis per metus',
+    balanceChartHint: 'Kiek buvo kasoje kiekvieno mėnesio pabaigoje',
+    wipeTitle: 'Ištrinti visus kasos duomenis',
+    wipeHint:
+      'Visi šios tarnystės kasos įrašai bus ištrinti visam laikui, likutis taps 0. Patvirtinkite įvesdami tarnystės pavadinimą.',
+    wipeConfirmLabel: 'Tarnystės pavadinimas',
+    wipeDone: 'Kasos duomenys ištrinti',
+    wipeMismatch: 'Pavadinimas nesutampa',
     meeting: 'Susitikimas',
     noMeeting: 'Be susitikimo',
     search: 'Vardas, aukotojas ar pastaba',
@@ -728,6 +740,7 @@ export const lt: Messages = {
       donation: 'Aukos',
     },
     categories: {
+      correction: 'Likučio pataisa',
       food: 'Maistas',
       transport: 'Transportas',
       rent: 'Nuoma',

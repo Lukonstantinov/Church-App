@@ -17,6 +17,7 @@ import {
   IconX,
 } from '../components/icons';
 import {
+  BalanceLine,
   FlowBars,
   HBars,
   TxRow,
@@ -26,6 +27,7 @@ import {
   type LedgerEntry,
 } from '../components/money';
 import { TransactionSheet } from '../components/TreasurySheets';
+import { Sheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import {
   Button,
@@ -51,6 +53,8 @@ import {
   useTransactions,
   useTreasury,
   useTreasurySettings,
+  useSetBalance,
+  useWipeTreasury,
   type LedgerFilter,
 } from '../lib/queries';
 import { haptic } from '../lib/telegram';
@@ -74,6 +78,8 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
     storage.set(SEG_KEY, s);
   };
   const s = summary.data;
+  const [balanceOpen, setBalanceOpen] = useState(false);
+  const me = useMe();
 
   return (
     <Screen tabs>
@@ -85,6 +91,7 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
           onReports={
             can('reports') ? () => push({ name: 'reports', groupId: active.id }) : undefined
           }
+          onSetBalance={can('money.manage') ? () => setBalanceOpen(true) : undefined}
         />
       ) : (
         <Skeleton className="h-40 w-full" />
@@ -125,11 +132,29 @@ export function Treasury({ groups, active }: { groups: GroupSummary[]; active: G
         <LedgerPanel key={active.id} groupId={active.id} groupName={active.name} summary={s} />
       )}
       {seg === 'stats' && (s ? <StatsPanel s={s} /> : <Skeleton className="h-56 w-full" />)}
+      {me.data?.user.isAdmin && can('money.manage') && (
+        <WipeTreasury groupId={active.id} name={active.name} />
+      )}
+      {balanceOpen && s && (
+        <SetBalanceSheet
+          groupId={active.id}
+          current={s.balanceCents}
+          onClose={() => setBalanceOpen(false)}
+        />
+      )}
     </Screen>
   );
 }
 
-function BalanceHero({ s, onReports }: { s: TreasurySummary; onReports?: () => void }) {
+function BalanceHero({
+  s,
+  onReports,
+  onSetBalance,
+}: {
+  s: TreasurySummary;
+  onReports?: () => void;
+  onSetBalance?: () => void;
+}) {
   const t = useT();
   const f = useFmt();
   const money = useMoney();
@@ -149,8 +174,20 @@ function BalanceHero({ s, onReports }: { s: TreasurySummary; onReports?: () => v
           </button>
         )}
       </div>
-      <div className="mt-2 text-[40px] font-bold leading-none tracking-tight tabular-nums">
-        {money(s.balanceCents)}
+      <div className="mt-2 flex items-end gap-2">
+        <span className="text-[40px] font-bold leading-none tracking-tight tabular-nums">
+          {money(s.balanceCents)}
+        </span>
+        {onSetBalance && (
+          <button
+            type="button"
+            onClick={onSetBalance}
+            aria-label={t.treasury.setBalance}
+            className="mb-1 rounded-full bg-white/18 px-2.5 py-1 text-[12px] font-semibold active:scale-95"
+          >
+            ✎ {t.treasury.setBalance}
+          </button>
+        )}
       </div>
       <div className="mt-4 text-[13px] text-white/75">
         {t.treasury.monthFlow(f.periodLong(s.month.month))}
@@ -421,6 +458,13 @@ function StatsPanel({ s }: { s: TreasurySummary }) {
   const hasFlow = s.series.some((m) => m.incomeCents || m.expenseCents);
   return (
     <>
+      {hasFlow && (
+        <Card className="p-4">
+          <h2 className="text-[17px] font-semibold">{t.treasury.balanceChart}</h2>
+          <p className="mb-3 text-[13px] text-hint">{t.treasury.balanceChartHint}</p>
+          <BalanceLine series={s.series} balanceCents={s.balanceCents} />
+        </Card>
+      )}
       <Card className="p-4">
         <h2 className="text-[17px] font-semibold">{t.treasury.flowTitle}</h2>
         <p className="mb-3 flex items-center gap-3 text-[13px] text-hint">
@@ -433,7 +477,7 @@ function StatsPanel({ s }: { s: TreasurySummary }) {
           </span>
         </p>
         {hasFlow ? (
-          <FlowBars series={s.series} />
+          <FlowBars series={s.series.slice(-6)} />
         ) : (
           <p className="py-6 text-center text-[14px] text-hint">{t.treasury.noStats}</p>
         )}
@@ -493,5 +537,108 @@ function StatCard({ title, children }: { title: string; children: React.ReactNod
       </h2>
       {children || <p className="py-3 text-center text-[14px] text-hint">{t.treasury.noStats}</p>}
     </Card>
+  );
+}
+
+/** Type in how much is really in the treasury now; the difference is saved as a correction. */
+function SetBalanceSheet({
+  groupId,
+  current,
+  onClose,
+}: {
+  groupId: number;
+  current: number;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const set = useSetBalance(groupId);
+  const [amount, setAmount] = useState((current / 100).toFixed(2).replace('.', ','));
+  const [note, setNote] = useState('');
+  const cents = parseAmount(amount.replace(/^-/, ''));
+  const negative = amount.trim().startsWith('-');
+  async function save() {
+    if (cents === null) return;
+    try {
+      await set.mutateAsync({ balanceCents: negative ? -cents : cents, note: note.trim() || null });
+      haptic.success();
+      toast(t.treasury.balanceSet);
+      onClose();
+    } catch {
+      toast(t.common.saveFailed, 'error');
+    }
+  }
+  return (
+    <Sheet open onClose={onClose} title={t.treasury.setBalance}>
+      <div className="flex flex-col gap-3 px-4 pb-4">
+        <p className="text-[13px] text-hint">{t.treasury.setBalanceHint}</p>
+        <input
+          inputMode="decimal"
+          autoFocus
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="w-full rounded-2xl bg-hairline px-4 py-3 text-center text-[28px] font-bold tabular-nums outline-none"
+        />
+        <input
+          value={note}
+          maxLength={200}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder={t.treasury.setBalanceNote}
+          className="w-full rounded-xl bg-hairline px-3 py-2.5 text-[15px] outline-none placeholder:text-hint"
+        />
+        <Button disabled={cents === null || set.isPending} onClick={() => void save()}>
+          {t.common.save}
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
+
+/** Church admins: delete all of this ministry's money records (its name typed back first). */
+function WipeTreasury({ groupId, name }: { groupId: number; name: string }) {
+  const t = useT();
+  const toast = useToast();
+  const wipe = useWipeTreasury(groupId);
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const ok = typed.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase();
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-2 self-center rounded-full px-4 py-2 text-[14px] font-semibold text-absent active:bg-absent/10"
+      >
+        🗑 {t.treasury.wipeTitle}
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={t.treasury.wipeTitle}>
+        <div className="flex flex-col gap-3 px-4 pb-4">
+          <p className="text-[14px] leading-snug text-absent">{t.treasury.wipeHint}</p>
+          <input
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder={`${t.treasury.wipeConfirmLabel}: ${name}`}
+            className="w-full rounded-xl bg-hairline px-3 py-2.5 text-[16px] outline-none placeholder:text-hint"
+          />
+          <Button
+            variant="destructive"
+            disabled={!ok || wipe.isPending}
+            onClick={() =>
+              void wipe
+                .mutateAsync(typed)
+                .then(() => {
+                  haptic.success();
+                  toast(t.treasury.wipeDone);
+                  setOpen(false);
+                  setTyped('');
+                })
+                .catch(() => toast(t.treasury.wipeMismatch, 'error'))
+            }
+          >
+            {t.treasury.wipeTitle}
+          </Button>
+        </div>
+      </Sheet>
+    </>
   );
 }

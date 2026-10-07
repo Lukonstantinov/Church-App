@@ -98,7 +98,10 @@ a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).
 home tiles (drag to reorder, expand), several meetings of a day share one tile.
 
 **Money** — income / expense / donation, receipts, dues, voiding, meeting & event money,
-PDF/Excel reports delivered by the bot, statistics.
+PDF/Excel reports delivered by the bot (coloured PDF: summary tiles, month chart, bars),
+statistics with animated charts (balance line over 12 months, month bars), set the balance
+to a cash count (`POST …/treasury/balance` → a `correction` entry), church admins wipe all
+money records (`DELETE …/treasury`, ministry name typed back).
 
 **Phone** — "Add to home screen" (Telegram `addToHomeScreen`; icon = the bot's profile photo,
 set from church settings via `setMyProfilePhoto`, `PUT /api/church/bot-photo`), dynamic `/manifest.webmanifest` + `/apple-touch-icon.png` from the church

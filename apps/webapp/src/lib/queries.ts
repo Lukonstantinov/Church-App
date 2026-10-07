@@ -862,6 +862,32 @@ export function useTreasury(groupId: number) {
   });
 }
 
+/** Sets the balance to the real amount now (a correction entry makes up the difference). */
+export function useSetBalance(groupId: number) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (input: { balanceCents: number; note?: string | null }) =>
+      apiFetch<TreasurySummary>(`/groups/${groupId}/treasury/balance`, {
+        method: 'POST',
+        ...json(input),
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+/** Church admins: deletes all of a ministry's money records (its name typed back). */
+export function useWipeTreasury(groupId: number) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (confirmName: string) =>
+      apiFetch<TreasurySummary>(`/groups/${groupId}/treasury`, {
+        method: 'DELETE',
+        ...json({ confirmName }),
+      }),
+    onSuccess: invalidate,
+  });
+}
+
 /** Cash-book entries, newest first; `filter` is a comma list of kinds ("" = all). */
 export interface LedgerFilter {
   member?: number;

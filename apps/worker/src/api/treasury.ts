@@ -7,6 +7,9 @@ import {
   createTransactionSchema,
   duesExemptSchema,
   payDuesSchema,
+  setBalanceSchema,
+  wipeTreasurySchema,
+  localDate,
   treasurySettingsSchema,
   updateTransactionSchema,
   type TransactionKind,
@@ -17,7 +20,9 @@ import { groups, meetings, memberships, transactions } from '../db/schema';
 import { assertCan } from '../lib/access';
 import { audit } from '../lib/audit';
 import { assertGroupMedia, readImageUpload, signedMediaUrl, storeMedia } from '../lib/media';
+import { getChurch } from '../lib/church';
 import {
+  balanceOf,
   duesSheet,
   listTransactions,
   myFinance,
@@ -54,6 +59,66 @@ groupTreasuryRoutes.patch('/:id/treasury', async (c) => {
     });
   }
   return c.json(await treasurySummary(db, { ...group, ...input }));
+});
+
+/**
+ * Sets the balance to what is really there now (a cash count): the difference goes in as
+ * one income or expense marked as a correction, so the history stays explainable.
+ */
+groupTreasuryRoutes.post('/:id/treasury/balance', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const group = await assertCan(db, user, idParam(c), 'money.manage');
+  const { balanceCents, note } = await parseBody(c, setBalanceSchema);
+  const diff = balanceCents - (await balanceOf(db, group.id));
+  if (diff !== 0) {
+    const { timezone } = await getChurch(db);
+    await db.insert(transactions).values({
+      groupId: group.id,
+      kind: diff > 0 ? 'income' : 'expense',
+      amountCents: Math.abs(diff),
+      occurredOn: localDate(Date.now(), timezone),
+      category: 'correction',
+      note: note || null,
+      createdBy: user.id,
+    });
+    await audit(db, {
+      actorUserId: user.id,
+      action: 'treasury_balance_set',
+      entity: 'group',
+      entityId: group.id,
+      groupId: group.id,
+      data: { balanceCents, diff },
+    });
+  }
+  return c.json(await treasurySummary(db, group));
+});
+
+/**
+ * Deletes every money record of a ministry (church admins only, with its name typed back).
+ * Receipts' pictures stay in storage; the cash book starts from zero.
+ */
+groupTreasuryRoutes.delete('/:id/treasury', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  if (!user.isAdmin) throw new HTTPException(403, { message: 'forbidden' });
+  const group = await assertCan(db, user, idParam(c), 'money.manage');
+  const { confirmName } = await parseBody(c, wipeTreasurySchema);
+  if (confirmName.trim().toLocaleLowerCase() !== group.name.trim().toLocaleLowerCase())
+    throw new HTTPException(400, { message: 'name_mismatch' });
+  const removed = await db
+    .delete(transactions)
+    .where(eq(transactions.groupId, group.id))
+    .returning({ id: transactions.id });
+  await audit(db, {
+    actorUserId: user.id,
+    action: 'treasury_wiped',
+    entity: 'group',
+    entityId: group.id,
+    groupId: group.id,
+    data: { count: removed.length },
+  });
+  return c.json(await treasurySummary(db, group));
 });
 
 groupTreasuryRoutes.get('/:id/transactions', async (c) => {

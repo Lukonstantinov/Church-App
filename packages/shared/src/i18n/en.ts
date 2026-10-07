@@ -680,6 +680,19 @@ export const en: Messages = {
     timezoneHint: 'Used for meeting times and reminders.',
   },
   treasury: {
+    setBalance: 'Set the current balance',
+    setBalanceHint:
+      'How much money is in the treasury now. The difference is saved as one “Balance correction” entry.',
+    setBalanceNote: 'Comment (optional)',
+    balanceSet: 'Balance updated',
+    balanceChart: 'Balance over the year',
+    balanceChartHint: 'What was in the treasury at the end of each month',
+    wipeTitle: 'Delete all treasury data',
+    wipeHint:
+      'Every treasury entry of this ministry is deleted for good and the balance becomes 0. To confirm, type the ministry’s name.',
+    wipeConfirmLabel: 'Ministry name',
+    wipeDone: 'Treasury data deleted',
+    wipeMismatch: 'The name doesn’t match',
     meeting: 'Meeting',
     noMeeting: 'No meeting',
     search: 'Name, donor or note',
@@ -722,6 +735,7 @@ export const en: Messages = {
       donation: 'Donations',
     },
     categories: {
+      correction: 'Balance correction',
       food: 'Food',
       transport: 'Transport',
       rent: 'Rent',
