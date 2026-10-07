@@ -88,8 +88,8 @@ bot-managed Telegram chat, pin to the main page, picture/PDF export.
 **Live & reminders** — LIVE badge (pulsing, outline kept) while an event/meeting is on;
 "🔴 LIVE now" bot message at the start (`lib/liveNotice.ts`, `live_notified_at`, skipped if
 more than 30 min late); it is pinned while on and unpinned + deleted after the end
-(`live_pins`, `clearEndedLive`). Live items per ministry in `GroupSummary.live` (red bars on
-the main page, red-tinted tiles). Automatic event reminders per ministry (`groups.event_reminder_hours`,
+(`live_pins`, `clearEndedLive`). Live items per ministry in `GroupSummary.live` (main page: LIVE badge +
+pulsing red outline on the ministry card only; red-tinted tiles inside). Automatic event reminders per ministry (`groups.event_reminder_hours`,
 off by default; checked every 5 min) plus manual reminders. Meeting reminders
 (`groups.meeting_reminders`: minutes list, null = [120, 60], [] = off; claimed per time in
 `job_runs` as `meeting_remind`) with who serves; meeting animation level off / calm / lively

@@ -47,8 +47,6 @@ export function Hub({ me }: { me: MeResponse }) {
 
       <TasksPill />
 
-      <LiveNowList groups={list} />
-
       {(pinned.data ?? []).length > 0 && (
         <section>
           <h2 className="mb-2 px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
@@ -253,41 +251,6 @@ export function EnvCard({
         )}
       </div>
     </button>
-  );
-}
-
-/**
- * Everything going on right now, across the person's ministries: a red pulsing bar per
- * meeting or event, tapping opens it. Nothing when nothing is live.
- */
-function LiveNowList({ groups }: { groups: GroupSummary[] }) {
-  const { push } = useNav();
-  const items = groups.flatMap((g) => g.live.map((x) => ({ ...x, group: g.name })));
-  if (items.length === 0) return null;
-  return (
-    <section className="flex flex-col gap-2">
-      {items.map((x) => (
-        <button
-          key={`${x.kind}${x.id}`}
-          type="button"
-          onClick={() =>
-            push(
-              x.kind === 'meeting'
-                ? { name: 'meeting', meetingId: x.id }
-                : { name: 'event', eventId: x.id },
-            )
-          }
-          className="live-strip flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left text-white shadow-cta active:scale-[0.98]"
-        >
-          <LiveBadge compact />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-bold">{x.title}</span>
-            <span className="block truncate text-[12px] text-white/80">{x.group}</span>
-          </span>
-          <span className="text-[18px]">›</span>
-        </button>
-      ))}
-    </section>
   );
 }
 
