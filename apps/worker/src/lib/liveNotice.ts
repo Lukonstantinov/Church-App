@@ -53,6 +53,8 @@ export async function sendLiveNotices(db: Db, env: Env, now: Date) {
       envAppUrl: env.APP_URL,
       dedupe: 'live',
       live: true,
+      liveEndsAt:
+        event.endsAt ?? new Date(Date.parse(event.startsAt) + 3 * 3_600_000).toISOString(),
     });
   }
 
@@ -115,6 +117,8 @@ export async function sendLiveNotices(db: Db, env: Env, now: Date) {
                 `${appUrl.replace(/\/+$/, '')}/?meeting=${meeting.id}`,
               )
             : undefined,
+          // Pinned at the top of the chat while the meeting is on, removed after it.
+          _live: { kind: 'meeting', refId: meeting.id, endsAt: meeting.endsAt },
         },
         dedupeKey: `mtglive:${meeting.id}:${p.chatId}`,
       });

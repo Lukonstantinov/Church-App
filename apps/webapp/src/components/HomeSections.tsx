@@ -31,8 +31,8 @@ import { MeetingHeroLines } from '../screens/MeetingScreen';
 import { canRollNow } from '../screens/Overview';
 import { Button, DateBadge, HeroCard } from './ui';
 import { BurnFrame } from './Burn';
-import { LiveNow, SoonPulse, SoonTimer, useStartsSoon } from './Live';
-import { useNowSecond } from '../lib/live';
+import { LiveBadge, LiveNow, SoonPulse, SoonTimer, useIsLive, useStartsSoon } from './Live';
+import { isLiveWindow, useNowSecond } from '../lib/live';
 import { TeamChips, meetingLook } from './TeamChips';
 import { LookTop } from './LookTop';
 import { PosterCard, PosterMedia, hasCover } from './Poster';
@@ -438,16 +438,28 @@ function EventRow({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
   );
 }
 
-function Tile({ onToggle, children }: { onToggle: () => void; children: ReactNode }) {
+function Tile({
+  onToggle,
+  live,
+  children,
+}: {
+  onToggle: () => void;
+  /** Going on now: a red tint and a pulsing red outline, to spot it at a glance. */
+  live?: boolean;
+  children: ReactNode;
+}) {
   const t = useT();
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-label={t.overview.expand}
-      className="glass flex h-full w-full flex-col overflow-hidden rounded-2xl text-left shadow-card active:scale-[0.98]"
+      className={`glass relative flex h-full w-full flex-col overflow-hidden rounded-2xl text-left shadow-card active:scale-[0.98] ${
+        live ? 'live-ring' : ''
+      }`}
     >
       {children}
+      {live && <span aria-hidden="true" className="live-tint" />}
     </button>
   );
 }
@@ -483,9 +495,10 @@ function PostTile({ post, onToggle }: { post: AnnouncementRow; onToggle: () => v
 function EventTile({ e, g, onToggle }: { e: EventSummary; g: GroupSummary; onToggle: () => void }) {
   const f = useFmt();
   const cover = e.coverUrl || e.design?.banner;
+  const live = useIsLive(e.startsAt, e.endsAt, e.status === 'cancelled');
   return (
     <BurnFrame e={e} radius={16} className="h-full">
-      <Tile onToggle={onToggle}>
+      <Tile onToggle={onToggle} live={live}>
         {cover ? (
           <div className="pointer-events-none relative">
             <EventCover e={e} className="aspect-[16/10]" compact />
@@ -526,6 +539,7 @@ function MeetingTile({
 }) {
   const t = useT();
   const f = useFmt();
+  const live = useIsLive(m.startsAt, m.endsAt, m.status === 'cancelled');
   return (
     <SoonPulse
       startsAt={m.startsAt}
@@ -533,11 +547,15 @@ function MeetingTile({
       motion={m.motion}
       className="h-full"
     >
-      <Tile onToggle={onToggle}>
+      <Tile onToggle={onToggle} live={live}>
         <LookTop look={meetingLook(m) ?? g} className="flex aspect-[16/10] flex-col p-2.5">
-          <span className="flex items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
-            <span className="opacity-80">{t.meetings.details}</span>
-            <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} compact />
+          <span className="flex min-w-0 items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
+            {/* While live the badge takes the label's place, so nothing spills out. */}
+            {live ? (
+              <LiveBadge compact />
+            ) : (
+              <span className="truncate opacity-80">{t.meetings.details}</span>
+            )}
             <SoonTimer startsAt={m.startsAt} compact />
           </span>
           <div className="flex items-end gap-2">
@@ -576,9 +594,11 @@ function MeetingDayTile({
   const now = useNowSecond() * 1000;
   const next = list.find((m) => Date.parse(m.startsAt) > now) ?? list[0]!;
   const soon = useStartsSoon(next.startsAt);
+  const isLive = (m: MeetingTileData) =>
+    m.status !== 'cancelled' && isLiveWindow(m.startsAt, m.endsAt, now);
   return (
     <SoonPulse startsAt={next.startsAt} motion={next.motion} className="h-full">
-      <Tile onToggle={onToggle}>
+      <Tile onToggle={onToggle} live={shown.some(isLive)}>
         <LookTop look={meetingLook(list[0]!) ?? g} className="flex flex-col gap-1.5 p-2">
           <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
             <span>{f.relativeDay(list[0]!.startsAt)}</span>
@@ -592,11 +612,14 @@ function MeetingDayTile({
             {shown.map((m, i) => (
               <span
                 key={m.id}
-                className="flex min-w-0 flex-col rounded-lg bg-white/22 px-1.5 py-1 backdrop-blur"
+                className={`flex min-w-0 flex-col rounded-lg px-1.5 py-1 ${
+                  isLive(m) ? 'live-cell text-white' : 'bg-white/22 backdrop-blur'
+                }`}
               >
-                <span className="flex items-center gap-1 text-[11px] font-bold tabular-nums">
-                  {f.time(m.startsAt)}
-                  <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} compact />
+                {/* A small cell has no room for the pill: a pulsing dot and a red cell say it. */}
+                <span className="flex min-w-0 items-center gap-1 text-[11px] font-bold tabular-nums">
+                  {isLive(m) && <LiveBadge dot />}
+                  <span className="truncate">{f.time(m.startsAt)}</span>
                 </span>
                 <span className="truncate text-[11px] leading-tight opacity-90">
                   {i === 3 && list.length > 4 ? `+${list.length - 3}` : m.title}
@@ -630,6 +653,12 @@ function MeetingExpanded({
     <SoonPulse startsAt={m.startsAt} cancelled={m.status === 'cancelled'} motion={m.motion}>
       <HeroCard living={m.motion ?? 'calm'} look={meetingLook(m)}>
         <SoonTimer startsAt={m.startsAt} className="mb-2" />
+        <LiveNow
+          startsAt={m.startsAt}
+          endsAt={m.endsAt}
+          cancelled={m.status === 'cancelled'}
+          className="mb-2"
+        />
         <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
           {t.overview.nextMeeting}
         </div>

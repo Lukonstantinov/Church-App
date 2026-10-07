@@ -11,7 +11,7 @@ import { getAppUrl, getChurch } from '../lib/church';
 import { escapeHtml } from '../lib/html';
 import { generateMeetings } from '../lib/meetings';
 import { leaderRecipients } from '../lib/membership';
-import { drainOutbox, enqueue } from '../lib/outbox';
+import { clearEndedLive, drainOutbox, enqueue } from '../lib/outbox';
 import { botApi } from '../lib/telegram';
 
 export const CRON_OUTBOX = '*/5 * * * *';
@@ -33,6 +33,7 @@ export async function minuteTick(env: Env, now = new Date()): Promise<void> {
   await sendLiveNotices(db, env, now);
   await remindUpcomingEvents(db, env, now);
   await sendMeetingReminders(db, env, now);
+  await clearEndedLive(db, botApi(env), now);
 }
 
 /** Hourly: create upcoming meetings, nudge leaders about missing roll calls, tidy up. */

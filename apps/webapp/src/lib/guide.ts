@@ -247,6 +247,8 @@ export const GUIDE: GuideSection[] = [
           'Automatic reminder: «Ещё» → «Настройки служения» → «Автонапоминание о событиях»: off, 1 h, 3 h, 1–3 days before.',
           'Manual reminder: «Ещё» → «Напоминания о событиях», or the event → remind.',
           '“🔴 LIVE now” goes to everyone automatically when an event or meeting starts.',
+          'That message is pinned at the top of each chat while it is on, and unpinned + deleted when it ends (checked every 5 min; worker: live_pins table, clearEndedLive in lib/outbox.ts). In group chats the bot must be an admin with “Pin messages”.',
+          'In the app: red LIVE bars at the top of the main page, a pulsing red outline on the ministry, and a red-tinted tile (a red cell in a day tile) on the ministry page.',
         ],
         note: 'Reminders are OFF for a new ministry until you choose a time.',
       },
@@ -346,6 +348,7 @@ export const GUIDE: GuideSection[] = [
         steps: [
           'Everything (reminders, LIVE, announcements, duties) comes as bot messages = normal Telegram push notifications.',
           'Each person must press Start in the bot once and not mute it.',
+          'A shortcut on the home screen can’t show a number badge (Telegram doesn’t allow it); the unread count shows on the Telegram app icon.',
         ],
       },
       {

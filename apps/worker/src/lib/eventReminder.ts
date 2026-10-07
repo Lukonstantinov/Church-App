@@ -161,6 +161,8 @@ export async function sendEventReminder(
     poster?: boolean;
     /** "It's live now" instead of a reminder. */
     live?: boolean;
+    /** With `live`: pin the message until this time, then remove it. */
+    liveEndsAt?: string;
   },
 ): Promise<{ total: number; bot: number }> {
   const fallback = await churchDefaultLocale(db);
@@ -212,9 +214,16 @@ export async function sendEventReminder(
     });
     if (!r.bot) continue;
     const reply_markup = eventKeyboard(t, args.event.id, appUrl, roster.length > 0);
+    const message = eventPayload(r.chatId!, html, picture, reply_markup);
     await enqueue(db, {
       chatId: r.chatId!,
-      ...eventPayload(r.chatId!, html, picture, reply_markup),
+      method: message.method,
+      payload: args.liveEndsAt
+        ? {
+            ...message.payload,
+            _live: { kind: 'event', refId: args.event.id, endsAt: args.liveEndsAt },
+          }
+        : message.payload,
       dedupeKey: `evremind:${args.event.id}:${r.chatId}:${stamp}`,
     });
     bot++;

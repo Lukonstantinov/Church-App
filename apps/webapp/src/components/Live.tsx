@@ -3,8 +3,26 @@ import type { MeetingMotion } from '@church/shared';
 import { isLiveWindow, useNowSecond } from '../lib/live';
 import { useT } from '../lib/i18n';
 
-/** A pulsing red "LIVE" pill: something is going on right now. */
-export function LiveBadge({ compact, className = '' }: { compact?: boolean; className?: string }) {
+/** A pulsing red "LIVE" pill: something is going on right now. `dot` fits tiny cells. */
+export function LiveBadge({
+  compact,
+  dot,
+  className = '',
+}: {
+  compact?: boolean;
+  dot?: boolean;
+  className?: string;
+}) {
+  if (dot)
+    return (
+      <span
+        role="status"
+        aria-label="LIVE"
+        className={`live-badge inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full ${className}`}
+      >
+        <span className="live-dot !h-1.5 !w-1.5" aria-hidden="true" />
+      </span>
+    );
   return (
     <span
       role="status"
@@ -35,6 +53,12 @@ export function LiveNow({
   useNowSecond();
   if (cancelled || !isLiveWindow(startsAt, endsAt)) return null;
   return <LiveBadge compact={compact} className={className} />;
+}
+
+/** Whether a meeting or event is going on right now (re-checked every second). */
+export function useIsLive(startsAt: string, endsAt?: string | null, cancelled?: boolean): boolean {
+  const now = useNowSecond() * 1000;
+  return !cancelled && isLiveWindow(startsAt, endsAt, now);
 }
 
 /** LIVE laid over the top of a cover (where the countdown sits before the start). */

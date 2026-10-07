@@ -136,6 +136,16 @@ export interface GroupSummary {
   backdropUrl: string | null;
   /** The background of this ministry's screens (null = the default). */
   pageBackground: AppBackground | null;
+  /** Meetings and events going on right now (for the LIVE marks on the main screen). */
+  live: LiveItem[];
+}
+
+export interface LiveItem {
+  kind: 'meeting' | 'event';
+  id: number;
+  title: string;
+  startsAt: string;
+  endsAt: string | null;
 }
 
 export interface GroupDetail extends GroupSummary {

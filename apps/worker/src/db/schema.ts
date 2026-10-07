@@ -398,6 +398,20 @@ export const outbox = sqliteTable(
 );
 
 /** Marks that a scheduled sub-job already ran for a scope+period, so it never runs twice. */
+/** "🔴 LIVE" messages pinned in people's chats with the bot, removed when the thing ends. */
+export const livePins = sqliteTable(
+  'live_pins',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    chatId: integer('chat_id').notNull(),
+    messageId: integer('message_id').notNull(),
+    kind: text('kind', { enum: ['meeting', 'event'] }).notNull(),
+    refId: integer('ref_id').notNull(),
+    endsAt: text('ends_at').notNull(),
+  },
+  (t) => [index('live_pins_ends').on(t.endsAt)],
+);
+
 export const jobRuns = sqliteTable(
   'job_runs',
   {

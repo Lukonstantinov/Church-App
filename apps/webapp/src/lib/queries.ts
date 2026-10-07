@@ -120,6 +120,8 @@ export function useGroups(enabled = true) {
     queryKey: keys.groups,
     queryFn: () => apiFetch<GroupSummary[]>('/groups'),
     enabled,
+    // Refresh now and then so a meeting that starts shows LIVE without reopening the app.
+    refetchInterval: 60_000,
   });
 }
 

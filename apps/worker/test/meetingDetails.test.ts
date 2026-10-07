@@ -22,7 +22,7 @@ import { events, meetings } from '../src/db/schema';
 import { remindUpcomingEvents } from '../src/jobs/tick';
 import { sendLiveNotices, sendMeetingReminders } from '../src/lib/liveNotice';
 import { generateMeetings } from '../src/lib/meetings';
-import { drainOutbox } from '../src/lib/outbox';
+import { clearEndedLive, drainOutbox } from '../src/lib/outbox';
 import { botApi } from '../src/lib/telegram';
 import {
   ADMIN,
@@ -1811,6 +1811,16 @@ describe('live messages, speakers and repeating meetings', () => {
     expect(
       texts.filter((x) => x.includes('Молитва') && x.includes('Встреча началась')),
     ).toHaveLength(1);
+    // Both are pinned in the person's chat while they last…
+    const pinned = calls.filter((c) => c.method === 'pinChatMessage' && c.body.chat_id === a.id);
+    expect(pinned).toHaveLength(2);
+    // …and taken down once they are over (the event: 3 hours after its start).
+    await clearEndedLive(db, botApi(env as never), new Date(Date.now() + 4 * 3_600_000));
+    const removed = calls.filter((c) => c.method === 'deleteMessage' && c.body.chat_id === a.id);
+    expect(removed.map((c) => c.body.message_id).sort()).toEqual(
+      pinned.map((c) => c.body.message_id).sort(),
+    );
+    expect(calls.filter((c) => c.method === 'unpinChatMessage')).toHaveLength(removed.length);
   });
 
   it('does not announce an event that began long ago', async () => {

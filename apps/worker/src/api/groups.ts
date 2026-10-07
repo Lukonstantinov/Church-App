@@ -1,7 +1,7 @@
-import { readMotion, readReminders, readServices } from '../lib/meetings';
+import { audienceOf, meetingIsFor, readMotion, readReminders, readServices } from '../lib/meetings';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import {
   ENTER_ANIMATIONS,
   PERMISSIONS,
@@ -22,6 +22,7 @@ import {
   type GroupSummary,
   type MemberRow,
   type ContactRow,
+  type LiveItem,
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
@@ -31,6 +32,7 @@ import {
   groupLabels,
   groups,
   memberLabels,
+  events,
   meetings,
   memberships,
   positions,
@@ -38,7 +40,7 @@ import {
   type Group,
   type User,
 } from '../db/schema';
-import { accessIn, assertCan, assertCanViewGroup, loadGroupOr404 } from '../lib/access';
+import { accessIn, assertCan, assertCanViewGroup, can, loadGroupOr404 } from '../lib/access';
 import { audit } from '../lib/audit';
 import { randomCode } from '../lib/codes';
 import { churchDefaultLocale } from '../lib/church';
@@ -52,6 +54,72 @@ import { startChatLink, unlinkChat } from '../lib/chats';
 import { idParam, parseBody } from './util';
 
 export const groupRoutes = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
+
+/**
+ * What is going on right now in these ministries: meetings (only those meant for the
+ * person, unless they manage meetings) and events (until they end, or 3 hours).
+ */
+async function liveItems(db: Db, ids: number[], user: User) {
+  const now = new Date().toISOString();
+  const since = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  const [ms, evs] = await Promise.all([
+    db
+      .select()
+      .from(meetings)
+      .where(
+        and(
+          inArray(meetings.groupId, ids),
+          eq(meetings.status, 'scheduled'),
+          lte(meetings.startsAt, now),
+          gte(meetings.endsAt, now),
+        ),
+      ),
+    db
+      .select()
+      .from(events)
+      .where(
+        and(
+          inArray(events.groupId, ids),
+          eq(events.status, 'scheduled'),
+          lte(events.startsAt, now),
+          gte(events.startsAt, since),
+        ),
+      ),
+  ]);
+  const audience = await audienceOf(
+    db,
+    ms.map((m) => m.id),
+  );
+  const out = new Map<number, LiveItem[]>();
+  const add = (groupId: number, item: LiveItem) =>
+    out.set(groupId, [...(out.get(groupId) ?? []), item]);
+  for (const m of ms) {
+    if (
+      !meetingIsFor(audience, m.id, user.id) &&
+      !(await can(db, user, m.groupId, 'meetings.manage'))
+    )
+      continue;
+    add(m.groupId, {
+      kind: 'meeting',
+      id: m.id,
+      title: m.title,
+      startsAt: m.startsAt,
+      endsAt: m.endsAt,
+    });
+  }
+  for (const e of evs) {
+    const end = e.endsAt ?? new Date(Date.parse(e.startsAt) + 3 * 3_600_000).toISOString();
+    if (end < now) continue;
+    add(e.groupId, {
+      kind: 'event',
+      id: e.id,
+      title: e.title,
+      startsAt: e.startsAt,
+      endsAt: e.endsAt,
+    });
+  }
+  return out;
+}
 
 async function summarize(
   db: Db,
@@ -104,6 +172,7 @@ async function summarize(
       ),
     unreadCounts(db, user.id, ids),
   ]);
+  const live = await liveItems(db, ids, user);
   const countBy = new Map(counts.map((c) => [c.groupId, c]));
   const mineBy = new Map(mine.map((m) => [m.groupId, m]));
   return Promise.all(
@@ -144,6 +213,7 @@ async function summarize(
         backdrop,
         backdropUrl: backdrop ? await signedMediaUrl(secret, backdrop.mediaId) : null,
         pageBackground: g.pageBackground ?? null,
+        live: live.get(g.id) ?? [],
       };
     }),
   );

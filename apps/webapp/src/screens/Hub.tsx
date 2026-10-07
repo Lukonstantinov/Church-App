@@ -8,7 +8,7 @@ import {
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { BurnFrame } from '../components/Burn';
-import { LiveNow } from '../components/Live';
+import { LiveBadge, LiveNow } from '../components/Live';
 import { CountdownBadge, hasCountdown } from '../components/Countdown';
 import { LookTop } from '../components/LookTop';
 import { TasksPill } from '../components/Assignments';
@@ -46,6 +46,8 @@ export function Hub({ me }: { me: MeResponse }) {
       <BrandHeader title={t.env.hubTitle} subtitle={t.env.hubSubtitle(list.length)} />
 
       <TasksPill />
+
+      <LiveNowList groups={list} />
 
       {(pinned.data ?? []).length > 0 && (
         <section>
@@ -202,7 +204,9 @@ export function EnvCard({
     <button
       type="button"
       onClick={onClick}
-      className={`reveal sheen spring relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left shadow-cta ${on.className}`}
+      className={`reveal sheen spring relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left shadow-cta ${
+        g.live.length > 0 ? 'live-ring' : ''
+      } ${on.className}`}
       style={
         {
           ...on.style,
@@ -230,6 +234,7 @@ export function EnvCard({
           </span>
         )}
         <span className="flex items-center gap-1">
+          {g.live.length > 0 && <LiveBadge compact />}
           {g.pendingCount > 0 && (
             <span className="min-w-[22px] rounded-full bg-white px-1.5 text-center text-[12px] font-bold leading-[22px] text-[var(--brand)]">
               +{g.pendingCount}
@@ -248,6 +253,41 @@ export function EnvCard({
         )}
       </div>
     </button>
+  );
+}
+
+/**
+ * Everything going on right now, across the person's ministries: a red pulsing bar per
+ * meeting or event, tapping opens it. Nothing when nothing is live.
+ */
+function LiveNowList({ groups }: { groups: GroupSummary[] }) {
+  const { push } = useNav();
+  const items = groups.flatMap((g) => g.live.map((x) => ({ ...x, group: g.name })));
+  if (items.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2">
+      {items.map((x) => (
+        <button
+          key={`${x.kind}${x.id}`}
+          type="button"
+          onClick={() =>
+            push(
+              x.kind === 'meeting'
+                ? { name: 'meeting', meetingId: x.id }
+                : { name: 'event', eventId: x.id },
+            )
+          }
+          className="live-strip flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left text-white shadow-cta active:scale-[0.98]"
+        >
+          <LiveBadge compact />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-bold">{x.title}</span>
+            <span className="block truncate text-[12px] text-white/80">{x.group}</span>
+          </span>
+          <span className="text-[18px]">›</span>
+        </button>
+      ))}
+    </section>
   );
 }
 
