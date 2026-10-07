@@ -43,6 +43,9 @@ export function Section({
   children,
   action,
   sticky,
+  cardClassName = '',
+  underlay,
+  cardStyle,
 }: {
   title?: ReactNode;
   footer?: ReactNode;
@@ -50,6 +53,11 @@ export function Section({
   action?: ReactNode;
   /** Clip with overflow: clip, which (unlike hidden) lets a sticky child stay stuck. */
   sticky?: boolean;
+  /** Extra classes for the card (a Design-studio surface). */
+  cardClassName?: string;
+  /** Drawn under the card's content (a Design-studio animation). */
+  underlay?: ReactNode;
+  cardStyle?: CSSProperties;
 }) {
   return (
     <section>
@@ -64,8 +72,10 @@ export function Section({
         </div>
       )}
       <div
-        className={`glass rounded-[var(--radius-card)] shadow-card ${sticky ? 'overflow-clip' : 'overflow-hidden'}`}
+        className={`glass rounded-[var(--radius-card)] shadow-card ${sticky ? 'overflow-clip' : 'overflow-hidden'} ${cardClassName}`}
+        style={cardStyle}
       >
+        {underlay}
         {children}
       </div>
       {footer && <p className="mt-2 px-3 text-[13px] leading-snug text-hint">{footer}</p>}
@@ -383,11 +393,21 @@ export function Card({
  * The moving wallpaper behind a card: colour drift (calm or lively), twinkling stars,
  * waves, floating lights or turning rays. Nothing for "off". Parent: relative + overflow-hidden.
  */
-export function LivingLayer({ kind, live }: { kind: MeetingMotion; live?: boolean }) {
+export function LivingLayer({
+  kind,
+  live,
+  behind,
+}: {
+  kind: MeetingMotion;
+  live?: boolean;
+  /** Under the content of a block that doesn't position its children (see `skin-host`). */
+  behind?: boolean;
+}) {
   if (kind === 'off') return null;
   return (
     <span
       aria-hidden="true"
+      style={behind ? { zIndex: -1 } : undefined}
       className="living-bg"
       data-kind={kind}
       data-live={live ? 'true' : 'false'}

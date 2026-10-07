@@ -46,6 +46,8 @@ export const churchSettings = sqliteTable(
     appBackground: text('app_background', { mode: 'json' }).$type<AppBackground>(),
     /** Only people with the designer right change the look of meetings, events and posts. */
     designLock: integer('design_lock', { mode: 'boolean' }).notNull().default(false),
+    /** The main page's parts as set in the Design studio (ScreenLook JSON). */
+    screenLook: text('screen_look', { mode: 'json' }),
   },
   (t) => [check('church_settings_singleton', sql`${t.id} = 1`)],
 );
@@ -124,6 +126,8 @@ export const groups = sqliteTable('groups', {
   backdrop: text('backdrop'),
   /** The background of the ministry's screens (AppBackground JSON; NULL = the default). */
   pageBackground: text('page_background', { mode: 'json' }).$type<AppBackground>(),
+  /** The ministry page's parts as set in the Design studio (ScreenLook JSON). */
+  screenLook: text('screen_look', { mode: 'json' }),
   archivedAt: text('archived_at'),
   createdAt: createdAt(),
 });

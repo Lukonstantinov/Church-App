@@ -1,3 +1,4 @@
+import { SkinLayer, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
 import { useState, type ReactNode } from 'react';
 import { LOCALE_NAMES, LOCALES, type Locale } from '@church/shared';
 import { useEnv } from '../lib/env';
@@ -64,8 +65,14 @@ export function BrandHeader({
   onTitleClick?: () => void;
 }) {
   const me = useMe();
+  const look = useModuleLook('header');
+  const skin = skinClass(look);
   return (
-    <header className="flex items-center gap-3 pt-1">
+    <header
+      className={`flex items-center gap-3 ${skin ? `${skin} -mx-1 rounded-[24px] p-3 shadow-card` : 'pt-1'}`}
+      style={skinStyle(look)}
+    >
+      <SkinLayer look={look} />
       <ChurchLogo />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12px] font-semibold uppercase tracking-wider text-accent">

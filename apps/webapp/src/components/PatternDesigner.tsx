@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  ENTER_ANIMATIONS,
   type BackdropConfig,
   type EnterAnimation,
   type GroupSummary,
@@ -12,7 +11,7 @@ import { useToast } from './Toast';
 import { haptic } from '../lib/telegram';
 import { EnvCard } from '../screens/Hub';
 import { Button } from './ui';
-import { Group, LookControls, SmallButton } from './LookControls';
+import { Group, LookControls } from './LookControls';
 
 export interface Look {
   pattern: PatternConfig | null;
@@ -44,7 +43,8 @@ export function PatternDesigner({
   const t = useT();
   const [pattern, setPattern] = useState<PatternConfig | null>(env.pattern);
   const [textColor, setTextColor] = useState(env.textColor);
-  const [animation, setAnimation] = useState<EnterAnimation>(env.animation);
+  // The entrance animation is set in the Design tab; kept as it is when saving the look.
+  const animation: EnterAnimation = env.animation;
   const [badgeColor, setBadgeColor] = useState<string | null>(env.badgeColor);
   const [brandColor, setBrandColor] = useState<string | null>(env.brandColor);
   const [backdrop, setBackdrop] = useState<BackdropConfig | null>(env.backdrop);
@@ -168,24 +168,6 @@ export function PatternDesigner({
               className="absolute inset-0 cursor-pointer opacity-0"
             />
           </label>
-        </div>
-      </Group>
-
-      <Group title={t.env.animation}>
-        <div className="flex flex-wrap gap-2">
-          {ENTER_ANIMATIONS.map((a) =>
-            pill(
-              animation === a,
-              () => {
-                setAnimation(a);
-                setReplay((r) => r + 1);
-              },
-              t.env.animations[a],
-            ),
-          )}
-        </div>
-        <div className="mt-2">
-          <SmallButton onClick={() => setReplay((r) => r + 1)}>▶ {t.env.play}</SmallButton>
         </div>
       </Group>
 

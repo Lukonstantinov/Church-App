@@ -12,6 +12,7 @@ import type {
   PosterLook,
 } from '@church/shared';
 import { initCover } from '../components/CoverDesigner';
+import { DesignStudio } from '../components/DesignStudio';
 import { GroupSwitcher } from '../components/GroupSwitcher';
 import { Group, LookControls, Pill } from '../components/LookControls';
 import { LookTop } from '../components/LookTop';
@@ -109,6 +110,8 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
           <Row title={locked ? `🔒 ${t.design.lockOn}` : `🔓 ${t.design.lockOff}`} />
         )}
       </Section>
+
+      <DesignStudio g={active} />
 
       <section>
         <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
@@ -375,7 +378,11 @@ function TemplateSheet({
   const save = useSaveTemplate();
   const remove = useDeleteTemplate();
   const group = useGroup(g.id);
-  const [name, setName] = useState(tpl?.name ?? '');
+  const templates = useTemplates();
+  // A new template starts with a name, so "Save" works even if the field was scrolled past.
+  const [name, setName] = useState(
+    () => tpl?.name ?? `${t.design.newTemplate} ${(templates.data?.length ?? 0) + 1}`,
+  );
   const [brandColor, setBrandColor] = useState<string | null>(tpl?.brandColor ?? g.brandColor);
   const [look, setLook] = useState<{
     pattern: PatternConfig | null;
@@ -402,7 +409,7 @@ function TemplateSheet({
     try {
       await save.mutateAsync({
         id: tpl?.id,
-        name: name.trim(),
+        name: name.trim() || `${t.design.newTemplate}`,
         brandColor,
         pattern: look.pattern,
         textColor: look.textColor,
@@ -440,7 +447,7 @@ function TemplateSheet({
         <Group title={t.design.motion}>
           <MotionPicker value={motion} onChange={setMotion} allowInherit />
         </Group>
-        <Button disabled={!name.trim() || save.isPending} onClick={() => void submit()}>
+        <Button disabled={save.isPending} onClick={() => void submit()}>
           {save.isPending ? t.common.saving : t.common.save}
         </Button>
         {tpl && canDelete && (

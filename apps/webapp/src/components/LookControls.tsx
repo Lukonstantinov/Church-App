@@ -397,13 +397,53 @@ export function Pill({
   );
 }
 
+/**
+ * A titled group of design settings. Tapping the title folds it away (and opens it again);
+ * the choice is remembered on this phone, so long editors stay short.
+ */
 export function Group({ title, children }: { title: string; children: ReactNode }) {
+  const key = `church.fold.${title}`;
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(key) !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try {
+      localStorage.setItem(key, next ? '1' : '0');
+    } catch {
+      /* private mode: just not remembered */
+    }
+  };
   return (
     <div>
-      <div className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="mb-2 flex w-full items-center justify-between text-left text-[13px] font-semibold uppercase tracking-wide text-section-header active:opacity-60"
+      >
         {title}
-      </div>
-      {children}
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className={`transition-transform ${open ? '' : '-rotate-90'}`}
+        >
+          <path d="M6 9.5l6 6 6-6" />
+        </svg>
+      </button>
+      {open && children}
     </div>
   );
 }

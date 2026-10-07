@@ -1,5 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  ChurchStudioInput,
+  MinistryStudioInput,
   SetProgramInput,
   NotificationsResponse,
   ReadNotificationsInput,
@@ -608,6 +610,26 @@ function useSetChurch() {
     const prev = qc.getQueryData<MeResponse>(keys.me);
     if (prev) qc.setQueryData<MeResponse>(keys.me, { ...prev, church });
   };
+}
+
+/** Design studio: save a ministry page's parts, entrance, meeting animation and background. */
+export function useSaveMinistryStudio(groupId: number) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (input: MinistryStudioInput) =>
+      apiFetch<{ ok: true }>(`/groups/${groupId}/studio`, send('PUT', input)),
+    onSuccess: invalidate,
+  });
+}
+
+/** Design studio: save the church main page's parts and background (admins). */
+export function useSaveChurchStudio() {
+  const setChurch = useSetChurch();
+  return useMutation({
+    mutationFn: (input: ChurchStudioInput) =>
+      apiFetch<ChurchInfo>('/church/studio', send('PUT', input)),
+    onSuccess: setChurch,
+  });
 }
 
 export function useUpdateChurch() {

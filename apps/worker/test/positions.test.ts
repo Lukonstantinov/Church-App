@@ -346,4 +346,48 @@ describe('adding people and environment look', () => {
       await apiJson('/api/church', { method: 'PATCH', user: ADMIN, json: { designLock: false } });
     }
   });
+
+  it('the Design studio saves how page parts look, for designers and admins only', async () => {
+    const g = await createEnv('Студия');
+    const made = await apiJson<PositionRow[]>(`/api/groups/${g.id}/positions`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Дизайнер', permissions: ['design'] },
+    });
+    const designer = fakeUser('Студиец');
+    const member = fakeUser('Зритель');
+    await assign(
+      (await join(designer, g)).membershipId,
+      made.find((p) => p.name === 'Дизайнер')!.id,
+    );
+    await join(member, g);
+    const look = {
+      screenLook: { actions: { motion: 'embers', surface: 'brand' }, tabbar: { surface: 'dark' } },
+      animation: 'zoom',
+      meetingMotion: 'snow',
+    };
+    const put = (user: FakeTgUser, json: unknown) =>
+      api(`/api/groups/${g.id}/studio`, { method: 'PUT', user, json });
+    expect((await put(member, look)).status).toBe(403);
+    expect((await put(designer, look)).status).toBe(200);
+    const mine = (await apiJson<GroupSummary[]>('/api/groups', { user: designer })).find(
+      (x) => x.id === g.id,
+    )!;
+    expect(mine.screenLook).toEqual(look.screenLook);
+    expect(mine.animation).toBe('zoom');
+    // An unknown part or animation is refused.
+    expect((await put(designer, { screenLook: { roof: { motion: 'snow' } } })).status).toBe(400);
+    // The church's main page: admins only.
+    const church = { screenLook: { cards: { motion: 'aurora' } } };
+    expect(
+      (await api('/api/church/studio', { method: 'PUT', user: designer, json: church })).status,
+    ).toBe(403);
+    const saved = await apiJson<{ screenLook: unknown }>('/api/church/studio', {
+      method: 'PUT',
+      user: ADMIN,
+      json: church,
+    });
+    expect(saved.screenLook).toEqual(church.screenLook);
+    await apiJson('/api/church/studio', { method: 'PUT', user: ADMIN, json: { screenLook: {} } });
+  });
 });

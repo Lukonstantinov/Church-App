@@ -23,6 +23,8 @@ import {
   type MemberRow,
   type ContactRow,
   type LiveItem,
+  readScreenLook,
+  ministryStudioSchema,
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
@@ -225,6 +227,7 @@ async function summarize(
         backdrop,
         backdropUrl: backdrop ? await signedMediaUrl(secret, backdrop.mediaId) : null,
         pageBackground: g.pageBackground ?? null,
+        screenLook: readScreenLook(g.screenLook),
         live: live.get(g.id) ?? [],
         soon: soon.get(g.id) ?? [],
       };
@@ -336,6 +339,36 @@ groupRoutes.patch('/:id', async (c) => {
   await audit(db, {
     actorUserId: user.id,
     action: 'group_updated',
+    entity: 'group',
+    entityId: group.id,
+    groupId: group.id,
+    data: input,
+  });
+  return c.json({ ok: true });
+});
+
+/**
+ * The Design studio saves a ministry page: how its parts look and move, the entrance
+ * animation, the meetings' animation and the background. Designers or ministry settings.
+ */
+groupRoutes.put('/:id/studio', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const group = await loadGroupOr404(db, idParam(c));
+  const perms = (await accessIn(db, user, group.id)).perms;
+  if (!perms.has('design') && !perms.has('settings'))
+    throw new HTTPException(403, { message: 'forbidden' });
+  const input = await parseBody(c, ministryStudioSchema);
+  const patch: Partial<typeof groups.$inferInsert> = {};
+  if (input.screenLook !== undefined) patch.screenLook = input.screenLook;
+  if (input.animation !== undefined) patch.animation = input.animation;
+  if (input.meetingMotion !== undefined) patch.meetingMotion = input.meetingMotion;
+  if (input.pageBackground !== undefined) patch.pageBackground = input.pageBackground;
+  if (Object.keys(patch).length > 0)
+    await db.update(groups).set(patch).where(eq(groups.id, group.id));
+  await audit(db, {
+    actorUserId: user.id,
+    action: 'group_studio',
     entity: 'group',
     entityId: group.id,
     groupId: group.id,

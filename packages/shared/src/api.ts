@@ -1,5 +1,6 @@
 import { labelLookSchema, type LabelLook } from './labels';
 import { appBackgroundSchema, type AppBackground } from './background';
+import type { ScreenLook } from './screenLook';
 import { z } from 'zod';
 import {
   ENTER_ANIMATIONS,
@@ -60,6 +61,8 @@ export interface ChurchInfo {
   sheetLabel: string | null;
   /** The main window's background (null = the default). */
   appBackground: AppBackground | null;
+  /** How the parts of the main page look and move (set in the Design studio). */
+  screenLook: ScreenLook;
   /** Only people with the designer right may change the look of meetings, events and posts. */
   designLock: boolean;
 }
@@ -139,6 +142,8 @@ export interface GroupSummary {
   backdropUrl: string | null;
   /** The background of this ministry's screens (null = the default). */
   pageBackground: AppBackground | null;
+  /** How the parts of the ministry's page look and move (set in the Design studio). */
+  screenLook: ScreenLook;
   /** Meetings and events going on right now (for the LIVE marks on the main screen). */
   live: LiveItem[];
   /** Starting within the next two hours (earliest first). */

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { SkinLayer, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
 
 export interface TabDef<K extends string> {
   key: K;
@@ -17,12 +18,17 @@ export function TabBar<K extends string>({
   active: K;
   onChange: (k: K) => void;
 }) {
+  const look = useModuleLook('tabbar');
   return (
     <nav
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3"
       style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}
     >
-      <div className="glass-strong pointer-events-auto mx-auto flex max-w-xl gap-1 rounded-[26px] p-1.5 shadow-float">
+      <div
+        className={`glass-strong pointer-events-auto mx-auto flex max-w-xl gap-1 rounded-[26px] p-1.5 shadow-float ${skinClass(look)}`}
+        style={skinStyle(look)}
+      >
+        <SkinLayer look={look} />
         {tabs.map((t) => {
           const on = t.key === active;
           return (

@@ -5,6 +5,7 @@ import {
   LOGO_MAX_BYTES,
   MEDIA_MAX_BYTES,
   updateChurchSchema,
+  churchStudioSchema,
   updateMeSchema,
 } from '@church/shared';
 import { isDeveloper, type Env } from '../env';
@@ -45,6 +46,19 @@ function requireAdmin(c: { get: (k: 'user') => AuthVariables['user'] }) {
 }
 
 churchRoutes.get('/', async (c) => c.json(await getChurch(c.get('db'))));
+
+/** The Design studio saves the main page (its parts and background); church admins only. */
+churchRoutes.put('/studio', async (c) => {
+  requireAdmin(c);
+  const db = c.get('db');
+  const input = await parseBody(c, churchStudioSchema);
+  const patch: Partial<typeof churchSettings.$inferInsert> = {};
+  if (input.screenLook !== undefined) patch.screenLook = input.screenLook;
+  if (input.appBackground !== undefined) patch.appBackground = input.appBackground;
+  if (Object.keys(patch).length > 0)
+    await db.update(churchSettings).set(patch).where(eq(churchSettings.id, 1));
+  return c.json(await getChurch(db));
+});
 
 churchRoutes.patch('/', async (c) => {
   requireAdmin(c);

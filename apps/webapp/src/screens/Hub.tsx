@@ -8,6 +8,7 @@ import {
   type MeResponse,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
+import { SkinLayer, skinClass, skinStyle, useModuleLook } from '../components/ModuleSkin';
 import { BurnFrame } from '../components/Burn';
 import { LiveBadge, LiveNow } from '../components/Live';
 import { CountdownBadge, hasCountdown } from '../components/Countdown';
@@ -35,6 +36,7 @@ export function Hub({ me }: { me: MeResponse }) {
   const myEvents = useMyEvents();
   const myJobs = useAssignments();
   const [showMine, setShowMine] = useState(false);
+  const listLook = useModuleLook('list');
   // Open duties: at events, plus meetings that still need an answer.
   const mine =
     (myEvents.data ?? []).filter((e) => e.myDuties.length > 0 && e.status !== 'cancelled').length +
@@ -115,7 +117,11 @@ export function Hub({ me }: { me: MeResponse }) {
 
       {showMine && <MyAssignments me={me} onClose={() => setShowMine(false)} />}
 
-      <Section>
+      <Section
+        cardClassName={skinClass(listLook)}
+        cardStyle={skinStyle(listLook)}
+        underlay={<SkinLayer look={listLook} />}
+      >
         <Row
           before={
             <Avatar id={me.user.id} firstName={me.user.firstName} lastName={me.user.lastName} />
@@ -197,6 +203,7 @@ export function EnvCard({
   const now = useNowSecond() * 1000;
   // A "starting soon" meeting becomes live by itself when its time comes.
   const isLive = g.live.length > 0 || g.soon.some((x) => isLiveWindow(x.startsAt, x.endsAt, now));
+  const look = useModuleLook('cards');
   const next = isLive ? undefined : g.soon.find((x) => Date.parse(x.startsAt) > now);
   const initials = g.name
     .split(/\s+/)
@@ -211,15 +218,17 @@ export function EnvCard({
       onClick={onClick}
       className={`reveal sheen spring relative flex min-h-[168px] flex-col overflow-hidden rounded-[26px] p-3.5 text-left shadow-cta ${
         isLive ? 'live-ring' : ''
-      } ${on.className}`}
+      } ${on.className} ${skinClass(look)}`}
       style={
         {
           ...on.style,
           '--i': index,
+          ...skinStyle(look),
           background: `linear-gradient(145deg, ${theme.light} 0%, ${theme.partner} 100%)`,
         } as React.CSSProperties
       }
     >
+      <SkinLayer look={look} />
       <PatternLayer pattern={g.pattern} logoUrl={g.logoUrl} />
       <BackdropLayer backdrop={g.backdrop} url={g.backdropUrl} />
       <span

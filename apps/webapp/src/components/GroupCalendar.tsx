@@ -1,3 +1,4 @@
+import { SkinLayer, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
 import { useState } from 'react';
 import {
   displayName,
@@ -574,13 +575,16 @@ export function CalendarTile({ g, onToggle }: { g: GroupSummary; onToggle: () =>
       (next.meetings[0] ? (next.meetings[0].topic ?? next.meetings[0].title) : ''))
     : t.meetings.nothingThisDay;
   const color = next?.notes[0]?.color ?? (next?.events.length ? '#f97316' : 'var(--brand)');
+  const look = useModuleLook('calendar');
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-label={t.overview.expand}
-      className="glass flex h-full w-full flex-col overflow-hidden rounded-2xl p-2 text-left shadow-card active:scale-[0.98]"
+      className={`glass flex h-full w-full flex-col overflow-hidden rounded-2xl p-2 text-left shadow-card active:scale-[0.98] ${skinClass(look)}`}
+      style={skinStyle(look)}
     >
+      <SkinLayer look={look} />
       <span className="mb-1 flex items-center justify-between px-0.5 text-[10px] font-bold uppercase tracking-wider text-hint">
         <span>{t.meetings.calendarTitle}</span>
         <span>{f.monthShort(today.slice(0, 7))}</span>

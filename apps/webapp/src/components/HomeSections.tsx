@@ -1,3 +1,4 @@
+import { SkinLayer, skinClass, skinStyle, useModuleLook } from './ModuleSkin';
 import { useState, type ReactNode } from 'react';
 import {
   fontFamily,
@@ -29,7 +30,7 @@ import {
 } from './icons';
 import { MeetingHeroLines } from '../screens/MeetingScreen';
 import { canRollNow } from '../screens/Overview';
-import { Button, DateBadge, HeroCard } from './ui';
+import { Button, DateBadge, HeroCard, LivingLayer } from './ui';
 import { BurnFrame } from './Burn';
 import { LiveBadge, LiveNow, SoonPulse, SoonTimer, useIsLive, useStartsSoon } from './Live';
 import { isLiveWindow, useNowSecond } from '../lib/live';
@@ -47,19 +48,21 @@ export interface HomeAction {
 
 /** The ministry's shortcuts in one compact row at the top of its home. */
 export function HomeActionRow({ actions }: { actions: HomeAction[] }) {
+  const look = useModuleLook('actions');
   return (
     <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 pt-1 [scrollbar-width:none]">
       {actions.map((a, i) => (
         <button
           key={a.key}
-          style={{ '--i': i } as React.CSSProperties}
+          style={{ '--i': i, ...skinStyle(look) } as React.CSSProperties}
           type="button"
           onClick={() => {
             haptic.tap();
             a.onClick();
           }}
-          className="reveal spring glass relative flex min-w-[62px] flex-1 flex-col items-center gap-1 rounded-2xl px-0.5 py-2 shadow-card"
+          className={`reveal spring glass relative flex min-w-[62px] flex-1 flex-col items-center gap-1 rounded-2xl px-0.5 py-2 shadow-card ${skinClass(look)}`}
         >
+          <SkinLayer look={look} />
           <span className="brand-gradient flex h-9 w-9 items-center justify-center rounded-xl text-white">
             {a.icon}
           </span>
@@ -441,14 +444,18 @@ function EventRow({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
 function Tile({
   onToggle,
   live,
+  module,
   children,
 }: {
   onToggle: () => void;
+  /** Which page part's Design-studio look it wears. */
+  module: 'meetings' | 'posts';
   /** Going on now: a red tint and a pulsing red outline, to spot it at a glance. */
   live?: boolean;
   children: ReactNode;
 }) {
   const t = useT();
+  const look = useModuleLook(module);
   return (
     <button
       type="button"
@@ -456,8 +463,10 @@ function Tile({
       aria-label={t.overview.expand}
       className={`glass relative flex h-full w-full flex-col overflow-hidden rounded-2xl text-left shadow-card active:scale-[0.98] ${
         live ? 'live-ring' : ''
-      }`}
+      } ${skinClass(look)}`}
+      style={skinStyle(look)}
     >
+      <SkinLayer look={look} />
       {children}
       {live && <span aria-hidden="true" className="live-tint" />}
     </button>
@@ -466,7 +475,7 @@ function Tile({
 
 function PostTile({ post, onToggle }: { post: AnnouncementRow; onToggle: () => void }) {
   return (
-    <Tile onToggle={onToggle}>
+    <Tile onToggle={onToggle} module="posts">
       {hasCover(post) ? (
         <div className="pointer-events-none">
           <PosterMedia
@@ -498,7 +507,7 @@ function EventTile({ e, g, onToggle }: { e: EventSummary; g: GroupSummary; onTog
   const live = useIsLive(e.startsAt, e.endsAt, e.status === 'cancelled');
   return (
     <BurnFrame e={e} radius={16} className="h-full">
-      <Tile onToggle={onToggle} live={live}>
+      <Tile onToggle={onToggle} live={live} module="meetings">
         {cover ? (
           <div className="pointer-events-none relative">
             <EventCover e={e} className="aspect-[16/10]" compact />
@@ -547,8 +556,10 @@ function MeetingTile({
       motion={m.motion}
       className="h-full"
     >
-      <Tile onToggle={onToggle} live={live}>
-        <LookTop look={meetingLook(m) ?? g} className="flex aspect-[16/10] flex-col p-2.5">
+      <Tile onToggle={onToggle} live={live} module="meetings">
+        <LookTop look={meetingLook(m) ?? g} className="isolate flex aspect-[16/10] flex-col p-2.5">
+          {/* The meeting's living animation, as on its own screen. */}
+          <LivingLayer kind={m.motion ?? 'calm'} live={live} behind />
           <span className="flex min-w-0 items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
             {/* While live the badge takes the label's place, so nothing spills out. */}
             {live ? (
@@ -598,8 +609,9 @@ function MeetingDayTile({
     m.status !== 'cancelled' && isLiveWindow(m.startsAt, m.endsAt, now);
   return (
     <SoonPulse startsAt={next.startsAt} motion={next.motion} className="h-full">
-      <Tile onToggle={onToggle} live={shown.some(isLive)}>
-        <LookTop look={meetingLook(list[0]!) ?? g} className="flex flex-col gap-1.5 p-2">
+      <Tile onToggle={onToggle} live={shown.some(isLive)} module="meetings">
+        <LookTop look={meetingLook(list[0]!) ?? g} className="isolate flex flex-col gap-1.5 p-2">
+          <LivingLayer kind={next.motion ?? 'calm'} behind />
           <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
             <span>{f.relativeDay(list[0]!.startsAt)}</span>
             {soon ? (

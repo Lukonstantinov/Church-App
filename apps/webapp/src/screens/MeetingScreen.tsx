@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   MEETING_KINDS,
-  type MeetingMotion,
   displayName,
   type MeetingDetail,
   type MeetingKind,
@@ -20,7 +19,6 @@ import { useMoney } from '../components/money';
 import { NotifySheet } from '../components/NotifySheet';
 import { MeetingAnnounceSheet } from '../components/MeetingAnnounceSheet';
 import { MeetingPeople } from '../components/MeetingPeople';
-import { MotionPicker } from '../components/MotionPicker';
 import { TeamChips, meetingLook } from '../components/TeamChips';
 import { useCoverLook } from '../components/CoverDesigner';
 import {
@@ -744,14 +742,11 @@ function PosterSheet({ m, onClose }: { m: MeetingDetail; onClose: () => void }) 
   const [poster, setPoster] = useState(() => initMeetingPoster(m));
   const { templateId } = useCoverLook(poster.cover, group.data);
   const [toSeries, setToSeries] = useState(false);
-  // This meeting's animation level; null = like the ministry.
-  const [motion, setMotion] = useState<MeetingMotion | null>(m.ownMotion);
   async function save() {
     try {
       await update.mutateAsync({
         id: m.id,
         ...meetingPosterPayload(poster, templateId),
-        motion,
         ...(toSeries ? { applyToSeries: true } : {}),
       });
       haptic.success();
@@ -771,10 +766,6 @@ function PosterSheet({ m, onClose }: { m: MeetingDetail; onClose: () => void }) 
           state={poster}
           onChange={setPoster}
         />
-        <div>
-          <div className="mb-2 text-[13px] text-hint">{t.meetings.motionTitle}</div>
-          <MotionPicker value={motion} onChange={setMotion} allowInherit />
-        </div>
         {m.seriesId && (
           <Toggle label={t.meetings.applyToSeries} checked={toSeries} onChange={setToSeries} />
         )}

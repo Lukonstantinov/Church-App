@@ -5,6 +5,7 @@ import {
   isLocale,
   type ChurchInfo,
   type Locale,
+  readScreenLook,
 } from '@church/shared';
 import type { Db } from '../db/client';
 import type { User } from '../db/schema';
@@ -22,6 +23,7 @@ export async function getChurch(db: Db): Promise<ChurchInfo> {
       sheetLabel: true,
       appBackground: true,
       designLock: true,
+      screenLook: true,
     },
   });
   const brand = row?.brandColor ?? DEFAULT_BRAND;
@@ -35,6 +37,7 @@ export async function getChurch(db: Db): Promise<ChurchInfo> {
     sheetLabel: row?.sheetLabel || null,
     appBackground: row?.appBackground ?? null,
     designLock: row?.designLock ?? false,
+    screenLook: readScreenLook(row?.screenLook),
   };
 }
 
