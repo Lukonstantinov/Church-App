@@ -169,6 +169,7 @@ export type MeetingTileData = Pick<
       | 'templateId'
       | 'look'
       | 'motion'
+      | 'tileMotion'
     >
   >;
 
@@ -462,12 +463,21 @@ function EventRow({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
 }
 
 /**
- * A meeting tile's animation: the meeting's own (as on its screen), or the tile's own when
- * the Design studio separates them; tuned there (speed, size, direction, colour, icon).
+ * A meeting tile's animation: the tile's own (chosen for the meeting or its template),
+ * else the tile's own from the Design studio when it separates them, else the meeting's
+ * (as on its screen); tuned in the studio (speed, size, direction, colour, icon).
  */
-function TileMotion({ motion, live }: { motion?: MeetingMotion; live?: boolean }) {
+function TileMotion({
+  motion,
+  tile,
+  live,
+}: {
+  motion?: MeetingMotion;
+  tile?: MeetingMotion | null;
+  live?: boolean;
+}) {
   const look = useModuleLook('meetings');
-  const kind = look.own ? (look.motion ?? 'off') : (motion ?? 'calm');
+  const kind = tile ?? (look.own ? (look.motion ?? 'off') : (motion ?? 'calm'));
   return <LivingLayer kind={kind} live={live} behind tune={look.tune} icon={look.icon} />;
 }
 
@@ -594,7 +604,7 @@ function MeetingTile({
           className="tile-top isolate flex aspect-[16/10] flex-col p-2.5"
         >
           {/* The meeting's living animation, as on its own screen. */}
-          <TileMotion motion={m.motion} live={live} />
+          <TileMotion motion={m.motion} tile={m.tileMotion} live={live} />
           <span className="flex min-w-0 items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
             {/* While live the badge takes the label's place, so nothing spills out. */}
             {live ? (
@@ -651,7 +661,7 @@ function MeetingDayTile({
           look={meetingLook(list[0]!) ?? g}
           className="tile-top isolate flex flex-col gap-1.5 p-2"
         >
-          <TileMotion motion={next.motion} />
+          <TileMotion motion={next.motion} tile={next.tileMotion} />
           <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
             <span>{f.relativeDay(list[0]!.startsAt)}</span>
             {soon ? (

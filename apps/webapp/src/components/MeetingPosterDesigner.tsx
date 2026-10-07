@@ -1,5 +1,6 @@
-import type { GroupSummary, MeetingHelper, MeetingRow } from '@church/shared';
-import { Pill } from './LookControls';
+import type { GroupSummary, MeetingHelper, MeetingMotion, MeetingRow } from '@church/shared';
+import { Group, Pill } from './LookControls';
+import { MotionPicker } from './MotionPicker';
 import { useT } from '../lib/i18n';
 import {
   CoverLookControls,
@@ -17,13 +18,22 @@ import { Section } from './ui';
 export interface MeetingPosterState {
   cover: CoverState;
   speakers: SpeakerDraft[];
+  /** The poster's own animation (null = its template's, else none). */
+  posterMotion: MeetingMotion | null;
+  /** What it shows without one of its own (from the template). */
+  inheritedMotion: MeetingMotion | null;
 }
 
 export const initMeetingPoster = (
-  m?: Pick<MeetingRow, 'design' | 'templateId' | 'look' | 'speakers'>,
+  m?: Pick<
+    MeetingRow,
+    'design' | 'templateId' | 'look' | 'speakers' | 'posterMotion' | 'ownPosterMotion'
+  >,
 ): MeetingPosterState => ({
   cover: initCover(m?.design, m?.templateId, m?.look, true),
   speakers: toDrafts(m?.speakers),
+  posterMotion: m?.ownPosterMotion ?? null,
+  inheritedMotion: m?.ownPosterMotion ? null : (m?.posterMotion ?? null),
 });
 
 /** The pieces the API stores for a meeting's poster. */
@@ -34,8 +44,13 @@ export function meetingPosterPayload(
   design: ReturnType<typeof coverPayload>['design'];
   templateId: number | null;
   speakers: ReturnType<typeof toSpeakerInputs>;
+  posterMotion: MeetingMotion | null;
 } {
-  return { ...coverPayload(state.cover, templateId), speakers: toSpeakerInputs(state.speakers) };
+  return {
+    ...coverPayload(state.cover, templateId),
+    speakers: toSpeakerInputs(state.speakers),
+    posterMotion: state.posterMotion,
+  };
 }
 
 /**
@@ -77,6 +92,7 @@ export function MeetingPosterDesigner({
                   look,
                   design: state.cover.design,
                   speakers: toShown(state.speakers),
+                  posterMotion: state.posterMotion ?? state.inheritedMotion,
                 }}
                 g={g}
               />
@@ -106,6 +122,14 @@ export function MeetingPosterDesigner({
             </div>
           </div>
           <TitleStyleControls design={state.cover.design} set={setDesign} />
+          <Group title={t.meetings.posterMotion}>
+            <MotionPicker
+              value={state.posterMotion}
+              onChange={(posterMotion) => onChange({ ...state, posterMotion })}
+              allowInherit
+              inheritLabel={t.meetings.motionDefault}
+            />
+          </Group>
         </div>
       </Section>
       <Section title={t.meetings.speakers}>

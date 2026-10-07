@@ -314,10 +314,18 @@ export async function toMeetingRows(
     templateIds.length
       ? (
           await db
-            .select({ id: designTemplates.id, motion: designTemplates.motion })
+            .select({
+              id: designTemplates.id,
+              motion: designTemplates.motion,
+              tile: designTemplates.tileMotion,
+              poster: designTemplates.posterMotion,
+            })
             .from(designTemplates)
             .where(inArray(designTemplates.id, templateIds))
-        ).map((t) => [t.id, readMotion(t.motion)])
+        ).map((t) => [
+          t.id,
+          { motion: readMotion(t.motion), tile: readMotion(t.tile), poster: readMotion(t.poster) },
+        ])
       : [],
   );
   const peopleLooks = await Promise.all(list.map((m) => readPeopleLook(m.peopleLook, secret)));
@@ -362,10 +370,20 @@ export async function toMeetingRows(
     helpers: helpers.get(m.id) ?? [],
     motion:
       readMotion(m.motion) ??
-      (m.templateId ? templateMotions.get(m.templateId) : null) ??
+      (m.templateId ? templateMotions.get(m.templateId)?.motion : null) ??
       motions.get(m.groupId) ??
       'calm',
     ownMotion: readMotion(m.motion),
+    tileMotion:
+      readMotion(m.tileMotion) ??
+      (m.templateId ? templateMotions.get(m.templateId)?.tile : null) ??
+      null,
+    ownTileMotion: readMotion(m.tileMotion),
+    posterMotion:
+      readMotion(m.posterMotion) ??
+      (m.templateId ? templateMotions.get(m.templateId)?.poster : null) ??
+      null,
+    ownPosterMotion: readMotion(m.posterMotion),
     snackDeclined: (!m.snackUserId && m.snackDeclinedBy && people.get(m.snackDeclinedBy)) || null,
     counts: counts.get(m.id) ?? emptyCounts(),
     design: readPostDesign(m.design),

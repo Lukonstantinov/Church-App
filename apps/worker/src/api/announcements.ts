@@ -447,6 +447,8 @@ templateRoutes.get('/', async (c) => {
         ? await signedMediaUrl(c.env.WEBHOOK_SECRET, readBackdrop(r.backdrop)!.mediaId)
         : null,
       motion: readMotion(r.motion),
+      tileMotion: readMotion(r.tileMotion),
+      posterMotion: readMotion(r.posterMotion),
       mine: r.createdBy === user.id,
     })),
   );
@@ -473,6 +475,8 @@ templateRoutes.post('/', async (c) => {
       logoMediaId: input.logoMediaId ?? null,
       backdrop: input.backdrop ? JSON.stringify(input.backdrop) : null,
       motion: input.motion ?? null,
+      tileMotion: input.tileMotion ?? null,
+      posterMotion: input.posterMotion ?? null,
       createdBy: user.id,
     })
     .returning({ id: designTemplates.id });
@@ -505,6 +509,8 @@ templateRoutes.put('/:id', async (c) => {
       logoMediaId: input.logoMediaId ?? null,
       backdrop: input.backdrop ? JSON.stringify(input.backdrop) : null,
       motion: input.motion ?? null,
+      tileMotion: input.tileMotion ?? null,
+      posterMotion: input.posterMotion ?? null,
     })
     .where(eq(designTemplates.id, row.id));
   return c.json({ id: row.id });

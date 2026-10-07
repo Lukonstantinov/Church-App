@@ -291,6 +291,8 @@ export const en: Messages = {
     motionHint:
       'How much the meetings’ background moves and how a meeting pulses before it starts. Each meeting can have its own.',
     motionMinistry: 'Like the ministry',
+    posterMotion: 'Poster animation',
+    motionDefault: 'Default',
     motions: {
       off: 'Still',
       calm: 'Calm',
@@ -832,6 +834,9 @@ export const en: Messages = {
       'Delete the template? Meetings and events using it go back to the ministry look.',
     previewApp: 'In the app',
     previewPoster: 'Poster',
+    motionSameAsApp: 'Same as in the app',
+    posterMotionHint:
+      'In the app the poster moves; the picture the bot sends keeps one still frame of it.',
     previewTile: 'Tile',
     sampleTitle: 'Youth meeting',
     sampleTopic: 'Light of the world',

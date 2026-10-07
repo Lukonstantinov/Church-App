@@ -59,7 +59,7 @@ Deploy → Run workflow → production.
   transform/opacity, not box-shadow or custom properties; animated layers live in
   `.living-clip` (contain: strict, paused off screen via `watchOffscreen`, `lib/perf.ts`);
   weaker phones get `html[data-lite]` (fewer particles, no SVG filters, lighter blur).
-  Per-phone graphics quality (More → Graphics: auto / full / lite / still, `lib/perf.ts`,
+  Per-phone graphics quality (More / Design → Graphics: auto / full / lite / still, `lib/perf.ts`,
   `html[data-quality]`): auto steps down when frames drop; still = no animation layers.
   Running `LivingLayer`s are capped (`watchOffscreen(el, true)`); never animate
   `background-position` or `box-shadow` smoothly — fade a pseudo copy (`flow-fade`), slide a
@@ -106,7 +106,8 @@ off by default; checked every 5 min) plus manual reminders. Meeting reminders
 (`groups.meeting_reminders`: minutes list, null = [120, 60], [] = off; claimed per time in
 `job_runs` as `meeting_remind`) with who serves; meeting animation (`MEETING_MOTIONS`: off / calm / lively / stars / waves / bokeh / rays /
 aurora / silk / mesh / embers / bubbles / snow / lines / grid / grain; `LivingLayer` + `.living-*` CSS)
-(`groups.meeting_motion`, per meeting `meetings.motion`);
+(`groups.meeting_motion`, per meeting `meetings.motion`; the home tile and the poster can have their
+own: `tile_motion` / `poster_motion` on meetings and design templates);
 a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).
 
 **Design** — the `design` right ("designer") gives a Design tab (`screens/Design.tsx`): church-wide

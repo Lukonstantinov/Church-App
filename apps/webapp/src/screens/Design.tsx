@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
   AnnouncementRow,
   BackdropConfig,
@@ -18,6 +18,7 @@ import { Group, LookControls, Pill } from '../components/LookControls';
 import { LookTop } from '../components/LookTop';
 import { MeetingPoster, groupLook } from '../components/MeetingPoster';
 import { MotionPicker } from '../components/MotionPicker';
+import { QualityPicker } from '../components/QualityPicker';
 import { Sheet } from '../components/Sheet';
 import { ThemePicker } from '../components/ThemePicker';
 import { useToast } from '../components/Toast';
@@ -112,6 +113,8 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
       </Section>
 
       <DesignStudio g={active} />
+
+      <QualityPicker />
 
       <section>
         <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
@@ -238,20 +241,36 @@ function Thumb({
 export function DesignPreviews({
   look,
   motion,
+  tileMotion,
+  posterMotion,
   g,
   title,
   design,
+  slide,
+  onSlide,
 }: {
   look: PosterLook;
   motion: MeetingMotion;
+  /** The tile's own animation (null = as on the meeting screen). */
+  tileMotion?: MeetingMotion | null;
+  /** The poster's animation (null = none). */
+  posterMotion?: MeetingMotion | null;
   g: GroupSummary;
   title?: string;
   design?: PostDesign | null;
+  /** Which preview is shown (0 screen, 1 tile, 2 poster), kept by the sheet. */
+  slide: number;
+  onSlide: (i: number) => void;
 }) {
   const t = useT();
   const f = useFmt();
   const track = useRef<HTMLDivElement>(null);
-  const [slide, setSlide] = useState(0);
+  // Picking a part below (screen / tile / poster) brings its preview into view.
+  useEffect(() => {
+    const el = track.current;
+    if (el && Math.round(el.scrollLeft / Math.max(1, el.clientWidth)) !== slide)
+      el.scrollTo({ left: slide * el.clientWidth, behavior: 'smooth' });
+  }, [slide]);
   // A sample date three days ahead, 19:00–21:00, fixed while the sheet is open.
   const [when] = useState(() => {
     const d = new Date(Date.now() + 3 * 86_400_000);
@@ -284,7 +303,8 @@ export function DesignPreviews({
         ref={track}
         onScroll={(e) => {
           const el = e.currentTarget;
-          setSlide(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+          const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+          if (i !== slide) onSlide(i);
         }}
         className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]"
       >
@@ -309,7 +329,8 @@ export function DesignPreviews({
         </Slide>
         <Slide>
           <div className="glass w-[58%] overflow-hidden rounded-2xl shadow-card">
-            <LookTop look={look} className="tile-top flex aspect-[16/10] flex-col p-2.5">
+            <LookTop look={look} className="tile-top isolate flex aspect-[16/10] flex-col p-2.5">
+              <LivingLayer kind={tileMotion ?? motion} behind />
               <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
                 {t.meetings.details}
               </span>
@@ -341,6 +362,7 @@ export function DesignPreviews({
                   look,
                   design: design ?? null,
                   speakers: [],
+                  posterMotion: posterMotion ?? null,
                 }}
                 g={g}
               />
@@ -349,6 +371,48 @@ export function DesignPreviews({
         </Slide>
       </div>
     </div>
+  );
+}
+
+/**
+ * The animation for the part shown above (meeting screen, home tile or poster): a switch
+ * that turns the carousel too, and the picker for that part.
+ */
+function MotionTargets({
+  slide,
+  onSlide,
+  screen,
+  tile,
+  poster,
+}: {
+  slide: number;
+  onSlide: (i: number) => void;
+  screen: { value: MeetingMotion | null; set: (m: MeetingMotion | null) => void; inherit: string };
+  tile: { value: MeetingMotion | null; set: (m: MeetingMotion | null) => void; inherit: string };
+  poster: { value: MeetingMotion | null; set: (m: MeetingMotion | null) => void; inherit?: string };
+}) {
+  const t = useT();
+  const parts = [screen, tile, poster];
+  const labels = [t.design.previewApp, t.design.previewTile, t.design.previewPoster];
+  const part = parts[slide] ?? screen;
+  return (
+    <Group title={t.design.motion}>
+      <div className="flex flex-col gap-3">
+        <div className="flex gap-1.5">
+          {labels.map((l, i) => (
+            <Pill key={l} on={slide === i} onClick={() => onSlide(i)} label={l} />
+          ))}
+        </div>
+        {slide === 2 && <p className="text-[13px] text-hint">{t.design.posterMotionHint}</p>}
+        <MotionPicker
+          key={slide}
+          value={part.value}
+          onChange={part.set}
+          allowInherit={!!part.inherit}
+          inheritLabel={part.inherit}
+        />
+      </div>
+    </Group>
   );
 }
 
@@ -396,6 +460,9 @@ function TemplateSheet({
     backdropUrl: tpl ? tpl.backdropUrl : null,
   });
   const [motion, setMotion] = useState<MeetingMotion | null>(tpl?.motion ?? 'calm');
+  const [tileMotion, setTileMotion] = useState<MeetingMotion | null>(tpl?.tileMotion ?? null);
+  const [posterMotion, setPosterMotion] = useState<MeetingMotion | null>(tpl?.posterMotion ?? null);
+  const [slide, setSlide] = useState(0);
   const preview: PosterLook = {
     brandColor: brandColor ?? g.brandColor,
     pattern: look.pattern,
@@ -416,6 +483,8 @@ function TemplateSheet({
         logoMediaId: g.logoMediaId,
         backdrop: look.backdrop,
         motion,
+        tileMotion,
+        posterMotion: posterMotion === 'off' ? null : posterMotion,
       });
       haptic.success();
       toast(t.common.saved);
@@ -431,7 +500,11 @@ function TemplateSheet({
         <DesignPreviews
           look={preview}
           motion={motion ?? group.data?.meetingMotion ?? 'calm'}
+          tileMotion={tileMotion}
+          posterMotion={posterMotion}
           g={g}
+          slide={slide}
+          onSlide={setSlide}
         />
         <input
           value={name}
@@ -444,9 +517,13 @@ function TemplateSheet({
           <ThemePicker value={brandColor} onChange={setBrandColor} />
         </Group>
         <LookControls value={look} onChange={setLook} groupId={g.id} logoUrl={g.logoUrl} />
-        <Group title={t.design.motion}>
-          <MotionPicker value={motion} onChange={setMotion} allowInherit />
-        </Group>
+        <MotionTargets
+          slide={slide}
+          onSlide={setSlide}
+          screen={{ value: motion, set: setMotion, inherit: t.meetings.motionMinistry }}
+          tile={{ value: tileMotion, set: setTileMotion, inherit: t.design.motionSameAsApp }}
+          poster={{ value: posterMotion ?? 'off', set: setPosterMotion }}
+        />
         <Button disabled={save.isPending} onClick={() => void submit()}>
           {save.isPending ? t.common.saving : t.common.save}
         </Button>
@@ -495,6 +572,11 @@ function ApplySheet({
   // This meeting's own animation (null = its template's or the ministry's).
   const startMotion = item.kind === 'meeting' ? item.m.ownMotion : null;
   const [ownMotion, setOwnMotion] = useState<MeetingMotion | null>(startMotion);
+  const startTile = item.kind === 'meeting' ? item.m.ownTileMotion : null;
+  const startPoster = item.kind === 'meeting' ? item.m.ownPosterMotion : null;
+  const [ownTile, setOwnTile] = useState<MeetingMotion | null>(startTile);
+  const [ownPoster, setOwnPoster] = useState<MeetingMotion | null>(startPoster);
+  const [slide, setSlide] = useState(0);
   const tpl = typeof choice === 'number' ? templates.data?.find((x) => x.id === choice) : null;
   const look: PosterLook =
     choice === 'own' ? (thing.look ?? groupLook(g)) : tpl ? templateLook(tpl) : groupLook(g);
@@ -502,10 +584,24 @@ function ApplySheet({
     item.kind === 'meeting'
       ? (ownMotion ?? tpl?.motion ?? (choice === start ? item.m.motion : 'calm'))
       : (tpl?.motion ?? 'calm');
+  // Without their own, the tile and poster follow the template (or what they had).
+  const same = choice === start && item.kind === 'meeting';
+  const tileMotion =
+    ownTile ?? tpl?.tileMotion ?? (same && item.kind === 'meeting' ? item.m.tileMotion : null);
+  const posterMotion =
+    ownPoster ??
+    tpl?.posterMotion ??
+    (same && item.kind === 'meeting' ? item.m.posterMotion : null);
   const pending = updateMeeting.isPending || updateEvent.isPending;
 
   async function save() {
-    if (choice === start && ownMotion === startMotion) return onClose();
+    if (
+      choice === start &&
+      ownMotion === startMotion &&
+      ownTile === startTile &&
+      ownPoster === startPoster
+    )
+      return onClose();
     // A template or the ministry's look replaces the own look and own colour.
     const design = {
       ...initCover(thing.design, null, null, true).design,
@@ -520,6 +616,8 @@ function ApplySheet({
           // Only a new choice of look replaces it; the animation alone leaves it be.
           ...(choice !== start ? { templateId, design } : {}),
           motion: ownMotion,
+          tileMotion: ownTile,
+          posterMotion: ownPoster,
         });
       else await updateEvent.mutateAsync({ templateId, design });
       haptic.success();
@@ -536,14 +634,22 @@ function ApplySheet({
         <DesignPreviews
           look={look}
           motion={motion}
+          tileMotion={tileMotion}
+          posterMotion={posterMotion}
           g={g}
           title={thing.title}
           design={thing.design}
+          slide={slide}
+          onSlide={setSlide}
         />
         {item.kind === 'meeting' && (
-          <Group title={t.meetings.motionTitle}>
-            <MotionPicker value={ownMotion} onChange={setOwnMotion} allowInherit />
-          </Group>
+          <MotionTargets
+            slide={slide}
+            onSlide={setSlide}
+            screen={{ value: ownMotion, set: setOwnMotion, inherit: t.meetings.motionMinistry }}
+            tile={{ value: ownTile, set: setOwnTile, inherit: t.meetings.motionDefault }}
+            poster={{ value: ownPoster, set: setOwnPoster, inherit: t.meetings.motionDefault }}
+          />
         )}
         <Group title={t.design.apply}>
           <div className="flex flex-wrap gap-2">

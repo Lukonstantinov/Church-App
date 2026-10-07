@@ -312,6 +312,7 @@ groupMeetingRoutes.post('/:id/meetings', async (c) => {
         design: input.design ? JSON.stringify(input.design) : null,
         templateId: input.templateId ?? null,
         speakers: input.speakers?.length ? JSON.stringify(input.speakers) : null,
+        posterMotion: input.posterMotion ?? null,
         seriesId,
         repeatRule: input.repeat ? JSON.stringify(input.repeat) : null,
         // Already underway when it is made: nobody needs a "live" message for it.
@@ -438,7 +439,14 @@ export const meetingRoutes = new Hono<App>();
 
 /** Who may do what with a meeting: managers everything; its leader place/topic/snacks. */
 /** A meeting's look: the poster, its template, the living wallpaper and the people block. */
-const MEETING_LOOK = ['design', 'templateId', 'motion', 'peopleLook'] as const;
+const MEETING_LOOK = [
+  'design',
+  'templateId',
+  'motion',
+  'tileMotion',
+  'posterMotion',
+  'peopleLook',
+] as const;
 
 async function meetingAccess(
   db: AuthVariables['db'],
@@ -677,6 +685,8 @@ meetingRoutes.patch('/:id', async (c) => {
   }
   if (input.templateId !== undefined) patch.templateId = input.templateId;
   if (input.motion !== undefined) patch.motion = input.motion;
+  if (input.tileMotion !== undefined) patch.tileMotion = input.tileMotion;
+  if (input.posterMotion !== undefined) patch.posterMotion = input.posterMotion;
   if (input.peopleLook !== undefined) {
     if (input.peopleLook?.photoMediaId)
       await assertGroupMedia(db, meeting.groupId, input.peopleLook.photoMediaId);

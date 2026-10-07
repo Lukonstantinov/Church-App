@@ -280,6 +280,9 @@ export const meetings = sqliteTable(
     remindedAt: text('reminded_at'),
     /** This meeting's own animation level (null = the ministry's). */
     motion: text('motion'),
+    /** Its home tile's / poster's own animations (null = the template's, else default). */
+    tileMotion: text('tile_motion'),
+    posterMotion: text('poster_motion'),
     rollTakenBy: integer('roll_taken_by'),
     rollTakenAt: text('roll_taken_at'),
     /** Who last said "Can't" to leading / the snacks (the job was freed; shown with a red ✗). */
@@ -736,6 +739,10 @@ export const designTemplates = sqliteTable('design_templates', {
   backdrop: text('backdrop'),
   /** Living wallpaper for meetings using it (MeetingMotion; NULL = the ministry's). */
   motion: text('motion'),
+  /** The home tile's animation (NULL = as on the meeting screen). */
+  tileMotion: text('tile_motion'),
+  /** The poster's animation (NULL = none). */
+  posterMotion: text('poster_motion'),
   createdBy: integer('created_by').references(() => users.id),
   createdAt: createdAt(),
 });

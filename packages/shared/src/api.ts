@@ -590,6 +590,12 @@ export interface MeetingRow {
   motion: MeetingMotion;
   /** Its own choice only (null = follows the ministry). */
   ownMotion: MeetingMotion | null;
+  /** The home tile's animation: its own, else its template's (null = the ministry's tile setting, else `motion`). */
+  tileMotion: MeetingMotion | null;
+  ownTileMotion: MeetingMotion | null;
+  /** The poster's animation: its own, else its template's (null = none). */
+  posterMotion: MeetingMotion | null;
+  ownPosterMotion: MeetingMotion | null;
   /** Set when the meeting is one of a repeating series. */
   seriesId: string | null;
   repeat: MeetingRepeat | null;
@@ -617,6 +623,8 @@ export const createMeetingSchema = z.object({
   design: postDesignSchema.nullish(),
   templateId: z.number().int().positive().nullish(),
   speakers: speakersSchema.optional(),
+  /** The poster's animation (null = the template's, else none). */
+  posterMotion: z.enum(MEETING_MOTIONS).nullish(),
   /** Make it a repeating meeting: the calendar is filled for all of them. */
   repeat: repeatSchema.nullish(),
 });
@@ -639,6 +647,9 @@ export const updateMeetingSchema = z.object({
   peopleLook: peopleLookSchema.nullable().optional(),
   /** This meeting's animation level (null = the ministry's). */
   motion: z.enum(MEETING_MOTIONS).nullable().optional(),
+  /** Its home tile's and its poster's own animations (null = the template's / default). */
+  tileMotion: z.enum(MEETING_MOTIONS).nullable().optional(),
+  posterMotion: z.enum(MEETING_MOTIONS).nullable().optional(),
   /** With a series: apply the change to this and all the later meetings of it. */
   applyToSeries: z.boolean().optional(),
   leaderUserId: z.number().int().positive().nullable().optional(),
@@ -1017,6 +1028,10 @@ export const templateInputSchema = z.object({
   backdrop: backdropSchema.nullish(),
   /** The living wallpaper meetings with this template get (null = the ministry's). */
   motion: z.enum(MEETING_MOTIONS).nullish(),
+  /** The home tile's own animation (null = as on the meeting screen). */
+  tileMotion: z.enum(MEETING_MOTIONS).nullish(),
+  /** The poster's animation (null = none; the sent picture keeps one still frame of it). */
+  posterMotion: z.enum(MEETING_MOTIONS).nullish(),
 });
 export type TemplateInput = z.input<typeof templateInputSchema>;
 
@@ -1030,6 +1045,8 @@ export interface DesignTemplate {
   backdrop: BackdropConfig | null;
   backdropUrl: string | null;
   motion: MeetingMotion | null;
+  tileMotion: MeetingMotion | null;
+  posterMotion: MeetingMotion | null;
   mine: boolean;
 }
 

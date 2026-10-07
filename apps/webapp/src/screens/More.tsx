@@ -12,13 +12,13 @@ import {
   IconUsers,
 } from '../components/icons';
 import { HomeScreenCard } from '../components/HomeScreenCard';
+import { QualityPicker } from '../components/QualityPicker';
 import { Pill } from '../components/LookControls';
 import { Badge, Row, Screen, Section } from '../components/ui';
 import { useEnv } from '../lib/env';
 import { useI18n } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import { MOTIONS, setMotion, useMotion } from '../lib/motion';
-import { QUALITY_CHOICES, setQualityChoice, useQuality, useQualityChoice } from '../lib/perf';
 import { useMe } from '../lib/queries';
 
 /** Profile, language, the ministry's settings (by rights) and church settings for admins. */
@@ -29,8 +29,6 @@ export function More({ groups }: { groups: GroupSummary[] }) {
   const me = useMe();
   const [langOpen, setLangOpen] = useState(false);
   const motion = useMotion();
-  const qualityChoice = useQualityChoice();
-  const quality = useQuality();
   const user = me.data?.user;
   const env = groups[0];
   if (!user) return null;
@@ -78,23 +76,7 @@ export function More({ groups }: { groups: GroupSummary[] }) {
         </div>
       </Section>
 
-      <Section title={t.quality.title} footer={t.quality.hint}>
-        <div className="flex flex-wrap gap-2 p-3">
-          {QUALITY_CHOICES.map((q) => (
-            <Pill
-              key={q}
-              on={qualityChoice === q}
-              onClick={() => setQualityChoice(q)}
-              // On "auto", show what it settled on for this phone.
-              label={
-                q === 'auto' && qualityChoice === 'auto'
-                  ? `${t.quality.auto} · ${t.quality[quality]}`
-                  : t.quality[q]
-              }
-            />
-          ))}
-        </div>
-      </Section>
+      <QualityPicker />
 
       {env &&
         (can('settings') ||

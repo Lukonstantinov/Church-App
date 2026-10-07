@@ -13,11 +13,14 @@ export function MotionPicker({
   value,
   onChange,
   allowInherit,
+  inheritLabel,
   icon,
 }: {
   value: MeetingMotion | null;
   onChange: (v: MeetingMotion | null) => void;
   allowInherit?: boolean;
+  /** The name of the "inherit" choice (default: like the ministry). */
+  inheritLabel?: string;
   /** What the icon animations show in their previews. */
   icon?: MotionIcon | null;
 }) {
@@ -49,7 +52,7 @@ export function MotionPicker({
         <span
           className={`text-center text-[12px] leading-tight ${on ? 'font-bold text-accent' : 'text-hint'}`}
         >
-          {m ? t.meetings.motions[m] : t.meetings.motionMinistry}
+          {m ? t.meetings.motions[m] : (inheritLabel ?? t.meetings.motionMinistry)}
         </span>
       </button>
     );

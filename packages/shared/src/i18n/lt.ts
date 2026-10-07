@@ -292,6 +292,8 @@ export const lt: Messages = {
     motionHint:
       'Kiek juda susitikimų fonas ir kaip susitikimas pulsuoja prieš pradžią. Kiekvienam susitikimui galima pasirinkti savo.',
     motionMinistry: 'Kaip tarnystės',
+    posterMotion: 'Plakato animacija',
+    motionDefault: 'Numatytoji',
     motions: {
       off: 'Be judesio',
       calm: 'Rami',
@@ -850,6 +852,9 @@ export const lt: Messages = {
       'Ištrinti šabloną? Susitikimai ir renginiai su juo grįš prie tarnystės išvaizdos.',
     previewApp: 'Programėlėje',
     previewPoster: 'Plakatas',
+    motionSameAsApp: 'Kaip programoje',
+    posterMotionHint:
+      'Programoje plakatas juda; išsiųstame paveikslėlyje lieka vienas animacijos kadras.',
     previewTile: 'Plytelė',
     sampleTitle: 'Jaunimo susitikimas',
     sampleTopic: 'Pasaulio šviesa',

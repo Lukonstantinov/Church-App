@@ -5,6 +5,7 @@ import {
   resolveBrand,
   type GroupSummary,
   type MeetingHelper,
+  type MeetingMotion,
   type MeetingRow,
   type PostDesign,
   type PosterLook,
@@ -13,6 +14,7 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
+import { LivingLayer } from './ui';
 import { SpeakerStrip } from './Speakers';
 
 const TITLE_PX = { s: 32, m: 40, l: 50, xl: 60 } as const;
@@ -60,6 +62,8 @@ export const MeetingPoster = forwardRef<
         speakers: Speaker[];
         /** Speakers from the people list stand in when the poster has none of its own. */
         helpers: MeetingHelper[];
+        /** The poster's animation (the sent picture keeps one still frame of it). */
+        posterMotion: MeetingMotion | null;
       }>;
     g: GroupSummary;
     /** Stamped "cancelled" across. */
@@ -110,6 +114,10 @@ export const MeetingPoster = forwardRef<
           <PatternLayer pattern={look.pattern} logoUrl={look.logoUrl} />
           <BackdropLayer backdrop={look.backdrop} url={look.backdropUrl} />
         </>
+      )}
+      {/* Drawn at print size, so its particles are drawn larger. */}
+      {m.posterMotion && m.posterMotion !== 'off' && (
+        <LivingLayer kind={m.posterMotion} tune={{ size: 1.6 }} />
       )}
       <span
         aria-hidden="true"
