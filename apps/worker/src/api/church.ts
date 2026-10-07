@@ -54,7 +54,11 @@ churchRoutes.put('/studio', async (c) => {
   const input = await parseBody(c, churchStudioSchema);
   // The main page's icon animations use the church logo or an emoji (no uploaded pictures).
   for (const part of Object.values(input.screenLook ?? {}))
-    if (part?.icon) part.icon = { emoji: part.icon.emoji ?? null };
+    if (part) {
+      if (part.icon) part.icon = { emoji: part.icon.emoji ?? null };
+      // No uploaded pictures on the main page (they belong to a ministry).
+      delete part.photo;
+    }
   const patch: Partial<typeof churchSettings.$inferInsert> = {};
   if (input.screenLook !== undefined) patch.screenLook = input.screenLook;
   if (input.appBackground !== undefined) patch.appBackground = input.appBackground;

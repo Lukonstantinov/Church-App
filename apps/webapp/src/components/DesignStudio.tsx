@@ -2,12 +2,15 @@ import { useState, type ReactNode } from 'react';
 import {
   ENTER_ANIMATIONS,
   MOTION_GROUPS,
+  MODULE_EDGES,
   MODULE_SURFACES,
+  isFontKey,
   resolveBrand,
   type EnterAnimation,
   type GroupSummary,
   type MeetingMotion,
   type ModuleLook,
+  type ModulePhoto,
   type MotionIcon,
   type MotionTune,
   type ScreenLook,
@@ -27,6 +30,7 @@ import {
 import { preparePhoto } from '../lib/image';
 import { haptic } from '../lib/telegram';
 import { EnvCard } from '../screens/Hub';
+import { FontPicker } from './FontPicker';
 import { AppBackdrop } from './AppBackdrop';
 import { BackgroundEditor } from './BackgroundEditor';
 import { BrandHeader } from './BrandHeader';
@@ -454,6 +458,50 @@ function ModuleSheet({
           </div>
         </Group>
 
+        <Group title={t.studio.edge}>
+          <div className="grid grid-cols-4 gap-2">
+            {MODULE_EDGES.map((e) => {
+              const on = (draft.edge ?? 'none') === e;
+              return (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => {
+                    haptic.tap();
+                    set({ edge: e === 'none' ? null : e });
+                  }}
+                  className={`flex flex-col items-center gap-1 rounded-2xl p-1.5 ${on ? 'ring-2 ring-[var(--brand)]' : ''}`}
+                >
+                  <span
+                    className={`brand-gradient relative block h-10 w-full rounded-xl ${e === 'none' ? '' : `skin edge edge-${e}`}`}
+                  />
+                  <span
+                    className={`text-center text-[11px] leading-tight ${on ? 'font-bold text-accent' : 'text-hint'}`}
+                  >
+                    {t.studio.edges[e]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </Group>
+
+        {scope === 'ministry' && (
+          <PhotoControls
+            photo={draft.photo ?? null}
+            groupId={g.id}
+            onChange={(photo) => set({ photo })}
+          />
+        )}
+
+        <Group title={t.studio.font}>
+          <FontPicker
+            label={t.studio.font}
+            value={isFontKey(draft.font) ? draft.font : null}
+            onChange={(font) => set({ font })}
+          />
+        </Group>
+
         {draft.surface === 'gradient' && (
           <Group title={t.studio.gradient}>
             <div className="flex flex-col gap-3">
@@ -879,6 +927,79 @@ function IconControls({
                   toast(t.common.saveFailed, 'error');
                 }
               }}
+            />
+          </label>
+        )}
+      </div>
+    </Group>
+  );
+}
+
+/** A picture inside the part, under its content, with how see-through it is. */
+function PhotoControls({
+  photo,
+  groupId,
+  onChange,
+}: {
+  photo: ModulePhoto | null;
+  groupId: number;
+  onChange: (p: ModulePhoto | null) => void;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const upload = useUploadMedia(groupId, 'event');
+  return (
+    <Group title={t.studio.photo}>
+      <p className="mb-2 text-[12px] text-hint">{t.studio.photoHint}</p>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {photo?.url && (
+            <img src={photo.url} alt="" className="h-12 w-12 rounded-xl object-cover" />
+          )}
+          <label className="flex h-11 cursor-pointer items-center rounded-xl bg-hairline px-3 text-[14px] font-semibold">
+            {upload.isPending ? '…' : `🖼 ${t.studio.photoAdd}`}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const media = await upload.mutateAsync(await preparePhoto(file));
+                  onChange({ mediaId: media.id, url: media.url, opacity: photo?.opacity ?? 0.35 });
+                } catch {
+                  toast(t.common.saveFailed, 'error');
+                }
+              }}
+            />
+          </label>
+          {photo && (
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              className="h-11 rounded-xl bg-hairline px-3 text-[14px] font-semibold text-absent"
+            >
+              {t.studio.photoRemove}
+            </button>
+          )}
+        </div>
+        {photo && (
+          <label className="flex flex-col gap-1">
+            <span className="flex justify-between text-[14px]">
+              <span>{t.studio.opacity}</span>
+              <span className="font-semibold tabular-nums text-hint">
+                {Math.round(photo.opacity * 100)}%
+              </span>
+            </span>
+            <input
+              type="range"
+              min={0.05}
+              max={1}
+              step={0.05}
+              value={photo.opacity}
+              onChange={(e) => onChange({ ...photo, opacity: Number(e.target.value) })}
+              className="w-full accent-[var(--brand)]"
             />
           </label>
         )}

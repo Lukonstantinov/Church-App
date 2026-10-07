@@ -2144,3 +2144,117 @@ html[data-motion='calm'] .skin-liquid::after {
     transform: rotate(360deg) translateX(34cqmin) rotate(-360deg);
   }
 }
+
+/* ---------- Edges of page parts (Design studio) ---------- */
+@property --edge-a {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+/* A ring drawn just inside the block's border, on top of everything, never catching taps. */
+.edge-metal::before,
+.edge-gold::before,
+.edge-rainbow::before,
+.edge-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  padding: 2px;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+/* Metallic: brushed silver with a slow glint. */
+.edge-metal::before {
+  background: linear-gradient(var(--edge-a), #f8fafc, #8b929c, #ffffff, #5b616b, #d9dde3, #8b929c);
+  animation: edge-turn 9s linear infinite;
+}
+.edge-gold::before {
+  background: linear-gradient(var(--edge-a), #fff6d5, #c9932c, #fff1b8, #8a5a12, #f5d27a, #c9932c);
+  animation: edge-turn 9s linear infinite;
+}
+/* Rainbow: the colours run around the edge. */
+.edge-rainbow::before {
+  padding: 2.5px;
+  background: conic-gradient(
+    from var(--edge-a),
+    #ef4444,
+    #f59e0b,
+    #22c55e,
+    #06b6d4,
+    #6366f1,
+    #d946ef,
+    #ef4444
+  );
+  animation: edge-turn 5s linear infinite;
+}
+.edge-glass::before {
+  padding: 1.5px;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 255, 255, 0.15) 40%,
+    rgba(255, 255, 255, 0.05) 60%,
+    rgba(255, 255, 255, 0.7)
+  );
+}
+@keyframes edge-turn {
+  to {
+    --edge-a: 360deg;
+  }
+}
+/* Neon: a glowing coloured outline that breathes. */
+.edge-neon {
+  box-shadow:
+    0 0 0 1.5px var(--brand-partner),
+    0 0 12px 2px color-mix(in srgb, var(--brand-partner) 70%, transparent),
+    inset 0 0 10px color-mix(in srgb, var(--brand-partner) 40%, transparent) !important;
+  animation: edge-neon 2.6s ease-in-out infinite;
+}
+@keyframes edge-neon {
+  50% {
+    box-shadow:
+      0 0 0 1.5px var(--brand-partner),
+      0 0 22px 5px color-mix(in srgb, var(--brand-partner) 55%, transparent),
+      inset 0 0 14px color-mix(in srgb, var(--brand-partner) 45%, transparent);
+  }
+}
+/* Burning: a flickering fire outline. */
+.edge-fire {
+  --burn: #ff6a1f;
+  animation: burn-flame 1.6s ease-in-out infinite;
+}
+/* Liquid: the corners slowly melt and re-form, with a soft glossy rim. */
+.edge-liquid {
+  animation: edge-liquid 8s ease-in-out infinite;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 6px 22px color-mix(in srgb, var(--brand) 30%, transparent) !important;
+}
+@keyframes edge-liquid {
+  0%,
+  100% {
+    border-radius: 22px 30px 20px 28px / 28px 20px 30px 22px;
+  }
+  33% {
+    border-radius: 30px 18px 28px 22px / 20px 30px 22px 28px;
+  }
+  66% {
+    border-radius: 18px 28px 24px 30px / 30px 24px 18px 26px;
+  }
+}
+html[data-motion='off'] .edge::before,
+html[data-motion='off'] .edge {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .edge,
+  .edge::before {
+    animation: none !important;
+  }
+}

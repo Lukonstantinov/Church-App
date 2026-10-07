@@ -138,16 +138,21 @@ const SOON_AHEAD_MS = 2 * 3_600_000;
 
 /** Adds signed links to the uploaded icon pictures of a page's parts. */
 async function signScreenLook(look: ScreenLook, secret: string): Promise<ScreenLook> {
-  const out: ScreenLook = { ...look };
+  const out: ScreenLook = {};
   for (const [key, part] of Object.entries(look) as [
     keyof ScreenLook,
     ScreenLook[keyof ScreenLook],
   ][]) {
-    if (part?.icon?.mediaId)
-      out[key] = {
-        ...part,
-        icon: { ...part.icon, url: await signedMediaUrl(secret, part.icon.mediaId) },
-      };
+    if (!part) continue;
+    out[key] = {
+      ...part,
+      ...(part.icon?.mediaId
+        ? { icon: { ...part.icon, url: await signedMediaUrl(secret, part.icon.mediaId) } }
+        : {}),
+      ...(part.photo
+        ? { photo: { ...part.photo, url: await signedMediaUrl(secret, part.photo.mediaId) } }
+        : {}),
+    };
   }
   return out;
 }
@@ -380,6 +385,10 @@ groupRoutes.put('/:id/studio', async (c) => {
   for (const part of Object.values(input.screenLook ?? {})) {
     if (part?.icon?.mediaId) await assertGroupMedia(db, group.id, part.icon.mediaId);
     if (part?.icon) part.icon.url = null;
+    if (part?.photo) {
+      await assertGroupMedia(db, group.id, part.photo.mediaId);
+      part.photo.url = null;
+    }
   }
   const patch: Partial<typeof groups.$inferInsert> = {};
   if (input.screenLook !== undefined) patch.screenLook = input.screenLook;

@@ -306,6 +306,18 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
+        title: 'Screen studio (tap a part to style it)',
+        steps: [
+          '«Дизайн» → «Студия экранов»: a live copy of the ministry page (or, for church admins, the church main page). Tap any outlined part: header, quick buttons, calendar, meetings, posts, bottom bar (main page: header, ministry cards, profile and menu).',
+          'Each part: surface (as in the app, glass, liquid glass, ministry colour, own gradient of 2–5 colours with direction and flowing, colour flow, dark, burning), edge (liquid, metal, gold, neon, rainbow, fire, glass), a picture inside with opacity (ministries), a font, an animation plus up to 2 animation layers, and tuning: speed, size, direction, colour; the icon animations show the logo, an emoji or an uploaded picture.',
+          'Meetings part: the meetings’ animation (meeting screen and tiles); switch «У плитки своя анимация» to give the tiles a different one.',
+          'Above the copy: «Фон экрана» (page background) and «Анимация входа» (how the ministry page appears).',
+          'All animation settings live here now; ministry settings and the poster sheet point to Design. Each person can still turn motion down or off for themselves in «Ещё».',
+          'Developers: data in groups.screen_look / church_settings.screen_look (ScreenLook in shared/screenLook.ts), saved by PUT /api/groups/:id/studio (designer or settings) and PUT /api/church/studio (admins). Parts read it with useModuleLook + skinClass/skinStyle/SkinLayer (components/ModuleSkin.tsx); CSS .skin-*, .edge-*, .living-*.',
+          'New animation: add it to MEETING_MOTIONS and MOTION_GROUPS (shared api.ts), meetings.motions in ru/en/lt, a layer in LivingLayer (components/ui.tsx) and its .living-… CSS.',
+        ],
+      },
+      {
         title: 'Restyle a meeting or event',
         steps: [
           '«Дизайн» → a meeting or event in the list → choose the ministry look or a template → Save.',

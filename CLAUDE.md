@@ -105,6 +105,13 @@ previews (meeting hero, home tile, poster) and restyling of upcoming meetings/ev
 Church setting `designLock`: when on, only designers (and admins) change looks — enforced in the
 meeting/event/post PATCH routes via `designRights` / `assertMayDesign` / `lookDiffers`
 (`lib/access.ts`; unchanged values resent by forms don't count); rows carry `canDesign`.
+Screen studio (`components/DesignStudio.tsx`): tap a part on a live copy of the ministry page or
+the church main page; per part (`ScreenLook` in `shared/screenLook.ts`, stored in
+`groups.screen_look` / `church_settings.screen_look`, PUT `/api/groups/:id/studio`,
+`/api/church/studio`): surface, own gradient, edge, picture with opacity, font, animation +
+layers, tune (speed/size/direction/colour), icon (logo/emoji/upload); applied via
+`useModuleLook`/`skinClass`/`skinStyle`/`SkinLayer`. All animation settings live in Design
+(animations sorted by `MOTION_GROUPS`).
 
 **Posts & home** — posts with photos, blocks, types, looks, reactions, comments, resend;
 home tiles (drag to reorder, expand), several meetings of a day share one tile.

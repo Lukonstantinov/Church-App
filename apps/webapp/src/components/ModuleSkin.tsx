@@ -1,5 +1,11 @@
 import { createContext, useContext, type CSSProperties } from 'react';
-import type { MeetingMotion, ModuleLook, ScreenLook, ScreenModule } from '@church/shared';
+import {
+  fontFamily,
+  type MeetingMotion,
+  type ModuleLook,
+  type ScreenLook,
+  type ScreenModule,
+} from '@church/shared';
 import { useEnv } from '../lib/env';
 import { useGroups, useMe } from '../lib/queries';
 import { LivingLayer } from './ui';
@@ -31,23 +37,38 @@ export function skinMotions(look: ModuleLook): MeetingMotion[] {
 export function skinClass(look: ModuleLook): string {
   const surface = look.surface && look.surface !== 'default' ? ` skin skin-${look.surface}` : '';
   const flow = look.surface === 'gradient' && look.flow ? ' skin-flow' : '';
-  const moving = skinMotions(look).length ? ' skin-host' : '';
-  return `${surface}${flow}${moving}`.trim();
+  const moving = skinMotions(look).length || look.photo ? ' skin-host' : '';
+  const edge = look.edge && look.edge !== 'none' ? ` skin edge edge-${look.edge}` : '';
+  return `${surface}${flow}${moving}${edge}`.trim();
 }
 
 /** Inline values a block needs: the own gradient (as a CSS variable). */
 export function skinStyle(look: ModuleLook): CSSProperties | undefined {
-  if (look.surface !== 'gradient' || !look.colors?.length) return undefined;
-  const colors = look.flow ? [...look.colors, look.colors[0]!] : look.colors;
+  const font = fontFamily(look.font);
+  const grad =
+    look.surface === 'gradient' && look.colors?.length
+      ? (look.flow ? [...look.colors, look.colors[0]!] : look.colors).join(', ')
+      : null;
+  if (!font && !grad) return undefined;
   return {
-    '--skin-grad': `linear-gradient(${look.angle ?? 135}deg, ${colors.join(', ')})`,
+    ...(font ? { fontFamily: font } : {}),
+    ...(grad ? { '--skin-grad': `linear-gradient(${look.angle ?? 135}deg, ${grad})` } : {}),
   } as CSSProperties;
 }
 
-/** The part's living animations, stacked under the block's content. */
+/** The part's picture and living animations, stacked under the block's content. */
 export function SkinLayer({ look }: { look: ModuleLook }) {
   return (
     <>
+      {look.photo?.url && (
+        <img
+          src={look.photo.url}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          style={{ zIndex: -1, opacity: look.photo.opacity }}
+        />
+      )}
       {skinMotions(look).map((m, i) => (
         <LivingLayer key={`${m}${i}`} kind={m} behind tune={look.tune} icon={look.icon} />
       ))}

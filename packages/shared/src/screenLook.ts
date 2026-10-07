@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { MEETING_MOTIONS } from './api';
 import { ENTER_ANIMATIONS } from './brand';
 import { appBackgroundSchema } from './background';
+import { isFontKey } from './posts';
 
 /**
  * The parts of a screen the designer styles in the Design studio, by tapping them on a
@@ -38,6 +39,32 @@ export const MODULE_SURFACES = [
 export type ModuleSurface = (typeof MODULE_SURFACES)[number];
 
 const hex = z.string().regex(/^#[0-9a-f]{6}$/i);
+
+/**
+ * The edge of a part's blocks: none, liquid (the corners slowly morph), metallic, gold,
+ * neon glow, a turning rainbow, burning, or a bright glass rim.
+ */
+export const MODULE_EDGES = [
+  'none',
+  'liquid',
+  'metal',
+  'gold',
+  'neon',
+  'rainbow',
+  'fire',
+  'glass',
+] as const;
+export type ModuleEdge = (typeof MODULE_EDGES)[number];
+
+/** A picture under a part's content (ministries: an uploaded photo), see-through. */
+export const modulePhotoSchema = z.object({
+  mediaId: z.number().int().positive(),
+  /** Filled by the server when reading (a signed link). */
+  url: z.string().max(600).nullish(),
+  /** 0.05 (faint) … 1 (full). */
+  opacity: z.number().min(0.05).max(1).default(0.35),
+});
+export type ModulePhoto = z.output<typeof modulePhotoSchema>;
 
 /** Fine-tuning of a part's animations: speed, size, direction and colour. */
 export const motionTuneSchema = z.object({
@@ -77,6 +104,10 @@ export const moduleLookSchema = z.object({
   icon: motionIconSchema.nullish(),
   /** Meetings: the tile has its own animation instead of the meeting screen's. */
   own: z.boolean().nullish(),
+  edge: z.enum(MODULE_EDGES).nullish(),
+  photo: modulePhotoSchema.nullish(),
+  /** A font for the part's text (a key of FONTS). */
+  font: z.string().max(40).refine(isFontKey, 'font').nullish(),
 });
 export type ModuleLook = z.output<typeof moduleLookSchema>;
 

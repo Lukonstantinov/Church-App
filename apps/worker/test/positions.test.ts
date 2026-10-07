@@ -375,6 +375,23 @@ describe('adding people and environment look', () => {
     )!;
     expect(mine.screenLook).toEqual(look.screenLook);
     expect(mine.animation).toBe('zoom');
+    // Edges, fonts, tuning and icons are kept; a font that doesn't exist is refused.
+    const rich = {
+      screenLook: {
+        posts: {
+          edge: 'metal',
+          font: 'playfair-display',
+          tune: { speed: 2, size: 1.5, angle: 90, color: '#ff0000' },
+          icon: { emoji: '🔥' },
+          motion: 'iconorbit',
+          layers: ['goo', 'fireflies'],
+        },
+      },
+    };
+    expect((await put(designer, rich)).status).toBe(200);
+    expect((await put(designer, { screenLook: { posts: { font: 'Comic Sans' } } })).status).toBe(
+      400,
+    );
     // An unknown part or animation is refused.
     expect((await put(designer, { screenLook: { roof: { motion: 'snow' } } })).status).toBe(400);
     // The church's main page: admins only.
