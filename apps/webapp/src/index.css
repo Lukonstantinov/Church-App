@@ -1242,20 +1242,19 @@ html[data-motion='off'] [class*='app-bg-'] {
 .soon-timer {
   background: linear-gradient(135deg, #f59e0b, #ea580c);
 }
+/* Only the glow breathes: scaling the card makes iPhones flatten its pattern and photo. */
 @keyframes soon-pulse {
   0%,
   100% {
-    transform: scale(1);
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 0%, transparent);
   }
   50% {
-    transform: scale(1.012);
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand) 22%, transparent);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--brand) 26%, transparent);
   }
 }
 .soon-pulse {
   animation: soon-pulse 3.2s ease-in-out infinite;
-  border-radius: 18px;
+  border-radius: var(--radius-card, 22px);
 }
 @media (prefers-reduced-motion: reduce) {
   .soon-pulse {
