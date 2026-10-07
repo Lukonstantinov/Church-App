@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { resolveBrand, type PosterLook } from '@church/shared';
+import { resolveBrand, type MeetingMotion, type PosterLook } from '@church/shared';
 import { useEnv } from '../lib/env';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
@@ -379,6 +379,50 @@ export function Card({
 }
 
 /** Solid brand-gradient card for the one most important thing on a screen. */
+/**
+ * The moving wallpaper behind a card: colour drift (calm or lively), twinkling stars,
+ * waves, floating lights or turning rays. Nothing for "off". Parent: relative + overflow-hidden.
+ */
+export function LivingLayer({ kind, live }: { kind: MeetingMotion; live?: boolean }) {
+  if (kind === 'off') return null;
+  return (
+    <span
+      aria-hidden="true"
+      className="living-bg"
+      data-kind={kind}
+      data-live={live ? 'true' : 'false'}
+      data-level={kind === 'calm' ? 'calm' : 'lively'}
+    >
+      {(kind === 'calm' || kind === 'lively') && (
+        <>
+          <i className="living-blob b1" />
+          <i className="living-blob b2" />
+          <i className="living-blob b3" />
+          <i className="living-rays" />
+          <i className="living-dots" />
+          <i className="living-dots far" />
+        </>
+      )}
+      {kind === 'stars' && (
+        <>
+          <i className="living-stars" />
+          <i className="living-stars far" />
+        </>
+      )}
+      {kind === 'waves' && (
+        <>
+          <i className="living-wave w1" />
+          <i className="living-wave w2" />
+          <i className="living-wave w3" />
+        </>
+      )}
+      {kind === 'bokeh' &&
+        [0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} className={`living-bokeh k${i}`} />)}
+      {kind === 'rays' && <i className="living-rays solo" />}
+    </span>
+  );
+}
+
 export function HeroCard({
   children,
   className = '',
@@ -394,7 +438,7 @@ export function HeroCard({
    * A living wallpaper: drifting colour, moving texture and twinkling light — fully
    * ("lively"), gently ("calm") or not at all. `true` = lively.
    */
-  living?: boolean | 'off' | 'calm' | 'lively';
+  living?: boolean | MeetingMotion;
   /** Something is on right now: the living wallpaper turns warm and quickens. */
   live?: boolean;
 }) {
@@ -419,21 +463,7 @@ export function HeroCard({
     >
       <PatternLayer pattern={src?.pattern} logoUrl={src?.logoUrl} />
       <BackdropLayer backdrop={src?.backdrop} url={src?.backdropUrl} />
-      {living && living !== 'off' && (
-        <span
-          aria-hidden="true"
-          className="living-bg"
-          data-live={live ? 'true' : 'false'}
-          data-level={living === 'calm' ? 'calm' : 'lively'}
-        >
-          <i className="living-blob b1" />
-          <i className="living-blob b2" />
-          <i className="living-blob b3" />
-          <i className="living-rays" />
-          <i className="living-dots" />
-          <i className="living-dots far" />
-        </span>
-      )}
+      <LivingLayer kind={living === true ? 'lively' : living || 'off'} live={live} />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/15 blur-2xl"

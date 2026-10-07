@@ -176,8 +176,19 @@ export type CreateGroupInput = z.input<typeof createGroupSchema>;
 export const REMINDER_MINUTES = [15, 30, 60, 120, 180, 1440] as const;
 export const DEFAULT_MEETING_REMINDERS = [120, 60];
 
-/** How much a meeting's background moves: not at all, gently, or fully. */
-export const MEETING_MOTIONS = ['off', 'calm', 'lively'] as const;
+/**
+ * How a meeting's background moves: not at all, gentle or full colour drift, twinkling
+ * stars, waves, floating circles of light (bokeh) or turning rays of light.
+ */
+export const MEETING_MOTIONS = [
+  'off',
+  'calm',
+  'lively',
+  'stars',
+  'waves',
+  'bokeh',
+  'rays',
+] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
 
 export const updateGroupSchema = z.object({

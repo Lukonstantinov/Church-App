@@ -1284,3 +1284,131 @@ html[data-motion='off'] [class*='app-bg-'] {
     animation: none;
   }
 }
+
+/* ---------- More living wallpapers: stars, waves, lights, rays ---------- */
+.living-stars {
+  position: absolute;
+  inset: -20px;
+  background:
+    radial-gradient(1.6px 1.6px at 12% 22%, #fff, transparent),
+    radial-gradient(1.2px 1.2px at 28% 68%, #fff, transparent),
+    radial-gradient(2px 2px at 46% 34%, #fff, transparent),
+    radial-gradient(1.3px 1.3px at 63% 78%, #fff, transparent),
+    radial-gradient(1.8px 1.8px at 78% 18%, #fff, transparent),
+    radial-gradient(1.2px 1.2px at 90% 56%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 8% 84%, #fff, transparent),
+    radial-gradient(1.1px 1.1px at 54% 8%, #fff, transparent);
+  opacity: 0.85;
+  animation: living-twinkle 3.6s ease-in-out infinite;
+}
+.living-stars.far {
+  background-size: 140px 110px;
+  opacity: 0.45;
+  animation:
+    living-twinkle 5.5s ease-in-out -1.7s infinite,
+    living-pan 60s linear infinite;
+}
+.living-wave {
+  position: absolute;
+  left: -50%;
+  width: 200%;
+  aspect-ratio: 1;
+  border-radius: 43%;
+  background: rgba(255, 255, 255, 0.12);
+  animation: living-spin 14s linear infinite;
+}
+.living-wave.w1 {
+  top: 62%;
+}
+.living-wave.w2 {
+  top: 70%;
+  border-radius: 40%;
+  background: rgba(255, 255, 255, 0.09);
+  animation-duration: 19s;
+  animation-direction: reverse;
+}
+.living-wave.w3 {
+  top: 78%;
+  border-radius: 46%;
+  background: rgba(255, 255, 255, 0.07);
+  animation-duration: 24s;
+}
+.living-bokeh {
+  position: absolute;
+  bottom: -60px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.05) 70%);
+  filter: blur(1px);
+  opacity: 0;
+  animation: living-float 11s ease-in infinite;
+}
+.living-bokeh.k0 {
+  left: 6%;
+  width: 34px;
+  height: 34px;
+  animation-delay: 0s;
+}
+.living-bokeh.k1 {
+  left: 22%;
+  width: 18px;
+  height: 18px;
+  animation-delay: -3s;
+  animation-duration: 9s;
+}
+.living-bokeh.k2 {
+  left: 38%;
+  width: 52px;
+  height: 52px;
+  animation-delay: -6s;
+  animation-duration: 14s;
+}
+.living-bokeh.k3 {
+  left: 55%;
+  width: 24px;
+  height: 24px;
+  animation-delay: -1.5s;
+}
+.living-bokeh.k4 {
+  left: 68%;
+  width: 40px;
+  height: 40px;
+  animation-delay: -8s;
+  animation-duration: 12s;
+}
+.living-bokeh.k5 {
+  left: 82%;
+  width: 16px;
+  height: 16px;
+  animation-delay: -4.5s;
+  animation-duration: 8s;
+}
+.living-bokeh.k6 {
+  left: 92%;
+  width: 28px;
+  height: 28px;
+  animation-delay: -10s;
+}
+@keyframes living-float {
+  0% {
+    transform: translateY(0) scale(0.8);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.8;
+  }
+  85% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(-320px) scale(1.15);
+    opacity: 0;
+  }
+}
+.living-rays.solo {
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.16) 0 7deg,
+    transparent 7deg 20deg
+  );
+  animation-duration: 40s;
+}

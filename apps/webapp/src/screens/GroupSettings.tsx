@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { BackgroundEditor } from '../components/BackgroundEditor';
-import { MEETING_MOTIONS, REMINDER_MINUTES, type GroupDetail } from '@church/shared';
+import { REMINDER_MINUTES, type GroupDetail } from '@church/shared';
+import { MotionPicker } from '../components/MotionPicker';
 import { IconImage, IconTelegram, IconTrash } from '../components/icons';
 import { PatternDesigner } from '../components/PatternDesigner';
 import { Pill } from '../components/LookControls';
@@ -218,15 +219,11 @@ function Form({ g }: { g: GroupDetail }) {
         </div>
       </Section>
       <Section title={t.meetings.motionTitle} footer={t.meetings.motionHint}>
-        <div className="flex flex-wrap gap-2 p-3">
-          {MEETING_MOTIONS.map((m) => (
-            <Pill
-              key={m}
-              on={g.meetingMotion === m}
-              onClick={() => void patchNow({ meetingMotion: m })}
-              label={t.motion[m]}
-            />
-          ))}
+        <div className="p-3">
+          <MotionPicker
+            value={g.meetingMotion}
+            onChange={(m) => m && void patchNow({ meetingMotion: m })}
+          />
         </div>
       </Section>
       <Section title={t.events.remindAutoTitle} footer={t.events.remindAutoHint}>

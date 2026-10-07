@@ -282,6 +282,15 @@ export const lt: Messages = {
     motionHint:
       'Kiek juda susitikimų fonas ir kaip susitikimas pulsuoja prieš pradžią. Kiekvienam susitikimui galima pasirinkti savo.',
     motionMinistry: 'Kaip tarnystės',
+    motions: {
+      off: 'Be judesio',
+      calm: 'Rami',
+      lively: 'Gyva',
+      stars: 'Žvaigždės',
+      waves: 'Bangos',
+      bokeh: 'Žiburėliai',
+      rays: 'Spinduliai',
+    },
     speakerService: 'Pranešėjas',
     pickService: 'Kokia tarnystė?',
     newService: 'Nauja tarnystė',

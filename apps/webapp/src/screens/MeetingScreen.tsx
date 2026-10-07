@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   MEETING_KINDS,
-  MEETING_MOTIONS,
   type MeetingMotion,
   displayName,
   type MeetingDetail,
@@ -21,6 +20,7 @@ import { useMoney } from '../components/money';
 import { NotifySheet } from '../components/NotifySheet';
 import { MeetingAnnounceSheet } from '../components/MeetingAnnounceSheet';
 import { MeetingPeople } from '../components/MeetingPeople';
+import { MotionPicker } from '../components/MotionPicker';
 import { TeamChips, meetingLook } from '../components/TeamChips';
 import { useCoverLook } from '../components/CoverDesigner';
 import {
@@ -730,16 +730,7 @@ function PosterSheet({ m, onClose }: { m: MeetingDetail; onClose: () => void }) 
         />
         <div>
           <div className="mb-2 text-[13px] text-hint">{t.meetings.motionTitle}</div>
-          <div className="flex flex-wrap gap-2">
-            <Pill
-              on={motion === null}
-              onClick={() => setMotion(null)}
-              label={t.meetings.motionMinistry}
-            />
-            {MEETING_MOTIONS.map((x) => (
-              <Pill key={x} on={motion === x} onClick={() => setMotion(x)} label={t.motion[x]} />
-            ))}
-          </div>
+          <MotionPicker value={motion} onChange={setMotion} allowInherit />
         </div>
         {m.seriesId && (
           <Toggle label={t.meetings.applyToSeries} checked={toSeries} onChange={setToSeries} />

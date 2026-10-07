@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { MeetingMotion } from '@church/shared';
 import { isLiveWindow, useNowSecond } from '../lib/live';
 import { useT } from '../lib/i18n';
 
@@ -98,7 +99,7 @@ export function SoonPulse({
   startsAt: string;
   cancelled?: boolean;
   /** The meeting's animation level: off = no pulse, calm = a faint slow one. */
-  motion?: 'off' | 'calm' | 'lively';
+  motion?: MeetingMotion;
   className?: string;
   children: ReactNode;
 }) {

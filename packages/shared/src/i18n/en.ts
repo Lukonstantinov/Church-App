@@ -281,6 +281,15 @@ export const en: Messages = {
     motionHint:
       'How much the meetings’ background moves and how a meeting pulses before it starts. Each meeting can have its own.',
     motionMinistry: 'Like the ministry',
+    motions: {
+      off: 'Still',
+      calm: 'Calm',
+      lively: 'Lively',
+      stars: 'Stars',
+      waves: 'Waves',
+      bokeh: 'Lights',
+      rays: 'Rays',
+    },
     speakerService: 'Speaker',
     pickService: 'Which service?',
     newService: 'New service',
