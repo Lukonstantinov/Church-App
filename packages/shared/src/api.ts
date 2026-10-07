@@ -225,22 +225,37 @@ export const MEETING_MOTIONS = [
   'iconfloat',
   'iconrain',
   'iconorbit',
+  'leaves',
+  'snowfall',
+  'petals',
+  'flames',
 ] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
 
 /** The animations sorted by type, for the pickers. */
 export const MOTION_GROUPS: {
-  key: 'light' | 'particles' | 'liquid' | 'texture' | 'icons';
+  key: 'light' | 'particles' | 'liquid' | 'texture' | 'icons' | 'seasons';
   items: MeetingMotion[];
 }[] = [
   { key: 'light', items: ['calm', 'lively', 'mesh', 'aurora', 'silk', 'rays'] },
   {
     key: 'particles',
-    items: ['stars', 'bokeh', 'embers', 'fireflies', 'bubbles', 'snow', 'confetti', 'warp'],
+    items: [
+      'flames',
+      'embers',
+      'stars',
+      'bokeh',
+      'fireflies',
+      'bubbles',
+      'snow',
+      'confetti',
+      'warp',
+    ],
   },
   { key: 'liquid', items: ['waves', 'goo', 'ripples'] },
   { key: 'texture', items: ['lines', 'grid', 'grain'] },
   { key: 'icons', items: ['iconfloat', 'iconrain', 'iconorbit'] },
+  { key: 'seasons', items: ['leaves', 'snowfall', 'petals'] },
 ];
 
 export const updateGroupSchema = z.object({

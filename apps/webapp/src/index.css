@@ -2270,6 +2270,54 @@ html[data-motion='off'] .edge {
   -webkit-mask-image: -webkit-radial-gradient(white, black);
   mask-image: radial-gradient(white, black);
 }
+/* A clip path is what iPhones honour for sure: the pictures follow the card's own corners. */
+.card-clip {
+  clip-path: inset(0 round var(--clip-r, 0px));
+}
+.skin-host > .living-clip,
+.skin-host > .card-clip,
+.card-clip ~ .living-clip {
+  clip-path: inset(0 round var(--clip-r, 0px));
+}
+
+/* ---------- Seasons: falling leaves, snowfall, petals ---------- */
+.living-fallitem {
+  position: absolute;
+  left: var(--x);
+  top: -12%;
+  width: var(--s);
+  height: var(--s);
+  font-size: var(--s);
+  font-style: normal;
+  line-height: 1;
+  color: var(--p-color, #fff);
+  animation: living-leaf var(--d) linear var(--t) infinite;
+}
+@keyframes living-leaf {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  25% {
+    transform: translate(var(--w), 30cqh) rotate(calc(var(--r) * 0.25));
+  }
+  50% {
+    transform: translate(calc(var(--w) * -0.6), 62cqh) rotate(calc(var(--r) * 0.5));
+  }
+  75% {
+    transform: translate(calc(var(--w) * 0.8), 92cqh) rotate(calc(var(--r) * 0.75));
+  }
+  100% {
+    transform: translate(0, 125cqh) rotate(var(--r));
+    opacity: 0.85;
+  }
+}
+.living-bg[data-kind='snowfall'] .living-fallitem {
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.7));
+}
 
 /* ---------- Shine over a part (Design studio), above its content, never catching taps ---------- */
 .shine {
@@ -2356,5 +2404,108 @@ html[data-motion='off'] .shine {
 @media (prefers-reduced-motion: reduce) {
   .shine {
     animation: none !important;
+  }
+}
+
+/* A tile's coloured top: clipped to the tile's own top corners (iPhones ignore the tile's
+   rounded overflow when animations run inside). */
+.tile-top {
+  clip-path: inset(0 round var(--clip-r, 16px) var(--clip-r, 16px) 0 0);
+}
+
+/* ---------- Flames: tongues of fire licking up from the bottom ---------- */
+.living-flames {
+  position: absolute;
+  left: -12%;
+  right: -12%;
+  bottom: -10%;
+  height: 62%;
+  filter: url(#living-fire);
+  mix-blend-mode: screen;
+}
+/* The glowing bed under the flames. */
+.living-flames::before {
+  content: '';
+  position: absolute;
+  inset: 55% 0 0;
+  background: radial-gradient(
+    ellipse at 50% 100%,
+    color-mix(in srgb, var(--p-color, #ff6a00) 80%, transparent),
+    transparent 70%
+  );
+  filter: blur(8px);
+  animation: living-blink 2.2s ease-in-out infinite;
+}
+.living-flames i {
+  position: absolute;
+  bottom: 0;
+  width: 30%;
+  height: 85%;
+  border-radius: 50% 50% 38% 38% / 62% 62% 38% 38%;
+  background: radial-gradient(
+    ellipse at 50% 88%,
+    #fff8d6 0%,
+    #ffd84a 16%,
+    var(--p-color, #ff8a00) 38%,
+    #e0361b 58%,
+    transparent 70%
+  );
+  transform-origin: 50% 100%;
+  animation: living-flame 1.5s ease-in-out infinite alternate;
+  opacity: 0.92;
+}
+.living-flames .f0 {
+  left: -2%;
+  height: 60%;
+  animation-duration: 1.3s;
+}
+.living-flames .f1 {
+  left: 12%;
+  height: 88%;
+  animation-duration: 1.7s;
+  animation-delay: -0.4s;
+}
+.living-flames .f2 {
+  left: 27%;
+  height: 72%;
+  animation-duration: 1.2s;
+  animation-delay: -0.8s;
+}
+.living-flames .f3 {
+  left: 40%;
+  height: 100%;
+  animation-duration: 1.9s;
+  animation-delay: -0.2s;
+}
+.living-flames .f4 {
+  left: 54%;
+  height: 78%;
+  animation-duration: 1.4s;
+  animation-delay: -1s;
+}
+.living-flames .f5 {
+  left: 68%;
+  height: 92%;
+  animation-duration: 1.6s;
+  animation-delay: -0.6s;
+}
+.living-flames .f6 {
+  left: 82%;
+  height: 64%;
+  animation-duration: 1.25s;
+  animation-delay: -0.3s;
+}
+@keyframes living-flame {
+  0% {
+    transform: scale(1, 0.86) translateY(4%) skewX(2deg);
+    opacity: 0.78;
+  }
+  45% {
+    transform: scale(0.9, 1.08) translateY(-3%) skewX(-3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.06, 0.96) translateY(0) skewX(4deg);
+    opacity: 0.88;
   }
 }

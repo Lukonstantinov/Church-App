@@ -309,7 +309,7 @@ export function DesignPreviews({
         </Slide>
         <Slide>
           <div className="glass w-[58%] overflow-hidden rounded-2xl shadow-card">
-            <LookTop look={look} className="flex aspect-[16/10] flex-col p-2.5">
+            <LookTop look={look} className="tile-top flex aspect-[16/10] flex-col p-2.5">
               <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
                 {t.meetings.details}
               </span>

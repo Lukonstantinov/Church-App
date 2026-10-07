@@ -407,6 +407,28 @@ describe('adding people and environment look', () => {
       json: church,
     });
     expect(saved.screenLook).toEqual(church.screenLook);
+    // One background for the whole app reaches every ministry.
+    const bg = {
+      source: 'color',
+      colors: ['#112233'],
+      strength: 0.4,
+      texture: 'none',
+      animation: 'none',
+    };
+    await apiJson('/api/church/studio', {
+      method: 'PUT',
+      user: ADMIN,
+      json: { appBackground: bg, everywhere: true },
+    });
+    const after = (await apiJson<GroupSummary[]>('/api/groups', { user: ADMIN })).find(
+      (x) => x.id === g.id,
+    )!;
+    expect(after.pageBackground).toMatchObject({ colors: ['#112233'] });
+    await apiJson('/api/church/studio', {
+      method: 'PUT',
+      user: ADMIN,
+      json: { appBackground: null, everywhere: true },
+    });
     await apiJson('/api/church/studio', { method: 'PUT', user: ADMIN, json: { screenLook: {} } });
   });
 });

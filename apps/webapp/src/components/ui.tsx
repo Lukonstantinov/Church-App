@@ -560,6 +560,51 @@ export function LivingLayer({
             <i className="living-sweep" />
           </>
         )}
+        {kind === 'flames' && (
+          <span className="living-flames">
+            {/* Moving noise bends the flames' edges: a ragged, flickering fire, not smooth blobs. */}
+            <svg width="0" height="0" className="absolute">
+              <filter id="living-fire" x="-20%" y="-20%" width="140%" height="140%">
+                <feTurbulence
+                  type="fractalNoise"
+                  baseFrequency="0.018 0.07"
+                  numOctaves="2"
+                  seed="7"
+                >
+                  <animate
+                    attributeName="baseFrequency"
+                    dur="5s"
+                    values="0.018 0.07;0.022 0.1;0.018 0.07"
+                    repeatCount="indefinite"
+                  />
+                </feTurbulence>
+                <feDisplacementMap in="SourceGraphic" scale="22" />
+              </filter>
+            </svg>
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <i key={i} className={`f${i}`} />
+            ))}
+          </span>
+        )}
+        {(kind === 'leaves' || kind === 'snowfall' || kind === 'petals') &&
+          PARTICLES.map((p, i) => (
+            <i
+              key={i}
+              className="living-fallitem"
+              style={
+                {
+                  '--x': `${p.x}%`,
+                  '--s': `${kind === 'snowfall' ? 6 + p.s * 2 : 12 + p.s * 2.5}px`,
+                  '--d': `${kind === 'snowfall' ? p.d * 1.1 : p.d * 1.5}s`,
+                  '--t': `${-p.t * 1.4}s`,
+                  '--w': `${p.w * 2}px`,
+                  '--r': `${(i % 2 ? 1 : -1) * (360 + p.d * 30)}deg`,
+                } as CSSProperties
+              }
+            >
+              {SEASON_ITEMS[kind][i % SEASON_ITEMS[kind].length]}
+            </i>
+          ))}
         {(kind === 'iconfloat' || kind === 'iconrain' || kind === 'iconorbit') &&
           PARTICLES.slice(0, kind === 'iconorbit' ? 6 : 9).map((p, i) => (
             <i
@@ -583,6 +628,13 @@ export function LivingLayer({
     </span>
   );
 }
+
+/** What falls in the season animations. */
+const SEASON_ITEMS = {
+  leaves: ['🍁', '🍂', '🍃', '🍂'],
+  snowfall: ['❄️', '❅', '❆', '•'],
+  petals: ['🌸', '💮', '🌸', '🏵️'],
+} as const;
 
 /**
  * Fixed spots for particles (embers, bubbles, snow, fireflies, confetti, icons): place
@@ -636,14 +688,18 @@ export function HeroCard({
     <div
       className={`brand-gradient flow relative overflow-hidden rounded-[var(--radius-card)] p-5 shadow-cta ${on.className} ${className}`}
       style={
-        brand
-          ? ({
-              ...on.style,
-              '--brand': brand.light,
-              '--brand-dark': brand.dark,
-              '--brand-partner': brand.partner,
-            } as React.CSSProperties)
-          : on.style
+        {
+          ...on.style,
+          // Its pictures and animation are clipped to the same rounded corners.
+          '--clip-r': 'var(--radius-card)',
+          ...(brand
+            ? {
+                '--brand': brand.light,
+                '--brand-dark': brand.dark,
+                '--brand-partner': brand.partner,
+              }
+            : {}),
+        } as React.CSSProperties
       }
     >
       <span aria-hidden="true" className="card-clip">

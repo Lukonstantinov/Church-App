@@ -47,6 +47,15 @@ export interface HomeAction {
   badge?: ReactNode;
 }
 
+/** How a quick button's icon square is filled (set in the Design studio). */
+const CHIP_FILLS = {
+  brand: 'brand-gradient text-white',
+  glass: 'bg-white/22 text-current backdrop-blur',
+  dark: 'bg-black/70 text-white',
+  white: 'bg-white text-[var(--brand)]',
+  none: 'text-accent',
+} as const;
+
 /** The ministry's shortcuts in one compact row at the top of its home. */
 export function HomeActionRow({ actions }: { actions: HomeAction[] }) {
   const look = useModuleLook('actions');
@@ -64,7 +73,14 @@ export function HomeActionRow({ actions }: { actions: HomeAction[] }) {
           className={`reveal spring glass relative flex min-w-[62px] flex-1 flex-col items-center gap-1 rounded-2xl px-0.5 py-2 shadow-card ${skinClass(look)}`}
         >
           <SkinLayer look={look} />
-          <span className="brand-gradient flex h-9 w-9 items-center justify-center rounded-xl text-white">
+          <span
+            className={`flex items-center justify-center ${CHIP_FILLS[look.chip?.fill ?? 'brand']}`}
+            style={{
+              width: 36 * (look.chip?.size ?? 1),
+              height: 36 * (look.chip?.size ?? 1),
+              borderRadius: look.chip?.radius ?? 12,
+            }}
+          >
             {a.icon}
           </span>
           <span
@@ -480,7 +496,7 @@ function Tile({
       className={`glass relative flex h-full w-full flex-col overflow-hidden rounded-2xl text-left shadow-card active:scale-[0.98] ${
         live ? 'live-ring' : ''
       } ${skinClass(look)}`}
-      style={skinStyle(look)}
+      style={{ '--clip-r': '16px', ...skinStyle(look) } as React.CSSProperties}
     >
       <SkinLayer look={look} />
       {children}
@@ -526,14 +542,14 @@ function EventTile({ e, g, onToggle }: { e: EventSummary; g: GroupSummary; onTog
       <Tile onToggle={onToggle} live={live} module="meetings">
         {cover ? (
           <div className="pointer-events-none relative">
-            <EventCover e={e} className="aspect-[16/10]" compact />
+            <EventCover e={e} className="tile-top aspect-[16/10]" compact />
             <CountdownOnCover e={e} compact />
           </div>
         ) : (
           <div className="relative">
             <LookTop
               look={e.look ?? g}
-              className="flex aspect-[16/10] items-center justify-center text-[28px]"
+              className="tile-top flex aspect-[16/10] items-center justify-center text-[28px]"
             >
               <span className="m-auto">
                 <IconCalendar size={30} />
@@ -573,7 +589,10 @@ function MeetingTile({
       className="h-full"
     >
       <Tile onToggle={onToggle} live={live} module="meetings">
-        <LookTop look={meetingLook(m) ?? g} className="isolate flex aspect-[16/10] flex-col p-2.5">
+        <LookTop
+          look={meetingLook(m) ?? g}
+          className="tile-top isolate flex aspect-[16/10] flex-col p-2.5"
+        >
           {/* The meeting's living animation, as on its own screen. */}
           <TileMotion motion={m.motion} live={live} />
           <span className="flex min-w-0 items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
@@ -628,7 +647,10 @@ function MeetingDayTile({
   return (
     <SoonPulse startsAt={next.startsAt} motion={next.motion} className="h-full">
       <Tile onToggle={onToggle} live={shown.some(isLive)} module="meetings">
-        <LookTop look={meetingLook(list[0]!) ?? g} className="isolate flex flex-col gap-1.5 p-2">
+        <LookTop
+          look={meetingLook(list[0]!) ?? g}
+          className="tile-top isolate flex flex-col gap-1.5 p-2"
+        >
           <TileMotion motion={next.motion} />
           <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
             <span>{f.relativeDay(list[0]!.startsAt)}</span>

@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ENTER_ANIMATIONS,
   MOTION_GROUPS,
@@ -8,6 +9,7 @@ import {
   isFontKey,
   resolveBrand,
   type EnterAnimation,
+  type AppBackground,
   type GroupSummary,
   type MeetingMotion,
   type ModuleLook,
@@ -29,7 +31,7 @@ import {
   useUploadMedia,
 } from '../lib/queries';
 import { preparePhoto } from '../lib/image';
-import { haptic } from '../lib/telegram';
+import { confirmDialog, haptic } from '../lib/telegram';
 import { EnvCard } from '../screens/Hub';
 import { FontPicker } from './FontPicker';
 import { AppBackdrop } from './AppBackdrop';
@@ -112,6 +114,7 @@ export function DesignStudio({ g }: { g: GroupSummary }) {
           />
         )}
       </div>
+      <ThemeRow scope={scope} g={g} />
       <div
         className="relative isolate overflow-hidden rounded-[30px] border-4 border-[var(--color-section)] p-3 shadow-float"
         style={{ background: 'var(--color-bg-secondary)' }}
@@ -281,7 +284,7 @@ function MeetingPiece({ g, motion }: { g: GroupSummary; motion: MeetingMotion })
       >
         {/* Layers cover the tile; the main animation sits in its coloured top. */}
         <SkinLayer look={{ ...look, motion: null }} />
-        <LookTop look={g} className="isolate flex aspect-[16/10] flex-col p-2.5">
+        <LookTop look={g} className="tile-top isolate flex aspect-[16/10] flex-col p-2.5">
           <LivingLayer
             kind={look.own ? (look.motion ?? 'off') : motion}
             behind
@@ -492,6 +495,76 @@ function ModuleSheet({
                 </button>
               );
             })}
+          </div>
+        </Group>
+
+        {spot === 'actions' && (
+          <Group title={t.studio.chip}>
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="flex justify-between text-[14px]">
+                  <span>{t.studio.chipSize}</span>
+                  <span className="font-semibold tabular-nums text-hint">
+                    {Math.round((draft.chip?.size ?? 1) * 100)}%
+                  </span>
+                </span>
+                <input
+                  type="range"
+                  min={0.6}
+                  max={1.4}
+                  step={0.05}
+                  value={draft.chip?.size ?? 1}
+                  onChange={(e) => set({ chip: { ...draft.chip, size: Number(e.target.value) } })}
+                  className="w-full accent-[var(--brand)]"
+                />
+              </label>
+              <div className="flex items-center gap-3">
+                <span className="text-[12px] text-hint">{t.studio.square}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={24}
+                  step={1}
+                  value={draft.chip?.radius ?? 12}
+                  onChange={(e) => set({ chip: { ...draft.chip, radius: Number(e.target.value) } })}
+                  className="flex-1 accent-[var(--brand)]"
+                />
+                <span className="text-[12px] text-hint">{t.studio.round}</span>
+              </div>
+              <div>
+                <div className="mb-2 text-[14px]">{t.studio.chipFill}</div>
+                <div className="flex flex-wrap gap-2">
+                  {(['brand', 'glass', 'dark', 'white', 'none'] as const).map((f) => (
+                    <Pill
+                      key={f}
+                      on={(draft.chip?.fill ?? 'brand') === f}
+                      onClick={() => set({ chip: { ...draft.chip, fill: f } })}
+                      label={t.studio.chipFills[f]}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Group>
+        )}
+
+        <Group title={t.studio.shape}>
+          <div className="flex items-center gap-3">
+            <span className="text-[12px] text-hint">{t.studio.square}</span>
+            <input
+              type="range"
+              min={0}
+              max={40}
+              step={2}
+              value={draft.radius ?? 20}
+              onChange={(e) => set({ radius: Number(e.target.value) })}
+              className="flex-1 accent-[var(--brand)]"
+            />
+            <span className="text-[12px] text-hint">{t.studio.round}</span>
+            <span
+              className="brand-gradient h-9 w-9 shrink-0"
+              style={{ borderRadius: Math.min(draft.radius ?? 20, 18) }}
+            />
           </div>
         </Group>
 
@@ -732,6 +805,9 @@ function BackgroundSheet({
   const saveChurch = useSaveChurchStudio();
   const saveMinistry = useSaveMinistryStudio(g.id);
   const church = me.data?.church;
+  const isAdmin = me.data?.user.isAdmin ?? false;
+  const [everywhere, setEverywhere] = useState(false);
+  const qc = useQueryClient();
   return (
     <Sheet open onClose={onClose} title={`🖼 ${t.studio.modules.background}`}>
       <div className="px-4 pb-4">
@@ -749,11 +825,18 @@ function BackgroundSheet({
           church={scope === 'church'}
           saving={saveChurch.isPending || saveMinistry.isPending}
           onSave={async (bg) => {
-            if (scope === 'church') await saveChurch.mutateAsync({ appBackground: bg });
+            if (everywhere) await saveChurch.mutateAsync({ appBackground: bg, everywhere: true });
+            else if (scope === 'church') await saveChurch.mutateAsync({ appBackground: bg });
             else await saveMinistry.mutateAsync({ pageBackground: bg });
+            await qc.invalidateQueries({ queryKey: ['groups'] });
             onClose();
           }}
         />
+        {isAdmin && (
+          <div className="mt-3">
+            <Toggle label={t.studio.everywhere} checked={everywhere} onChange={setEverywhere} />
+          </div>
+        )}
       </div>
     </Sheet>
   );
@@ -1173,6 +1256,172 @@ function OnePhoto({
           </label>
         </>
       )}
+    </div>
+  );
+}
+
+type ThemeKey = 'autumn' | 'winter' | 'christmas' | 'easter' | 'night' | 'summer' | 'clean';
+
+/**
+ * Ready-made looks for the whole page: every part, the meetings' animation and the
+ * background. Each part can be fine-tuned afterwards.
+ */
+const THEMES: Record<
+  ThemeKey,
+  {
+    base: ModuleLook;
+    parts?: Partial<Record<ScreenModule, ModuleLook>>;
+    meetings: MeetingMotion;
+    bg: AppBackground | null;
+  }
+> = {
+  autumn: {
+    base: { surface: 'dark', edge: 'gold', motion: 'leaves', tune: { size: 0.8, speed: 0.75 } },
+    parts: {
+      header: {
+        surface: 'gradient',
+        colors: ['#7c2d12', '#ea580c', '#facc15'],
+        angle: 135,
+        flow: true,
+        motion: 'leaves',
+      },
+      calendar: { surface: 'glass', edge: 'gold' },
+    },
+    meetings: 'leaves',
+    bg: {
+      source: 'color',
+      colors: ['#7c2d12', '#c2410c', '#facc15'],
+      strength: 0.35,
+      texture: 'grain',
+      animation: 'drift',
+    },
+  },
+  winter: {
+    base: { surface: 'liquid', edge: 'glass', motion: 'snowfall', shine: 'soft' },
+    parts: { calendar: { surface: 'glass', edge: 'glass' } },
+    meetings: 'snowfall',
+    bg: {
+      source: 'color',
+      colors: ['#0ea5e9', '#1e3a8a', '#e0f2fe'],
+      strength: 0.4,
+      texture: 'none',
+      animation: 'aurora',
+    },
+  },
+  christmas: {
+    base: { surface: 'dark', edge: 'gold', motion: 'snowfall', shine: 'sparkle' },
+    parts: {
+      header: {
+        surface: 'gradient',
+        colors: ['#991b1b', '#166534'],
+        angle: 120,
+        edge: 'gold',
+        motion: 'snowfall',
+        shine: 'sparkle',
+      },
+    },
+    meetings: 'snowfall',
+    bg: {
+      source: 'color',
+      colors: ['#7f1d1d', '#14532d'],
+      strength: 0.4,
+      texture: 'dots',
+      animation: 'breathe',
+    },
+  },
+  easter: {
+    base: {
+      surface: 'glass',
+      edge: 'glass',
+      shine: 'glint',
+      motion: 'petals',
+      tune: { size: 0.8 },
+    },
+    parts: {
+      header: {
+        surface: 'gradient',
+        colors: ['#fde68a', '#fb923c', '#f472b6'],
+        angle: 135,
+        motion: 'rays',
+        layers: ['petals'],
+        shine: 'glint',
+      },
+    },
+    meetings: 'rays',
+    bg: {
+      source: 'color',
+      colors: ['#fef3c7', '#fbcfe8'],
+      strength: 0.45,
+      texture: 'none',
+      animation: 'breathe',
+    },
+  },
+  night: {
+    base: { surface: 'dark', edge: 'neon', motion: 'stars' },
+    parts: { header: { surface: 'dark', edge: 'neon', motion: 'stars', layers: ['aurora'] } },
+    meetings: 'stars',
+    bg: {
+      source: 'color',
+      colors: ['#0f172a', '#312e81'],
+      strength: 0.6,
+      texture: 'none',
+      animation: 'aurora',
+    },
+  },
+  summer: {
+    base: { surface: 'fluid', edge: 'liquid', motion: 'bokeh', shine: 'soft' },
+    parts: { calendar: { surface: 'glass', edge: 'liquid' } },
+    meetings: 'bokeh',
+    bg: { source: 'theme', strength: 0.35, texture: 'none', animation: 'drift' },
+  },
+  clean: { base: {}, meetings: 'calm', bg: null },
+};
+
+/** One tap: a theme for the whole page (church main page or this ministry). */
+function ThemeRow({ scope, g }: { scope: Scope; g: GroupSummary }) {
+  const t = useT();
+  const toast = useToast();
+  const saveChurch = useSaveChurchStudio();
+  const saveMinistry = useSaveMinistryStudio(g.id);
+  async function apply(key: ThemeKey) {
+    if (!(await confirmDialog(t.studio.themeConfirm))) return;
+    const th = THEMES[key];
+    const modules = scope === 'church' ? CHURCH_SPOTS : MINISTRY_SPOTS;
+    const screenLook: ScreenLook = {};
+    if (key !== 'clean') for (const m of modules) screenLook[m] = th.parts?.[m] ?? th.base;
+    try {
+      if (scope === 'church') await saveChurch.mutateAsync({ screenLook, appBackground: th.bg });
+      else
+        await saveMinistry.mutateAsync({
+          screenLook,
+          meetingMotion: th.meetings,
+          pageBackground: th.bg,
+        });
+      haptic.success();
+      toast(t.studio.themeApplied);
+    } catch {
+      toast(t.common.saveFailed, 'error');
+    }
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="px-3 text-[12px] font-semibold uppercase tracking-wide text-section-header">
+        {t.studio.themes}
+      </div>
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+        {(Object.keys(THEMES) as ThemeKey[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            disabled={saveChurch.isPending || saveMinistry.isPending}
+            onClick={() => void apply(k)}
+            className="glass shrink-0 rounded-full px-3.5 py-2 text-[14px] font-semibold shadow-card active:scale-95"
+          >
+            {t.studio.themeNames[k]}
+          </button>
+        ))}
+      </div>
+      <p className="px-3 text-[12px] text-hint">{t.studio.themesHint}</p>
     </div>
   );
 }

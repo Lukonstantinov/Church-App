@@ -125,6 +125,16 @@ export const moduleLookSchema = z.object({
   photo: modulePhotoSchema.nullish(),
   /** With a split picture: a second one in the other half. */
   photo2: modulePhotoSchema.nullish(),
+  /** The quick buttons' icon squares: size, roundness and fill. */
+  chip: z
+    .object({
+      size: z.number().min(0.6).max(1.4).nullish(),
+      radius: z.number().int().min(0).max(24).nullish(),
+      fill: z.enum(['brand', 'glass', 'dark', 'white', 'none']).nullish(),
+    })
+    .nullish(),
+  /** Corner roundness of the part's blocks in px: 0 = square … 40 = very round. */
+  radius: z.number().int().min(0).max(40).nullish(),
   /** Text size of the part: 0.7 (smaller, long names fit) … 1.3 (bigger). */
   textScale: z.number().min(0.7).max(1.3).nullish(),
   /** A font for the part's text (a key of FONTS). */
@@ -158,5 +168,7 @@ export type MinistryStudioInput = z.input<typeof ministryStudioSchema>;
 export const churchStudioSchema = z.object({
   screenLook: screenLookSchema.optional(),
   appBackground: appBackgroundSchema.nullable().optional(),
+  /** The same background on every ministry's pages too (the whole app). */
+  everywhere: z.boolean().optional(),
 });
 export type ChurchStudioInput = z.input<typeof churchStudioSchema>;

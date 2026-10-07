@@ -65,6 +65,9 @@ churchRoutes.put('/studio', async (c) => {
   if (input.appBackground !== undefined) patch.appBackground = input.appBackground;
   if (Object.keys(patch).length > 0)
     await db.update(churchSettings).set(patch).where(eq(churchSettings.id, 1));
+  // One background for the whole app: every ministry's pages get it too.
+  if (input.everywhere && input.appBackground !== undefined)
+    await db.update(groups).set({ pageBackground: input.appBackground });
   return c.json(await getChurch(db));
 });
 

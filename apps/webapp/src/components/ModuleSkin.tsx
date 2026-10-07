@@ -38,7 +38,10 @@ export function skinMotions(look: ModuleLook): MeetingMotion[] {
 export function skinClass(look: ModuleLook): string {
   const surface = look.surface && look.surface !== 'default' ? ` skin skin-${look.surface}` : '';
   const flow = look.surface === 'gradient' && look.flow ? ' skin-flow' : '';
-  const moving = skinMotions(look).length || look.photo || look.photo2 ? ' skin-host' : '';
+  const moving =
+    skinMotions(look).length || look.photo || look.photo2 || look.surface === 'fire'
+      ? ' skin-host'
+      : '';
   const edge = look.edge && look.edge !== 'none' ? ` skin edge edge-${look.edge}` : '';
   const shine = look.shine && look.shine !== 'none' ? ' skin-host' : '';
   return `${surface}${flow}${moving}${edge}${shine}`.trim();
@@ -52,9 +55,12 @@ export function skinStyle(look: ModuleLook): CSSProperties | undefined {
     look.surface === 'gradient' && look.colors?.length
       ? (look.flow ? [...look.colors, look.colors[0]!] : look.colors).join(', ')
       : null;
-  if (!font && !grad && !fs) return undefined;
+  const r = look.radius ?? null;
+  if (!font && !grad && !fs && r === null) return undefined;
   return {
     ...(font ? { fontFamily: font } : {}),
+    // Corner shape: the block's own corners and the frame its pictures are clipped to.
+    ...(r !== null ? { borderRadius: r, '--clip-r': `${r}px` } : {}),
     ...(fs ? { '--fs': fs } : {}),
     ...(grad ? { '--skin-grad': `linear-gradient(${look.angle ?? 135}deg, ${grad})` } : {}),
   } as CSSProperties;
@@ -70,6 +76,10 @@ export function SkinLayer({ look }: { look: ModuleLook }) {
       )}
       {look.shine && look.shine !== 'none' && (
         <span aria-hidden="true" className={`shine shine-${look.shine}`} />
+      )}
+      {/* "Burning" really burns: low flames along the bottom. */}
+      {look.surface === 'fire' && !skinMotions(look).includes('flames') && (
+        <LivingLayer kind="flames" behind tune={{ size: 0.7, speed: 1 }} />
       )}
       {skinMotions(look).map((m, i) => (
         <LivingLayer key={`${m}${i}`} kind={m} behind tune={look.tune} icon={look.icon} />

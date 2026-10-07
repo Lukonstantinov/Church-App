@@ -223,6 +223,7 @@ export function EnvCard({
         {
           ...on.style,
           '--i': index,
+          '--clip-r': '26px',
           ...skinStyle(look),
           background: `linear-gradient(145deg, ${theme.light} 0%, ${theme.partner} 100%)`,
         } as React.CSSProperties
