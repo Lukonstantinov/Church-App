@@ -25,6 +25,8 @@ import type {
   NotifyMeetingInput,
   ContactRow,
   MeetingDetail,
+  MeetingHelper,
+  AddHelperInput,
   MeetingPerson,
   AddOfflineMemberInput,
   AnnouncementResult,
@@ -473,6 +475,55 @@ export function useUpdateMeeting() {
       apiFetch<MeetingRow>(`/meetings/${id}`, {
         method: 'PATCH',
         ...json(input),
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+/** More people with a job at a meeting: add, remove, ask (by bot), answer. */
+export function useMeetingHelpers(meetingId: number) {
+  const invalidate = useInvalidateAll();
+  const add = useMutation({
+    mutationFn: (input: AddHelperInput) =>
+      apiFetch<MeetingHelper[]>(`/meetings/${meetingId}/helpers`, {
+        method: 'POST',
+        ...json(input),
+      }),
+    onSuccess: invalidate,
+  });
+  const remove = useMutation({
+    mutationFn: (helperId: number) =>
+      apiFetch<MeetingHelper[]>(`/meetings/${meetingId}/helpers/${helperId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: invalidate,
+  });
+  const notify = useMutation({
+    mutationFn: (helperId: number) =>
+      apiFetch<{ sent: boolean }>(`/meetings/${meetingId}/helpers/${helperId}/notify`, {
+        method: 'POST',
+      }),
+    onSuccess: invalidate,
+  });
+  const answer = useMutation({
+    mutationFn: ({ helperId, agree }: { helperId: number; agree: boolean }) =>
+      apiFetch<{ ok: true }>(`/meetings/${meetingId}/helpers/${helperId}/answer`, {
+        method: 'POST',
+        ...json({ agree }),
+      }),
+    onSuccess: invalidate,
+  });
+  return { add, remove, notify, answer };
+}
+
+/** Sets a person's photo (shown on meeting cards); null removes it. */
+export function usePersonPhoto(meetingId: number) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({ userId, mediaId }: { userId: number; mediaId: number | null }) =>
+      apiFetch<{ ok: true }>(`/meetings/${meetingId}/people/${userId}/photo`, {
+        method: 'PUT',
+        ...json({ mediaId }),
       }),
     onSuccess: invalidate,
   });

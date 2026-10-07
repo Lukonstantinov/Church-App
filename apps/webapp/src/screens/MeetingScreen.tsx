@@ -9,26 +9,16 @@ import {
   type MeetingRsvpStatus,
   type UpdateMeetingInput,
 } from '@church/shared';
-import { Avatar } from '../components/Avatar';
 import { GroupTheme } from '../components/GroupTheme';
 import { LiveNow } from '../components/Live';
-import { LookTop } from '../components/LookTop';
 import { SpeakerStrip } from '../components/Speakers';
 import { AudiencePicker } from '../components/AudiencePicker';
-import {
-  IconCalendar,
-  IconCheck,
-  IconClock,
-  IconFood,
-  IconMapPin,
-  IconPlus,
-  IconSend,
-  IconUsers,
-} from '../components/icons';
+import { IconCalendar, IconClock, IconMapPin, IconPlus, IconSend } from '../components/icons';
 import { Pill } from '../components/LookControls';
 import { useMoney } from '../components/money';
 import { NotifySheet } from '../components/NotifySheet';
 import { MeetingAnnounceSheet } from '../components/MeetingAnnounceSheet';
+import { MeetingPeople } from '../components/MeetingPeople';
 import { useCoverLook } from '../components/CoverDesigner';
 import {
   MeetingPosterDesigner,
@@ -51,7 +41,6 @@ import {
   TextField,
   Toggle,
 } from '../components/ui';
-import { useEnv } from '../lib/env';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { isLiveWindow, useNowSecond } from '../lib/live';
@@ -64,7 +53,7 @@ import {
   useMeetingRsvp,
   useUpdateMeeting,
 } from '../lib/queries';
-import { confirmDialog, haptic, openTelegramLink } from '../lib/telegram';
+import { confirmDialog, haptic } from '../lib/telegram';
 import { canRollNow } from './Overview';
 
 /** Topic, place and leader under a meeting's title on a coloured hero card. */
@@ -208,13 +197,10 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
 
       {m.myRole && !m.myAcceptedAt && !cancelled && <AnswerCard meetingId={m.id} role={m.myRole} />}
 
-      <LeaderCard
-        person={m.leader}
-        canAssign={m.canManage}
-        onAssign={() => setPicker('leader')}
-        notifiedAt={m.leaderNotifiedAt}
-        acceptedAt={m.leaderAcceptedAt}
-        onNotify={m.canManage ? () => setNotify({ role: 'leader', person: m.leader }) : undefined}
+      <MeetingPeople
+        m={m}
+        onAssign={setPicker}
+        onNotify={(role, person) => setNotify({ role, person })}
       />
 
       {m.canManage && !cancelled && (
@@ -266,49 +252,10 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           </Button>
         ))}
 
-      {(m.canEdit || m.expenses) && (
+      {m.expenses && (
         <Section title={t.meetings.snackPerson}>
-          <button
-            type="button"
-            disabled={!m.canEdit}
-            onClick={() => setPicker('snack')}
-            className="flex min-h-[56px] w-full items-center gap-3 px-4 py-2 text-left active:bg-hairline disabled:active:bg-transparent"
-          >
-            {m.snackPerson ? (
-              <Avatar
-                id={m.snackPerson.id}
-                firstName={m.snackPerson.firstName}
-                lastName={m.snackPerson.lastName}
-                size={36}
-              />
-            ) : (
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-hairline text-hint">
-                <IconFood size={18} />
-              </span>
-            )}
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[16px] font-medium">
-                {m.snackPerson ? displayName(m.snackPerson) : t.meetings.snackNone}
-              </span>
-              <span className="block text-[13px] text-hint">
-                {t.meetings.budget}: {money(budget)}
-              </span>
-            </span>
-            {m.canEdit && (
-              <span className="text-[14px] font-semibold text-link">{t.common.edit}</span>
-            )}
-          </button>
-          {m.snackPerson && m.canEdit && (
-            <div className="border-t border-hairline px-4 py-2.5">
-              <NotifyRow
-                notifiedAt={m.snackNotifiedAt}
-                acceptedAt={m.snackAcceptedAt}
-                onNotify={() => setNotify({ role: 'snack', person: m.snackPerson })}
-              />
-            </div>
-          )}
           {m.expenses && (
-            <div className="border-t border-hairline px-4 py-3">
+            <div className="px-4 py-3">
               <div className="mb-2 flex items-center justify-between text-[14px]">
                 <span className="font-semibold">{t.meetings.expenses}</span>
                 <span className={spent > budget ? 'font-semibold text-absent' : 'text-hint'}>
@@ -488,120 +435,6 @@ function AnswerCard({ meetingId, role }: { meetingId: number; role: 'leader' | '
 }
 
 /** The meeting's leader, in the theme colour so it stands out; tap to write to them. */
-function LeaderCard({
-  person,
-  canAssign,
-  onAssign,
-  notifiedAt,
-  acceptedAt,
-  onNotify,
-}: {
-  person: MeetingPerson | null;
-  canAssign: boolean;
-  onAssign: () => void;
-  notifiedAt: string | null;
-  acceptedAt: string | null;
-  onNotify?: () => void;
-}) {
-  const t = useT();
-  const { env } = useEnv();
-  if (!person && !canAssign) return null;
-  return (
-    <LookTop look={env} className="rounded-[var(--radius-card)] p-4 shadow-cta">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          {person ? (
-            <Avatar
-              id={person.id}
-              firstName={person.firstName}
-              lastName={person.lastName}
-              size={44}
-            />
-          ) : (
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20">
-              <IconUsers size={22} />
-            </span>
-          )}
-          <button
-            type="button"
-            disabled={!person?.username}
-            onClick={() => person?.username && openTelegramLink(`https://t.me/${person.username}`)}
-            className="min-w-0 flex-1 text-left"
-          >
-            <span className="block text-[12px] font-bold uppercase tracking-wider text-white/80">
-              {t.meetings.leader}
-            </span>
-            <span className="block truncate text-[19px] font-bold">
-              {person ? displayName(person) : t.meetings.noLeader}
-            </span>
-          </button>
-          {canAssign && (
-            <button
-              type="button"
-              onClick={onAssign}
-              className="shrink-0 rounded-full bg-white/22 px-3.5 py-2 text-[14px] font-semibold active:scale-95"
-            >
-              {person ? t.common.edit : t.meetings.assignLeader}
-            </button>
-          )}
-        </div>
-        {person && onNotify && (
-          <NotifyRow notifiedAt={notifiedAt} acceptedAt={acceptedAt} onNotify={onNotify} onBrand />
-        )}
-      </div>
-    </LookTop>
-  );
-}
-
-/** "Message sent" / confirmed state and the button to send (again). */
-function NotifyRow({
-  notifiedAt,
-  acceptedAt,
-  onNotify,
-  onBrand,
-}: {
-  notifiedAt: string | null;
-  acceptedAt: string | null;
-  onNotify: () => void;
-  onBrand?: boolean;
-}) {
-  const t = useT();
-  const f = useFmt();
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className={`text-[13px] ${onBrand ? 'text-white/85' : 'text-hint'}`}>
-        {acceptedAt ? (
-          <b
-            className={`inline-flex items-center gap-1 ${onBrand ? 'text-white' : 'text-present'}`}
-          >
-            <IconCheck size={14} /> {t.meetings.accepted}
-          </b>
-        ) : notifiedAt ? (
-          <>
-            ✓ {t.meetings.messageSent} · {f.dayMonth(notifiedAt)} {f.time(notifiedAt)}
-            <span className="flex items-center gap-1">
-              <IconClock size={13} /> {t.meetings.waitingAnswer}
-            </span>
-          </>
-        ) : (
-          t.meetings.notSentYet
-        )}
-      </span>
-      <button
-        type="button"
-        onClick={onNotify}
-        className={`shrink-0 rounded-full px-3.5 py-2 text-[14px] font-semibold active:scale-95 ${
-          onBrand ? 'bg-white text-[var(--brand)]' : 'brand-gradient text-white'
-        }`}
-      >
-        <span className="inline-flex items-center gap-1.5">
-          <IconSend size={15} /> {notifiedAt ? t.meetings.sendAgain : t.meetings.sendMessage}
-        </span>
-      </button>
-    </div>
-  );
-}
-
 function EditForm({
   m,
   saving,

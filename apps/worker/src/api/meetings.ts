@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, or, type SQL } from 'drizzle-orm';
 import {
+  addHelperSchema,
   createMeetingSchema,
+  personPhotoSchema,
   createScheduleSchema,
   saveRollSchema,
   addDays,
@@ -38,6 +40,8 @@ import {
   calendarNotes,
   groups,
   meetingAudience,
+  meetingHelpers,
+  meetingRsvps,
   messageTemplates,
   transactions,
   users,
@@ -76,7 +80,9 @@ import {
   toMeetingRows,
   repeatDates,
 } from '../lib/meetings';
+import { answerHelper, listHelpers, notifyHelper } from '../lib/meetingHelpers';
 import { idParam, parseBody } from './util';
+import { z } from 'zod';
 
 type App = { Bindings: Env; Variables: AuthVariables };
 
@@ -298,6 +304,18 @@ groupMeetingRoutes.post('/:id/meetings', async (c) => {
   return c.json((await toMeetingRows(db, [row], c.env.WEBHOOK_SECRET))[0], 201);
 });
 
+/** Deletes meetings together with who they were for, the answers and the helpers. */
+async function removeMeetings(db: AuthVariables['db'], where: SQL) {
+  const ids = (await db.select({ id: meetings.id }).from(meetings).where(where)).map((m) => m.id);
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90);
+    await db.delete(meetingHelpers).where(inArray(meetingHelpers.meetingId, chunk));
+    await db.delete(meetingAudience).where(inArray(meetingAudience.meetingId, chunk));
+    await db.delete(meetingRsvps).where(inArray(meetingRsvps.meetingId, chunk));
+    await db.delete(meetings).where(inArray(meetings.id, chunk));
+  }
+}
+
 // ---------- /api/schedules ----------
 
 export const scheduleRoutes = new Hono<App>();
@@ -340,7 +358,7 @@ scheduleRoutes.patch('/:id', async (c) => {
   const timingChanged =
     input.weekday !== undefined || input.startTime !== undefined || input.durationMin !== undefined;
   if (timingChanged || input.active === false) {
-    await db.delete(meetings).where(futureEmpty);
+    await removeMeetings(db, futureEmpty!);
   } else if (input.title !== undefined) {
     await db.update(meetings).set({ title: input.title }).where(futureEmpty);
   }
@@ -355,15 +373,14 @@ scheduleRoutes.delete('/:id', async (c) => {
   const user = c.get('user');
   const schedule = await loadSchedule(c, idParam(c));
   await assertCan(db, user, schedule.groupId, 'meetings.manage');
-  await db
-    .delete(meetings)
-    .where(
-      and(
-        eq(meetings.scheduleId, schedule.id),
-        eq(meetings.status, 'scheduled'),
-        gte(meetings.startsAt, new Date().toISOString()),
-      ),
-    );
+  await removeMeetings(
+    db,
+    and(
+      eq(meetings.scheduleId, schedule.id),
+      eq(meetings.status, 'scheduled'),
+      gte(meetings.startsAt, new Date().toISOString()),
+    )!,
+  );
   // Keep the row (past meetings reference it) but switch it off.
   await db
     .update(meetingSchedules)
@@ -479,6 +496,7 @@ meetingRoutes.get('/:id', async (c) => {
           ? meeting.snackAcceptedAt
           : null,
     announcedAt: meeting.announcedAt,
+    helpers: await listHelpers(db, meeting.id, c.env.WEBHOOK_SECRET),
     rsvp: {
       asked: meeting.askRsvp,
       mine: rsvp.rows.find((r) => r.id === user.id)?.status ?? null,
@@ -613,11 +631,13 @@ meetingRoutes.patch('/:id', async (c) => {
   // A new person hasn't been told yet; the message is sent separately, when chosen.
   if (input.leaderUserId !== undefined && input.leaderUserId !== meeting.leaderUserId) {
     patch.leaderUserId = input.leaderUserId;
+    patch.leaderDeclinedBy = null;
     patch.leaderNotifiedAt = null;
     patch.leaderAcceptedAt = null;
   }
   if (input.snackUserId !== undefined && input.snackUserId !== meeting.snackUserId) {
     patch.snackUserId = input.snackUserId;
+    patch.snackDeclinedBy = null;
     patch.snackNotifiedAt = null;
     patch.snackAcceptedAt = null;
   }
@@ -1045,6 +1065,96 @@ meetingRoutes.post('/:id/answer', async (c) => {
     user: c.get('user'),
   });
   if (result === 'not_yours') throw new HTTPException(403, { message: 'not_yours' });
+  return c.json({ ok: true });
+});
+
+// ---------- people with a job at a meeting ----------
+
+/** A meeting the user manages (to add, ask or remove its people). */
+async function managedMeeting(c: { get: (k: 'db' | 'user') => unknown }, id: number) {
+  const db = c.get('db') as AuthVariables['db'];
+  const user = c.get('user') as AuthVariables['user'];
+  const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, id) });
+  if (!meeting) throw new HTTPException(404, { message: 'not_found' });
+  await assertCan(db, user, meeting.groupId, 'meetings.manage');
+  return { db, user, meeting };
+}
+
+meetingRoutes.post('/:id/helpers', async (c) => {
+  const { db, meeting } = await managedMeeting(c, idParam(c));
+  const input = await parseBody(c, addHelperSchema);
+  await assertActiveMember(db, meeting.groupId, input.userId);
+  await db
+    .insert(meetingHelpers)
+    .values({ meetingId: meeting.id, userId: input.userId, role: input.role });
+  return c.json(await listHelpers(db, meeting.id, c.env.WEBHOOK_SECRET), 201);
+});
+
+meetingRoutes.delete('/:id/helpers/:helperId', async (c) => {
+  const { db, meeting } = await managedMeeting(c, idParam(c));
+  await db
+    .delete(meetingHelpers)
+    .where(
+      and(
+        eq(meetingHelpers.id, Number(c.req.param('helperId'))),
+        eq(meetingHelpers.meetingId, meeting.id),
+      ),
+    );
+  return c.json(await listHelpers(db, meeting.id, c.env.WEBHOOK_SECRET));
+});
+
+/** Asks the helper by bot (again); their answer comes back as a mark. */
+meetingRoutes.post('/:id/helpers/:helperId/notify', async (c) => {
+  const { db, user, meeting } = await managedMeeting(c, idParam(c));
+  const helperId = Number(c.req.param('helperId'));
+  const helper = await db.query.meetingHelpers.findFirst({
+    where: and(eq(meetingHelpers.id, helperId), eq(meetingHelpers.meetingId, meeting.id)),
+  });
+  if (!helper) throw new HTTPException(404, { message: 'not_found' });
+  const sent = await notifyHelper(db, {
+    helperId,
+    senderId: user.id,
+    senderName: displayName(user),
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+  });
+  if (sent)
+    c.executionCtx.waitUntil(
+      drainOutbox(db, botApi(c.env), { limit: 10 }).catch((err) =>
+        console.error('helper drain', err),
+      ),
+    );
+  return c.json({ sent });
+});
+
+/** A helper answers in the app (same as the bot buttons). */
+meetingRoutes.post('/:id/helpers/:helperId/answer', async (c) => {
+  const db = c.get('db');
+  const { agree } = await parseBody(c, z.object({ agree: z.boolean() }));
+  const result = await answerHelper(db, botApi(c.env), {
+    helperId: Number(c.req.param('helperId')),
+    agree,
+    user: c.get('user'),
+  });
+  if (result === 'not_yours') throw new HTTPException(403, { message: 'not_yours' });
+  return c.json({ ok: true });
+});
+
+/**
+ * A person's photo for the meeting cards: managers of the meeting's ministry set anyone's
+ * in it, everyone their own. The picture must be one of the ministry's uploads.
+ */
+meetingRoutes.put('/:id/people/:userId/photo', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, idParam(c)) });
+  if (!meeting) throw new HTTPException(404, { message: 'not_found' });
+  const userId = Number(c.req.param('userId'));
+  if (userId !== user.id) await assertCan(db, user, meeting.groupId, 'meetings.manage');
+  await assertActiveMember(db, meeting.groupId, userId);
+  const { mediaId } = await parseBody(c, personPhotoSchema);
+  if (mediaId) await assertGroupMedia(db, meeting.groupId, mediaId);
+  await db.update(users).set({ photoMediaId: mediaId }).where(eq(users.id, userId));
   return c.json({ ok: true });
 });
 

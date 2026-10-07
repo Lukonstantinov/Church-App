@@ -196,8 +196,18 @@ export async function answerMeetingRole(
           ? { leaderAcceptedAt: now }
           : { snackAcceptedAt: now }
         : args.role === 'leader'
-          ? { leaderUserId: null, leaderNotifiedAt: null, leaderAcceptedAt: null }
-          : { snackUserId: null, snackNotifiedAt: null, snackAcceptedAt: null },
+          ? {
+              leaderUserId: null,
+              leaderNotifiedAt: null,
+              leaderAcceptedAt: null,
+              leaderDeclinedBy: args.user.id,
+            }
+          : {
+              snackUserId: null,
+              snackNotifiedAt: null,
+              snackAcceptedAt: null,
+              snackDeclinedBy: args.user.id,
+            },
     )
     .where(eq(meetings.id, meeting.id));
 

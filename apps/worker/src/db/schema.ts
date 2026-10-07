@@ -71,6 +71,8 @@ export const users = sqliteTable('users', {
   anonymizedAt: text('anonymized_at'),
   /** Last time the person used the app or the bot (updated at most hourly). */
   lastSeenAt: text('last_seen_at'),
+  /** Their photo (a ministry picture), shown on meeting cards instead of initials. */
+  photoMediaId: integer('photo_media_id'),
 });
 
 export const groups = sqliteTable('groups', {
@@ -262,6 +264,9 @@ export const meetings = sqliteTable(
     liveNotifiedAt: text('live_notified_at'),
     rollTakenBy: integer('roll_taken_by'),
     rollTakenAt: text('roll_taken_at'),
+    /** Who last said "Can't" to leading / the snacks (the job was freed; shown with a red ✗). */
+    leaderDeclinedBy: integer('leader_declined_by'),
+    snackDeclinedBy: integer('snack_declined_by'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -290,6 +295,28 @@ export const meetingRsvps = sqliteTable(
     updatedAt: text('updated_at').notNull().default(now),
   },
   (t) => [primaryKey({ columns: [t.meetingId, t.userId] })],
+);
+
+/** More people with a job at a meeting (music, welcome, tech…), each asked like the leader. */
+export const meetingHelpers = sqliteTable(
+  'meeting_helpers',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    meetingId: integer('meeting_id')
+      .notNull()
+      .references(() => meetings.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    /** What they do, e.g. "Worship", "Welcome". */
+    role: text('role').notNull(),
+    notifiedAt: text('notified_at'),
+    notifiedBy: integer('notified_by'),
+    acceptedAt: text('accepted_at'),
+    declinedAt: text('declined_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('meeting_helpers_meeting').on(t.meetingId)],
 );
 
 export const meetingAudience = sqliteTable(

@@ -34,6 +34,7 @@ import {
   handleEventJoinRequest,
   retryPendingEventLink,
 } from '../lib/eventChats';
+import { answerHelper } from '../lib/meetingHelpers';
 import { answerMeetingRole } from '../lib/meetingNotify';
 
 export interface BotDeps {
@@ -228,6 +229,28 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     await ctx.answerCallbackQuery();
     await ctx.reply(agree ? ctx.t.bot.meetingAgreed : ctx.t.bot.meetingDeclined, {
       reply_markup: agree ? openMeeting : openAppKeyboard(ctx.t),
+    });
+  });
+
+  // "Agree" / "Can't" under a helper's request (music, welcome…).
+  pm.callbackQuery(/^mh:([yn]):(\d+)$/, async (ctx) => {
+    const agree = ctx.match[1] === 'y';
+    const result = await answerHelper(db, ctx.api, {
+      helperId: Number(ctx.match[2]),
+      agree,
+      user: ctx.dbUser,
+    });
+    if (result === 'not_yours') {
+      await ctx.editMessageReplyMarkup().catch(() => undefined);
+      await ctx.answerCallbackQuery({ text: ctx.t.bot.meetingNotYours, show_alert: true });
+      return;
+    }
+    const meetingUrl = `${appUrl.replace(/\/+$/, '')}/?meeting=${result.meetingId}`;
+    const openMeeting = new InlineKeyboard().webApp(ctx.t.bot.meetingButton, meetingUrl);
+    await ctx.editMessageReplyMarkup({ reply_markup: openMeeting }).catch(() => undefined);
+    await ctx.answerCallbackQuery();
+    await ctx.reply(agree ? ctx.t.bot.meetingAgreed : ctx.t.bot.meetingDeclined, {
+      reply_markup: openMeeting,
     });
   });
 

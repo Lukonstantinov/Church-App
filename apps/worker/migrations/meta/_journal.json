@@ -239,6 +239,13 @@
       "when": 1791213715943,
       "tag": "0033_meetings_speakers_live",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1791361868028,
+      "tag": "0034_meeting_people",
+      "breakpoints": true
     }
   ]
 }

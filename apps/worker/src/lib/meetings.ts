@@ -176,7 +176,8 @@ export async function toMeetingRows(
   const [people, audience] = await Promise.all([
     meetingPeople(
       db,
-      list.flatMap((m) => [m.leaderUserId, m.snackUserId]),
+      list.flatMap((m) => [m.leaderUserId, m.snackUserId, m.leaderDeclinedBy, m.snackDeclinedBy]),
+      secret,
     ),
     audienceOf(
       db,
@@ -226,6 +227,9 @@ export async function toMeetingRows(
     snackNotifiedAt: m.snackNotifiedAt,
     leaderAcceptedAt: m.leaderAcceptedAt,
     snackAcceptedAt: m.snackAcceptedAt,
+    leaderDeclined:
+      (!m.leaderUserId && m.leaderDeclinedBy && people.get(m.leaderDeclinedBy)) || null,
+    snackDeclined: (!m.snackUserId && m.snackDeclinedBy && people.get(m.snackDeclinedBy)) || null,
     counts: counts.get(m.id) ?? emptyCounts(),
     design: readPostDesign(m.design),
     templateId: m.templateId,
@@ -260,6 +264,8 @@ export const meetingKind = (v: string | null): MeetingKind | null =>
 export async function meetingPeople(
   db: Db,
   ids: (number | null)[],
+  /** Signs photo links; without it `photoUrl` stays null. */
+  secret?: string,
 ): Promise<Map<number, MeetingPerson>> {
   const unique = [...new Set(ids.filter((x): x is number => x !== null))];
   if (unique.length === 0) return new Map();
@@ -269,10 +275,24 @@ export async function meetingPeople(
       firstName: users.firstName,
       lastName: users.lastName,
       username: users.username,
+      photoMediaId: users.photoMediaId,
     })
     .from(users)
     .where(inArray(users.id, unique));
-  return new Map(rows.map((r) => [r.id, r]));
+  return new Map(
+    await Promise.all(
+      rows.map(
+        async ({ photoMediaId, ...r }) =>
+          [
+            r.id,
+            {
+              ...r,
+              photoUrl: photoMediaId && secret ? await signedMediaUrl(secret, photoMediaId) : null,
+            },
+          ] as const,
+      ),
+    ),
+  );
 }
 
 // ---------- roll-call roster ----------

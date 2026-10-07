@@ -403,6 +403,8 @@ describe('message preview, answers and the calendar', () => {
     const freed = await apiJson<MeetingDetail>(`/api/meetings/${meeting.id}`, { user: ADMIN });
     expect(freed.leader).toBeNull();
     expect(freed.leaderNotifiedAt).toBeNull();
+    // Who said "Can't" stays visible (red ✗) until someone else is chosen.
+    expect(freed.leaderDeclined?.id).toBeDefined();
     expect(await sentTo(ADMIN.id, 'Лидер не может')).toBeDefined();
   });
 
@@ -1868,5 +1870,72 @@ describe('live messages, speakers and repeating meetings', () => {
       .filter((x) => x.seriesId === m.seriesId)
       .map((x) => x.speakers.map((s) => s.name).join(','));
     expect(names).toEqual(['Пётр,Анна', 'Лука', 'Лука', 'Лука']);
+  });
+});
+
+describe('more people at a meeting', () => {
+  it('adds a helper, asks them, shows their answer, keeps a photo', async () => {
+    const g = await createEnv('Помощники');
+    const h = fakeUser('Гитарист');
+    const hId = await join(h, g);
+    const date = addDays(localDate(new Date(), TZ), 3);
+    const m = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date, startTime: '19:00', durationMin: 120, title: 'Вечер' },
+    });
+    const list = await apiJson<MeetingDetail['helpers']>(`/api/meetings/${m.id}/helpers`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { userId: hId, role: 'Прославление' },
+    });
+    expect(list).toHaveLength(1);
+    // A plain member can't add people.
+    expect(
+      (
+        await api(`/api/meetings/${m.id}/helpers`, {
+          method: 'POST',
+          user: h,
+          json: { userId: hId, role: 'Сам' },
+        })
+      ).status,
+    ).toBe(403);
+    const res = await apiJson<{ sent: boolean }>(
+      `/api/meetings/${m.id}/helpers/${list[0]!.id}/notify`,
+      { method: 'POST', user: ADMIN },
+    );
+    expect(res.sent).toBe(true);
+    await drainOutbox(getDb(env.DB), botApi(env as never), { limit: 100 });
+    expect(await sentTo(h.id, 'Прославление')).toBeDefined();
+    await pressButton(h, `mh:n:${list[0]!.id}`);
+    let d = await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: ADMIN });
+    expect(d.helpers[0]!.declinedAt).not.toBeNull();
+    await pressButton(h, `mh:y:${list[0]!.id}`);
+    d = await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: ADMIN });
+    expect(d.helpers[0]!.acceptedAt).not.toBeNull();
+    expect(d.helpers[0]!.declinedAt).toBeNull();
+
+    // A photo for the person shows on their card.
+    const up = (await (
+      await api(`/api/groups/${g.id}/media?kind=event`, { method: 'POST', user: ADMIN, body: PNG })
+    ).json()) as { id: number };
+    expect(
+      (
+        await api(`/api/meetings/${m.id}/people/${hId}/photo`, {
+          method: 'PUT',
+          user: ADMIN,
+          json: { mediaId: up.id },
+        })
+      ).status,
+    ).toBe(200);
+    d = await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: ADMIN });
+    expect(d.helpers[0]!.person.photoUrl).toContain('/media/m/');
+
+    // Removing them.
+    const left = await apiJson<MeetingDetail['helpers']>(
+      `/api/meetings/${m.id}/helpers/${list[0]!.id}`,
+      { method: 'DELETE', user: ADMIN },
+    );
+    expect(left).toHaveLength(0);
   });
 });

@@ -356,7 +356,28 @@ export interface MeetingPerson {
   firstName: string;
   lastName: string | null;
   username: string | null;
+  /** Their photo, when one was added (signed link). */
+  photoUrl?: string | null;
 }
+
+/** Someone else with a job at a meeting, asked like the leader; their answer shows as a mark. */
+export interface MeetingHelper {
+  id: number;
+  role: string;
+  person: MeetingPerson;
+  notifiedAt: string | null;
+  acceptedAt: string | null;
+  declinedAt: string | null;
+}
+
+export const addHelperSchema = z.object({
+  userId: z.number().int().positive(),
+  role: z.string().trim().min(1).max(40),
+});
+export type AddHelperInput = z.input<typeof addHelperSchema>;
+
+/** A person's photo (an uploaded ministry picture), or null to remove it. */
+export const personPhotoSchema = z.object({ mediaId: z.number().int().positive().nullable() });
 
 export interface MeetingRow {
   id: number;
@@ -385,6 +406,9 @@ export interface MeetingRow {
   /** When they pressed "Agree" in the bot message (null = not yet). */
   leaderAcceptedAt: string | null;
   snackAcceptedAt: string | null;
+  /** Who last said "Can't" (the job is free again; shown with a red ✗ until someone else is chosen). */
+  leaderDeclined: MeetingPerson | null;
+  snackDeclined: MeetingPerson | null;
   /** Counts are filled for meetings that have a saved roll call. */
   counts: Record<AttendanceStatus, number>;
   /** Poster look (colours, fonts, pattern); null = the ministry's own. */
@@ -480,6 +504,8 @@ export interface MeetingDetail extends MeetingRow {
   myAcceptedAt: string | null;
   /** When people were last told about it (null = never). */
   announcedAt: string | null;
+  /** More people with a job at this meeting. */
+  helpers: MeetingHelper[];
   /** "Will you come?" answers (asked = the message asked it). */
   rsvp: {
     asked: boolean;
