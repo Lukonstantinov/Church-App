@@ -318,6 +318,7 @@ export function MeetingPeople({
   return (
     <div
       className="people-panel relative overflow-hidden rounded-[24px] p-2.5 shadow-card"
+      data-tinted={look?.color ? 'true' : undefined}
       style={{ '--card-tint': look?.color ?? 'var(--brand)' } as React.CSSProperties}
     >
       {look?.photoUrl ? (

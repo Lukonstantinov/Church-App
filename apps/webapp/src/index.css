@@ -1151,10 +1151,13 @@ html[data-motion='off'] [class*='app-bg-'] {
 
 /* ---------- Person cards at a meeting: dark, with brushed-metal edges ---------- */
 .metal-card {
+  /* Dark by default; a colour chosen for the people block fills the card. */
+  --card-a: color-mix(in srgb, var(--brand) 22%, #15171c);
+  --card-b: #0f1115;
   position: relative;
   border: 1.5px solid transparent;
   background:
-    linear-gradient(150deg, color-mix(in srgb, var(--brand) 22%, #15171c), #0f1115 70%) padding-box,
+    linear-gradient(150deg, var(--card-a), var(--card-b) 75%) padding-box,
     linear-gradient(
         135deg,
         #f5f5f4 0%,
@@ -1213,4 +1216,9 @@ html[data-motion='off'] [class*='app-bg-'] {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.75);
   background: rgba(255, 255, 255, 0.12);
+}
+
+.people-panel[data-tinted='true'] .metal-card {
+  --card-a: color-mix(in srgb, var(--card-tint) 88%, #000);
+  --card-b: color-mix(in srgb, var(--card-tint) 50%, #0b0c0f);
 }
