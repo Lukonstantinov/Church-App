@@ -75,7 +75,9 @@ People block (ministry background or a photo, card colour: `meetings.people_look
 speakers (`meeting_helpers.speaker`, 🎤, listed first and used on the poster when it has no
 speakers of its own), snacks (optional), other services with icons; services are saved per
 ministry (`groups.meeting_services`) and added via "+". Each person is asked by bot with
-Agree / Can't; marks ✓ / ✗ (`*_declined_by`, `declined_at`) / waiting. Announce,
+Agree / Can't; card/chip style dark / glass / colour / mixed tints and role icons
+(`people_look`), chips on home meeting cards (`TeamChips`), "who serves" message
+(`lib/meetingRoster.ts`, also in announcements); marks ✓ / ✗ (`*_declined_by`, `declined_at`) / waiting. Announce,
 time-changed and cancelled notices with "Will you come?" answers. Roll call, expenses
 against a budget, calendar with notes. Meeting screen has a living animated hero.
 

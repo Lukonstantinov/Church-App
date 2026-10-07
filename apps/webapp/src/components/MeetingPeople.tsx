@@ -5,6 +5,7 @@ import {
   type MeetingDetail,
   type MeetingPerson,
   type MeetingService,
+  type PeopleStyle,
   type UpdateMeetingInput,
 } from '@church/shared';
 import { useEnv } from '../lib/env';
@@ -27,6 +28,7 @@ import { Pill } from './LookControls';
 import { BackdropLayer, PatternLayer } from './PatternLayer';
 import { PersonPicker } from './PersonPicker';
 import { Sheet } from './Sheet';
+import { MIXED_TINTS, leaderIconOf, peopleStyleOf, snackIconOf, teamOf, tintOf } from './TeamChips';
 import { useToast } from './Toast';
 import { Button, TextField, Toggle } from './ui';
 
@@ -96,7 +98,10 @@ export function PersonCard({
   onPhoto,
   actions,
   icon,
+  tint,
 }: {
+  /** This card's own colour ("one colour" / "different tints" styles). */
+  tint?: string;
   person: MeetingPerson | null;
   /** What they do here, e.g. "Leader", "Snacks", "Worship". */
   role: string;
@@ -113,7 +118,10 @@ export function PersonCard({
   const file = useRef<HTMLInputElement>(null);
   return (
     <div className="flex items-stretch gap-2">
-      <div className="metal-card flex min-w-0 flex-1 items-stretch overflow-hidden rounded-[18px]">
+      <div
+        className="metal-card flex min-w-0 flex-1 items-stretch overflow-hidden rounded-[18px]"
+        style={tint ? ({ '--card-tint': tint } as React.CSSProperties) : undefined}
+      >
         <button
           type="button"
           disabled={!onPhoto || !person}
@@ -238,6 +246,7 @@ export function MeetingPeople({
   const upload = useUploadMedia(m.groupId, 'event');
   const [adding, setAdding] = useState(false);
   const [lookOpen, setLookOpen] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(false);
 
   const photoFor = (person: MeetingPerson | null) =>
     person && (m.canManage || person.id === myId)
@@ -258,11 +267,16 @@ export function MeetingPeople({
   const others = m.helpers.filter((h) => !h.speaker);
   const look = m.peopleLook;
 
+  // Each card's place in the list, for "different tints".
+  const order = teamOf(m).map((p) => p.key);
+  const tintFor = (key: string) => tintOf(look, Math.max(0, order.indexOf(key)));
+
   const helperCard = (h: MeetingDetail['helpers'][number]) => {
     const mine = h.person.id === myId && !h.acceptedAt;
     return (
       <PersonCard
         key={h.id}
+        tint={tintFor(`h${h.id}`)}
         person={h.person}
         role={h.role}
         icon={h.icon}
@@ -318,8 +332,7 @@ export function MeetingPeople({
   return (
     <div
       className="people-panel relative overflow-hidden rounded-[24px] p-2.5 shadow-card"
-      data-tinted={look?.color ? 'true' : undefined}
-      style={{ '--card-tint': look?.color ?? 'var(--brand)' } as React.CSSProperties}
+      data-style={peopleStyleOf(look)}
     >
       {look?.photoUrl ? (
         <img
@@ -338,20 +351,32 @@ export function MeetingPeople({
       <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black/25" />
       <div className="relative flex flex-col gap-2.5">
         {m.canManage && (
-          <button
-            type="button"
-            aria-label={t.meetings.peopleLookTitle}
-            onClick={() => setLookOpen(true)}
-            className="metal-action self-end rounded-full px-3 py-1 text-[12px] font-semibold text-white"
-          >
-            🎨 {t.meetings.peopleLookTitle}
-          </button>
+          <div className="flex flex-wrap justify-end gap-1.5">
+            {teamOf(m).length > 0 && (
+              <button
+                type="button"
+                onClick={() => setRosterOpen(true)}
+                className="metal-action rounded-full px-3 py-1 text-[12px] font-semibold text-white"
+              >
+                📤 {t.bot.meetingRosterTitle}
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label={t.meetings.peopleLookTitle}
+              onClick={() => setLookOpen(true)}
+              className="metal-action rounded-full px-3 py-1 text-[12px] font-semibold text-white"
+            >
+              🎨 {t.env.look}
+            </button>
+          </div>
         )}
         {(leader || m.canManage) && (
           <PersonCard
             person={leader}
             role={t.meetings.leader}
-            icon="🎙"
+            tint={tintFor('l')}
+            icon={leaderIconOf(look)}
             empty={t.meetings.noLeader}
             status={statusOf({
               person: m.leader,
@@ -381,7 +406,8 @@ export function MeetingPeople({
           <PersonCard
             person={snack}
             role={t.meetings.forFood}
-            icon="🍕"
+            tint={tintFor('s')}
+            icon={snackIconOf(look)}
             empty={t.meetings.snackNone}
             status={statusOf({
               person: m.snackPerson,
@@ -432,6 +458,47 @@ export function MeetingPeople({
           onClose={() => setAdding(false)}
         />
       )}
+      <Sheet
+        open={rosterOpen}
+        onClose={() => setRosterOpen(false)}
+        title={`📤 ${t.meetings.sendRoster}`}
+      >
+        <div className="flex flex-col gap-2.5 px-4 pb-4">
+          <p className="text-[13px] text-hint">{t.meetings.sendRosterHint}</p>
+          <div className="glass rounded-2xl px-3.5 py-3 text-[14px] leading-relaxed">
+            {teamOf(m).map((p) => (
+              <div key={p.key}>
+                {p.icon ?? '•'}{' '}
+                {p.role === 'leader'
+                  ? t.meetings.leader
+                  : p.role === 'snack'
+                    ? t.meetings.forFood
+                    : p.role}{' '}
+                — <b>{p.name}</b>
+              </div>
+            ))}
+          </div>
+          {(['everyone', 'team'] as const).map((to) => (
+            <Button
+              key={to}
+              variant={to === 'everyone' ? 'primary' : 'glass'}
+              disabled={helpers.roster.isPending}
+              onClick={() =>
+                void helpers.roster
+                  .mutateAsync(to)
+                  .then((r) => {
+                    haptic.success();
+                    toast(t.meetings.rosterSent(r.bot));
+                    setRosterOpen(false);
+                  })
+                  .catch(() => toast(t.common.actionFailed, 'error'))
+              }
+            >
+              {to === 'everyone' ? t.meetings.rosterToEveryone : t.meetings.rosterToTeam}
+            </Button>
+          ))}
+        </div>
+      </Sheet>
       {lookOpen && (
         <PeopleLookSheet
           m={m}
@@ -612,7 +679,7 @@ function AddServiceFlow({
   );
 }
 
-/** Card colour and the panel's background (the ministry's, or a photo) of the people block. */
+/** Style and colour of the people cards and chips, role icons, and the panel's background. */
 function PeopleLookSheet({
   m,
   onClose,
@@ -626,7 +693,11 @@ function PeopleLookSheet({
 }) {
   const t = useT();
   const toast = useToast();
+  const helpers = useMeetingHelpers(m.id);
+  const [style, setStyle] = useState<PeopleStyle>(peopleStyleOf(m.peopleLook));
   const [color, setColor] = useState<string | null>(m.peopleLook?.color ?? null);
+  const [leaderIcon, setLeaderIcon] = useState(leaderIconOf(m.peopleLook));
+  const [snackIcon, setSnackIcon] = useState(snackIconOf(m.peopleLook));
   const [photo, setPhoto] = useState<{ id: number; url: string } | null>(
     m.peopleLook?.photoMediaId && m.peopleLook.photoUrl
       ? { id: m.peopleLook.photoMediaId, url: m.peopleLook.photoUrl }
@@ -634,28 +705,98 @@ function PeopleLookSheet({
   );
   const [toSeries, setToSeries] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [iconFor, setIconFor] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
+  const styles: { key: PeopleStyle; label: string }[] = [
+    { key: 'dark', label: t.meetings.styleDark },
+    { key: 'glass', label: t.meetings.styleGlass },
+    { key: 'color', label: t.meetings.styleColor },
+    { key: 'mixed', label: t.meetings.styleMixed },
+  ];
+  // Roles whose icon can change: the leader, snacks and every added person.
+  const roles = [
+    { key: 'l', label: t.meetings.leader, icon: leaderIcon, set: setLeaderIcon },
+    { key: 's', label: t.meetings.forFood, icon: snackIcon, set: setSnackIcon },
+    ...m.helpers.map((h) => ({
+      key: `h${h.id}`,
+      label: `${h.role} · ${h.person.firstName}`,
+      icon: h.icon ?? '🙌',
+      set: (icon: string) => helpers.update.mutate({ helperId: h.id, icon }),
+    })),
+  ];
   return (
-    <Sheet open onClose={onClose} title={t.meetings.peopleLookTitle}>
+    <Sheet open onClose={onClose} title={t.meetings.chipStyle}>
       <div className="flex flex-col gap-4 px-4 pb-4">
-        <div>
-          <div className="mb-2 text-[13px] text-hint">{t.meetings.cardColor}</div>
-          <div className="flex flex-wrap gap-2.5">
-            <button
-              type="button"
-              aria-label={t.meetings.bgMinistry}
-              onClick={() => setColor(null)}
-              className={`brand-gradient h-9 w-9 rounded-full ${color === null ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''}`}
+        <div className="flex flex-wrap gap-2">
+          {styles.map((x) => (
+            <Pill
+              key={x.key}
+              on={style === x.key}
+              onClick={() => setStyle(x.key)}
+              label={x.label}
             />
-            {CARD_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                aria-label={c}
-                onClick={() => setColor(c)}
-                className={`h-9 w-9 rounded-full ${color === c ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''}`}
-                style={{ background: c }}
-              />
+          ))}
+        </div>
+        {style === 'color' && (
+          <div>
+            <div className="mb-2 text-[13px] text-hint">{t.meetings.cardColor}</div>
+            <div className="flex flex-wrap gap-2.5">
+              {CARD_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-label={c}
+                  onClick={() => setColor(c)}
+                  className={`h-9 w-9 rounded-full ${color === c ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''}`}
+                  style={{ background: c }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+        {style === 'mixed' && (
+          <div className="flex gap-1.5">
+            {MIXED_TINTS.map((c) => (
+              <span key={c} className="h-5 flex-1 rounded-full" style={{ background: c }} />
+            ))}
+          </div>
+        )}
+        <div>
+          <div className="mb-2 text-[13px] text-hint">{t.meetings.roleIcons}</div>
+          <div className="flex flex-col gap-1.5">
+            {roles.map((r) => (
+              <div key={r.key}>
+                <button
+                  type="button"
+                  onClick={() => setIconFor(iconFor === r.key ? null : r.key)}
+                  className="flex w-full items-center gap-3 rounded-xl bg-hairline/60 px-3 py-2 text-left"
+                >
+                  <span className="text-[22px]">{r.icon}</span>
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
+                    {r.label}
+                  </span>
+                  <span className="text-[12px] text-link">{t.common.edit}</span>
+                </button>
+                {iconFor === r.key && (
+                  <div className="mt-1.5 grid grid-cols-8 gap-1">
+                    {SERVICE_ICONS.map((icon) => (
+                      <button
+                        key={icon}
+                        type="button"
+                        onClick={() => {
+                          r.set(icon);
+                          setIconFor(null);
+                        }}
+                        className={`flex aspect-square items-center justify-center rounded-lg text-[20px] ${
+                          r.icon === icon ? 'bg-brand/20 ring-2 ring-[var(--brand)]' : 'bg-hairline'
+                        }`}
+                      >
+                        {icon}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -695,9 +836,18 @@ function PeopleLookSheet({
           <Toggle label={t.meetings.applyToSeries} checked={toSeries} onChange={setToSeries} />
         )}
         <Button
-          disabled={busy}
+          disabled={busy || (style === 'color' && !color)}
           onClick={() =>
-            onSave(color || photo ? { color, photoMediaId: photo?.id ?? null } : null, toSeries)
+            onSave(
+              {
+                style,
+                color: style === 'color' ? color : null,
+                photoMediaId: photo?.id ?? null,
+                leaderIcon,
+                snackIcon,
+              },
+              toSeries,
+            )
           }
         >
           {t.common.save}

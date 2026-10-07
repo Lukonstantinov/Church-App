@@ -25,6 +25,7 @@ import {
   meetingServicesSchema,
   peopleLookSchema,
   type MeetingService,
+  type MeetingHelper,
   type PeopleLook,
 } from '@church/shared';
 import type { Db } from '../db/client';
@@ -32,6 +33,7 @@ import {
   attendance,
   groups,
   meetingAudience,
+  meetingHelpers,
   meetingSchedules,
   meetings,
   memberships,
@@ -47,6 +49,50 @@ const emptyCounts = (): Record<AttendanceStatus, number> => ({
   excused: 0,
   absent: 0,
 });
+
+// ---------- helpers ----------
+
+/** The helpers of several meetings at once (speakers first, then in the order added). */
+export async function helpersOf(
+  db: Db,
+  meetingIds: number[],
+  secret?: string,
+): Promise<Map<number, MeetingHelper[]>> {
+  const out = new Map<number, MeetingHelper[]>();
+  if (meetingIds.length === 0) return out;
+  const rows = [];
+  for (let i = 0; i < meetingIds.length; i += 90)
+    rows.push(
+      ...(await db
+        .select()
+        .from(meetingHelpers)
+        .where(inArray(meetingHelpers.meetingId, meetingIds.slice(i, i + 90)))
+        .orderBy(desc(meetingHelpers.speaker), asc(meetingHelpers.id))),
+    );
+  const people = await meetingPeople(
+    db,
+    rows.map((r) => r.userId),
+    secret,
+  );
+  for (const r of rows) {
+    const person = people.get(r.userId);
+    if (!person) continue;
+    out.set(r.meetingId, [
+      ...(out.get(r.meetingId) ?? []),
+      {
+        id: r.id,
+        role: r.role,
+        icon: r.icon ?? (r.speaker ? '🎤' : null),
+        speaker: r.speaker,
+        person,
+        notifiedAt: r.notifiedAt,
+        acceptedAt: r.acceptedAt,
+        declinedAt: r.declinedAt,
+      },
+    ]);
+  }
+  return out;
+}
 
 // ---------- services & people look ----------
 
@@ -224,6 +270,11 @@ export async function toMeetingRows(
         list.map((m) => m.templateId),
       )
     : { brandOf: new Map(), templateOf: new Map() };
+  const helpers = await helpersOf(
+    db,
+    list.map((m) => m.id),
+    secret,
+  );
   const peopleLooks = await Promise.all(list.map((m) => readPeopleLook(m.peopleLook, secret)));
   const looks = await Promise.all(
     list.map(async (m) => {
@@ -263,6 +314,7 @@ export async function toMeetingRows(
     leaderDeclined:
       (!m.leaderUserId && m.leaderDeclinedBy && people.get(m.leaderDeclinedBy)) || null,
     peopleLook: peopleLooks[i]!,
+    helpers: helpers.get(m.id) ?? [],
     snackDeclined: (!m.snackUserId && m.snackDeclinedBy && people.get(m.snackDeclinedBy)) || null,
     counts: counts.get(m.id) ?? emptyCounts(),
     design: readPostDesign(m.design),

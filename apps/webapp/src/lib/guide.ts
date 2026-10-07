@@ -172,10 +172,19 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
-        title: 'Change the colour and background of the people block',
+        title: 'Change the look of the people cards and chips, and role icons',
         steps: [
-          'Meeting → people block → «🎨 Вид блока людей».',
-          'Card colour (or the ministry colour), background: the ministry’s or a photo. Can apply to the whole series.',
+          'Meeting → people block → «🎨 Оформление».',
+          'Style: dark, see-through (ministry background shows), one colour, or different tints per person. The chips on the main page follow it.',
+          'Role icons: tap a role (leader, snacks, any service) → pick an icon.',
+          'Background: the ministry’s or a photo. Can apply to the whole series.',
+        ],
+      },
+      {
+        title: 'Send “who serves” (every role and person)',
+        steps: [
+          'Meeting → people block → «📤 Кто служит» → to everyone at the meeting or only those who serve.',
+          'The meeting announcement also lists who serves automatically.',
         ],
       },
       {
@@ -297,6 +306,9 @@ export const GUIDE: GuideSection[] = [
         title: 'Add the app to the phone home screen',
         steps: [
           '«Ещё» → «Иконка на экране телефона» → «Добавить на экран».',
+          'Android: Telegram asks “Add to Home screen?” → «Добавить». No window: in the app ⋯ (top right) → “Add to Home Screen”.',
+          'iPhone: Safari opens → Share (square with arrow) → “Add to Home Screen” → «Добавить».',
+          'The card shows these steps for the person’s own phone, and a message when it worked or failed.',
           'Needs a recent Telegram. The icon Telegram uses is the bot’s Mini App icon — set it in @BotFather → /mybots → bot → Bot Settings → Configure Mini App (upload the church photo).',
         ],
       },

@@ -19,6 +19,7 @@ import { useMoney } from '../components/money';
 import { NotifySheet } from '../components/NotifySheet';
 import { MeetingAnnounceSheet } from '../components/MeetingAnnounceSheet';
 import { MeetingPeople } from '../components/MeetingPeople';
+import { TeamChips } from '../components/TeamChips';
 import { useCoverLook } from '../components/CoverDesigner';
 import {
   MeetingPosterDesigner,
@@ -61,7 +62,8 @@ import { canRollNow } from './Overview';
 export function MeetingHeroLines({
   meeting,
 }: {
-  meeting: Pick<MeetingDetail, 'topic' | 'location' | 'leader' | 'kind'>;
+  meeting: Pick<MeetingDetail, 'topic' | 'location' | 'leader' | 'kind'> &
+    Partial<Pick<MeetingDetail, 'snackPerson' | 'helpers' | 'peopleLook'>>;
 }) {
   const t = useT();
   if (!meeting.topic && !meeting.location && !meeting.leader && !meeting.kind) return null;
@@ -69,11 +71,7 @@ export function MeetingHeroLines({
     <div className="mt-3 flex flex-col gap-1.5 text-[14px]">
       {meeting.topic && <div className="text-[16px] font-semibold">«{meeting.topic}»</div>}
       <div className="flex flex-wrap items-center gap-1.5">
-        {meeting.leader && (
-          <span className="rounded-full bg-white px-2.5 py-1 text-[13px] font-bold text-[var(--brand)]">
-            {displayName(meeting.leader)}
-          </span>
-        )}
+        <TeamChips m={meeting} />
         {meeting.kind && (
           <span className="rounded-full bg-white/20 px-2.5 py-1 text-[13px] font-semibold">
             {t.meetings.kinds[meeting.kind]}

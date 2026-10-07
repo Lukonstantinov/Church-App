@@ -1,43 +1,21 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { InlineKeyboard, type Api } from 'grammy';
 import { INTL_LOCALE, displayName, messages, type MeetingHelper } from '@church/shared';
 import type { Db } from '../db/client';
 import { groups, meetingHelpers, meetings, users, type User } from '../db/schema';
 import { churchDefaultLocale, getAppUrl, getChurch, localeOf } from './church';
 import { escapeHtml } from './html';
-import { meetingPeople } from './meetings';
+import { helpersOf } from './meetings';
 import { recordNotification } from './notifications';
 import { enqueue } from './outbox';
 
-/** The other people with a job at a meeting, in the order they were added. */
+/** The other people with a job at a meeting, speakers first, then in the order added. */
 export async function listHelpers(
   db: Db,
   meetingId: number,
   secret?: string,
 ): Promise<MeetingHelper[]> {
-  const rows = await db
-    .select()
-    .from(meetingHelpers)
-    .where(eq(meetingHelpers.meetingId, meetingId))
-    // Speakers first (one under another), then the other services, each in the order added.
-    .orderBy(desc(meetingHelpers.speaker), asc(meetingHelpers.id));
-  const people = await meetingPeople(
-    db,
-    rows.map((r) => r.userId),
-    secret,
-  );
-  return rows
-    .filter((r) => people.has(r.userId))
-    .map((r) => ({
-      id: r.id,
-      role: r.role,
-      icon: r.icon ?? (r.speaker ? '🎤' : null),
-      speaker: r.speaker,
-      person: people.get(r.userId)!,
-      notifiedAt: r.notifiedAt,
-      acceptedAt: r.acceptedAt,
-      declinedAt: r.declinedAt,
-    }));
+  return (await helpersOf(db, [meetingId], secret)).get(meetingId) ?? [];
 }
 
 /**

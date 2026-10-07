@@ -1944,6 +1944,29 @@ describe('more people at a meeting', () => {
     d = await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: ADMIN });
     expect(d.helpers[0]!.person.photoUrl).toContain('/media/m/');
 
+    // "Who serves": the list goes to the team, every role with its icon and person.
+    await patch(m.id, { leaderUserId: hId });
+    const helperId = d.helpers[0]!.id;
+    await api(`/api/meetings/${m.id}/helpers/${helperId}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { icon: '🎸' },
+    });
+    const sent = await apiJson<{ bot: number }>(`/api/meetings/${m.id}/roster`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { to: 'team' },
+    });
+    expect(sent.bot).toBe(1);
+    await drainOutbox(getDb(env.DB), botApi(env as never), { limit: 100 });
+    const roster = String((await sentTo(h.id, 'Кто служит'))!.body.text);
+    expect(roster).toContain('🎸 Прославление — Гитарист');
+    expect(roster).toContain('Ведущий — Гитарист');
+    const text = await apiJson<{ text: string }>(`/api/meetings/${m.id}/announce-text`, {
+      user: ADMIN,
+    });
+    expect(text.text).toContain('Кто служит');
+
     // Removing them.
     const left = await apiJson<MeetingDetail['helpers']>(
       `/api/meetings/${m.id}/helpers/${list[0]!.id}`,

@@ -3,6 +3,8 @@ import { HTTPException } from 'hono/http-exception';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or, type SQL } from 'drizzle-orm';
 import {
   addHelperSchema,
+  sendRosterSchema,
+  updateHelperSchema,
   meetingServicesSchema,
   createMeetingSchema,
   personPhotoSchema,
@@ -83,6 +85,7 @@ import {
   readServices,
 } from '../lib/meetings';
 import { answerHelper, listHelpers, notifyHelper } from '../lib/meetingHelpers';
+import { sendMeetingRoster } from '../lib/meetingRoster';
 import { idParam, parseBody } from './util';
 import { z } from 'zod';
 
@@ -510,7 +513,6 @@ meetingRoutes.get('/:id', async (c) => {
           ? meeting.snackAcceptedAt
           : null,
     announcedAt: meeting.announcedAt,
-    helpers: await listHelpers(db, meeting.id, c.env.WEBHOOK_SECRET),
     rsvp: {
       asked: meeting.askRsvp,
       mine: rsvp.rows.find((r) => r.id === user.id)?.status ?? null,
@@ -1136,6 +1138,42 @@ meetingRoutes.delete('/:id/helpers/:helperId', async (c) => {
       ),
     );
   return c.json(await listHelpers(db, meeting.id, c.env.WEBHOOK_SECRET));
+});
+
+/** Changes a helper's service name or icon. */
+meetingRoutes.patch('/:id/helpers/:helperId', async (c) => {
+  const { db, meeting } = await managedMeeting(c, idParam(c));
+  const input = await parseBody(c, updateHelperSchema);
+  await db
+    .update(meetingHelpers)
+    .set(input)
+    .where(
+      and(
+        eq(meetingHelpers.id, Number(c.req.param('helperId'))),
+        eq(meetingHelpers.meetingId, meeting.id),
+      ),
+    );
+  return c.json(await listHelpers(db, meeting.id, c.env.WEBHOOK_SECRET));
+});
+
+/** Sends who serves (every role and person) to everyone at the meeting or only the team. */
+meetingRoutes.post('/:id/roster', async (c) => {
+  const { db, user, meeting } = await managedMeeting(c, idParam(c));
+  const { to } = await parseBody(c, sendRosterSchema);
+  const result = await sendMeetingRoster(db, {
+    meeting,
+    to,
+    senderName: displayName(user),
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+  });
+  if (result.bot > 0)
+    c.executionCtx.waitUntil(
+      drainOutbox(db, botApi(c.env), { limit: 50 }).catch((err) =>
+        console.error('roster drain', err),
+      ),
+    );
+  return c.json(result);
 });
 
 /** Asks the helper by bot (again); their answer comes back as a mark. */

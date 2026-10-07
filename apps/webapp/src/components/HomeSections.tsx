@@ -32,6 +32,7 @@ import { canRollNow } from '../screens/Overview';
 import { Button, DateBadge, HeroCard } from './ui';
 import { BurnFrame } from './Burn';
 import { LiveNow } from './Live';
+import { TeamChips } from './TeamChips';
 import { LookTop } from './LookTop';
 import { PosterCard, PosterMedia, hasCover } from './Poster';
 
@@ -133,7 +134,7 @@ export type MeetingTileData = Pick<
   MeetingRow,
   'id' | 'title' | 'startsAt' | 'endsAt' | 'location' | 'topic' | 'kind' | 'leader'
 > &
-  Partial<Pick<MeetingRow, 'status'>>;
+  Partial<Pick<MeetingRow, 'status' | 'snackPerson' | 'helpers' | 'peopleLook'>>;
 
 type Item =
   | { kind: 'calendar' }
@@ -521,11 +522,7 @@ function MeetingTile({
         </span>
         <div className="flex items-end gap-2">
           <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
-          {m.leader && (
-            <span className="mb-1 truncate rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--brand)]">
-              {m.leader.firstName}
-            </span>
-          )}
+          <TeamChips m={m} compact className="mb-1 min-w-0" />
         </div>
       </LookTop>
       <div className="flex flex-col gap-0.5 p-2.5">

@@ -3,6 +3,7 @@ import { useHomeScreen } from '../lib/homeScreen';
 import { useMe } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 import { IconBell, IconCheck } from './icons';
+import { useToast } from './Toast';
 import { Button, Section } from './ui';
 
 /**
@@ -12,7 +13,12 @@ import { Button, Section } from './ui';
 export function HomeScreenCard() {
   const t = useT();
   const me = useMe();
-  const { status, add } = useHomeScreen();
+  const toast = useToast();
+  const { status, add, os } = useHomeScreen({
+    added: () => toast(t.homeScreen.addedToast),
+    failed: () => toast(t.homeScreen.failedToast, 'error'),
+  });
+  const steps = os === 'ios' ? t.homeScreen.ios : os === 'android' ? t.homeScreen.android : null;
   const logo = me.data?.church.logoUrl ?? '/icon.svg';
   return (
     <Section title={t.homeScreen.title}>
@@ -42,6 +48,27 @@ export function HomeScreenCard() {
           </Button>
         )}
       </div>
+      {status !== 'added' && (
+        <div className="border-t border-hairline px-4 py-3">
+          <div className="mb-1.5 text-[13px] font-semibold">
+            {t.homeScreen.stepsTitle}
+            {steps ? '' : ' (Android / iPhone)'}
+          </div>
+          {(steps ? [steps] : [t.homeScreen.android, t.homeScreen.ios]).map((list, k) => (
+            <ol
+              key={k}
+              className="mb-1 flex list-decimal flex-col gap-1 pl-5 text-[13px] leading-snug text-hint"
+            >
+              {!steps && (
+                <li className="list-none -ml-5 font-semibold">{k === 0 ? 'Android' : 'iPhone'}</li>
+              )}
+              {list.map((x, i) => (
+                <li key={i}>{x}</li>
+              ))}
+            </ol>
+          ))}
+        </div>
+      )}
       <div className="flex items-start gap-3 border-t border-hairline px-4 py-3.5">
         <span className="brand-gradient flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white">
           <IconBell size={19} />
@@ -49,6 +76,9 @@ export function HomeScreenCard() {
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-semibold">{t.homeScreen.notifTitle}</span>
           <span className="block text-[13px] leading-snug text-hint">{t.homeScreen.notifHint}</span>
+          <span className="mt-1 block text-[12px] leading-snug text-hint">
+            {t.homeScreen.notifPhone}
+          </span>
         </span>
       </div>
     </Section>

@@ -514,7 +514,22 @@ export function useMeetingHelpers(meetingId: number) {
       }),
     onSuccess: invalidate,
   });
-  return { add, remove, notify, answer };
+  const update = useMutation({
+    mutationFn: ({ helperId, ...input }: { helperId: number; role?: string; icon?: string }) =>
+      apiFetch<MeetingHelper[]>(`/meetings/${meetingId}/helpers/${helperId}`, {
+        method: 'PATCH',
+        ...json(input),
+      }),
+    onSuccess: invalidate,
+  });
+  const roster = useMutation({
+    mutationFn: (to: 'everyone' | 'team') =>
+      apiFetch<{ total: number; bot: number }>(`/meetings/${meetingId}/roster`, {
+        method: 'POST',
+        ...json({ to }),
+      }),
+  });
+  return { add, remove, notify, answer, update, roster };
 }
 
 /** Replaces the ministry's saved list of meeting services. */

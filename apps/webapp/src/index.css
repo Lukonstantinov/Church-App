@@ -1218,7 +1218,22 @@ html[data-motion='off'] [class*='app-bg-'] {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.people-panel[data-tinted='true'] .metal-card {
-  --card-a: color-mix(in srgb, var(--card-tint) 88%, #000);
-  --card-b: color-mix(in srgb, var(--card-tint) 50%, #0b0c0f);
+.people-panel[data-style='color'] .metal-card,
+.people-panel[data-style='mixed'] .metal-card {
+  --card-a: color-mix(in srgb, var(--card-tint, var(--brand)) 88%, #000);
+  --card-b: color-mix(in srgb, var(--card-tint, var(--brand)) 50%, #0b0c0f);
+}
+/* See-through: the panel's background (the ministry's or a photo) shows through. */
+.people-panel[data-style='glass'] .metal-card {
+  --card-a: rgba(255, 255, 255, 0.22);
+  --card-b: rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+/* A chip in the dark-metal style (on meeting cards outside the meeting). */
+.team-chip-dark {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(#202329, #111317) padding-box,
+    linear-gradient(135deg, #e7e5e4, #57534e 50%, #d6d3d1) border-box;
 }

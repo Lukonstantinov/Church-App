@@ -413,6 +413,18 @@ export const addHelperSchema = z.object({
   speaker: z.boolean().optional(),
 });
 
+export const PEOPLE_STYLES = ['dark', 'glass', 'color', 'mixed'] as const;
+export type PeopleStyle = (typeof PEOPLE_STYLES)[number];
+
+/** Changes a helper's service name or icon. */
+export const updateHelperSchema = z.object({
+  role: z.string().trim().min(1).max(40).optional(),
+  icon: z.string().trim().min(1).max(8).optional(),
+});
+
+/** Send the list of who serves: to everyone the meeting is for, or only to the team. */
+export const sendRosterSchema = z.object({ to: z.enum(['everyone', 'team']) });
+
 /** How the people cards look: card colour and the panel's photo (null = the ministry's). */
 export const peopleLookSchema = z.object({
   color: z
@@ -420,6 +432,14 @@ export const peopleLookSchema = z.object({
     .regex(/^#[0-9a-f]{6}$/i)
     .nullable(),
   photoMediaId: z.number().int().positive().nullable(),
+  /**
+   * Cards and chips: dark metal, see-through (the ministry's background shows), one
+   * colour, or a different tint for each person. Older saves without it: colour if set.
+   */
+  style: z.enum(PEOPLE_STYLES).optional(),
+  /** Icons of the leader and the snack person (others keep their service's icon). */
+  leaderIcon: z.string().trim().min(1).max(8).nullish(),
+  snackIcon: z.string().trim().min(1).max(8).nullish(),
 });
 export type PeopleLook = z.infer<typeof peopleLookSchema> & { photoUrl: string | null };
 export type AddHelperInput = z.input<typeof addHelperSchema>;
@@ -459,6 +479,8 @@ export interface MeetingRow {
   snackDeclined: MeetingPerson | null;
   /** Card colour and panel photo of the people block (null = the ministry's look). */
   peopleLook: PeopleLook | null;
+  /** More people with a job at this meeting (speakers first). */
+  helpers: MeetingHelper[];
   /** Counts are filled for meetings that have a saved roll call. */
   counts: Record<AttendanceStatus, number>;
   /** Poster look (colours, fonts, pattern); null = the ministry's own. */
@@ -555,8 +577,6 @@ export interface MeetingDetail extends MeetingRow {
   myAcceptedAt: string | null;
   /** When people were last told about it (null = never). */
   announcedAt: string | null;
-  /** More people with a job at this meeting. */
-  helpers: MeetingHelper[];
   /** "Will you come?" answers (asked = the message asked it). */
   rsvp: {
     asked: boolean;

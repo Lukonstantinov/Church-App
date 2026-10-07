@@ -14,6 +14,7 @@ import { meetingRsvps, memberships, users, type Meeting, type User } from '../db
 import { churchDefaultLocale, getAppUrl, getChurch, localeOf } from './church';
 import { escapeHtml } from './html';
 import { audienceOf } from './meetings';
+import { meetingRosterLines } from './meetingRoster';
 import { recordNotification } from './notifications';
 import { enqueue } from './outbox';
 
@@ -73,13 +74,16 @@ export async function defaultMeetingAnnouncement(
     ? await db.query.users.findFirst({ where: eq(users.id, meeting.leaderUserId) })
     : null;
   const speakers = readSpeakers(meeting.speakers);
+  const roster = await meetingRosterLines(db, meeting, locale);
   return [
     `📣 ${meeting.title}`,
     meeting.topic ? `«${meeting.topic}»` : null,
     '',
     `🗓 ${when}`,
     meeting.location ? `📍 ${meeting.location}` : null,
-    leader ? `🎤 ${t.whoLeads}: ${displayName(leader)}` : null,
+    ...(roster.lines.length > 1
+      ? ['', `👥 ${t.meetingRosterTitle}:`, ...roster.lines]
+      : [leader ? `🎤 ${t.whoLeads}: ${displayName(leader)}` : null]),
     speakers.length ? `🎙 ${speakers.map((sp) => sp.name).join(', ')}` : null,
     meeting.notes ? `\n${meeting.notes.trim()}` : null,
   ]
