@@ -20,7 +20,7 @@ import { getDb } from '../src/db/client';
 import { eq } from 'drizzle-orm';
 import { events, meetings } from '../src/db/schema';
 import { remindUpcomingEvents } from '../src/jobs/tick';
-import { sendLiveNotices } from '../src/lib/liveNotice';
+import { sendLiveNotices, sendMeetingReminders } from '../src/lib/liveNotice';
 import { generateMeetings } from '../src/lib/meetings';
 import { drainOutbox } from '../src/lib/outbox';
 import { botApi } from '../src/lib/telegram';
@@ -2000,5 +2000,58 @@ describe('bot photo', () => {
         })
       ).status,
     ).toBe(403);
+  });
+});
+
+describe('meeting reminders', () => {
+  it('reminds once, two hours ahead by default; a ministry can switch it off', async () => {
+    const g = await createEnv('Напомни');
+    const a = fakeUser('Забывчивый');
+    await join(a, g);
+    const m = await apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        date: localDate(new Date(), TZ),
+        startTime: '12:00',
+        durationMin: 60,
+        title: 'Скоро',
+      },
+    });
+    const db = getDb(env.DB);
+    const soon = async (minutes: number) =>
+      db
+        .update(meetings)
+        .set({
+          startsAt: new Date(Date.now() + minutes * 60_000).toISOString(),
+          endsAt: new Date(Date.now() + (minutes + 60) * 60_000).toISOString(),
+          createdAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+          remindedAt: null,
+        })
+        .where(eq(meetings.id, m.id));
+    // Three hours away: too early.
+    await soon(180);
+    await sendMeetingReminders(db, env as never, new Date());
+    await drainOutbox(db, botApi(env as never), { limit: 100 });
+    expect(calls.some((c) => String(c.body.text).includes('Скоро встреча'))).toBe(false);
+    // 90 minutes away: once.
+    await soon(90);
+    await sendMeetingReminders(db, env as never, new Date());
+    await sendMeetingReminders(db, env as never, new Date());
+    await drainOutbox(db, botApi(env as never), { limit: 100 });
+    expect(
+      calls.filter((c) => c.body.chat_id === a.id && String(c.body.text).includes('Скоро встреча')),
+    ).toHaveLength(1);
+    // Switched off.
+    await api(`/api/groups/${g.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { meetingReminderHours: 0 },
+    });
+    calls.length = 0;
+    await soon(60);
+    await sendMeetingReminders(db, env as never, new Date());
+    await drainOutbox(db, botApi(env as never), { limit: 100 });
+    expect(calls.some((c) => String(c.body.text).includes('Скоро встреча'))).toBe(false);
   });
 });

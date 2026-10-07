@@ -272,6 +272,11 @@ export const lt: Messages = {
     styleMixed: 'Skirtingi atspalviai',
     roleIcons: 'Vaidmenų piktogramos',
     patternToggle: 'Tarnystės raštas (piktograma)',
+    remindTitle: 'Priminimai apie susitikimus',
+    remindHint:
+      'Botas primins visiems, kam skirtas susitikimas. Likus 2 valandoms, jei nepasirinksite kitaip.',
+    remindOff: 'Nepriminti',
+    startsIn: 'Iki pradžios',
     speakerService: 'Pranešėjas',
     pickService: 'Kokia tarnystė?',
     newService: 'Nauja tarnystė',
@@ -1467,6 +1472,8 @@ export const lt: Messages = {
     eventLive: (titleHtml: string, placeHtml: string | null) =>
       `🔴 <b>Vyksta dabar</b>\n„${titleHtml}“${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     notifLiveTitle: (title: string) => `🔴 LIVE: „${title}“`,
+    meetingReminder: (titleHtml: string, when: string, placeHtml: string | null) =>
+      `⏰ <b>Netrukus susitikimas</b>\n„${titleHtml}“\n${when}${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     meetingLive: (titleHtml: string, placeHtml: string | null) =>
       `🔴 <b>Susitikimas prasidėjo</b>\n„${titleHtml}“${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     eventReminder: (titleHtml: string, when: string, placeHtml: string | null) =>

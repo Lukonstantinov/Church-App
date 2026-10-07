@@ -1237,3 +1237,28 @@ html[data-motion='off'] [class*='app-bg-'] {
     linear-gradient(#202329, #111317) padding-box,
     linear-gradient(135deg, #e7e5e4, #57534e 50%, #d6d3d1) border-box;
 }
+
+/* ---------- A meeting about to start: a slow pulse and its timer ---------- */
+.soon-timer {
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+}
+@keyframes soon-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 0%, transparent);
+  }
+  50% {
+    transform: scale(1.012);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand) 22%, transparent);
+  }
+}
+.soon-pulse {
+  animation: soon-pulse 3.2s ease-in-out infinite;
+  border-radius: 18px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .soon-pulse {
+    animation: none;
+  }
+}

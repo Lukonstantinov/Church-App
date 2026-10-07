@@ -275,6 +275,11 @@ export const ru = {
     styleMixed: 'Разные оттенки',
     roleIcons: 'Иконки ролей',
     patternToggle: 'Узор служения (иконка)',
+    remindTitle: 'Напоминание о встречах',
+    remindHint:
+      'Бот напомнит всем, для кого встреча. Через 2 часа до начала, если не выбрать иначе.',
+    remindOff: 'Не напоминать',
+    startsIn: 'До начала',
     speakerService: 'Спикер',
     pickService: 'Какое служение?',
     newService: 'Новое служение',
@@ -1467,6 +1472,8 @@ export const ru = {
     eventLive: (titleHtml: string, placeHtml: string | null) =>
       `🔴 <b>Прямо сейчас</b>\n«${titleHtml}»${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     notifLiveTitle: (title: string) => `🔴 LIVE: «${title}»`,
+    meetingReminder: (titleHtml: string, when: string, placeHtml: string | null) =>
+      `⏰ <b>Скоро встреча</b>\n«${titleHtml}»\n${when}${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     meetingLive: (titleHtml: string, placeHtml: string | null) =>
       `🔴 <b>Встреча началась</b>\n«${titleHtml}»${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     eventReminder: (titleHtml: string, when: string, placeHtml: string | null) =>

@@ -5,7 +5,7 @@ import type { Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { events, groups, jobRuns, meetings, outbox } from '../db/schema';
 import { sendEventReminder } from '../lib/eventReminder';
-import { sendLiveNotices } from '../lib/liveNotice';
+import { sendLiveNotices, sendMeetingReminders } from '../lib/liveNotice';
 import { pruneNotifications } from '../lib/notifications';
 import { getAppUrl, getChurch } from '../lib/church';
 import { escapeHtml } from '../lib/html';
@@ -27,11 +27,12 @@ async function claim(db: Db, job: string, scope: string, period: string): Promis
   return rows.length > 0;
 }
 
-/** Every 5 minutes: "it's live" messages and event reminders that have come due. */
+/** Every 5 minutes: "it's live" messages and event and meeting reminders that have come due. */
 export async function minuteTick(env: Env, now = new Date()): Promise<void> {
   const db = getDb(env.DB);
   await sendLiveNotices(db, env, now);
   await remindUpcomingEvents(db, env, now);
+  await sendMeetingReminders(db, env, now);
 }
 
 /** Hourly: create upcoming meetings, nudge leaders about missing roll calls, tidy up. */

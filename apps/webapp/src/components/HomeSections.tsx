@@ -31,7 +31,8 @@ import { MeetingHeroLines } from '../screens/MeetingScreen';
 import { canRollNow } from '../screens/Overview';
 import { Button, DateBadge, HeroCard } from './ui';
 import { BurnFrame } from './Burn';
-import { LiveNow } from './Live';
+import { LiveNow, SoonPulse, SoonTimer, useStartsSoon } from './Live';
+import { useNowSecond } from '../lib/live';
 import { TeamChips, meetingLook } from './TeamChips';
 import { LookTop } from './LookTop';
 import { PosterCard, PosterMedia, hasCover } from './Poster';
@@ -519,24 +520,27 @@ function MeetingTile({
   const t = useT();
   const f = useFmt();
   return (
-    <Tile onToggle={onToggle}>
-      <LookTop look={meetingLook(m) ?? g} className="flex aspect-[16/10] flex-col p-2.5">
-        <span className="flex items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
-          <span className="opacity-80">{t.meetings.details}</span>
-          <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} compact />
-        </span>
-        <div className="flex items-end gap-2">
-          <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
-          <TeamChips m={m} compact className="mb-1 min-w-0" />
+    <SoonPulse startsAt={m.startsAt} cancelled={m.status === 'cancelled'} className="h-full">
+      <Tile onToggle={onToggle}>
+        <LookTop look={meetingLook(m) ?? g} className="flex aspect-[16/10] flex-col p-2.5">
+          <span className="flex items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
+            <span className="opacity-80">{t.meetings.details}</span>
+            <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} compact />
+            <SoonTimer startsAt={m.startsAt} compact />
+          </span>
+          <div className="flex items-end gap-2">
+            <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
+            <TeamChips m={m} compact className="mb-1 min-w-0" />
+          </div>
+        </LookTop>
+        <div className="flex flex-col gap-0.5 p-2.5">
+          <span className="truncate text-[14px] font-semibold">{m.title}</span>
+          <span className="truncate text-[12px] text-hint">
+            {f.relativeDay(m.startsAt)} · {f.time(m.startsAt)}
+          </span>
         </div>
-      </LookTop>
-      <div className="flex flex-col gap-0.5 p-2.5">
-        <span className="truncate text-[14px] font-semibold">{m.title}</span>
-        <span className="truncate text-[12px] text-hint">
-          {f.relativeDay(m.startsAt)} · {f.time(m.startsAt)}
-        </span>
-      </div>
-    </Tile>
+      </Tile>
+    </SoonPulse>
   );
 }
 
@@ -556,35 +560,45 @@ function MeetingDayTile({
   const t = useT();
   const f = useFmt();
   const shown = list.slice(0, 4);
+  // The next one still to start sets the pulse.
+  const now = useNowSecond() * 1000;
+  const next = list.find((m) => Date.parse(m.startsAt) > now) ?? list[0]!;
+  const soon = useStartsSoon(next.startsAt);
   return (
-    <Tile onToggle={onToggle}>
-      <LookTop look={meetingLook(list[0]!) ?? g} className="flex flex-col gap-1.5 p-2">
-        <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
-          <span>{f.relativeDay(list[0]!.startsAt)}</span>
-          <span>{t.meetings.meetingsToday(list.length)}</span>
-        </span>
-        <div className={`grid gap-1 ${shown.length > 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-          {shown.map((m, i) => (
-            <span
-              key={m.id}
-              className="flex min-w-0 flex-col rounded-lg bg-white/22 px-1.5 py-1 backdrop-blur"
-            >
-              <span className="flex items-center gap-1 text-[11px] font-bold tabular-nums">
-                {f.time(m.startsAt)}
-                <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} compact />
+    <SoonPulse startsAt={next.startsAt} className="h-full">
+      <Tile onToggle={onToggle}>
+        <LookTop look={meetingLook(list[0]!) ?? g} className="flex flex-col gap-1.5 p-2">
+          <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
+            <span>{f.relativeDay(list[0]!.startsAt)}</span>
+            {soon ? (
+              <SoonTimer startsAt={next.startsAt} compact />
+            ) : (
+              <span>{t.meetings.meetingsToday(list.length)}</span>
+            )}
+          </span>
+          <div className={`grid gap-1 ${shown.length > 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {shown.map((m, i) => (
+              <span
+                key={m.id}
+                className="flex min-w-0 flex-col rounded-lg bg-white/22 px-1.5 py-1 backdrop-blur"
+              >
+                <span className="flex items-center gap-1 text-[11px] font-bold tabular-nums">
+                  {f.time(m.startsAt)}
+                  <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} compact />
+                </span>
+                <span className="truncate text-[11px] leading-tight opacity-90">
+                  {i === 3 && list.length > 4 ? `+${list.length - 3}` : m.title}
+                </span>
               </span>
-              <span className="truncate text-[11px] leading-tight opacity-90">
-                {i === 3 && list.length > 4 ? `+${list.length - 3}` : m.title}
-              </span>
-            </span>
-          ))}
+            ))}
+          </div>
+        </LookTop>
+        <div className="flex flex-col gap-0.5 p-2.5">
+          <span className="truncate text-[14px] font-semibold">{list[0]!.title}</span>
+          <span className="truncate text-[12px] text-hint">{t.meetings.showAllMeetings}</span>
         </div>
-      </LookTop>
-      <div className="flex flex-col gap-0.5 p-2.5">
-        <span className="truncate text-[14px] font-semibold">{list[0]!.title}</span>
-        <span className="truncate text-[12px] text-hint">{t.meetings.showAllMeetings}</span>
-      </div>
-    </Tile>
+      </Tile>
+    </SoonPulse>
   );
 }
 
@@ -601,39 +615,42 @@ function MeetingExpanded({
   const { push } = useNav();
   const rollable = onRoll && canRollNow({ status: m.status ?? 'scheduled', startsAt: m.startsAt });
   return (
-    <HeroCard living look={meetingLook(m)}>
-      <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
-        {t.overview.nextMeeting}
-      </div>
-      <div className="flex items-center gap-3.5">
-        <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[21px] font-bold leading-tight">{m.title}</div>
-          <div className="text-[15px] text-white/85">
-            {f.relativeDay(m.startsAt)} · {f.timeRange(m.startsAt, m.endsAt)}
+    <SoonPulse startsAt={m.startsAt} cancelled={m.status === 'cancelled'}>
+      <HeroCard living look={meetingLook(m)}>
+        <SoonTimer startsAt={m.startsAt} className="mb-2" />
+        <div className="mb-3 text-[12px] font-bold uppercase tracking-wider text-white/80">
+          {t.overview.nextMeeting}
+        </div>
+        <div className="flex items-center gap-3.5">
+          <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[21px] font-bold leading-tight">{m.title}</div>
+            <div className="text-[15px] text-white/85">
+              {f.relativeDay(m.startsAt)} · {f.timeRange(m.startsAt, m.endsAt)}
+            </div>
           </div>
         </div>
-      </div>
-      <MeetingHeroLines meeting={m} />
-      <div className="mt-4 flex flex-col gap-2">
-        {rollable && (
-          <Button variant="white" onClick={() => onRoll!(m.id)}>
-            {t.overview.startRoll}
-          </Button>
-        )}
-        <button
-          type="button"
-          onClick={() => push({ name: 'meeting', meetingId: m.id })}
-          className="rounded-2xl bg-white/18 px-3 py-2.5 text-[15px] font-semibold active:scale-[0.98]"
-        >
-          {t.overview.openMeeting}
-        </button>
-        {onRoll && !rollable && (
-          <p className="flex items-center gap-2 text-[13px] text-white/85">
-            <IconClock size={15} /> {t.overview.rollOpensSoon}
-          </p>
-        )}
-      </div>
-    </HeroCard>
+        <MeetingHeroLines meeting={m} />
+        <div className="mt-4 flex flex-col gap-2">
+          {rollable && (
+            <Button variant="white" onClick={() => onRoll!(m.id)}>
+              {t.overview.startRoll}
+            </Button>
+          )}
+          <button
+            type="button"
+            onClick={() => push({ name: 'meeting', meetingId: m.id })}
+            className="rounded-2xl bg-white/18 px-3 py-2.5 text-[15px] font-semibold active:scale-[0.98]"
+          >
+            {t.overview.openMeeting}
+          </button>
+          {onRoll && !rollable && (
+            <p className="flex items-center gap-2 text-[13px] text-white/85">
+              <IconClock size={15} /> {t.overview.rollOpensSoon}
+            </p>
+          )}
+        </div>
+      </HeroCard>
+    </SoonPulse>
   );
 }

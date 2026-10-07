@@ -41,7 +41,7 @@ export function Overview({ groups, active }: { groups: GroupSummary[]; active: G
       {tasks.panel}
       <HomeHighlights
         g={active}
-        meetings={(upcoming.data ?? []).filter((m) => m.status !== 'cancelled').slice(0, 2)}
+        meetings={comingWeek((upcoming.data ?? []).filter((m) => m.status !== 'cancelled'))}
         onRoll={can('attendance.take') ? (id) => push({ name: 'roll', meetingId: id }) : undefined}
       />
 
@@ -137,4 +137,11 @@ export function QuickAction({
       </span>
     </Card>
   );
+}
+
+/** Meetings of the coming week (all of them, however many a day has), at least the next two. */
+function comingWeek<T extends { startsAt: string }>(list: T[]): T[] {
+  const until = Date.now() + 7 * 864e5;
+  const week = list.filter((m) => Date.parse(m.startsAt) <= until);
+  return week.length >= 2 ? week : list.slice(0, 2);
 }

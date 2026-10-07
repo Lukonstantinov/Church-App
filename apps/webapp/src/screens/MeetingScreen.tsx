@@ -10,7 +10,7 @@ import {
   type UpdateMeetingInput,
 } from '@church/shared';
 import { GroupTheme } from '../components/GroupTheme';
-import { LiveNow } from '../components/Live';
+import { LiveNow, SoonPulse, SoonTimer } from '../components/Live';
 import { SpeakerStrip } from '../components/Speakers';
 import { AudiencePicker } from '../components/AudiencePicker';
 import { IconCalendar, IconClock, IconMapPin, IconPlus, IconSend } from '../components/icons';
@@ -149,60 +149,63 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
 
   return (
     <Screen>
-      <HeroCard living={!cancelled} live={live} look={meetingLook(m)}>
-        <div className="mb-3 flex items-center justify-between gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">
-          <span className="truncate">{m.groupName}</span>
-          <span className="flex shrink-0 items-center gap-1.5 normal-case tracking-normal">
-            <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} cancelled={cancelled} />
-            {m.seriesId && (
-              <span className="rounded-full bg-white/20 px-2.5 py-1">
-                🔁 {t.meetings.seriesBadge}
-              </span>
-            )}
-            {m.kind && (
-              <span className="rounded-full bg-white/20 px-2.5 py-1">
-                {t.meetings.kinds[m.kind]}
-              </span>
-            )}
-          </span>
-        </div>
-        <div className="flex items-center gap-3.5">
-          <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
-          <div className="min-w-0">
-            <div
-              className={`text-[22px] font-bold leading-tight ${cancelled ? 'line-through' : ''}`}
+      <SoonPulse startsAt={m.startsAt} cancelled={cancelled}>
+        <HeroCard living={!cancelled} live={live} look={meetingLook(m)}>
+          <div className="mb-3 flex items-center justify-between gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">
+            <span className="truncate">{m.groupName}</span>
+            <span className="flex shrink-0 items-center gap-1.5 normal-case tracking-normal">
+              <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} cancelled={cancelled} />
+              <SoonTimer startsAt={m.startsAt} cancelled={cancelled} compact />
+              {m.seriesId && (
+                <span className="rounded-full bg-white/20 px-2.5 py-1">
+                  🔁 {t.meetings.seriesBadge}
+                </span>
+              )}
+              {m.kind && (
+                <span className="rounded-full bg-white/20 px-2.5 py-1">
+                  {t.meetings.kinds[m.kind]}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="flex items-center gap-3.5">
+            <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
+            <div className="min-w-0">
+              <div
+                className={`text-[22px] font-bold leading-tight ${cancelled ? 'line-through' : ''}`}
+              >
+                {m.title}
+              </div>
+              <div className="text-[15px] text-white/85">
+                {f.relativeDay(m.startsAt)} · {f.timeRange(m.startsAt, m.endsAt)}
+              </div>
+            </div>
+          </div>
+          {m.topic && <div className="mt-3 text-[17px] font-semibold">«{m.topic}»</div>}
+          {m.audience && (
+            <div className="mt-2 inline-flex rounded-full bg-white/20 px-2.5 py-1 text-[13px] font-semibold">
+              {t.meetings.chosenCount(m.audience.length)}
+            </div>
+          )}
+          {m.location && (
+            <div className="mt-2 flex items-center gap-1.5 text-[15px] text-white/90">
+              <IconMapPin size={16} /> {m.location}
+            </div>
+          )}
+          {m.speakers.length > 0 && (
+            <SpeakerStrip speakers={m.speakers} size="md" onColor className="mt-4" />
+          )}
+          {m.canManage && (
+            <button
+              type="button"
+              onClick={() => setPosterOpen(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/22 px-3.5 py-1.5 text-[13px] font-semibold backdrop-blur active:scale-95"
             >
-              {m.title}
-            </div>
-            <div className="text-[15px] text-white/85">
-              {f.relativeDay(m.startsAt)} · {f.timeRange(m.startsAt, m.endsAt)}
-            </div>
-          </div>
-        </div>
-        {m.topic && <div className="mt-3 text-[17px] font-semibold">«{m.topic}»</div>}
-        {m.audience && (
-          <div className="mt-2 inline-flex rounded-full bg-white/20 px-2.5 py-1 text-[13px] font-semibold">
-            {t.meetings.chosenCount(m.audience.length)}
-          </div>
-        )}
-        {m.location && (
-          <div className="mt-2 flex items-center gap-1.5 text-[15px] text-white/90">
-            <IconMapPin size={16} /> {m.location}
-          </div>
-        )}
-        {m.speakers.length > 0 && (
-          <SpeakerStrip speakers={m.speakers} size="md" onColor className="mt-4" />
-        )}
-        {m.canManage && (
-          <button
-            type="button"
-            onClick={() => setPosterOpen(true)}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/22 px-3.5 py-1.5 text-[13px] font-semibold backdrop-blur active:scale-95"
-          >
-            🎨 {t.meetings.editPoster}
-          </button>
-        )}
-      </HeroCard>
+              🎨 {t.meetings.editPoster}
+            </button>
+          )}
+        </HeroCard>
+      </SoonPulse>
       {posterOpen && <PosterSheet m={m} onClose={() => setPosterOpen(false)} />}
 
       {m.myRole && !m.myAcceptedAt && !cancelled && <AnswerCard meetingId={m.id} role={m.myRole} />}

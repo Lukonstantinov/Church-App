@@ -196,6 +196,14 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
+        title: 'Meeting reminders and the timer',
+        steps: [
+          'The bot reminds everyone the meeting is for 2 hours before it (with who serves).',
+          'Change or switch off: «Ещё» → «Настройки служения» → «Напоминание о встречах» (off, 1, 2, 3 or 24 h).',
+          'In the last 2 hours a ⏳ timer shows on the meeting and its card pulses slowly; at the start it turns LIVE.',
+        ],
+      },
+      {
         title: 'Cancel a meeting',
         steps: ['Meeting → «Изменить» → «Отменить встречу» → confirm.'],
         note: 'A meeting with a saved roll call can’t be cancelled.',

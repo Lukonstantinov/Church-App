@@ -271,6 +271,11 @@ export const en: Messages = {
     styleMixed: 'Different tints',
     roleIcons: 'Role icons',
     patternToggle: 'Ministry pattern (icon)',
+    remindTitle: 'Meeting reminders',
+    remindHint:
+      'The bot reminds everyone the meeting is for. 2 hours before the start unless you choose otherwise.',
+    remindOff: 'Don’t remind',
+    startsIn: 'Starts in',
     speakerService: 'Speaker',
     pickService: 'Which service?',
     newService: 'New service',
@@ -1445,6 +1450,8 @@ export const en: Messages = {
     eventLive: (titleHtml: string, placeHtml: string | null) =>
       `🔴 <b>LIVE now</b>\n“${titleHtml}”${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     notifLiveTitle: (title: string) => `🔴 LIVE: “${title}”`,
+    meetingReminder: (titleHtml: string, when: string, placeHtml: string | null) =>
+      `⏰ <b>Meeting soon</b>\n“${titleHtml}”\n${when}${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     meetingLive: (titleHtml: string, placeHtml: string | null) =>
       `🔴 <b>The meeting is live</b>\n“${titleHtml}”${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     eventReminder: (titleHtml: string, when: string, placeHtml: string | null) =>

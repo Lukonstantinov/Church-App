@@ -218,6 +218,7 @@ groupRoutes.get('/:id', async (c) => {
     chatUrl: group.chatUrl,
     defaultLocation: group.defaultLocation,
     eventReminderHours: group.eventReminderHours,
+    meetingReminderHours: group.meetingReminderHours,
     meetingServices: readServices(group.meetingServices),
     managedChat: group.tgChatId
       ? { title: group.tgChatTitle, pending: group.chatLinkCode !== null }

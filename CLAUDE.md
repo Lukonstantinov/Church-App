@@ -88,7 +88,9 @@ bot-managed Telegram chat, pin to the main page, picture/PDF export.
 **Live & reminders** — LIVE badge (pulsing, outline kept) while an event/meeting is on;
 "🔴 LIVE now" bot message at the start (`lib/liveNotice.ts`, `live_notified_at`, skipped if
 more than 30 min late). Automatic event reminders per ministry (`groups.event_reminder_hours`,
-off by default; checked every 5 min) plus manual reminders.
+off by default; checked every 5 min) plus manual reminders. Meeting reminders
+(`groups.meeting_reminder_hours`: null = 2 h, 0 = off; `meetings.reminded_at`) with who serves;
+a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).
 
 **Posts & home** — posts with photos, blocks, types, looks, reactions, comments, resend;
 home tiles (drag to reorder, expand), several meetings of a day share one tile.

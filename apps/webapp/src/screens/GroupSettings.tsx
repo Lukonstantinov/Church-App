@@ -191,6 +191,23 @@ function Form({ g }: { g: GroupDetail }) {
       <Section title={t.meetings.defaultPlace} footer={t.meetings.defaultPlaceHint}>
         <TextField label={t.meetings.taskPlace} value={place} onChange={setPlace} maxLength={120} />
       </Section>
+      <Section title={t.meetings.remindTitle} footer={t.meetings.remindHint}>
+        <div className="flex flex-wrap gap-2 p-3">
+          <Pill
+            on={g.meetingReminderHours === 0}
+            onClick={() => void patchNow({ meetingReminderHours: 0 })}
+            label={t.meetings.remindOff}
+          />
+          {[1, 2, 3, 24].map((h) => (
+            <Pill
+              key={h}
+              on={(g.meetingReminderHours ?? 2) === h}
+              onClick={() => void patchNow({ meetingReminderHours: h })}
+              label={t.events.remindAutoHours(h)}
+            />
+          ))}
+        </div>
+      </Section>
       <Section title={t.events.remindAutoTitle} footer={t.events.remindAutoHint}>
         <div className="flex flex-wrap gap-2 p-3">
           <Pill

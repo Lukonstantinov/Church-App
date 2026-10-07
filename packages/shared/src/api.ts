@@ -147,6 +147,8 @@ export interface GroupDetail extends GroupSummary {
   /** Usual place of the ministry's meetings. */
   defaultLocation: string;
   eventReminderHours: number | null;
+  /** Hours before a meeting its reminder goes out (null = 2, 0 = never). */
+  meetingReminderHours: number | null;
   /** Services saved for meetings (name, icon, speaker). */
   meetingServices: MeetingService[];
   /** Chat managed by the bot (members-only): its title; null when not linked. */
@@ -188,6 +190,8 @@ export const updateGroupSchema = z.object({
   defaultLocation: z.string().trim().max(120).optional(),
   /** Remind everyone this many hours before an event (null = don't). */
   eventReminderHours: z.number().int().min(1).max(168).nullable().optional(),
+  /** Remind about meetings this many hours ahead (null = 2 h, 0 = never). */
+  meetingReminderHours: z.number().int().min(0).max(48).nullable().optional(),
 });
 export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 

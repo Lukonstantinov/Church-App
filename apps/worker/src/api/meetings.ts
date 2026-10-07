@@ -686,8 +686,9 @@ meetingRoutes.patch('/:id', async (c) => {
       throw new HTTPException(400, { message: 'validation_error' });
     patch.startsAt = startsAt.toISOString();
     patch.endsAt = new Date(startsAt.getTime() + duration * 60_000).toISOString();
-    // Moved: the "live" message goes out again for the new time.
+    // Moved: the reminder and the "live" message go out again for the new time.
     patch.liveNotifiedAt = null;
+    patch.remindedAt = null;
   }
   if (Object.keys(patch).length > 0) {
     await db.update(meetings).set(patch).where(eq(meetings.id, meeting.id));

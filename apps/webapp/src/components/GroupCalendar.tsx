@@ -538,7 +538,7 @@ export function CalendarTile({ g, onToggle }: { g: GroupSummary; onToggle: () =>
       type="button"
       onClick={onToggle}
       aria-label={t.overview.expand}
-      className="glass flex flex-col overflow-hidden rounded-2xl p-2 text-left shadow-card active:scale-[0.98]"
+      className="glass flex h-full w-full flex-col overflow-hidden rounded-2xl p-2 text-left shadow-card active:scale-[0.98]"
     >
       <span className="mb-1 flex items-center justify-between px-0.5 text-[10px] font-bold uppercase tracking-wider text-hint">
         <span>{t.meetings.calendarTitle}</span>

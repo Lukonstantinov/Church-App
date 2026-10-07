@@ -110,6 +110,8 @@ export const groups = sqliteTable('groups', {
   defaultLocation: text('default_location').notNull().default('Šeškinės 22A'),
   /** Automatic reminder to everyone this many hours before an event (null = off). */
   eventReminderHours: integer('event_reminder_hours'),
+  /** Remind about meetings this many hours ahead (null = 2 h, 0 = never). */
+  meetingReminderHours: integer('meeting_reminder_hours'),
   /** Services people do at meetings, saved for reuse: JSON [{name, icon, speaker}]. */
   meetingServices: text('meeting_services'),
   /** Photo behind the ministry card (BackdropConfig JSON), NULL = colours only. */
@@ -264,6 +266,8 @@ export const meetings = sqliteTable(
     repeatRule: text('repeat_rule'),
     /** When the "it's live" message went out (null = not yet). */
     liveNotifiedAt: text('live_notified_at'),
+    /** When the reminder before the meeting went out (null = not yet). */
+    remindedAt: text('reminded_at'),
     rollTakenBy: integer('roll_taken_by'),
     rollTakenAt: text('roll_taken_at'),
     /** Who last said "Can't" to leading / the snacks (the job was freed; shown with a red ✗). */
