@@ -1324,6 +1324,9 @@ export const en: Messages = {
     pinnedHint: 'Everyone in the church sees it at the top of the main page.',
   },
   dev: {
+    guideTitle: 'Instructions',
+    guideEntry: 'For the developer: how to add, change and remove everything',
+    guideSearch: 'Search',
     title: 'Telemetry',
     entry: 'For the developer: storage, activity, bot',
     storage: 'Storage (D1 database)',

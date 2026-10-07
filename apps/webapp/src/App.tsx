@@ -16,6 +16,7 @@ import { AddOffline } from './screens/AddOffline';
 import { Feed, PostScreen } from './screens/Feed';
 import { PostEditor } from './screens/PostEditor';
 import { Telemetry } from './screens/Telemetry';
+import { Guide } from './screens/Guide';
 import { ChurchSettings } from './screens/ChurchSettings';
 import { CreateGroup } from './screens/CreateGroup';
 import { ManagerShell } from './screens/ManagerShell';
@@ -154,6 +155,8 @@ function Router({ me }: { me: MeResponse }) {
       return <PostScreen key={route.postId} groupId={route.groupId} postId={route.postId} />;
     case 'telemetry':
       return me.user.isDeveloper ? <Telemetry /> : null;
+    case 'guide':
+      return me.user.isDeveloper ? <Guide /> : null;
     case 'newPost':
       return <PostEditor key={route.groupId} groupId={route.groupId} />;
     case 'editPost':

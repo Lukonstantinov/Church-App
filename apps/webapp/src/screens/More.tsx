@@ -125,10 +125,18 @@ export function More({ groups }: { groups: GroupSummary[] }) {
           </Section>
         )}
 
-      {(envId !== null || user.isAdmin) && (
+      {(envId !== null || user.isAdmin || user.isDeveloper) && (
         <Section>
           {envId !== null && (
             <Row before={iconTile(<IconHome size={19} />)} title={t.env.all} onClick={back} />
+          )}
+          {user.isDeveloper && (
+            <Row
+              before={iconTile(<span className="text-[17px]">📘</span>)}
+              title={t.dev.guideTitle}
+              subtitle={t.dev.guideEntry}
+              onClick={() => push({ name: 'guide' })}
+            />
           )}
           {user.isAdmin && (
             <Row

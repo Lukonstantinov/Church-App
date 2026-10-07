@@ -1344,6 +1344,9 @@ export const lt: Messages = {
     pinnedHint: 'Renginį matys visa bažnyčia — pagrindinio puslapio viršuje.',
   },
   dev: {
+    guideTitle: 'Instrukcijos',
+    guideEntry: 'Kūrėjui: kaip pridėti, keisti ir šalinti viską',
+    guideSearch: 'Paieška',
     title: 'Telemetrija',
     entry: 'Kūrėjui: saugykla, aktyvumas, botas',
     storage: 'Saugykla (D1 duomenų bazė)',

@@ -28,6 +28,7 @@ export type Route =
   | { name: 'newPost'; groupId: number }
   | { name: 'editPost'; groupId: number; postId: number }
   | { name: 'telemetry' }
+  | { name: 'guide' }
   | {
       name: 'newTransaction';
       groupId: number;

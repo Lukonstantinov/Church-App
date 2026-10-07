@@ -146,6 +146,18 @@ export function Hub({ me }: { me: MeResponse }) {
             onClick={() => push({ name: 'telemetry' })}
           />
         )}
+        {me.user.isDeveloper && (
+          <Row
+            before={
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-text/85 text-[17px] text-[var(--color-section)]">
+                📘
+              </span>
+            }
+            title={t.dev.guideTitle}
+            subtitle={t.dev.guideEntry}
+            onClick={() => push({ name: 'guide' })}
+          />
+        )}
         {isAdmin && (
           <Row
             before={
