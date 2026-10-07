@@ -26,6 +26,7 @@ import type {
   ContactRow,
   MeetingDetail,
   MeetingHelper,
+  MeetingService,
   AddHelperInput,
   MeetingPerson,
   AddOfflineMemberInput,
@@ -514,6 +515,19 @@ export function useMeetingHelpers(meetingId: number) {
     onSuccess: invalidate,
   });
   return { add, remove, notify, answer };
+}
+
+/** Replaces the ministry's saved list of meeting services. */
+export function useSaveMeetingServices(groupId: number) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (services: MeetingService[]) =>
+      apiFetch<MeetingService[]>(`/groups/${groupId}/services`, {
+        method: 'PUT',
+        ...json({ services }),
+      }),
+    onSuccess: invalidate,
+  });
 }
 
 /** Sets a person's photo (shown on meeting cards); null removes it. */

@@ -147,6 +147,8 @@ export interface GroupDetail extends GroupSummary {
   /** Usual place of the ministry's meetings. */
   defaultLocation: string;
   eventReminderHours: number | null;
+  /** Services saved for meetings (name, icon, speaker). */
+  meetingServices: MeetingService[];
   /** Chat managed by the bot (members-only): its title; null when not linked. */
   managedChat: { title: string | null; pending: boolean } | null;
 }
@@ -364,16 +366,62 @@ export interface MeetingPerson {
 export interface MeetingHelper {
   id: number;
   role: string;
+  icon: string | null;
+  speaker: boolean;
   person: MeetingPerson;
   notifiedAt: string | null;
   acceptedAt: string | null;
   declinedAt: string | null;
 }
 
+/** Icons to choose for a service at a meeting. */
+export const SERVICE_ICONS = [
+  '🎤',
+  '🎸',
+  '🎹',
+  '🥁',
+  '🙏',
+  '🤝',
+  '🍕',
+  '☕',
+  '🎛',
+  '💡',
+  '📸',
+  '🎥',
+  '📖',
+  '🧒',
+  '🧹',
+  '🚗',
+] as const;
+
+/** A service people do at meetings (saved per ministry for reuse). */
+export const meetingServiceSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  icon: z.string().trim().min(1).max(8),
+  /** Speakers are listed first and can go on the poster. */
+  speaker: z.boolean().default(false),
+});
+export type MeetingService = z.infer<typeof meetingServiceSchema>;
+export const meetingServicesSchema = z.object({
+  services: z.array(meetingServiceSchema).max(40),
+});
+
 export const addHelperSchema = z.object({
   userId: z.number().int().positive(),
   role: z.string().trim().min(1).max(40),
+  icon: z.string().trim().min(1).max(8).nullish(),
+  speaker: z.boolean().optional(),
 });
+
+/** How the people cards look: card colour and the panel's photo (null = the ministry's). */
+export const peopleLookSchema = z.object({
+  color: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/i)
+    .nullable(),
+  photoMediaId: z.number().int().positive().nullable(),
+});
+export type PeopleLook = z.infer<typeof peopleLookSchema> & { photoUrl: string | null };
 export type AddHelperInput = z.input<typeof addHelperSchema>;
 
 /** A person's photo (an uploaded ministry picture), or null to remove it. */
@@ -409,6 +457,8 @@ export interface MeetingRow {
   /** Who last said "Can't" (the job is free again; shown with a red ✗ until someone else is chosen). */
   leaderDeclined: MeetingPerson | null;
   snackDeclined: MeetingPerson | null;
+  /** Card colour and panel photo of the people block (null = the ministry's look). */
+  peopleLook: PeopleLook | null;
   /** Counts are filled for meetings that have a saved roll call. */
   counts: Record<AttendanceStatus, number>;
   /** Poster look (colours, fonts, pattern); null = the ministry's own. */
@@ -464,6 +514,7 @@ export const updateMeetingSchema = z.object({
   design: postDesignSchema.nullable().optional(),
   templateId: z.number().int().positive().nullable().optional(),
   speakers: speakersSchema.optional(),
+  peopleLook: peopleLookSchema.nullable().optional(),
   /** With a series: apply the change to this and all the later meetings of it. */
   applyToSeries: z.boolean().optional(),
   leaderUserId: z.number().int().positive().nullable().optional(),

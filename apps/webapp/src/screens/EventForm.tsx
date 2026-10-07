@@ -364,6 +364,19 @@ function EventFormBody({
           {look.design.banner && (
             <div className="flex flex-col gap-5 border-t border-hairline p-4">
               <CoverLookControls state={look} onChange={setLook} g={group.data} groupId={groupId} />
+              <div>
+                <div className="mb-2 text-[13px] text-hint">{t.meetings.posterLayout}</div>
+                <div className="flex flex-wrap gap-2">
+                  {(['classic', 'collage'] as const).map((l) => (
+                    <Pill
+                      key={l}
+                      on={(look.design.posterLayout ?? 'classic') === l}
+                      onClick={() => setDesign({ posterLayout: l })}
+                      label={l === 'classic' ? t.meetings.layoutClassic : t.meetings.layoutCollage}
+                    />
+                  ))}
+                </div>
+              </div>
               <TitleStyleControls design={look.design} set={setDesign} />
             </div>
           )}

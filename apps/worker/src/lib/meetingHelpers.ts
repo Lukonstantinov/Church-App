@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import { InlineKeyboard, type Api } from 'grammy';
 import { INTL_LOCALE, displayName, messages, type MeetingHelper } from '@church/shared';
 import type { Db } from '../db/client';
@@ -19,7 +19,8 @@ export async function listHelpers(
     .select()
     .from(meetingHelpers)
     .where(eq(meetingHelpers.meetingId, meetingId))
-    .orderBy(asc(meetingHelpers.id));
+    // Speakers first (one under another), then the other services, each in the order added.
+    .orderBy(desc(meetingHelpers.speaker), asc(meetingHelpers.id));
   const people = await meetingPeople(
     db,
     rows.map((r) => r.userId),
@@ -30,6 +31,8 @@ export async function listHelpers(
     .map((r) => ({
       id: r.id,
       role: r.role,
+      icon: r.icon ?? (r.speaker ? '🎤' : null),
+      speaker: r.speaker,
       person: people.get(r.userId)!,
       notifiedAt: r.notifiedAt,
       acceptedAt: r.acceptedAt,

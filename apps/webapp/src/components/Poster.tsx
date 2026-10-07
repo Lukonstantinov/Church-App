@@ -96,6 +96,14 @@ export function PosterMedia({
   speakers?: Speaker[];
 }) {
   const me = useMe();
+  // A collage of the speakers' photos stands in for the poster's own photos.
+  if (design?.posterLayout === 'collage' && photos.length === 0) {
+    const faces = speakers.filter((sp) => sp.photoUrl);
+    if (faces.length) {
+      photos = faces.map((sp, i) => ({ id: -1 - i, url: sp.photoUrl! }));
+      speakers = speakers.map((sp) => ({ ...sp, photoUrl: null }));
+    }
+  }
   if (!hasCover({ photos, title, design: design ?? null })) return null;
   const theme = resolveBrand(look?.brandColor ?? me.data?.church.brandColor);
   const on = onBrandStyle(

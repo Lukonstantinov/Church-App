@@ -26,6 +26,7 @@ import {
   meetingPosterPayload,
 } from '../components/MeetingPosterDesigner';
 import { PersonPicker } from '../components/PersonPicker';
+import { Sheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import {
   Button,
@@ -127,6 +128,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
   } | null>(null);
   // The message window: about the meeting, its new time, or its cancellation.
   const [sheet, setSheet] = useState<{ notice: MeetingNotice; previous?: string } | null>(null);
+  const [posterOpen, setPosterOpen] = useState(false);
   const people = useMeetingPeople(m.id, m.canEdit && (editing || picker !== null));
   const cancelled = m.status === 'cancelled';
   useNowSecond();
@@ -193,7 +195,17 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
         {m.speakers.length > 0 && (
           <SpeakerStrip speakers={m.speakers} size="md" onColor className="mt-4" />
         )}
+        {m.canManage && (
+          <button
+            type="button"
+            onClick={() => setPosterOpen(true)}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/22 px-3.5 py-1.5 text-[13px] font-semibold backdrop-blur active:scale-95"
+          >
+            🎨 {t.meetings.editPoster}
+          </button>
+        )}
       </HeroCard>
+      {posterOpen && <PosterSheet m={m} onClose={() => setPosterOpen(false)} />}
 
       {m.myRole && !m.myAcceptedAt && !cancelled && <AnswerCard meetingId={m.id} role={m.myRole} />}
 
@@ -674,5 +686,49 @@ function RsvpCard({ m }: { m: MeetingDetail }) {
           ))}
       </div>
     </Section>
+  );
+}
+
+/** The meeting's poster, designed and saved on its own (look, layout, fonts, speakers). */
+function PosterSheet({ m, onClose }: { m: MeetingDetail; onClose: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  const group = useGroup(m.groupId);
+  const update = useUpdateMeeting();
+  const [poster, setPoster] = useState(() => initMeetingPoster(m));
+  const { templateId } = useCoverLook(poster.cover, group.data);
+  const [toSeries, setToSeries] = useState(false);
+  async function save() {
+    try {
+      await update.mutateAsync({
+        id: m.id,
+        ...meetingPosterPayload(poster, templateId),
+        ...(toSeries ? { applyToSeries: true } : {}),
+      });
+      haptic.success();
+      toast(t.common.saved);
+      onClose();
+    } catch {
+      toast(t.common.saveFailed, 'error');
+    }
+  }
+  return (
+    <Sheet open onClose={onClose} title={`🎨 ${t.meetings.editPoster}`}>
+      <div className="flex flex-col gap-4 px-4 pb-4">
+        <MeetingPosterDesigner
+          g={group.data}
+          groupId={m.groupId}
+          meeting={m}
+          state={poster}
+          onChange={setPoster}
+        />
+        {m.seriesId && (
+          <Toggle label={t.meetings.applyToSeries} checked={toSeries} onChange={setToSeries} />
+        )}
+        <Button disabled={update.isPending} onClick={() => void save()}>
+          {t.common.save}
+        </Button>
+      </div>
+    </Sheet>
   );
 }

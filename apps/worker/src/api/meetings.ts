@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or, type SQL } from 'drizzle-orm';
 import {
   addHelperSchema,
+  meetingServicesSchema,
   createMeetingSchema,
   personPhotoSchema,
   createScheduleSchema,
@@ -79,6 +80,7 @@ import {
   rosterFor,
   toMeetingRows,
   repeatDates,
+  readServices,
 } from '../lib/meetings';
 import { answerHelper, listHelpers, notifyHelper } from '../lib/meetingHelpers';
 import { idParam, parseBody } from './util';
@@ -183,6 +185,18 @@ groupMeetingRoutes.get('/:id/calendar', async (c) => {
     canNote: manage,
   };
   return c.json(body);
+});
+
+/** The ministry's saved services for meetings (people with meetings rights change the list). */
+groupMeetingRoutes.put('/:id/services', async (c) => {
+  const db = c.get('db');
+  const group = await assertCan(db, c.get('user'), idParam(c), 'meetings.manage');
+  const { services } = await parseBody(c, meetingServicesSchema);
+  await db
+    .update(groups)
+    .set({ meetingServices: services.length ? JSON.stringify(services) : null })
+    .where(eq(groups.id, group.id));
+  return c.json(services);
 });
 
 /** A leader's colour note on a calendar day. */
@@ -624,6 +638,11 @@ meetingRoutes.patch('/:id', async (c) => {
     patch.design = input.design ? JSON.stringify(input.design) : null;
   }
   if (input.templateId !== undefined) patch.templateId = input.templateId;
+  if (input.peopleLook !== undefined) {
+    if (input.peopleLook?.photoMediaId)
+      await assertGroupMedia(db, meeting.groupId, input.peopleLook.photoMediaId);
+    patch.peopleLook = input.peopleLook ? JSON.stringify(input.peopleLook) : null;
+  }
   if (input.speakers !== undefined) {
     await assertSpeakerPhotos(db, meeting.groupId, input.speakers);
     patch.speakers = input.speakers.length ? JSON.stringify(input.speakers) : null;
@@ -1084,9 +1103,25 @@ meetingRoutes.post('/:id/helpers', async (c) => {
   const { db, meeting } = await managedMeeting(c, idParam(c));
   const input = await parseBody(c, addHelperSchema);
   await assertActiveMember(db, meeting.groupId, input.userId);
+  const speaker = input.speaker ?? false;
+  const icon = input.icon ?? (speaker ? '🎤' : null);
   await db
     .insert(meetingHelpers)
-    .values({ meetingId: meeting.id, userId: input.userId, role: input.role });
+    .values({ meetingId: meeting.id, userId: input.userId, role: input.role, icon, speaker });
+  // A new service is remembered by the ministry, to pick it next time.
+  const group = (await db.query.groups.findFirst({ where: eq(groups.id, meeting.groupId) }))!;
+  const saved = readServices(group.meetingServices);
+  const key = input.role.toLocaleLowerCase();
+  if (!saved.some((x) => x.name.toLocaleLowerCase() === key) && saved.length < 40)
+    await db
+      .update(groups)
+      .set({
+        meetingServices: JSON.stringify([
+          ...saved,
+          { name: input.role, icon: icon ?? '🙌', speaker },
+        ]),
+      })
+      .where(eq(groups.id, group.id));
   return c.json(await listHelpers(db, meeting.id, c.env.WEBHOOK_SECRET), 201);
 });
 

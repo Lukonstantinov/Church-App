@@ -1890,6 +1890,19 @@ describe('more people at a meeting', () => {
       json: { userId: hId, role: 'Прославление' },
     });
     expect(list).toHaveLength(1);
+    // A speaker goes on top (with the microphone), and both services are saved for next time.
+    const both = await apiJson<MeetingDetail['helpers']>(`/api/meetings/${m.id}/helpers`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { userId: hId, role: 'Проповедь', speaker: true },
+    });
+    expect(both.map((x) => [x.role, x.icon])).toEqual([
+      ['Проповедь', '🎤'],
+      ['Прославление', null],
+    ]);
+    await api(`/api/meetings/${m.id}/helpers/${both[0]!.id}`, { method: 'DELETE', user: ADMIN });
+    const gd = await apiJson<GroupDetail>(`/api/groups/${g.id}`, { user: ADMIN });
+    expect(gd.meetingServices.map((x) => x.name)).toEqual(['Прославление', 'Проповедь']);
     // A plain member can't add people.
     expect(
       (

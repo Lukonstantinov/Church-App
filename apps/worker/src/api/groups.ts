@@ -1,3 +1,4 @@
+import { readServices } from '../lib/meetings';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -217,6 +218,7 @@ groupRoutes.get('/:id', async (c) => {
     chatUrl: group.chatUrl,
     defaultLocation: group.defaultLocation,
     eventReminderHours: group.eventReminderHours,
+    meetingServices: readServices(group.meetingServices),
     managedChat: group.tgChatId
       ? { title: group.tgChatTitle, pending: group.chatLinkCode !== null }
       : null,

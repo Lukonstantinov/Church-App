@@ -1,4 +1,5 @@
-import type { GroupSummary, MeetingRow } from '@church/shared';
+import type { GroupSummary, MeetingHelper, MeetingRow } from '@church/shared';
+import { Pill } from './LookControls';
 import { useT } from '../lib/i18n';
 import {
   CoverLookControls,
@@ -55,7 +56,7 @@ export function MeetingPosterDesigner({
   meeting: Pick<
     MeetingRow,
     'title' | 'startsAt' | 'endsAt' | 'topic' | 'location' | 'leader' | 'kind'
-  >;
+  > & { helpers?: MeetingHelper[] };
   state: MeetingPosterState;
   onChange: (s: MeetingPosterState) => void;
 }) {
@@ -90,6 +91,19 @@ export function MeetingPosterDesigner({
             g={g}
             groupId={groupId}
           />
+          <div>
+            <div className="mb-2 text-[13px] text-hint">{t.meetings.posterLayout}</div>
+            <div className="flex flex-wrap gap-2">
+              {(['classic', 'collage'] as const).map((l) => (
+                <Pill
+                  key={l}
+                  on={(state.cover.design.posterLayout ?? 'classic') === l}
+                  onClick={() => setDesign({ posterLayout: l })}
+                  label={l === 'classic' ? t.meetings.layoutClassic : t.meetings.layoutCollage}
+                />
+              ))}
+            </div>
+          </div>
           <TitleStyleControls design={state.cover.design} set={setDesign} />
         </div>
       </Section>

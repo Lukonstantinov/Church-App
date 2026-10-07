@@ -4,6 +4,7 @@ import {
   fontFamily,
   resolveBrand,
   type GroupSummary,
+  type MeetingHelper,
   type MeetingRow,
   type PostDesign,
   type PosterLook,
@@ -15,6 +16,20 @@ import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { SpeakerStrip } from './Speakers';
 
 const TITLE_PX = { s: 32, m: 40, l: 50, xl: 60 } as const;
+
+/** The poster's speakers: its own list, else the speakers from the meeting's people. */
+export function posterSpeakers(m: { speakers?: Speaker[]; helpers?: MeetingHelper[] }): Speaker[] {
+  if (m.speakers?.length) return m.speakers;
+  return (m.helpers ?? [])
+    .filter((h) => h.speaker)
+    .slice(0, 4)
+    .map((h) => ({
+      name: displayName(h.person),
+      role: h.role,
+      mediaId: null,
+      photoUrl: h.person.photoUrl ?? null,
+    }));
+}
 
 /** The ministry's own look, for a poster that has none of its own. */
 export const groupLook = (g: GroupSummary): PosterLook => ({
@@ -39,7 +54,13 @@ export const MeetingPoster = forwardRef<
       MeetingRow,
       'title' | 'startsAt' | 'endsAt' | 'topic' | 'location' | 'leader' | 'kind'
     > &
-      Partial<{ design: PostDesign | null; look: PosterLook | null; speakers: Speaker[] }>;
+      Partial<{
+        design: PostDesign | null;
+        look: PosterLook | null;
+        speakers: Speaker[];
+        /** Speakers from the people list stand in when the poster has none of its own. */
+        helpers: MeetingHelper[];
+      }>;
     g: GroupSummary;
     /** Stamped "cancelled" across. */
     cancelled?: boolean;
@@ -53,7 +74,9 @@ export const MeetingPoster = forwardRef<
   const on = onBrandStyle(look.textColor, true);
   const badge = f.dateBadge(m.startsAt);
   const center = design?.align === 'center';
-  const speakers = m.speakers ?? [];
+  const speakers = posterSpeakers(m);
+  const collage =
+    design?.posterLayout === 'collage' ? speakers.filter((sp) => sp.photoUrl).slice(0, 4) : [];
   const place =
     design?.titlePos === 'top' ? 'mt-8' : design?.titlePos === 'center' ? 'my-auto' : 'mt-auto';
   return (
@@ -66,8 +89,28 @@ export const MeetingPoster = forwardRef<
         fontFamily: fontFamily(design?.bodyFont),
       }}
     >
-      <PatternLayer pattern={look.pattern} logoUrl={look.logoUrl} />
-      <BackdropLayer backdrop={look.backdrop} url={look.backdropUrl} />
+      {collage.length > 0 ? (
+        <div
+          aria-hidden="true"
+          className={`absolute inset-0 grid gap-1 ${collage.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} ${
+            collage.length > 2 ? 'grid-rows-2' : ''
+          }`}
+        >
+          {collage.map((sp, i) => (
+            <img
+              key={i}
+              src={sp.photoUrl!}
+              alt=""
+              className={`h-full w-full object-cover ${collage.length === 3 && i === 0 ? 'row-span-2' : ''}`}
+            />
+          ))}
+        </div>
+      ) : (
+        <>
+          <PatternLayer pattern={look.pattern} logoUrl={look.logoUrl} />
+          <BackdropLayer backdrop={look.backdrop} url={look.backdropUrl} />
+        </>
+      )}
       <span
         aria-hidden="true"
         className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent"
@@ -107,7 +150,13 @@ export const MeetingPoster = forwardRef<
           </div>
         </div>
         {m.topic && <div className="text-[28px] font-bold leading-tight">«{m.topic}»</div>}
-        {speakers.length > 0 && <SpeakerStrip speakers={speakers} size="md" onColor />}
+        {speakers.length > 0 && (
+          <SpeakerStrip
+            speakers={collage.length ? speakers.map((sp) => ({ ...sp, photoUrl: null })) : speakers}
+            size="md"
+            onColor
+          />
+        )}
         <div
           className={`flex flex-wrap gap-2 text-[19px] font-semibold ${center ? 'justify-center' : ''}`}
         >

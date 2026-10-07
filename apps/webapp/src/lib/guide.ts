@@ -153,18 +153,29 @@ export const GUIDE: GuideSection[] = [
       {
         title: "Design a meeting's poster and add speakers",
         steps: [
-          'New meeting → switch on «Постер», or meeting → «Изменить» → «Постер».',
+          'Meeting → «🎨 Постер» on the top card (or when creating: switch on «Постер»).',
+          'Layout: «Обычный» or «Коллаж из фото спикеров» (needs speakers with photos).',
+          'Without its own speakers list, the poster shows the speakers from the people block.',
           'Look: ministry / own / template, colour, headline font, size, position.',
           'Speakers: up to 4, each with an optional photo, name and role.',
         ],
       },
       {
-        title: 'Assign the leader, snack person and other helpers',
+        title: 'Assign the leader, speakers, snacks and other services',
         steps: [
-          'Open the meeting → people cards under the poster.',
-          'Leader / Snacks: «Изменить» to choose, «Спросить» to send the bot message with Agree / Can’t.',
-          '«Добавить человека» adds anyone else with a role (worship, welcome, tech…), asked the same way.',
-          'Marks: green ✓ confirmed, red ✗ can’t, yellow clock waiting. Bin button removes a helper.',
+          'Open the meeting → the people block under the poster.',
+          'Leader: «Изменить» to choose, «Спросить» to send the bot message with Agree / Can’t.',
+          '«Добавить человека» → pick the service: 🎤 Спикер, 🍕 Снеки, a saved service, or «Новое служение» (name + icon, “speaker” switch) → pick the person.',
+          'Speakers are listed right under the leader, one under another, then snacks, then the other services.',
+          'New services are saved for the ministry; remove one with ✕ in that list.',
+          'Marks: green ✓ confirmed, red ✗ can’t, yellow clock waiting. Bin button removes a person.',
+        ],
+      },
+      {
+        title: 'Change the colour and background of the people block',
+        steps: [
+          'Meeting → people block → «🎨 Вид блока людей».',
+          'Card colour (or the ministry colour), background: the ministry’s or a photo. Can apply to the whole series.',
         ],
       },
       {

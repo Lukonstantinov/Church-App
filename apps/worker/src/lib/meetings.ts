@@ -22,6 +22,10 @@ import {
   readPostDesign,
   readSpeakers,
   repeatSchema,
+  meetingServicesSchema,
+  peopleLookSchema,
+  type MeetingService,
+  type PeopleLook,
 } from '@church/shared';
 import type { Db } from '../db/client';
 import {
@@ -43,6 +47,34 @@ const emptyCounts = (): Record<AttendanceStatus, number> => ({
   excused: 0,
   absent: 0,
 });
+
+// ---------- services & people look ----------
+
+/** The ministry's saved services, read defensively. */
+export function readServices(raw: string | null): MeetingService[] {
+  if (!raw) return [];
+  try {
+    const r = meetingServicesSchema.safeParse({ services: JSON.parse(raw) });
+    return r.success ? r.data.services : [];
+  } catch {
+    return [];
+  }
+}
+
+async function readPeopleLook(raw: string | null, secret?: string): Promise<PeopleLook | null> {
+  if (!raw) return null;
+  try {
+    const r = peopleLookSchema.safeParse(JSON.parse(raw));
+    if (!r.success) return null;
+    return {
+      ...r.data,
+      photoUrl:
+        r.data.photoMediaId && secret ? await signedMediaUrl(secret, r.data.photoMediaId) : null,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // ---------- repeating meetings ----------
 
@@ -192,6 +224,7 @@ export async function toMeetingRows(
         list.map((m) => m.templateId),
       )
     : { brandOf: new Map(), templateOf: new Map() };
+  const peopleLooks = await Promise.all(list.map((m) => readPeopleLook(m.peopleLook, secret)));
   const looks = await Promise.all(
     list.map(async (m) => {
       const brand = brandOf.get(m.groupId);
@@ -229,6 +262,7 @@ export async function toMeetingRows(
     snackAcceptedAt: m.snackAcceptedAt,
     leaderDeclined:
       (!m.leaderUserId && m.leaderDeclinedBy && people.get(m.leaderDeclinedBy)) || null,
+    peopleLook: peopleLooks[i]!,
     snackDeclined: (!m.snackUserId && m.snackDeclinedBy && people.get(m.snackDeclinedBy)) || null,
     counts: counts.get(m.id) ?? emptyCounts(),
     design: readPostDesign(m.design),

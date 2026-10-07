@@ -123,6 +123,8 @@ export const postDesignSchema = z.object({
     .regex(/^#[0-9a-f]{6}$/i)
     .nullish(),
   burnDays: z.number().int().min(1).max(14).optional(),
+  /** Poster layout: the usual one, or a collage of the speakers' photos. */
+  posterLayout: z.enum(['classic', 'collage']).optional(),
 });
 export type PostDesign = z.infer<typeof postDesignSchema>;
 export type PostDesignInput = z.input<typeof postDesignSchema>;

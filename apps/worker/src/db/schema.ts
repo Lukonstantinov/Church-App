@@ -110,6 +110,8 @@ export const groups = sqliteTable('groups', {
   defaultLocation: text('default_location').notNull().default('Šeškinės 22A'),
   /** Automatic reminder to everyone this many hours before an event (null = off). */
   eventReminderHours: integer('event_reminder_hours'),
+  /** Services people do at meetings, saved for reuse: JSON [{name, icon, speaker}]. */
+  meetingServices: text('meeting_services'),
   /** Photo behind the ministry card (BackdropConfig JSON), NULL = colours only. */
   backdrop: text('backdrop'),
   /** The background of the ministry's screens (AppBackground JSON; NULL = the default). */
@@ -266,6 +268,8 @@ export const meetings = sqliteTable(
     rollTakenAt: text('roll_taken_at'),
     /** Who last said "Can't" to leading / the snacks (the job was freed; shown with a red ✗). */
     leaderDeclinedBy: integer('leader_declined_by'),
+    /** Look of the people cards: JSON {color, photoMediaId} (null = the ministry's). */
+    peopleLook: text('people_look'),
     snackDeclinedBy: integer('snack_declined_by'),
     createdAt: createdAt(),
   },
@@ -310,6 +314,10 @@ export const meetingHelpers = sqliteTable(
       .references(() => users.id),
     /** What they do, e.g. "Worship", "Welcome". */
     role: text('role').notNull(),
+    /** The service's icon (an emoji); speakers default to 🎤. */
+    icon: text('icon'),
+    /** Speakers are listed first and can go on the poster. */
+    speaker: integer('speaker', { mode: 'boolean' }).notNull().default(false),
     notifiedAt: text('notified_at'),
     notifiedBy: integer('notified_by'),
     acceptedAt: text('accepted_at'),
