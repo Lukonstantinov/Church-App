@@ -34,6 +34,7 @@ import {
   users,
   type Meeting,
 } from '../db/schema';
+import { lookSources, posterLook } from './looks';
 import { signedMediaUrl } from './media';
 
 const emptyCounts = (): Record<AttendanceStatus, number> => ({
@@ -183,6 +184,26 @@ export async function toMeetingRows(
     ),
   ]);
   const speakers = await Promise.all(list.map((m) => speakersOf(m.speakers, secret)));
+  const { brandOf, templateOf } = secret
+    ? await lookSources(
+        db,
+        list.map((m) => m.groupId),
+        list.map((m) => m.templateId),
+      )
+    : { brandOf: new Map(), templateOf: new Map() };
+  const looks = await Promise.all(
+    list.map(async (m) => {
+      const brand = brandOf.get(m.groupId);
+      return secret && brand
+        ? posterLook(
+            secret,
+            brand,
+            readPostDesign(m.design),
+            m.templateId ? templateOf.get(m.templateId) : undefined,
+          )
+        : null;
+    }),
+  );
   return list.map((m, i) => ({
     id: m.id,
     groupId: m.groupId,
@@ -207,6 +228,8 @@ export async function toMeetingRows(
     snackAcceptedAt: m.snackAcceptedAt,
     counts: counts.get(m.id) ?? emptyCounts(),
     design: readPostDesign(m.design),
+    templateId: m.templateId,
+    look: looks[i]!,
     speakers: speakers[i]!,
     seriesId: m.seriesId,
     repeat: readRepeat(m.repeatRule),

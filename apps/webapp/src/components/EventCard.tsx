@@ -30,7 +30,8 @@ export function EventCover({
   className = 'aspect-[16/7]',
   compact,
 }: {
-  e: Pick<EventSummary, 'coverUrl' | 'design' | 'look' | 'title'>;
+  e: Pick<EventSummary, 'coverUrl' | 'design' | 'look' | 'title'> &
+    Partial<Pick<EventSummary, 'speakers'>>;
   className?: string;
   compact?: boolean;
 }) {
@@ -47,6 +48,7 @@ export function EventCover({
       look={e.look}
       design={e.design}
       compact={compact}
+      speakers={e.speakers}
     />
   );
 }

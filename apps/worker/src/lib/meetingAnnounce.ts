@@ -60,7 +60,7 @@ export async function defaultMeetingAnnouncement(
     const was = previousStartsAt ? await whenText(db, previousStartsAt, null, locale) : null;
     return [
       `🕒 ${t.meetingChanged}`,
-        `«${meeting.title}»`,
+      `«${meeting.title}»`,
       '',
       was ? `${t.meetingWas}: ${was}` : null,
       `${t.meetingNow}: ${when}`,

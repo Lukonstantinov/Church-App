@@ -198,7 +198,7 @@ function Form({ g }: { g: GroupDetail }) {
             onClick={() => void patchNow({ eventReminderHours: null })}
             label={t.events.remindAutoOff}
           />
-          {[3, 24, 48, 72].map((h) => (
+          {[1, 3, 24, 48, 72].map((h) => (
             <Pill
               key={h}
               on={g.eventReminderHours === h}

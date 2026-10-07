@@ -1,6 +1,7 @@
 ALTER TABLE `events` ADD `live_notified_at` text;--> statement-breakpoint
 ALTER TABLE `events` ADD `speakers` text;--> statement-breakpoint
 ALTER TABLE `meetings` ADD `design` text;--> statement-breakpoint
+ALTER TABLE `meetings` ADD `template_id` integer;--> statement-breakpoint
 ALTER TABLE `meetings` ADD `speakers` text;--> statement-breakpoint
 ALTER TABLE `meetings` ADD `series_id` text;--> statement-breakpoint
 ALTER TABLE `meetings` ADD `repeat_rule` text;--> statement-breakpoint

@@ -1803,10 +1803,12 @@ describe('live messages, speakers and repeating meetings', () => {
     const texts = calls
       .filter((c) => c.method === 'sendMessage' && c.body.chat_id === a.id)
       .map((c) => String(c.body.text));
-    expect(texts.filter((x) => x.includes('Концерт') && x.includes('Прямо сейчас'))).toHaveLength(1);
-    expect(texts.filter((x) => x.includes('Молитва') && x.includes('Встреча началась'))).toHaveLength(
+    expect(texts.filter((x) => x.includes('Концерт') && x.includes('Прямо сейчас'))).toHaveLength(
       1,
     );
+    expect(
+      texts.filter((x) => x.includes('Молитва') && x.includes('Встреча началась')),
+    ).toHaveLength(1);
   });
 
   it('does not announce an event that began long ago', async () => {
@@ -1853,7 +1855,9 @@ describe('live messages, speakers and repeating meetings', () => {
     const series = cal.meetings.filter((x) => x.seriesId === m.seriesId);
     expect(series).toHaveLength(4);
     // A week apart each, in order.
-    const gaps = series.slice(1).map((x, i) => Date.parse(x.startsAt) - Date.parse(series[i]!.startsAt));
+    const gaps = series
+      .slice(1)
+      .map((x, i) => Date.parse(x.startsAt) - Date.parse(series[i]!.startsAt));
     expect(gaps.every((ms) => Math.abs(ms - 7 * 86_400_000) <= 3_600_000)).toBe(true);
     // Change the look of this one and all later ones.
     await patch(series[1]!.id, { speakers: [{ name: 'Лука' }], applyToSeries: true });

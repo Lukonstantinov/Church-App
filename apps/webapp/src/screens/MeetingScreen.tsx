@@ -11,7 +11,9 @@ import {
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { GroupTheme } from '../components/GroupTheme';
+import { LiveNow } from '../components/Live';
 import { LookTop } from '../components/LookTop';
+import { SpeakerStrip } from '../components/Speakers';
 import { AudiencePicker } from '../components/AudiencePicker';
 import {
   IconCalendar,
@@ -27,6 +29,12 @@ import { Pill } from '../components/LookControls';
 import { useMoney } from '../components/money';
 import { NotifySheet } from '../components/NotifySheet';
 import { MeetingAnnounceSheet } from '../components/MeetingAnnounceSheet';
+import { useCoverLook } from '../components/CoverDesigner';
+import {
+  MeetingPosterDesigner,
+  initMeetingPoster,
+  meetingPosterPayload,
+} from '../components/MeetingPosterDesigner';
 import { PersonPicker } from '../components/PersonPicker';
 import { useToast } from '../components/Toast';
 import {
@@ -41,10 +49,12 @@ import {
   Section,
   TextArea,
   TextField,
+  Toggle,
 } from '../components/ui';
 import { useEnv } from '../lib/env';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
+import { isLiveWindow, useNowSecond } from '../lib/live';
 import { useNav } from '../lib/nav';
 import {
   useAnswerMeeting,
@@ -130,6 +140,8 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
   const [sheet, setSheet] = useState<{ notice: MeetingNotice; previous?: string } | null>(null);
   const people = useMeetingPeople(m.id, m.canEdit && (editing || picker !== null));
   const cancelled = m.status === 'cancelled';
+  useNowSecond();
+  const live = !cancelled && isLiveWindow(m.startsAt, m.endsAt);
   const budget = m.budgetCents ?? m.defaultBudgetCents;
   const spent = (m.expenses ?? []).reduce((a, e) => a + e.amountCents, 0);
 
@@ -148,14 +160,22 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
 
   return (
     <Screen>
-      <HeroCard>
+      <HeroCard living={!cancelled} live={live}>
         <div className="mb-3 flex items-center justify-between gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">
           <span className="truncate">{m.groupName}</span>
-          {m.kind && (
-            <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-1 normal-case tracking-normal">
-              {t.meetings.kinds[m.kind]}
-            </span>
-          )}
+          <span className="flex shrink-0 items-center gap-1.5 normal-case tracking-normal">
+            <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} cancelled={cancelled} />
+            {m.seriesId && (
+              <span className="rounded-full bg-white/20 px-2.5 py-1">
+                🔁 {t.meetings.seriesBadge}
+              </span>
+            )}
+            {m.kind && (
+              <span className="rounded-full bg-white/20 px-2.5 py-1">
+                {t.meetings.kinds[m.kind]}
+              </span>
+            )}
+          </span>
         </div>
         <div className="flex items-center gap-3.5">
           <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
@@ -181,6 +201,9 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
             <IconMapPin size={16} /> {m.location}
           </div>
         )}
+        {m.speakers.length > 0 && (
+          <SpeakerStrip speakers={m.speakers} size="md" onColor className="mt-4" />
+        )}
       </HeroCard>
 
       {m.myRole && !m.myAcceptedAt && !cancelled && <AnswerCard meetingId={m.id} role={m.myRole} />}
@@ -196,7 +219,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
 
       {m.canManage && !cancelled && (
         <Button onClick={() => setSheet({ notice: 'announce' })}>
-          <IconSend size={17} /> {m.kind === 'leaders' ? '👑 ' : ''}
+          <IconSend size={17} />{' '}
           {m.announcedAt ? t.meetings.announceAgain : t.meetings.announceMeeting}
         </Button>
       )}
@@ -605,6 +628,11 @@ function EditForm({
   const [notes, setNotes] = useState(m.notes ?? '');
   const [audience, setAudience] = useState<number[] | null>(m.audience);
   const [budget, setBudget] = useState(((m.budgetCents ?? m.defaultBudgetCents) / 100).toFixed(2));
+  const group = useGroup(m.groupId);
+  const [designing, setDesigning] = useState(false);
+  const [poster, setPoster] = useState(() => initMeetingPoster(m));
+  const { templateId } = useCoverLook(poster.cover, group.data);
+  const [toSeries, setToSeries] = useState(false);
 
   function submit() {
     const input: UpdateMeetingInput = {
@@ -624,6 +652,8 @@ function EditForm({
         input.budgetCents = cents;
       if (JSON.stringify(audience) !== JSON.stringify(m.audience))
         input.audience = audience?.length ? audience : null;
+      if (designing) Object.assign(input, meetingPosterPayload(poster, templateId));
+      if (m.seriesId && toSeries) input.applyToSeries = true;
     }
     onSave(input);
   }
@@ -717,6 +747,27 @@ function EditForm({
         <div className="mb-1 text-[13px] text-hint">{t.meetings.notes}</div>
         <TextArea value={notes} onChange={setNotes} maxLength={500} rows={3} />
       </div>
+      {m.canManage && (
+        <Toggle label={t.meetings.posterTitle} checked={designing} onChange={setDesigning} />
+      )}
+      {m.canManage && designing && (
+        <MeetingPosterDesigner
+          g={group.data}
+          groupId={m.groupId}
+          meeting={{
+            ...m,
+            title: title || m.title,
+            topic: topic || null,
+            location: location || null,
+            kind,
+          }}
+          state={poster}
+          onChange={setPoster}
+        />
+      )}
+      {m.canManage && m.seriesId && (
+        <Toggle label={t.meetings.applyToSeries} checked={toSeries} onChange={setToSeries} />
+      )}
       <div className="flex gap-2">
         <Button variant="glass" onClick={onCancel}>
           {t.common.cancel}

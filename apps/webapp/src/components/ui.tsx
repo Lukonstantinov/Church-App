@@ -381,9 +381,15 @@ export function Card({
 export function HeroCard({
   children,
   className = '',
+  living,
+  live,
 }: {
   children: ReactNode;
   className?: string;
+  /** A living wallpaper: drifting colour, moving texture and twinkling light. */
+  living?: boolean;
+  /** Something is on right now: the living wallpaper turns warm and quickens. */
+  live?: boolean;
 }) {
   // Inside a ministry, its pattern decorates the hero blocks too.
   const { env } = useEnv();
@@ -395,6 +401,16 @@ export function HeroCard({
     >
       <PatternLayer pattern={env?.pattern} logoUrl={env?.logoUrl} />
       <BackdropLayer backdrop={env?.backdrop} url={env?.backdropUrl} />
+      {living && (
+        <span aria-hidden="true" className="living-bg" data-live={live ? 'true' : 'false'}>
+          <i className="living-blob b1" />
+          <i className="living-blob b2" />
+          <i className="living-blob b3" />
+          <i className="living-rays" />
+          <i className="living-dots" />
+          <i className="living-dots far" />
+        </span>
+      )}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/15 blur-2xl"

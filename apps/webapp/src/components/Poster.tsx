@@ -8,6 +8,7 @@ import {
   type AnnouncementRow,
   type PostDesign,
   type PosterLook,
+  type Speaker,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
@@ -35,6 +36,7 @@ import { Button, Toggle } from './ui';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { PostBlocks } from './PostBlocks';
 import { RichText } from './RichText';
+import { SpeakerStrip } from './Speakers';
 
 const TITLE_SIZE = { s: 'text-[20px]', m: 'text-[25px]', l: 'text-[31px]', xl: 'text-[39px]' };
 const TITLE_POS = {
@@ -79,6 +81,7 @@ export function PosterMedia({
   onPhoto,
   tall,
   compact,
+  speakers = [],
 }: {
   title: string | null;
   photos: { id: number; url: string }[];
@@ -89,6 +92,8 @@ export function PosterMedia({
   tall?: boolean;
   /** Small tiles: smaller headline and padding. */
   compact?: boolean;
+  /** Up to four speakers, along the bottom of the cover. */
+  speakers?: Speaker[];
 }) {
   const me = useMe();
   if (!hasCover({ photos, title, design: design ?? null })) return null;
@@ -145,7 +150,7 @@ export function PosterMedia({
 
   return (
     <div
-      className={`relative w-full overflow-hidden ${photos.length ? (tall ? 'aspect-[4/5]' : 'aspect-[4/3]') : title ? 'aspect-[16/9]' : 'aspect-[3/1]'}`}
+      className={`relative w-full overflow-hidden ${photos.length ? (tall ? 'aspect-[4/5]' : 'aspect-[4/3]') : speakers.length ? 'aspect-[4/3]' : title ? 'aspect-[16/9]' : 'aspect-[3/1]'}`}
       style={
         photos.length
           ? undefined
@@ -170,7 +175,7 @@ export function PosterMedia({
           }}
         />
       )}
-      {!tint && photos.length > 0 && title && (
+      {!tint && (photos.length > 0 || speakers.length > 0) && (title || speakers.length > 0) && (
         <span
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent"
@@ -183,7 +188,7 @@ export function PosterMedia({
       )}
       {title && (
         <div
-          className={`pointer-events-none absolute inset-x-0 ${compact ? 'p-2.5' : 'p-4'} ${TITLE_POS[design?.titlePos ?? 'bottom']} ${
+          className={`pointer-events-none absolute inset-x-0 ${compact ? 'p-2.5' : 'p-4'} ${speakers.length > 0 && (design?.titlePos ?? 'bottom') === 'bottom' ? 'bottom-[26%]' : TITLE_POS[design?.titlePos ?? 'bottom']} ${
             design?.align === 'center' ? 'text-center' : ''
           } ${on.className}`}
           style={
@@ -198,6 +203,13 @@ export function PosterMedia({
           >
             {title}
           </div>
+        </div>
+      )}
+      {speakers.length > 0 && (
+        <div
+          className={`pointer-events-none absolute inset-x-0 bottom-0 text-white ${compact ? 'p-1.5' : 'px-4 pb-4'}`}
+        >
+          <SpeakerStrip speakers={speakers} size={compact ? 'sm' : 'md'} onColor />
         </div>
       )}
     </div>

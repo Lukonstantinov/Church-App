@@ -348,13 +348,7 @@ export const updateScheduleSchema = z.object({
 export type UpdateScheduleInput = z.input<typeof updateScheduleSchema>;
 
 /** Kinds of youth meeting (optional label). */
-export const MEETING_KINDS = [
-  'prayer',
-  'worship',
-  'outside',
-  'guest',
-  'prophetic',
-] as const;
+export const MEETING_KINDS = ['prayer', 'worship', 'outside', 'guest', 'prophetic'] as const;
 export type MeetingKind = (typeof MEETING_KINDS)[number];
 
 export interface MeetingPerson {
@@ -395,6 +389,9 @@ export interface MeetingRow {
   counts: Record<AttendanceStatus, number>;
   /** Poster look (colours, fonts, pattern); null = the ministry's own. */
   design: PostDesign | null;
+  templateId: number | null;
+  /** The poster's resolved look (colours, pattern, photo); filled with the speakers' photo links. */
+  look: PosterLook | null;
   /** Up to four speakers shown on the poster and the meeting screen. */
   speakers: Speaker[];
   /** Set when the meeting is one of a repeating series. */
@@ -422,6 +419,7 @@ export const createMeetingSchema = z.object({
   audience: z.array(z.number().int().positive()).max(500).optional(),
   kind: z.enum(MEETING_KINDS).nullable().optional(),
   design: postDesignSchema.nullish(),
+  templateId: z.number().int().positive().nullish(),
   speakers: speakersSchema.optional(),
   /** Make it a repeating meeting: the calendar is filled for all of them. */
   repeat: repeatSchema.nullish(),
@@ -440,6 +438,7 @@ export const updateMeetingSchema = z.object({
   topic: optionalText(200).optional(),
   kind: z.enum(MEETING_KINDS).nullable().optional(),
   design: postDesignSchema.nullable().optional(),
+  templateId: z.number().int().positive().nullable().optional(),
   speakers: speakersSchema.optional(),
   /** With a series: apply the change to this and all the later meetings of it. */
   applyToSeries: z.boolean().optional(),

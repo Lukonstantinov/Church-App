@@ -138,6 +138,8 @@ export type MeetingTileData = Pick<
 type Item =
   | { kind: 'calendar' }
   | { kind: 'meeting'; meeting: MeetingTileData }
+  /** Several meetings on one day share one square (earliest on top). */
+  | { kind: 'meetingDay'; day: string; meetings: MeetingTileData[] }
   | { kind: 'post'; post: AnnouncementRow }
   | { kind: 'event'; event: EventSummary };
 
@@ -202,21 +204,31 @@ export function HomeHighlights({
   const [withCalendar, setWithCalendar] = useState(() => calendarOnHome(g.id));
   const first = feed.data?.pages[0] ?? [];
   const shownEvents = (events.data ?? []).filter((e) => e.status !== 'cancelled').slice(0, 6);
+  const f = useFmt();
+  const coming = meetings
+    .filter((m) => m.status !== 'cancelled')
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const byDay = new Map<string, MeetingTileData[]>();
+  for (const m of coming) {
+    const day = f.dateInput(m.startsAt);
+    byDay.set(day, [...(byDay.get(day) ?? []), m]);
+  }
+  const startOf = (i: Item) =>
+    i.kind === 'meeting'
+      ? i.meeting.startsAt
+      : i.kind === 'meetingDay'
+        ? i.meetings[0]!.startsAt
+        : i.kind === 'event'
+          ? i.event.startsAt
+          : '';
   const timeline: Item[] = [
-    ...meetings
-      .filter((m) => m.status !== 'cancelled')
-      .map((meeting) => ({ kind: 'meeting' as const, meeting })),
-    ...shownEvents.map((event) => ({ kind: 'event' as const, event })),
-  ].sort((a, b) =>
-    (a.kind === 'meeting'
-      ? a.meeting.startsAt
-      : a.kind === 'event'
-        ? a.event.startsAt
-        : ''
-    ).localeCompare(
-      b.kind === 'meeting' ? b.meeting.startsAt : b.kind === 'event' ? b.event.startsAt : '',
+    ...[...byDay.entries()].map(([day, list]): Item =>
+      list.length > 1
+        ? { kind: 'meetingDay', day, meetings: list }
+        : { kind: 'meeting', meeting: list[0]! },
     ),
-  );
+    ...shownEvents.map((event) => ({ kind: 'event' as const, event })),
+  ].sort((a, b) => startOf(a).localeCompare(startOf(b)));
   const keyOf = (i: Item) =>
     i.kind === 'calendar'
       ? 'cal'
@@ -224,7 +236,9 @@ export function HomeHighlights({
         ? `p${i.post.id}`
         : i.kind === 'event'
           ? `e${i.event.id}`
-          : `m${i.meeting.id}`;
+          : i.kind === 'meetingDay'
+            ? `d${i.day}`
+            : `m${i.meeting.id}`;
   const base: Item[] = [
     ...(withCalendar ? [{ kind: 'calendar' as const }] : []),
     ...timeline,
@@ -301,6 +315,10 @@ export function HomeHighlights({
                       </>
                     ) : item.kind === 'meeting' ? (
                       <MeetingExpanded meeting={item.meeting} onRoll={onRoll} />
+                    ) : item.kind === 'meetingDay' ? (
+                      item.meetings.map((m) => (
+                        <MeetingExpanded key={m.id} meeting={m} onRoll={onRoll} />
+                      ))
                     ) : item.kind === 'post' ? (
                       <PosterCard post={item.post} onOpen={() => openPost(item.post.id)} />
                     ) : (
@@ -329,6 +347,8 @@ export function HomeHighlights({
                     <CalendarTile g={g} onToggle={toggle} />
                   ) : item.kind === 'meeting' ? (
                     <MeetingTile m={item.meeting} g={g} onToggle={toggle} />
+                  ) : item.kind === 'meetingDay' ? (
+                    <MeetingDayTile list={item.meetings} g={g} onToggle={toggle} />
                   ) : item.kind === 'post' ? (
                     <PostTile post={item.post} onToggle={toggle} />
                   ) : asRow ? (
@@ -393,7 +413,12 @@ function EventRow({ e, onToggle }: { e: EventSummary; onToggle: () => void }) {
           </span>
         </span>
         <CountdownBadge startsAt={e.startsAt} design={e.design} compact muted={!hasCountdown(e)} />
-        <LiveNow startsAt={e.startsAt} endsAt={e.endsAt} cancelled={e.status === 'cancelled'} compact />
+        <LiveNow
+          startsAt={e.startsAt}
+          endsAt={e.endsAt}
+          cancelled={e.status === 'cancelled'}
+          compact
+        />
       </button>
     </BurnFrame>
   );
@@ -490,8 +515,9 @@ function MeetingTile({
   return (
     <Tile onToggle={onToggle}>
       <LookTop look={g} className="flex aspect-[16/10] flex-col p-2.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
-          {t.meetings.details}
+        <span className="flex items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
+          <span className="opacity-80">{t.meetings.details}</span>
+          <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} compact />
         </span>
         <div className="flex items-end gap-2">
           <DateBadge {...f.dateBadge(m.startsAt)} onBrand />
@@ -507,6 +533,54 @@ function MeetingTile({
         <span className="truncate text-[12px] text-hint">
           {f.relativeDay(m.startsAt)} · {f.time(m.startsAt)}
         </span>
+      </div>
+    </Tile>
+  );
+}
+
+/**
+ * Two to four meetings of one day in one square: small stacked cards, earliest on
+ * top (more than four show "+N"). Tapping opens them all at full size.
+ */
+function MeetingDayTile({
+  list,
+  g,
+  onToggle,
+}: {
+  list: MeetingTileData[];
+  g: GroupSummary;
+  onToggle: () => void;
+}) {
+  const t = useT();
+  const f = useFmt();
+  const shown = list.slice(0, 4);
+  return (
+    <Tile onToggle={onToggle}>
+      <LookTop look={g} className="flex flex-col gap-1.5 p-2">
+        <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
+          <span>{f.relativeDay(list[0]!.startsAt)}</span>
+          <span>{t.meetings.meetingsToday(list.length)}</span>
+        </span>
+        <div className={`grid gap-1 ${shown.length > 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {shown.map((m, i) => (
+            <span
+              key={m.id}
+              className="flex min-w-0 flex-col rounded-lg bg-white/22 px-1.5 py-1 backdrop-blur"
+            >
+              <span className="flex items-center gap-1 text-[11px] font-bold tabular-nums">
+                {f.time(m.startsAt)}
+                <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} compact />
+              </span>
+              <span className="truncate text-[11px] leading-tight opacity-90">
+                {i === 3 && list.length > 4 ? `+${list.length - 3}` : m.title}
+              </span>
+            </span>
+          ))}
+        </div>
+      </LookTop>
+      <div className="flex flex-col gap-0.5 p-2.5">
+        <span className="truncate text-[14px] font-semibold">{list[0]!.title}</span>
+        <span className="truncate text-[12px] text-hint">{t.meetings.showAllMeetings}</span>
       </div>
     </Tile>
   );

@@ -11,6 +11,7 @@ import {
   IconSettings,
   IconUsers,
 } from '../components/icons';
+import { HomeScreenCard } from '../components/HomeScreenCard';
 import { Pill } from '../components/LookControls';
 import { Badge, Row, Screen, Section } from '../components/ui';
 import { useEnv } from '../lib/env';
@@ -63,6 +64,8 @@ export function More({ groups }: { groups: GroupSummary[] }) {
           onClick={() => setLangOpen(true)}
         />
       </Section>
+
+      <HomeScreenCard />
 
       <Section title={t.motion.title} footer={t.motion.hint}>
         <div className="flex flex-wrap gap-2 p-3">

@@ -59,9 +59,7 @@ export function MeetingAnnounceSheet({
   const [loading, setLoading] = useState(true);
   const [withPoster, setWithPoster] = useState(notice !== 'cancelled');
   // A leaders' meeting (or one for chosen people) asks who will come by default.
-  const [ask, setAsk] = useState(
-    notice !== 'cancelled' && (meeting.kind === 'leaders' || meeting.audience !== null),
-  );
+  const [ask, setAsk] = useState(notice !== 'cancelled' && meeting.audience !== null);
   const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
   const [busy, setBusy] = useState<'poster' | 'send' | null>(null);
   const [done, setDone] = useState<number | null>(null);
@@ -144,9 +142,7 @@ export function MeetingAnnounceSheet({
           ? t.meetings.noticeCancelled
           : notice === 'changed'
             ? t.meetings.noticeChanged
-            : meeting.kind === 'leaders'
-              ? `👑 ${t.meetings.announceMeeting}`
-              : t.meetings.announceMeeting
+            : t.meetings.announceMeeting
       }
     >
       <div className="flex flex-col gap-3 px-4 pb-4">

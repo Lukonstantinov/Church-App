@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import type { ApiErrorBody } from '@church/shared';
+import { resolveBrand, type ApiErrorBody } from '@church/shared';
+import { getDb } from './db/client';
+import { getChurch } from './lib/church';
 import type { Env } from './env';
 import { apiRoutes } from './api/routes';
 import { botRoutes } from './bot/routes';
@@ -23,6 +25,49 @@ app.get('/health', async (c) => {
     { ok: db !== 'error', environment: c.env.ENVIRONMENT, db, time: new Date().toISOString() },
     db === 'error' ? 503 : 200,
   );
+});
+
+/** The app as a phone shortcut: the church's name, with its main photo (logo) as the icon. */
+app.get('/manifest.webmanifest', async (c) => {
+  const church = await getChurch(getDb(c.env.DB));
+  const row = await getDb(c.env.DB).query.churchSettings.findFirst({
+    columns: { logoMime: true },
+  });
+  const icons = church.logoUrl
+    ? [
+        {
+          src: church.logoUrl,
+          sizes: '192x192',
+          type: row?.logoMime ?? 'image/png',
+          purpose: 'any',
+        },
+        {
+          src: church.logoUrl,
+          sizes: '512x512',
+          type: row?.logoMime ?? 'image/png',
+          purpose: 'any',
+        },
+      ]
+    : [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }];
+  return c.json(
+    {
+      name: church.name,
+      short_name: church.name.slice(0, 12),
+      start_url: '/',
+      display: 'standalone',
+      background_color: '#ffffff',
+      theme_color: resolveBrand(church.brandColor).light,
+      icons,
+    },
+    200,
+    { 'Content-Type': 'application/manifest+json', 'Cache-Control': 'public, max-age=300' },
+  );
+});
+
+/** The church's main photo as the iPhone home-screen icon (falls back to the app icon). */
+app.get('/apple-touch-icon.png', async (c) => {
+  const church = await getChurch(getDb(c.env.DB));
+  return c.redirect(church.logoUrl ?? '/icon.svg', 302);
 });
 
 app.route('/bot', botRoutes);

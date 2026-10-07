@@ -12,6 +12,13 @@ import { BURN_COLORS, BURN_STYLES } from '../components/Burn';
 import { COUNTDOWN_COLORS, COUNTDOWN_SIZES, CountdownBadge } from '../components/Countdown';
 import { Pill } from '../components/LookControls';
 import { PosterMedia } from '../components/Poster';
+import {
+  SpeakersEditor,
+  toDrafts,
+  toShown,
+  toSpeakerInputs,
+  type SpeakerDraft,
+} from '../components/Speakers';
 import { capturePoster } from '../lib/poster';
 import { Sheet } from '../components/Sheet';
 import {
@@ -143,6 +150,7 @@ function EventFormBody({
   );
   const [notify, setNotify] = useState(true);
   const [countdown, setCountdown] = useState(event?.countdown ?? false);
+  const [speakers, setSpeakers] = useState<SpeakerDraft[]>(() => toDrafts(event?.speakers));
   // Without a cover photo the event shows a designed cover, like posts.
   const [look, setLook] = useState<CoverState>(() =>
     initCover(event?.design, event?.templateId, event?.look, true),
@@ -230,6 +238,7 @@ function EventFormBody({
       ...coverPayload(look, coverLook.templateId),
       features,
       countdown,
+      speakers: toSpeakerInputs(speakers),
       priceCents: features.cost ? priceCents : null,
       chatUrl: chatUrl.trim() || null,
     };
@@ -303,6 +312,7 @@ function EventFormBody({
               tint={null}
               look={coverLook.look}
               design={look.design}
+              speakers={toShown(speakers)}
             />
             <button
               type="button"
@@ -339,6 +349,7 @@ function EventFormBody({
             tint={null}
             look={coverLook.look}
             design={{ ...look.design, banner: true }}
+            speakers={toShown(speakers)}
           />
         </div>
       </div>
@@ -358,6 +369,10 @@ function EventFormBody({
           )}
         </Section>
       )}
+
+      <Section title={t.meetings.speakers}>
+        <SpeakersEditor groupId={groupId} value={speakers} onChange={setSpeakers} />
+      </Section>
 
       <Section>
         <TextField

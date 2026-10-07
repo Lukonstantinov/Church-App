@@ -251,6 +251,8 @@ export const meetings = sqliteTable(
     slotAt: text('slot_at'),
     /** Poster look (PostDesign JSON): colours, fonts, pattern, photo. */
     design: text('design'),
+    /** A design template the poster follows (like events). */
+    templateId: integer('template_id'),
     /** Up to four speakers shown on the poster: JSON [{name, role, mediaId}]. */
     speakers: text('speakers'),
     /** Meetings made together by "repeats" share this id; repeatRule says how often. */

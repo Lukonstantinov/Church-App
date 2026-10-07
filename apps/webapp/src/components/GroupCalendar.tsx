@@ -24,6 +24,7 @@ import { storage } from '../lib/storage';
 import { confirmDialog, haptic } from '../lib/telegram';
 import { CountdownBadge, daysUntil, hasCountdown } from './Countdown';
 import { IconCheck, IconChevronRight, IconClock, IconMic } from './icons';
+import { LiveNow } from './Live';
 import { NotifySheet } from './NotifySheet';
 import { PersonPicker } from './PersonPicker';
 import { Sheet } from './Sheet';
@@ -70,6 +71,8 @@ function useDays(data: CalendarData | undefined) {
     }
   }
   for (const n of data.notes ?? []) at(n.date).notes.push(n);
+  // Earliest first, so a day with several meetings reads in order.
+  for (const d of days.values()) d.meetings.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   return days;
 }
 
@@ -129,6 +132,11 @@ function MonthGrid({
               } ${isToday && !m ? 'font-bold text-accent ring-1 ring-[var(--brand)]' : ''}`}
             >
               {i + 1}
+              {d && d.meetings.length > 1 && (
+                <span className="absolute -right-1 -top-1 flex h-2.5 min-w-2.5 items-center justify-center rounded-full bg-white px-0.5 text-[7px] font-bold leading-none text-[var(--brand)] ring-1 ring-[var(--brand)]">
+                  {d.meetings.length}
+                </span>
+              )}
               {dots[0] && (
                 <span
                   className="absolute -bottom-0.5 h-1 w-1 rounded-full"
@@ -156,7 +164,9 @@ function MonthGrid({
             } ${isToday ? 'outline outline-2 outline-offset-1 outline-[var(--brand)]' : ''}`}
           >
             <span className="leading-none">{i + 1}</span>
-            {m?.leader ? (
+            {d && d.meetings.length > 1 ? (
+              <span className="text-[9px] font-bold leading-none">×{d.meetings.length}</span>
+            ) : m?.leader ? (
               <span className="text-[9px] font-semibold leading-none">
                 {`${m.leader.firstName[0]}${m.leader.lastName?.[0] ?? ''}`}
               </span>
@@ -382,7 +392,10 @@ function DaySheet({
                     onClick={() => push({ name: 'meeting', meetingId: m.id })}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <span className="block truncate text-[15px] font-semibold">{m.title}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-[15px] font-semibold">{m.title}</span>
+                      <LiveNow startsAt={m.startsAt} endsAt={m.endsAt} compact />
+                    </span>
                     <span className="block truncate text-[13px] text-hint">
                       {f.timeRange(m.startsAt, m.endsAt)}
                       {m.topic ? ` · «${m.topic}»` : ''}
@@ -466,7 +479,7 @@ function DaySheet({
                     {d.meetings.length ? t.meetings.addEvent : t.meetings.createEvent}
                   </Button>
                 )}
-                {manage && upcoming && !d.meetings.length && (
+                {manage && upcoming && (
                   <Button
                     small
                     variant="glass"

@@ -275,6 +275,7 @@ groupMeetingRoutes.post('/:id/meetings', async (c) => {
         startsAt: start.toISOString(),
         endsAt: new Date(start.getTime() + input.durationMin * 60_000).toISOString(),
         design: input.design ? JSON.stringify(input.design) : null,
+        templateId: input.templateId ?? null,
         speakers: input.speakers?.length ? JSON.stringify(input.speakers) : null,
         seriesId,
         repeatRule: input.repeat ? JSON.stringify(input.repeat) : null,
@@ -604,6 +605,7 @@ meetingRoutes.patch('/:id', async (c) => {
     if (photo) await assertGroupMedia(db, meeting.groupId, photo);
     patch.design = input.design ? JSON.stringify(input.design) : null;
   }
+  if (input.templateId !== undefined) patch.templateId = input.templateId;
   if (input.speakers !== undefined) {
     await assertSpeakerPhotos(db, meeting.groupId, input.speakers);
     patch.speakers = input.speakers.length ? JSON.stringify(input.speakers) : null;
@@ -651,7 +653,15 @@ meetingRoutes.patch('/:id', async (c) => {
     // "This and all later meetings": the look and wording follow along (not the times).
     if (input.applyToSeries && meeting.seriesId) {
       const shared: Partial<typeof meetings.$inferInsert> = {};
-      for (const k of ['title', 'topic', 'location', 'design', 'speakers', 'kind'] as const)
+      for (const k of [
+        'title',
+        'topic',
+        'location',
+        'design',
+        'templateId',
+        'speakers',
+        'kind',
+      ] as const)
         if (k in patch) (shared as Record<string, unknown>)[k] = patch[k];
       if (Object.keys(shared).length > 0)
         await db

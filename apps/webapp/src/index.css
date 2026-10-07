@@ -1028,3 +1028,123 @@ html[data-motion='off'] [class*='app-bg-'] {
     animation: none;
   }
 }
+
+/* ---------- A living wallpaper behind a meeting's hero card ---------- */
+.living-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  --live-a: color-mix(in srgb, var(--brand-partner) 85%, #fff);
+  --live-b: color-mix(in srgb, var(--brand) 60%, #fff);
+  --live-c: color-mix(in srgb, var(--brand) 70%, var(--brand-partner));
+  --live-speed: 1;
+}
+.living-bg[data-live='true'] {
+  --live-a: #fb7185;
+  --live-b: #f59e0b;
+  --live-c: #ef4444;
+  --live-speed: 0.55;
+}
+.living-blob {
+  position: absolute;
+  width: 70%;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  filter: blur(34px);
+  opacity: 0.55;
+  mix-blend-mode: soft-light;
+  will-change: transform;
+}
+.living-blob.b1 {
+  left: -18%;
+  top: -40%;
+  background: radial-gradient(circle at 40% 40%, var(--live-a), transparent 68%);
+  animation: living-drift-a calc(15s * var(--live-speed)) ease-in-out infinite alternate;
+}
+.living-blob.b2 {
+  right: -22%;
+  bottom: -55%;
+  background: radial-gradient(circle at 60% 50%, var(--live-b), transparent 68%);
+  animation: living-drift-b calc(19s * var(--live-speed)) ease-in-out infinite alternate;
+}
+.living-blob.b3 {
+  left: 28%;
+  top: -10%;
+  width: 46%;
+  background: radial-gradient(circle, var(--live-c), transparent 66%);
+  animation: living-drift-c calc(12s * var(--live-speed)) ease-in-out infinite alternate;
+}
+.living-rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 190%;
+  aspect-ratio: 1;
+  margin: -95% 0 0 -95%;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.1) 0 8deg,
+    transparent 8deg 24deg
+  );
+  mask-image: radial-gradient(circle, transparent 18%, #000 60%);
+  -webkit-mask-image: radial-gradient(circle, transparent 18%, #000 60%);
+  animation: living-spin calc(70s * var(--live-speed)) linear infinite;
+}
+.living-dots {
+  position: absolute;
+  inset: -30px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.55) 1.3px, transparent 1.9px) 0 0 / 26px
+    26px;
+  opacity: 0.45;
+  animation:
+    living-pan calc(26s * var(--live-speed)) linear infinite,
+    living-twinkle 5s ease-in-out infinite;
+}
+.living-dots.far {
+  background-size: 41px 41px;
+  opacity: 0.3;
+  animation:
+    living-pan-rev calc(38s * var(--live-speed)) linear infinite,
+    living-twinkle 7s ease-in-out -2s infinite;
+}
+@keyframes living-drift-a {
+  to {
+    transform: translate3d(38%, 22%, 0) scale(1.25);
+  }
+}
+@keyframes living-drift-b {
+  to {
+    transform: translate3d(-42%, -26%, 0) scale(1.2);
+  }
+}
+@keyframes living-drift-c {
+  to {
+    transform: translate3d(-30%, 40%, 0) scale(0.8);
+  }
+}
+@keyframes living-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes living-pan {
+  to {
+    transform: translate3d(26px, 26px, 0);
+  }
+}
+@keyframes living-pan-rev {
+  to {
+    transform: translate3d(-41px, 41px, 0);
+  }
+}
+@keyframes living-twinkle {
+  50% {
+    opacity: 0.12;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .living-bg * {
+    animation: none !important;
+  }
+}

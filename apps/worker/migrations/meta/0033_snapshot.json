@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4fad9b42-136c-4117-b2b6-16840f614551",
+  "id": "003b50c1-c6e4-447d-a21a-59a41cf41d3d",
   "prevId": "2ebe23b4-cebb-4b6b-a309-7eafb6c94610",
   "tables": {
     "announcement_comments": {
@@ -2799,6 +2799,13 @@
         "design": {
           "name": "design",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
