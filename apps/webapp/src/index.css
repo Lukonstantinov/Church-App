@@ -1073,7 +1073,7 @@ html[data-motion='off'] [class*='app-bg-'] {
   width: 70%;
   aspect-ratio: 1;
   border-radius: 9999px;
-  filter: blur(34px);
+  filter: blur(calc(34px * var(--k-soft, 1)));
   opacity: 0.55;
   mix-blend-mode: soft-light;
   will-change: transform;
@@ -1360,7 +1360,7 @@ html[data-motion='off'] [class*='app-bg-'] {
   bottom: -60px;
   border-radius: 9999px;
   background: radial-gradient(circle, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.05) 70%);
-  filter: blur(1px);
+  filter: blur(calc(1px + 5px * (1 - var(--k-soft-b, 1))));
   opacity: 0;
   animation: living-float 11s ease-in infinite;
 }
@@ -1609,8 +1609,46 @@ html[data-motion='off'] .soon-fire-icon {
   }
 }
 @keyframes living-hue {
+  from {
+    filter: blur(26px) hue-rotate(0deg);
+  }
   to {
     filter: blur(26px) hue-rotate(360deg);
+  }
+}
+/* Sharper aurora: the same colour turn with less blur, in fixed steps (keyframes can't
+   take variables without leaving the graphics chip). */
+.living-bg[data-sharp='1'] .living-aurora {
+  animation-name: living-aurora, living-hue-1;
+}
+.living-bg[data-sharp='2'] .living-aurora {
+  animation-name: living-aurora, living-hue-2;
+}
+.living-bg[data-sharp='3'] .living-aurora {
+  animation-name: living-aurora, living-hue-3;
+}
+@keyframes living-hue-1 {
+  from {
+    filter: blur(18px) hue-rotate(0deg);
+  }
+  to {
+    filter: blur(18px) hue-rotate(360deg);
+  }
+}
+@keyframes living-hue-2 {
+  from {
+    filter: blur(11px) hue-rotate(0deg);
+  }
+  to {
+    filter: blur(11px) hue-rotate(360deg);
+  }
+}
+@keyframes living-hue-3 {
+  from {
+    filter: blur(4px) hue-rotate(0deg);
+  }
+  to {
+    filter: blur(4px) hue-rotate(360deg);
   }
 }
 /* Silk: satin folds that slide and sway. */
@@ -1623,7 +1661,7 @@ html[data-motion='off'] .soon-fire-icon {
     rgba(255, 255, 255, 0.22) 30px,
     transparent 44px
   );
-  filter: blur(3px);
+  filter: blur(calc(3px * var(--k-soft, 1)));
   animation: living-silk 14s ease-in-out infinite alternate;
 }
 .living-silk.s2 {
@@ -1650,7 +1688,7 @@ html[data-motion='off'] .soon-fire-icon {
   position: absolute;
   inset: -45%;
   background: conic-gradient(from 0deg, var(--live-a), var(--live-c), var(--live-b), var(--live-a));
-  filter: blur(30px);
+  filter: blur(calc(30px * var(--k-soft, 1)));
   opacity: 0.55;
   animation: living-spin 14s linear infinite;
 }
@@ -1754,12 +1792,16 @@ html[data-motion='off'] .soon-fire-icon {
 /* Lines: fine diagonal stripes flowing across. */
 .living-lines {
   position: absolute;
-  inset: -40px;
+  /* Big enough to still cover the block when drawn smaller (wider apart = scaled up). */
+  inset: calc(((100% + 80px) / var(--k-gap, 1) - 100%) / -2);
   background: repeating-linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.14) 0 2px,
-    transparent 2px 14px
+    rgba(255, 255, 255, calc(0.14 * var(--k-strength, 1))) 0
+      calc(2px * var(--k-weight, 1) / var(--k-gap, 1)),
+    transparent 0 14px
   );
+  /* Distance between lines: the whole pattern (and its fixed loop step) is scaled. */
+  scale: var(--k-gap, 1);
   animation: living-lines 2.4s linear infinite;
 }
 /* One stripe period along the x axis (14px across 45° lines), so the loop is seamless. */
@@ -1775,10 +1817,14 @@ html[data-motion='off'] .soon-fire-icon {
   right: -60%;
   bottom: -20%;
   height: 170%;
+  --grid-line: rgba(255, 255, 255, calc(0.45 * var(--k-strength, 1)));
+  --grid-w: calc(1.5px * var(--k-weight, 1) / var(--k-gap, 1));
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.45) 1.5px, transparent 1.5px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.45) 1.5px, transparent 1.5px);
+    linear-gradient(var(--grid-line) var(--grid-w), transparent var(--grid-w)),
+    linear-gradient(90deg, var(--grid-line) var(--grid-w), transparent var(--grid-w));
   background-size: 34px 34px;
+  /* Square size: the floor (and its fixed one-square step) is scaled. */
+  scale: var(--k-gap, 1);
   transform: perspective(200px) rotateX(48deg);
   transform-origin: bottom;
   mask-image: linear-gradient(to top, #000 20%, transparent 85%);
@@ -2462,7 +2508,7 @@ html[data-motion='off'] .edge {
 /* Soft: a wide, gentle light drifting across. */
 .shine-soft {
   background: linear-gradient(
-    110deg,
+    var(--shine-a, 110deg),
     transparent 20%,
     rgba(255, 255, 255, 0.16) 45%,
     rgba(255, 255, 255, 0.22) 50%,
@@ -2474,11 +2520,12 @@ html[data-motion='off'] .edge {
 .shine-soft::before {
   width: 300%;
   animation: shine-move 9s ease-in-out infinite;
+  animation-duration: calc(9s / var(--shine-speed, 1));
 }
 /* Glint: a thin bright streak now and then, like light on polished glass. */
 .shine-glint {
   background: linear-gradient(
-    115deg,
+    var(--shine-a, 115deg),
     transparent 46%,
     rgba(255, 255, 255, 0.75) 49.5%,
     rgba(255, 255, 255, 0.95) 50%,
@@ -2491,11 +2538,12 @@ html[data-motion='off'] .edge {
 .shine-glint::before {
   width: 350%;
   animation: shine-glint 6s cubic-bezier(0.6, 0, 0.3, 1) infinite;
+  animation-duration: calc(6s / var(--shine-speed, 1));
 }
 /* Holographic: rainbow light shifting across the surface. */
 .shine-holo {
   background: linear-gradient(
-    125deg,
+    var(--shine-a, 125deg),
     rgba(255, 0, 128, 0.18),
     rgba(255, 200, 0, 0.18),
     rgba(0, 255, 170, 0.18),
@@ -2509,6 +2557,7 @@ html[data-motion='off'] .edge {
 .shine-holo::before {
   width: 400%;
   animation: shine-move 8s linear infinite;
+  animation-duration: calc(8s / var(--shine-speed, 1));
 }
 /* Sparkle: tiny lights twinkling here and there. */
 .shine-sparkle {
@@ -2519,6 +2568,7 @@ html[data-motion='off'] .edge {
     radial-gradient(circle at 85% 65%, #fff 0 1px, transparent 1.8px),
     radial-gradient(circle at 58% 42%, #fff 0 0.9px, transparent 1.6px);
   animation: living-twinkle 2.6s ease-in-out infinite;
+  animation-duration: calc(2.6s / var(--shine-speed, 1));
 }
 /* From the strip's left end to its right end showing (the strip is N× the part's width). */
 @keyframes shine-move {
@@ -2558,99 +2608,60 @@ html[data-motion='off'] .shine::before {
 }
 
 /* ---------- Flames: tongues of fire licking up from the bottom ---------- */
+.living-fire {
+  position: absolute;
+  left: -6%;
+  right: -6%;
+  bottom: -4%;
+  height: 62%;
+}
 .living-flames {
   position: absolute;
-  left: -12%;
-  right: -12%;
-  bottom: -10%;
-  height: 62%;
-  filter: url(#living-fire);
-  mix-blend-mode: screen;
+  inset: 0;
 }
-/* The glowing bed under the flames. */
-.living-flames::before {
-  content: '';
+/* The glow of the fire bed, outside the sharpening filter so it stays soft. */
+.living-fire-bed {
   position: absolute;
-  inset: 55% 0 0;
+  inset: 40% -10% -10%;
   background: radial-gradient(
     ellipse at 50% 100%,
-    color-mix(in srgb, var(--p-color, #ff6a00) 80%, transparent),
+    color-mix(in srgb, var(--p-color, #ff6a00) 75%, transparent),
     transparent 70%
   );
-  filter: blur(8px);
+  filter: blur(10px);
   animation: living-blink 2.2s ease-in-out infinite;
 }
+/* One tongue: a pointed flame shape (mask) filled hot at the base, cooler at the tips. */
 .living-flames i {
   position: absolute;
   bottom: 0;
-  width: 30%;
-  height: 85%;
-  border-radius: 50% 50% 38% 38% / 62% 62% 38% 38%;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 200' preserveAspectRatio='none'%3E%3Cpath d='M56 0C58 50 96 88 96 136C96 176 76 200 50 200C24 200 4 176 4 136C4 96 30 70 40 40C44 56 46 64 47 74C54 54 58 30 56 0Z'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 200' preserveAspectRatio='none'%3E%3Cpath d='M56 0C58 50 96 88 96 136C96 176 76 200 50 200C24 200 4 176 4 136C4 96 30 70 40 40C44 56 46 64 47 74C54 54 58 30 56 0Z'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
   background: radial-gradient(
-    ellipse at 50% 88%,
-    #fff8d6 0%,
-    #ffd84a 16%,
-    var(--p-color, #ff8a00) 38%,
-    #e0361b 58%,
-    transparent 70%
+    ellipse 70% 60% at 50% 92%,
+    #ffc53d 0%,
+    var(--p-color, #ff6a1a) 42%,
+    #e3321b 72%,
+    #a3180e 100%
   );
   transform-origin: 50% 100%;
   animation: living-flame 1.5s ease-in-out infinite alternate;
-  opacity: 0.92;
 }
-.living-flames .f0 {
-  left: -2%;
-  height: 60%;
-  animation-duration: 1.3s;
-}
-.living-flames .f1 {
-  left: 12%;
-  height: 88%;
-  animation-duration: 1.7s;
-  animation-delay: -0.4s;
-}
-.living-flames .f2 {
-  left: 27%;
-  height: 72%;
-  animation-duration: 1.2s;
-  animation-delay: -0.8s;
-}
-.living-flames .f3 {
-  left: 40%;
-  height: 100%;
-  animation-duration: 1.9s;
-  animation-delay: -0.2s;
-}
-.living-flames .f4 {
-  left: 54%;
-  height: 78%;
-  animation-duration: 1.4s;
-  animation-delay: -1s;
-}
-.living-flames .f5 {
-  left: 68%;
-  height: 92%;
-  animation-duration: 1.6s;
-  animation-delay: -0.6s;
-}
-.living-flames .f6 {
-  left: 82%;
-  height: 64%;
-  animation-duration: 1.25s;
-  animation-delay: -0.3s;
+/* The hotter inner row: yellow to white. */
+.living-flames.inner i {
+  background: radial-gradient(ellipse 70% 60% at 50% 95%, #fffbea 0%, #ffe36b 45%, #ffb52e 100%);
 }
 @keyframes living-flame {
   0% {
-    transform: scale(1, 0.86) translateY(4%) skewX(2deg);
-    opacity: 0.78;
+    transform: scale(1, 0.84) translateY(3%) skewX(3deg);
   }
-  45% {
-    transform: scale(0.9, 1.08) translateY(-3%) skewX(-3deg);
-    opacity: 1;
+  40% {
+    transform: scale(0.88, 1.08) translateY(-2%) skewX(-4deg);
   }
   100% {
-    transform: scale(1.06, 0.96) translateY(0) skewX(4deg);
-    opacity: 0.88;
+    transform: scale(1.05, 0.95) translateY(0) skewX(5deg);
   }
 }
 
@@ -2681,7 +2692,7 @@ html[data-motion='off'] .shine::before {
 /* Lite mode (weaker phones): no heavy distortion or blur filters, lighter glass. */
 html[data-lite='true'] .living-flames,
 html[data-lite='true'] .living-goo {
-  filter: none;
+  filter: none !important;
 }
 html[data-lite='true'] .living-blob,
 html[data-lite='true'] .living-aurora,

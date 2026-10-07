@@ -2,11 +2,13 @@ import { createContext, useContext, useEffect, useRef, type CSSProperties } from
 import { watchOffscreen } from '../lib/perf';
 import {
   fontFamily,
+  tuneFor,
   type MeetingMotion,
   type ModuleLook,
   type ModulePhoto,
   type ScreenLook,
   type ScreenModule,
+  type ShineTune,
 } from '@church/shared';
 import { useEnv } from '../lib/env';
 import { useGroups, useMe } from '../lib/queries';
@@ -83,14 +85,18 @@ export function SkinLayer({ look }: { look: ModuleLook }) {
         <PartPhoto photo={{ ...look.photo2, split: OTHER_HALF[look.photo.split] }} />
       )}
       {look.shine && look.shine !== 'none' && (
-        <span aria-hidden="true" className={`shine shine-${look.shine}`} />
+        <span
+          aria-hidden="true"
+          className={`shine shine-${look.shine}`}
+          style={shineStyle(look.shineTune)}
+        />
       )}
       {/* "Burning" really burns: low flames along the bottom. */}
       {look.surface === 'fire' && !skinMotions(look).includes('flames') && (
         <LivingLayer kind="flames" behind tune={{ size: 0.7, speed: 1 }} />
       )}
       {skinMotions(look).map((m, i) => (
-        <LivingLayer key={`${m}${i}`} kind={m} behind tune={look.tune} icon={look.icon} />
+        <LivingLayer key={`${m}${i}`} kind={m} behind tune={tuneFor(look, m)} icon={look.icon} />
       ))}
     </>
   );
@@ -100,10 +106,20 @@ export function SkinLayer({ look }: { look: ModuleLook }) {
  * The tuning a ministry gives its meeting animation on the meeting screen (shared with the
  * tiles unless the tiles have their own).
  */
-export function useMeetingTune(groupId: number): Pick<ModuleLook, 'tune' | 'icon'> {
+export function useMeetingTune(groupId: number): Pick<ModuleLook, 'tune' | 'tunes' | 'icon'> {
   const groups = useGroups();
   const look = groups.data?.find((x) => x.id === groupId)?.screenLook.meetings;
-  return look && !look.own ? { tune: look.tune, icon: look.icon } : {};
+  return look && !look.own ? { tune: look.tune, tunes: look.tunes, icon: look.icon } : {};
+}
+
+/** The light's strength, speed and slant as values its CSS reads. */
+export function shineStyle(t: ShineTune | null | undefined): CSSProperties | undefined {
+  if (!t) return undefined;
+  return {
+    ...(t.strength != null ? { opacity: t.strength } : {}),
+    ...(t.speed ? { '--shine-speed': t.speed } : {}),
+    ...(t.angle != null ? { '--shine-a': `${t.angle}deg` } : {}),
+  } as CSSProperties;
 }
 
 const OTHER_HALF = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' } as const;

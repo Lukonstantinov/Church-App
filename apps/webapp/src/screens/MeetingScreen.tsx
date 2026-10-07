@@ -8,6 +8,7 @@ import {
   type MeetingPerson,
   type MeetingRsvpStatus,
   type UpdateMeetingInput,
+  tuneFor,
 } from '@church/shared';
 import { GroupTheme } from '../components/GroupTheme';
 import { LiveNow, SoonPulse, SoonTimer } from '../components/Live';
@@ -157,7 +158,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           living={cancelled ? 'off' : m.motion}
           live={live}
           look={meetingLook(m)}
-          tune={meetingTune.tune}
+          tune={tuneFor(meetingTune, m.motion)}
           icon={meetingTune.icon}
         >
           <div className="mb-3 flex items-center justify-between gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">

@@ -8,6 +8,7 @@ import {
   MODULE_SURFACES,
   isFontKey,
   resolveBrand,
+  tuneFor,
   type EnterAnimation,
   type AppBackground,
   type GroupSummary,
@@ -46,11 +47,13 @@ import {
   PartPhoto,
   ScreenLookPreview,
   SkinLayer,
+  shineStyle,
   skinClass,
   skinStyle,
   useModuleLook,
 } from './ModuleSkin';
 import { MotionPicker } from './MotionPicker';
+import { MotionTuneControls, PALETTE, ShineTuneControls, TunePanel } from './MotionTune';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
 import { Button, DateBadge, LivingLayer, Row, Section, Toggle } from './ui';
@@ -288,7 +291,7 @@ function MeetingPiece({ g, motion }: { g: GroupSummary; motion: MeetingMotion })
           <LivingLayer
             kind={look.own ? (look.motion ?? 'off') : motion}
             behind
-            tune={look.tune}
+            tune={tuneFor(look, look.own ? look.motion : motion)}
             icon={look.icon}
           />
           <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
@@ -356,20 +359,6 @@ function TabBarPiece() {
   );
 }
 
-const PALETTE = [
-  '#ef4444',
-  '#f97316',
-  '#f59e0b',
-  '#22c55e',
-  '#14b8a6',
-  '#06b6d4',
-  '#3b82f6',
-  '#6366f1',
-  '#a855f7',
-  '#ec4899',
-  '#111418',
-  '#ffffff',
-];
 const ANGLES = [90, 135, 180, 225];
 
 /**
@@ -402,6 +391,10 @@ function ModuleSheet({
   const theme = resolveBrand(g.brandColor ?? 'blue');
   const colors = draft.colors?.length ? draft.colors : [theme.light, theme.partner];
   const layers = draft.layers ?? [];
+  // Each animation keeps its own settings (an emptied one = as designed).
+  const tuneOf = (m: MeetingMotion) => tuneFor(draft, m);
+  const onTune = (m: MeetingMotion, tune: MotionTune | null) =>
+    set({ tunes: { ...(draft.tunes ?? {}), [m]: tune ?? {} } });
   const pending = saveChurch.isPending || saveMinistry.isPending;
 
   async function save(next: ModuleLook | null) {
@@ -583,7 +576,12 @@ function ModuleSheet({
                   className={`flex flex-col items-center gap-1 rounded-2xl p-1 ${on ? 'ring-2 ring-[var(--brand)]' : ''}`}
                 >
                   <span className="brand-gradient relative block h-10 w-full overflow-hidden rounded-xl">
-                    {x !== 'none' && <span className={`shine shine-${x}`} />}
+                    {x !== 'none' && (
+                      <span
+                        className={`shine shine-${x}`}
+                        style={on ? shineStyle(draft.shineTune) : undefined}
+                      />
+                    )}
                   </span>
                   <span
                     className={`text-center text-[11px] leading-tight ${on ? 'font-bold text-accent' : 'text-hint'}`}
@@ -594,6 +592,16 @@ function ModuleSheet({
               );
             })}
           </div>
+          {draft.shine && draft.shine !== 'none' && (
+            <div className="mt-3">
+              <TunePanel title={`${t.studio.knob.settings}: ${t.studio.shines[draft.shine]}`}>
+                <ShineTuneControls
+                  tune={draft.shineTune ?? {}}
+                  onChange={(shineTune) => set({ shineTune })}
+                />
+              </TunePanel>
+            </div>
+          )}
         </Group>
 
         {scope === 'ministry' && (
@@ -716,6 +724,8 @@ function ModuleSheet({
                 value={meetings}
                 onChange={(m) => setMeetings(m ?? 'calm')}
                 icon={draft.icon}
+                tuneOf={tuneOf}
+                onTune={onTune}
               />
             </Group>
             <div>
@@ -735,12 +745,12 @@ function ModuleSheet({
               value={draft.motion ?? 'off'}
               onChange={(m) => set({ motion: !m || m === 'off' ? null : m })}
               icon={draft.icon}
+              tuneOf={tuneOf}
+              onTune={onTune}
             />
             <p className="mt-2 text-[12px] text-hint">{t.studio.tip}</p>
           </Group>
         )}
-
-        <TuneControls tune={draft.tune ?? {}} onChange={(tune) => set({ tune })} />
 
         <IconControls
           icon={draft.icon ?? null}
@@ -775,6 +785,16 @@ function ModuleSheet({
                   })}
                 </div>
               </div>
+            ))}
+            {/* Each layer's own settings, open under the list. */}
+            {layers.map((m) => (
+              <TunePanel key={m} title={`${t.studio.knob.settings}: ${t.meetings.motions[m]}`}>
+                <MotionTuneControls
+                  kind={m}
+                  tune={tuneOf(m) ?? {}}
+                  onChange={(tune) => onTune(m, tune)}
+                />
+              </TunePanel>
             ))}
           </div>
         </Group>
@@ -893,98 +913,6 @@ function EntranceSheet({ g, onClose }: { g: GroupSummary; onClose: () => void })
         </Button>
       </div>
     </Sheet>
-  );
-}
-
-const DIRECTIONS = [0, 45, 90, 135, 180, 225, 270, 315];
-const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
-
-/** Speed, size, direction and colour of a part's animations. */
-function TuneControls({ tune, onChange }: { tune: MotionTune; onChange: (t: MotionTune) => void }) {
-  const t = useT();
-  const set = (patch: Partial<MotionTune>) => onChange({ ...tune, ...patch });
-  const slider = (
-    label: string,
-    value: number,
-    min: number,
-    max: number,
-    step: number,
-    put: (v: number) => void,
-  ) => (
-    <label className="flex flex-col gap-1">
-      <span className="flex justify-between text-[14px]">
-        <span>{label}</span>
-        <span className="font-semibold tabular-nums text-hint">×{value.toFixed(2)}</span>
-      </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => put(Number(e.target.value))}
-        className="w-full accent-[var(--brand)]"
-      />
-    </label>
-  );
-  return (
-    <Group title={t.studio.tune}>
-      <div className="flex flex-col gap-4">
-        {slider(t.studio.speed, tune.speed ?? 1, 0.25, 3, 0.25, (speed) => set({ speed }))}
-        {slider(t.studio.size, tune.size ?? 1, 0.5, 2, 0.1, (size) => set({ size }))}
-        <div>
-          <div className="mb-2 text-[14px]">{t.studio.direction}</div>
-          <div className="flex flex-wrap gap-2">
-            {DIRECTIONS.map((a, i) => (
-              <Pill
-                key={a}
-                on={(tune.angle ?? 0) === a}
-                onClick={() => set({ angle: a })}
-                label={ARROWS[i]!}
-              />
-            ))}
-          </div>
-        </div>
-        <div>
-          <div className="mb-2 text-[14px]">{t.studio.color}</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Pill
-              on={!tune.color}
-              onClick={() => set({ color: null })}
-              label={t.studio.colorAuto}
-            />
-            {PALETTE.map((c) => (
-              <button
-                key={c}
-                type="button"
-                aria-label={c}
-                onClick={() => set({ color: tune.color === c ? null : c })}
-                className={`h-8 w-8 rounded-full ring-1 ring-black/10 active:scale-90 ${
-                  tune.color === c ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
-                }`}
-                style={{ background: c }}
-              />
-            ))}
-            <label
-              className="relative h-8 w-8 cursor-pointer overflow-hidden rounded-full"
-              style={{
-                background:
-                  tune.color && !PALETTE.includes(tune.color)
-                    ? tune.color
-                    : 'conic-gradient(#ef4444,#f59e0b,#22c55e,#06b6d4,#6366f1,#d946ef,#ef4444)',
-              }}
-            >
-              <input
-                type="color"
-                value={tune.color ?? '#6366f1'}
-                onChange={(e) => set({ color: e.target.value })}
-                className="absolute inset-0 cursor-pointer opacity-0"
-              />
-            </label>
-          </div>
-        </div>
-      </div>
-    </Group>
   );
 }
 

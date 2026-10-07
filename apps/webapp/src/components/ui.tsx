@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react';
 import {
   resolveBrand,
   type MeetingMotion,
@@ -433,19 +433,34 @@ export function LivingLayer({
       for (const a of el.getAnimations({ subtree: true })) a.playbackRate = speed;
     });
     return () => cancelAnimationFrame(id);
-  }, [speed, kind]);
+  }, [speed, kind, tune?.density, tune?.sharp]);
   // On "still" phones the animation layers aren't drawn at all.
   if (kind === 'off' || quality === 'still') return null;
   // Weaker phones draw every other particle.
   const few = <T,>(list: readonly T[]): readonly T[] =>
     quality === 'lite' ? list.filter((_, i) => i % 2 === 0) : list;
+  // Its own settings: how many (or how far apart), how thick / big, how sharp, how strong.
+  const density = tune?.density ?? 1;
+  const weight = tune?.weight ?? 1;
+  const strength = tune?.strength ?? 1;
+  const sharp = tune?.sharp ?? null;
+  const spots = (base: readonly Particle[] = PARTICLES) => few(particleSpots(base, density));
   const size = tune?.size ?? 1;
   const angle = tune?.angle ?? 0;
   // Turned or shrunk, the layer grows so it still covers the card.
   const grow = angle % 180 !== 0 || size < 1 ? '-40%' : angle ? '-10%' : undefined;
   const c = tune?.color;
+  const lined = kind === 'lines' || kind === 'grid';
   const style = {
     ...(grow ? { inset: grow } : {}),
+    // Lines and grid get brighter or fainter lines; the rest fade as a whole.
+    ...(lined
+      ? { '--k-strength': strength, '--k-gap': density, '--k-weight': weight }
+      : strength < 1
+        ? { opacity: strength }
+        : {}),
+    // Glows: less blur = clearer shapes (the aurora's colour turn has fixed steps).
+    ...(sharp !== null ? { '--k-soft': 1 - sharp * 0.85, '--k-soft-b': sharp } : {}),
     ...(angle || size !== 1 ? { transform: `rotate(${angle}deg) scale(${size})` } : {}),
     ...(c
       ? {
@@ -474,6 +489,7 @@ export function LivingLayer({
         data-kind={kind}
         data-live={live ? 'true' : 'false'}
         data-level={kind === 'calm' ? 'calm' : 'lively'}
+        data-sharp={sharp !== null ? Math.round(sharp * 3) : undefined}
       >
         {(kind === 'calm' || kind === 'lively') && (
           <>
@@ -499,7 +515,13 @@ export function LivingLayer({
           </>
         )}
         {kind === 'bokeh' &&
-          [0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} className={`living-bokeh k${i}`} />)}
+          [0, 1, 2, 3, 4, 5, 6].map((i) => (
+            <i
+              key={i}
+              className={`living-bokeh k${i}`}
+              style={weight !== 1 ? { scale: weight } : undefined}
+            />
+          ))}
         {kind === 'rays' && <i className="living-rays solo" />}
         {kind === 'aurora' && (
           <>
@@ -519,7 +541,7 @@ export function LivingLayer({
           kind === 'snow' ||
           kind === 'fireflies' ||
           kind === 'confetti') &&
-          few(PARTICLES).map((p, i) => (
+          spots().map((p, i) => (
             <i
               key={i}
               className="living-p"
@@ -527,7 +549,7 @@ export function LivingLayer({
                 {
                   '--x': `${p.x}%`,
                   '--y': `${(p.t * 9) % 90}%`,
-                  '--s': `${kind === 'bubbles' ? p.s * 2.2 : kind === 'confetti' ? p.s * 1.4 : p.s}px`,
+                  '--s': `${(kind === 'bubbles' ? p.s * 2.2 : kind === 'confetti' ? p.s * 1.4 : p.s) * weight}px`,
                   '--d': `${p.d}s`,
                   '--t': `${-p.t}s`,
                   '--w': `${p.w}px`,
@@ -537,7 +559,7 @@ export function LivingLayer({
             />
           ))}
         {kind === 'warp' &&
-          few(PARTICLES).map((p, i) => (
+          spots().map((p, i) => (
             <i
               key={i}
               className="living-warp"
@@ -574,41 +596,16 @@ export function LivingLayer({
             <i className="living-sweep" />
           </>
         )}
-        {kind === 'flames' && (
-          <span className="living-flames">
-            {/* Moving noise bends the flames' edges: a ragged, flickering fire, not smooth blobs. */}
-            <svg width="0" height="0" className="absolute">
-              <filter id="living-fire" x="-20%" y="-20%" width="140%" height="140%">
-                <feTurbulence
-                  type="fractalNoise"
-                  baseFrequency="0.018 0.07"
-                  numOctaves="2"
-                  seed="7"
-                >
-                  <animate
-                    attributeName="baseFrequency"
-                    dur="5s"
-                    values="0.018 0.07;0.022 0.1;0.018 0.07"
-                    repeatCount="indefinite"
-                  />
-                </feTurbulence>
-                <feDisplacementMap in="SourceGraphic" scale="22" />
-              </filter>
-            </svg>
-            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-              <i key={i} className={`f${i}`} />
-            ))}
-          </span>
-        )}
+        {kind === 'flames' && <Flames sharp={sharp ?? 0.7} weight={weight} density={density} />}
         {(kind === 'leaves' || kind === 'snowfall' || kind === 'petals') &&
-          few(PARTICLES).map((p, i) => (
+          spots().map((p, i) => (
             <i
               key={i}
               className="living-fallitem"
               style={
                 {
                   '--x': `${p.x}%`,
-                  '--s': `${kind === 'snowfall' ? 6 + p.s * 2 : 12 + p.s * 2.5}px`,
+                  '--s': `${(kind === 'snowfall' ? 6 + p.s * 2 : 12 + p.s * 2.5) * weight}px`,
                   '--d': `${kind === 'snowfall' ? p.d * 1.1 : p.d * 1.5}s`,
                   '--t': `${-p.t * 1.4}s`,
                   '--w': `${p.w * 2}px`,
@@ -620,24 +617,26 @@ export function LivingLayer({
             </i>
           ))}
         {(kind === 'iconfloat' || kind === 'iconrain' || kind === 'iconorbit') &&
-          few(PARTICLES.slice(0, kind === 'iconorbit' ? 6 : 9)).map((p, i) => (
-            <i
-              key={i}
-              className="living-icon"
-              style={
-                {
-                  '--x': `${p.x}%`,
-                  '--s': `${10 + p.s * 3}px`,
-                  '--d': `${p.d * 1.3}s`,
-                  '--t': `${-p.t * 1.3}s`,
-                  '--w': `${p.w}px`,
-                  '--a': `${i * 60}deg`,
-                } as CSSProperties
-              }
-            >
-              {iconUrl ? <img src={iconUrl} alt="" /> : iconEmoji}
-            </i>
-          ))}
+          (kind === 'iconorbit' ? few(PARTICLES.slice(0, 6)) : spots(PARTICLES.slice(0, 9))).map(
+            (p, i) => (
+              <i
+                key={i}
+                className="living-icon"
+                style={
+                  {
+                    '--x': `${p.x}%`,
+                    '--s': `${(10 + p.s * 3) * weight}px`,
+                    '--d': `${p.d * 1.3}s`,
+                    '--t': `${-p.t * 1.3}s`,
+                    '--w': `${p.w}px`,
+                    '--a': `${i * 60}deg`,
+                  } as CSSProperties
+                }
+              >
+                {iconUrl ? <img src={iconUrl} alt="" /> : iconEmoji}
+              </i>
+            ),
+          )}
       </span>
     </span>
   );
@@ -649,6 +648,91 @@ const SEASON_ITEMS = {
   snowfall: ['❄️', '❅', '❆', '•'],
   petals: ['🌸', '💮', '🌸', '🏵️'],
 } as const;
+
+type Particle = (typeof PARTICLES)[number];
+
+/**
+ * As many particles as asked for (density 1 = the 12 fixed spots): more are spread between
+ * the fixed ones, each round shifted across and in time so they never line up.
+ */
+function particleSpots(base: readonly Particle[], density: number): Particle[] {
+  const n = Math.max(3, Math.round(base.length * density));
+  return Array.from({ length: n }, (_, i) => {
+    const p = base[i % base.length]!;
+    const round = Math.floor(i / base.length);
+    return round
+      ? { ...p, x: (p.x + round * 37) % 100, t: p.t + round * 2.7, d: p.d * (1 + round * 0.12) }
+      : p;
+  });
+}
+
+/** How tall each tongue of fire is, in turn, and how long one flicker takes. */
+const TONGUES = [
+  { h: 0.62, d: 1.3 },
+  { h: 0.9, d: 1.7 },
+  { h: 0.74, d: 1.2 },
+  { h: 1, d: 1.9 },
+  { h: 0.8, d: 1.4 },
+  { h: 0.94, d: 1.6 },
+  { h: 0.66, d: 1.25 },
+];
+
+/**
+ * Fire: two rows of pointed tongues (red-orange outside, yellow-white inside) bent by noise
+ * and then cut sharp (blur + an alpha threshold), so the edges are crisp and ragged like
+ * real flames and neighbouring tongues melt together. `sharp` 0 = soft and smoky … 1 =
+ * crisp; `weight` = how high; `density` = how many tongues.
+ */
+function Flames({ sharp, weight, density }: { sharp: number; weight: number; density: number }) {
+  const id = `fire${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const n = Math.min(14, Math.max(3, Math.round(7 * density)));
+  const row = (inner: boolean) => {
+    const count = inner ? Math.max(2, n - 2) : n;
+    const step = 108 / count;
+    return Array.from({ length: count }, (_, i) => {
+      const t = TONGUES[(i + (inner ? 3 : 0)) % TONGUES.length]!;
+      return (
+        <i
+          key={i}
+          style={{
+            left: `${-6 + i * step + (inner ? step * 0.3 : 0)}%`,
+            width: `${step * (inner ? 0.9 : 1.6)}%`,
+            height: `${t.h * (inner ? 70 : 100)}%`,
+            animationDuration: `${t.d}s`,
+            animationDelay: `${-i * 0.37}s`,
+          }}
+        />
+      );
+    });
+  };
+  return (
+    <span className="living-fire" style={{ height: `${62 * weight}%` }}>
+      <svg width="0" height="0" className="absolute">
+        <filter id={id} x="-25%" y="-25%" width="150%" height="150%">
+          {/* Ragged edges from noise; the tongues move through it, so the edges waver. */}
+          <feTurbulence type="fractalNoise" baseFrequency="0.02 0.06" numOctaves="2" seed="4" />
+          <feDisplacementMap in="SourceGraphic" scale={5 + (1 - sharp) * 9} />
+          {/* Melt, then cut at half: the steeper the cut, the crisper the edge. */}
+          <feGaussianBlur stdDeviation={0.6 + (1 - sharp) * 2.6} />
+          <feComponentTransfer>
+            <feFuncA
+              type="linear"
+              slope={2 + sharp * 18}
+              intercept={0.5 - 0.5 * (2 + sharp * 18)}
+            />
+          </feComponentTransfer>
+        </filter>
+      </svg>
+      <i className="living-fire-bed" />
+      <span className="living-flames" style={{ filter: `url(#${id})` }}>
+        {row(false)}
+      </span>
+      <span className="living-flames inner" style={{ filter: `url(#${id})` }}>
+        {row(true)}
+      </span>
+    </span>
+  );
+}
 
 /**
  * Fixed spots for particles (embers, bubbles, snow, fireflies, confetti, icons): place

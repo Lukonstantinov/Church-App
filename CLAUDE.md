@@ -120,7 +120,8 @@ Screen studio (`components/DesignStudio.tsx`): tap a part on a live copy of the 
 the church main page; per part (`ScreenLook` in `shared/screenLook.ts`, stored in
 `groups.screen_look` / `church_settings.screen_look`, PUT `/api/groups/:id/studio`,
 `/api/church/studio`): surface, own gradient, edge, picture with opacity, font, animation +
-layers, tune (speed/size/direction/colour), icon (logo/emoji/upload); applied via
+layers, per-animation settings opened under the picked animation (`tunes` by kind: speed, size,
+strength, angle, colour + `MOTION_KNOBS` density/weight/sharp; shine `shineTune`), icon (logo/emoji/upload); applied via
 `useModuleLook`/`skinClass`/`skinStyle`/`SkinLayer`. All animation settings live in Design
 (animations sorted by `MOTION_GROUPS`).
 

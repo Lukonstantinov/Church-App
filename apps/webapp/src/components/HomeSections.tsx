@@ -7,6 +7,7 @@ import {
   type EventSummary,
   type GroupSummary,
   type MeetingMotion,
+  tuneFor,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
@@ -478,7 +479,7 @@ function TileMotion({
 }) {
   const look = useModuleLook('meetings');
   const kind = tile ?? (look.own ? (look.motion ?? 'off') : (motion ?? 'calm'));
-  return <LivingLayer kind={kind} live={live} behind tune={look.tune} icon={look.icon} />;
+  return <LivingLayer kind={kind} live={live} behind tune={tuneFor(look, kind)} icon={look.icon} />;
 }
 
 function Tile({
@@ -721,7 +722,7 @@ function MeetingExpanded({
       <HeroCard
         living={m.motion ?? 'calm'}
         look={meetingLook(m)}
-        tune={meetingTune.tune}
+        tune={tuneFor(meetingTune, m.motion ?? 'calm')}
         icon={meetingTune.icon}
       >
         <SoonTimer startsAt={m.startsAt} className="mb-2" />
