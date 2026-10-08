@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PERMISSIONS,
+  type ContactRow,
   type GroupDetail,
   type GroupSummary,
   type MeResponse,
@@ -90,6 +91,37 @@ describe('positions', () => {
       positionName: 'Участник',
       permissions: [],
     });
+  });
+
+  it('the positions order sets the order of the members list', async () => {
+    const g = await createEnv('Порядок');
+    const created = await apiJson<PositionRow[]>(`/api/groups/${g.id}/positions`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Лидер молодёжи', permissions: ['people.view'] },
+    });
+    const top = created.find((p) => p.name === 'Лидер молодёжи')!;
+    const a = fakeUser('Аня');
+    const b = fakeUser('Борис');
+    const rowA = await join(a, g);
+    await join(b, g);
+    await assign(rowA.membershipId, top.id);
+    // Put the new position first.
+    const ordered = await apiJson<PositionRow[]>(`/api/groups/${g.id}/positions/order`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: { ids: [top.id, ...created.filter((p) => p.id !== top.id).map((p) => p.id)] },
+    });
+    expect(ordered[0]!.id).toBe(top.id);
+    const contacts = await apiJson<ContactRow[]>(`/api/groups/${g.id}/contacts`, { user: b });
+    expect(contacts[0]).toMatchObject({ firstName: 'Аня', positionRank: 0 });
+    // Only those who manage positions may reorder them.
+    const res = await api(`/api/groups/${g.id}/positions/order`, {
+      method: 'PUT',
+      user: b,
+      json: { ids: [top.id] },
+    });
+    expect(res.status).toBe(403);
   });
 
   it('a custom "Treasurer" position can see and keep money, and nothing else', async () => {

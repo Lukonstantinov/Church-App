@@ -140,7 +140,7 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
               {t.home.noNextMeeting(g.groupName)}
             </Card>
           )}
-          <AttendanceSummary data={g} />
+          {g.visible && <AttendanceSummary data={g} />}
         </div>
       ))}
 

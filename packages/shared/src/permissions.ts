@@ -87,3 +87,8 @@ export const positionInputSchema = z.object({
 export type PositionInput = z.input<typeof positionInputSchema>;
 
 export const setPositionSchema = z.object({ positionId: z.number().int().positive() });
+
+/** The ministry's positions top to bottom: the order of the member lists. */
+export const positionOrderSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(100),
+});

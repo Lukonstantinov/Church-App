@@ -16,6 +16,7 @@ import {
   TextArea,
   TextField,
   Title,
+  Toggle,
 } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { prepareLogo } from '../lib/image';
@@ -220,6 +221,13 @@ function Form({ g }: { g: GroupDetail }) {
       {/* Every animation now lives in the Design tab's screen studio. */}
       <Section title={t.meetings.motionTitle}>
         <p className="px-4 py-3 text-[14px] text-hint">🎨 {t.studio.movedHere}</p>
+      </Section>
+      <Section footer={t.env.attendanceOpenHint}>
+        <Toggle
+          label={t.env.attendanceOpen}
+          checked={g.membersSeeAttendance}
+          onChange={(v) => void patchNow({ membersSeeAttendance: v })}
+        />
       </Section>
       <Section title={t.events.remindAutoTitle} footer={t.events.remindAutoHint}>
         <div className="flex flex-wrap gap-2 p-3">

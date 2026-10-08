@@ -705,6 +705,8 @@ export const lt: Messages = {
     failed: 'Nepavyko sukurti susitikimo',
   },
   people: {
+    sortByPosition: 'Pagal pareigą',
+    sortByName: 'Pagal vardą',
     all: 'Visi',
     attendanceRate: 'Lankomumas',
     serves: 'Tarnauja',
@@ -1622,6 +1624,10 @@ export const lt: Messages = {
     noData: 'Šiems metams duomenų nėra',
   },
   positions: {
+    orderHint:
+      'Iš viršaus į apačią — narių sąrašų tvarka: aukščiau esantys rodomi pirmi. Keiskite rodyklėmis.',
+    moveUp: 'Aukščiau',
+    moveDown: 'Žemiau',
     leader: 'Vadovas',
     leaderDescription: 'Vadovauja tarnystei: visos teisės',
     member: 'Narys',
@@ -1720,6 +1726,9 @@ export const lt: Messages = {
     design: 'Išvaizda',
   },
   env: {
+    attendanceOpen: 'Nariai mato savo lankomumą',
+    attendanceOpenHint:
+      'Išjungta: paprasti nariai (be teisių) nemato lankomumo kortelės nei pradžioje, nei profilyje. Vadovai mato visada.',
     lookInDesign: 'Ekrano fonas, animacijos ir šablonai — «Dizainas»',
     lookInDesignHint: 'Visa išvaizda nustatoma vienoje vietoje — skirtuke «Dizainas».',
     look: 'Išvaizda',

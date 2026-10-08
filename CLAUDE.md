@@ -82,7 +82,8 @@ time zone, poster label, main-window background); ministries ("environments") wi
 look (colour, pattern, logo, photo), background, default place, Telegram chat; archive.
 
 **People** — invite link/QR via the bot, join approval, offline members with claim codes,
-positions with rights, labels, contacts, profile photos (`users.photo_media_id`, set on the person
+positions with rights (ordered with ↑/↓, `positions.sort`; member lists follow that order or A–Z),
+labels, contacts (members' own attendance hidden unless `groups.members_see_attendance`), profile photos (`users.photo_media_id`, set on the person
 screen via `PUT /api/users/:id/photo`; used on meeting cards and as speakers' photos on posters —
 speakers can be picked from people, `speaker.userId`; missing photos give a warning; their look on
 posters and meeting cards — style photo/side/background, nine spots, edge, shape, size, opacity, on

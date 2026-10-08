@@ -70,6 +70,19 @@ export const GUIDE: GuideSection[] = [
     title: 'People, positions & labels',
     items: [
       {
+        title: 'Order of positions and member lists',
+        steps: [
+          '«Должности»: the ↑ / ↓ arrows next to each position set its place (positions.sort, PUT /api/groups/:id/positions/order). The default position («Участник») and people without one are always listed last.',
+          'Both member lists (leaders’ «Люди» and members’ «Участники», /contacts rows carry positionRank) go in that order, then by name; a «По должности / По имени» switch and position chips filter or re-sort them.',
+        ],
+      },
+      {
+        title: 'Members’ own attendance',
+        steps: [
+          'Hidden from plain members (no rights) by default: ministry settings → «Участники видят свою посещаемость» (groups.members_see_attendance). Rows of /me/attendance and the profile carry visible. Leaders always see it.',
+        ],
+      },
+      {
         title: 'Invite a person',
         steps: [
           'Open the ministry → «Люди» → add person → share the invite link (or QR).',

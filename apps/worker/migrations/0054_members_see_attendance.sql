@@ -1,0 +1,1 @@
+ALTER TABLE `groups` ADD `members_see_attendance` integer DEFAULT false NOT NULL;

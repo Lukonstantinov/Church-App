@@ -693,7 +693,7 @@ export async function memberAttendance(
     timezone: string;
     now?: Date;
   },
-): Promise<MemberAttendance> {
+): Promise<Omit<MemberAttendance, 'visible'>> {
   const { userId, groupId, groupName, joinedAt, timezone } = args;
   const now = args.now ?? new Date();
   const joinedDay = joinedAt ? dayStart(joinedAt, timezone) : null;

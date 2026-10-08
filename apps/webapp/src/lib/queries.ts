@@ -1398,6 +1398,16 @@ export function useSavePosition(groupId: number) {
   });
 }
 
+/** New top-to-bottom order of the positions (the order of the member lists). */
+export function useReorderPositions(groupId: number) {
+  const saved = usePositionsSaved(groupId);
+  return useMutation({
+    mutationFn: (ids: number[]) =>
+      apiFetch<PositionRow[]>(`/groups/${groupId}/positions/order`, send('PUT', { ids })),
+    onSuccess: saved,
+  });
+}
+
 export function useDeletePosition(groupId: number) {
   const saved = usePositionsSaved(groupId);
   return useMutation({

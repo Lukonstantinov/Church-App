@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast';
 import { Badge, Screen, Skeleton, Title } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { useContacts, useGroup } from '../lib/queries';
+import { FilterChip, SortSwitch } from './People';
 import { haptic, openTelegramLink } from '../lib/telegram';
 
 /** Everyone in the ministry with their position; tapping someone opens a Telegram chat. */
@@ -16,13 +17,32 @@ export function Contacts({ groupId }: { groupId: number }) {
   const group = useGroup(groupId);
   const contacts = useContacts(groupId);
   const [q, setQ] = useState('');
+  const [byName, setByName] = useState(false);
+  const [only, setOnly] = useState<string | null>(null);
   const needle = q.trim().toLocaleLowerCase();
-  const list = (contacts.data ?? []).filter(
+  const all = contacts.data ?? [];
+  // Leaders first (the ministry's position order, set in Позиции), or simply A–Z.
+  const sorted = [...all].sort(
+    (a, b) =>
+      (byName ? 0 : a.positionRank - b.positionRank) ||
+      displayName(a).localeCompare(displayName(b)),
+  );
+  // One chip per position, in that order, to show only its people.
+  const positionsInUse = [
+    ...new Map(
+      [...all]
+        .sort((a, b) => a.positionRank - b.positionRank)
+        .filter((c) => c.positionName)
+        .map((c) => [c.positionName!, all.filter((x) => x.positionName === c.positionName).length]),
+    ),
+  ];
+  const list = sorted.filter(
     (c) =>
-      !needle ||
-      `${displayName(c)} ${c.username ?? ''} ${c.positionName ?? ''}`
-        .toLocaleLowerCase()
-        .includes(needle),
+      (only === null || c.positionName === only) &&
+      (!needle ||
+        `${displayName(c)} ${c.username ?? ''} ${c.positionName ?? ''}`
+          .toLocaleLowerCase()
+          .includes(needle)),
   );
 
   return (
@@ -38,6 +58,19 @@ export function Contacts({ groupId }: { groupId: number }) {
         />
       </label>
       <p className="-mt-2 px-2 text-[13px] text-hint">{t.people.contactsHint}</p>
+      {all.length > 1 && <SortSwitch byName={byName} onChange={setByName} />}
+      {positionsInUse.length > 1 && (
+        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
+          <FilterChip on={only === null} onClick={() => setOnly(null)}>
+            {t.people.all} · {all.length}
+          </FilterChip>
+          {positionsInUse.map(([name, n]) => (
+            <FilterChip key={name} on={only === name} onClick={() => setOnly(name)}>
+              {name} · {n}
+            </FilterChip>
+          ))}
+        </div>
+      )}
       {contacts.isPending ? (
         <Skeleton className="h-64 w-full" />
       ) : (

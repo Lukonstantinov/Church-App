@@ -5,6 +5,7 @@ import {
   labelExtra,
   readLabelLook,
   positionInputSchema,
+  positionOrderSchema,
   type labelLookSchema,
   type Permission,
 } from '@church/shared';
@@ -74,6 +75,26 @@ groupPositionRoutes.post('/:id/positions', async (c) => {
     data: { positionId: row!.id, name: input.name, permissions: input.permissions },
   });
   return c.json(await listPositions(db, group.id), 201);
+});
+
+/** New order of the positions (top first): the order members are listed in. */
+groupPositionRoutes.put('/:id/positions/order', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const group = await assertCan(db, user, idParam(c), 'positions');
+  const { ids } = await parseBody(c, positionOrderSchema);
+  const mine = new Set((await listPositions(db, group.id)).map((p) => p.id));
+  // Positions of this ministry only, in the given order; any left out keep their place after.
+  const order = ids.filter((id) => mine.has(id));
+  await Promise.all(
+    order.map((id, i) =>
+      db
+        .update(positions)
+        .set({ sort: i })
+        .where(and(eq(positions.id, id), eq(positions.groupId, group.id))),
+    ),
+  );
+  return c.json(await listPositions(db, group.id));
 });
 
 async function makeDefault(db: AuthVariables['db'], groupId: number, positionId: number) {

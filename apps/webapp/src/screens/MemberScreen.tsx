@@ -123,9 +123,12 @@ export function MemberScreen({ userId }: { userId: number }) {
         )}
       </header>
 
-      {attendance.map((a) => (
-        <AttendanceSummary key={a.groupId} data={a} showStreak={permissions.canEditProfile} />
-      ))}
+      {attendance.map(
+        (a) =>
+          a.visible && (
+            <AttendanceSummary key={a.groupId} data={a} showStreak={permissions.canEditProfile} />
+          ),
+      )}
 
       {permissions.canEditProfile && (
         <Section title={t.member.profile}>

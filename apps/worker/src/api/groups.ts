@@ -61,7 +61,13 @@ import {
   signedMediaUrl,
   storeMedia,
 } from '../lib/media';
-import { createDefaultPositions, defaultPositionId, permsOf, roleFor } from '../lib/positions';
+import {
+  createDefaultPositions,
+  defaultPositionId,
+  listPositions,
+  permsOf,
+  roleFor,
+} from '../lib/positions';
 import { botApi, botUsername, inviteLink } from '../lib/telegram';
 import { toLabelRef } from './labels';
 import { startChatLink, unlinkChat } from '../lib/chats';
@@ -340,6 +346,7 @@ groupRoutes.get('/:id', async (c) => {
     chatUrl: group.chatUrl,
     defaultLocation: group.defaultLocation,
     eventReminderHours: group.eventReminderHours,
+    membersSeeAttendance: group.membersSeeAttendance,
     meetingReminders: readReminders(group.meetingReminders),
     meetingMotion: readMotion(group.meetingMotion) ?? 'calm',
     meetingTemplateId: group.meetingTemplateId,
@@ -796,12 +803,19 @@ groupRoutes.get('/:id/contacts', async (c) => {
       isAdmin: users.isAdmin,
       positionName: positions.name,
       positionLook: positions.look,
+      positionId: memberships.positionId,
     })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
     .leftJoin(positions, eq(positions.id, memberships.positionId))
     .where(and(eq(memberships.groupId, group.id), eq(memberships.status, 'active')))
     .orderBy(users.firstName);
+  // The ministry's position order (leaders first); the default position and none come last.
+  const order = await listPositions(db, group.id);
+  const rankOf = (id: number | null) => {
+    const i = order.findIndex((p) => p.id === id);
+    return i < 0 || order[i]!.isDefault ? 999 : i;
+  };
   const labelRows = rows.length
     ? await db
         .select({ userId: memberLabels.userId, label: groupLabels })
@@ -818,11 +832,14 @@ groupRoutes.get('/:id/contacts', async (c) => {
         )
         .orderBy(asc(groupLabels.sort), asc(groupLabels.id))
     : [];
-  const list: ContactRow[] = rows.map(({ telegramId, ...r }) => ({
-    ...r,
-    offline: telegramId === null,
-    labels: labelRows.filter((l) => l.userId === r.id).map((l) => toLabelRef(l.label)),
-  }));
+  const list: ContactRow[] = rows
+    .map(({ telegramId, ...r }) => ({
+      ...r,
+      positionRank: rankOf(r.positionId),
+      offline: telegramId === null,
+      labels: labelRows.filter((l) => l.userId === r.id).map((l) => toLabelRef(l.label)),
+    }))
+    .sort((a, b) => a.positionRank - b.positionRank);
   return c.json(list);
 });
 

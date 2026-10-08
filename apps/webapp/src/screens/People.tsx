@@ -53,8 +53,9 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
   const defaultId = positions.data?.find((p) => p.isDefault)?.id ?? null;
   const order = new Map((positions.data ?? []).map((p, i) => [p.id, p.isDefault ? 999 : i]));
   const rank = (m: MemberRow) => order.get(m.positionId ?? -1) ?? 999;
+  const [byName, setByName] = useState(false);
   const sorted = [...activeList].sort(
-    (a, b) => rank(a) - rank(b) || displayName(a).localeCompare(displayName(b)),
+    (a, b) => (byName ? 0 : rank(a) - rank(b)) || displayName(a).localeCompare(displayName(b)),
   );
   const chips = (positions.data ?? [])
     .map((p) => ({
@@ -203,6 +204,7 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
             />
           </label>
         )}
+        {activeList.length > 1 && <SortSwitch byName={byName} onChange={setByName} />}
         {chips.length > 1 && (
           <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
             <FilterChip on={only === null} onClick={() => setOnly(null)}>
@@ -342,7 +344,7 @@ function PersonDetails({
   );
 }
 
-function FilterChip({
+export function FilterChip({
   on,
   onClick,
   children,
@@ -364,5 +366,35 @@ function FilterChip({
     >
       {children}
     </button>
+  );
+}
+
+/** Members in the ministry's position order (Позиции, top first) or simply by name. */
+export function SortSwitch({
+  byName,
+  onChange,
+}: {
+  byName: boolean;
+  onChange: (byName: boolean) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="glass flex self-start rounded-full p-1 shadow-card">
+      {[false, true].map((v) => (
+        <button
+          key={String(v)}
+          type="button"
+          onClick={() => {
+            haptic.tap();
+            onChange(v);
+          }}
+          className={`rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
+            byName === v ? 'brand-gradient text-white' : 'text-hint'
+          }`}
+        >
+          {v ? t.people.sortByName : t.people.sortByPosition}
+        </button>
+      ))}
+    </div>
   );
 }

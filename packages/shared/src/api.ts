@@ -206,6 +206,8 @@ export interface GroupDetail extends GroupSummary {
   /** Usual place of the ministry's meetings. */
   defaultLocation: string;
   eventReminderHours: number | null;
+  /** Members without rights see their own attendance on the home screen. */
+  membersSeeAttendance: boolean;
   /** Minutes before each meeting a reminder goes out (empty = none). */
   meetingReminders: number[];
   /** How lively the ministry's meetings move. */
@@ -265,6 +267,8 @@ export const updateGroupSchema = z.object({
   meetingReminders: z.array(z.number().int().min(5).max(2880)).max(6).nullable().optional(),
   /** How lively meetings' backgrounds move (null = calm). */
   meetingMotion: z.enum(MEETING_MOTIONS).nullable().optional(),
+  /** Members without rights see their own attendance (off by default). */
+  membersSeeAttendance: z.boolean().optional(),
 });
 export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 
@@ -322,6 +326,13 @@ export interface ContactRow {
   username: string | null;
   positionName: string | null;
   positionLook: LabelLook | null;
+  /** The position (null = none: counted with the ministry's default one). */
+  positionId: number | null;
+  /**
+   * Where the position stands in the ministry's order (Позиции: top first); the default
+   * position and people without one come last.
+   */
+  positionRank: number;
   offline: boolean;
   /** A church administrator (the name is shown in red). */
   isAdmin: boolean;
@@ -931,6 +942,11 @@ export interface MemberAttendance {
   streak: number;
   /** Newest first, up to 8. */
   recent: RecentMark[];
+  /**
+   * Whether the home screen shows this attendance: to people with rights always, to plain
+   * members only when the ministry allows it (`membersSeeAttendance`).
+   */
+  visible: boolean;
   nextMeeting: {
     id: number;
     title: string;

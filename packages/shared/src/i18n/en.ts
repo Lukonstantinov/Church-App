@@ -700,6 +700,8 @@ export const en: Messages = {
     failed: 'Couldn’t create the meeting',
   },
   people: {
+    sortByPosition: 'By position',
+    sortByName: 'By name',
     all: 'All',
     attendanceRate: 'Attendance',
     serves: 'Serves in',
@@ -1588,6 +1590,10 @@ export const en: Messages = {
     noData: 'No data for this year',
   },
   positions: {
+    orderHint:
+      'Top to bottom is the order of the member lists: higher positions are shown first. Change it with the arrows.',
+    moveUp: 'Up',
+    moveDown: 'Down',
     leader: 'Leader',
     leaderDescription: 'Runs the ministry: all rights',
     member: 'Member',
@@ -1685,6 +1691,9 @@ export const en: Messages = {
     design: 'Look',
   },
   env: {
+    attendanceOpen: 'Members see their attendance',
+    attendanceOpenHint:
+      'Off: regular members (without rights) don’t see the attendance card on the home screen or in their profile. Leaders always see it.',
     lookInDesign: 'Screen background, animations and templates — in «Design»',
     lookInDesignHint: 'All of the look is set in one place — the «Design» tab.',
     look: 'Look',

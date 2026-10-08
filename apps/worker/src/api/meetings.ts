@@ -1478,21 +1478,23 @@ myAttendanceRoutes.get('/', async (c) => {
   const user = c.get('user');
   const { timezone } = await getChurch(db);
   const rows = await db
-    .select({ m: memberships, groupName: groups.name })
+    .select({ m: memberships, groupName: groups.name, open: groups.membersSeeAttendance })
     .from(memberships)
     .innerJoin(groups, eq(groups.id, memberships.groupId))
     .where(and(eq(memberships.userId, user.id), eq(memberships.status, 'active')));
   const result: MyAttendanceResponse = {
     groups: await Promise.all(
-      rows.map(({ m, groupName }) =>
-        memberAttendance(db, {
+      rows.map(async ({ m, groupName, open }) => ({
+        ...(await memberAttendance(db, {
           userId: user.id,
           groupId: m.groupId,
           groupName,
           joinedAt: m.joinedAt,
           timezone,
-        }),
-      ),
+        })),
+        // Plain members see their attendance only when the ministry allows it.
+        visible: open || (await accessIn(db, user, m.groupId)).perms.size > 0,
+      })),
     ),
   };
   return c.json(result);

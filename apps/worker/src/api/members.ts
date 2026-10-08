@@ -177,6 +177,7 @@ userRoutes.get('/:id', async (c) => {
     .select({
       m: memberships,
       groupName: groups.name,
+      openAttendance: groups.membersSeeAttendance,
       brandColor: groups.brandColor,
       logoMediaId: groups.logoMediaId,
       positionName: positions.name,
@@ -200,15 +201,19 @@ userRoutes.get('/:id', async (c) => {
   const attendance = await Promise.all(
     rows
       .filter(({ m }) => m.status === 'active')
-      .map(({ m, groupName }) =>
-        memberAttendance(db, {
+      .map(async ({ m, groupName, openAttendance }) => ({
+        ...(await memberAttendance(db, {
           userId: id,
           groupId: m.groupId,
           groupName,
           joinedAt: m.joinedAt,
           timezone: church.timezone,
-        }),
-      ),
+        })),
+        // Those who manage the person always see it; plain members their own only when
+        // the ministry allows it.
+        visible:
+          canManage || openAttendance || (await accessIn(db, actor, m.groupId)).perms.size > 0,
+      })),
   );
   const labelRows = rows.length
     ? await db

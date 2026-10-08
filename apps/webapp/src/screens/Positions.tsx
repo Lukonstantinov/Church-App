@@ -7,7 +7,7 @@ import {
   type Permission,
   type PositionRow,
 } from '@church/shared';
-import { IconCheck, IconPlus, IconTrash } from '../components/icons';
+import { IconCheck, IconChevronDown, IconPlus, IconTrash } from '../components/icons';
 import { LabelChip } from '../components/LabelLook';
 import { Pill } from '../components/LookControls';
 import { LookEditor, defaultLook } from '../components/LookEditor';
@@ -29,7 +29,13 @@ import { ApiError } from '../lib/api';
 import { useEnv } from '../lib/env';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { useDeletePosition, useGroup, usePositions, useSavePosition } from '../lib/queries';
+import {
+  useDeletePosition,
+  useGroup,
+  usePositions,
+  useReorderPositions,
+  useSavePosition,
+} from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
 
 /** List of the ministry's positions: who they are for, how many people, how many rights. */
@@ -38,43 +44,85 @@ export function Positions({ groupId }: { groupId: number }) {
   const { push } = useNav();
   const group = useGroup(groupId);
   const q = usePositions(groupId);
+  const reorder = useReorderPositions(groupId);
+  const { can } = useEnv();
   if (q.isPending) return <Loading />;
   if (q.isError) return <ErrorState onRetry={() => void q.refetch()} />;
+  const list = q.data;
+  // Moves a position one place up or down: members are listed in this order.
+  const move = (i: number, by: -1 | 1) => {
+    const ids = list.map((p) => p.id);
+    const j = i + by;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j]!, ids[i]!];
+    haptic.tap();
+    reorder.mutate(ids);
+  };
 
   return (
     <Screen>
       <Title subtitle={group.data?.name}>{t.positions.title}</Title>
+      {can('positions') && list.length > 1 && (
+        <p className="-mt-2 px-2 text-[13px] leading-snug text-hint">{t.positions.orderHint}</p>
+      )}
       <div className="flex flex-col gap-3">
-        {q.data.map((p) => (
-          <Card
-            key={p.id}
-            onClick={() => push({ name: 'position', groupId, positionId: p.id })}
-            className="p-4"
-          >
-            <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-[17px] font-semibold">
-                {p.look ? <LabelChip label={{ ...p.look, name: p.name }} /> : p.name}
+        {list.map((p, i) => (
+          <div key={p.id} className="flex items-stretch gap-2">
+            <div className="min-w-0 flex-1">
+              <Card
+                onClick={() => push({ name: 'position', groupId, positionId: p.id })}
+                className="p-4"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-[17px] font-semibold">
+                    {p.look ? <LabelChip label={{ ...p.look, name: p.name }} /> : p.name}
+                  </span>
+                  {p.isDefault && <Badge tone="hint">{t.positions.defaultBadge}</Badge>}
+                  <span className="text-[13px] text-hint">{t.positions.people(p.memberCount)}</span>
+                </div>
+                {p.description && (
+                  <p className="mt-1 line-clamp-2 text-[14px] text-hint">{p.description}</p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {p.permissions.length === 0 ? (
+                    <Badge tone="hint">{t.positions.noRights}</Badge>
+                  ) : p.permissions.length === PERMISSIONS.length ? (
+                    <Badge>
+                      {t.positions.rightsCount(p.permissions.length, PERMISSIONS.length)}
+                    </Badge>
+                  ) : (
+                    p.permissions.map((perm) => (
+                      <Badge key={perm} tone="accent">
+                        {t.positions.perm[perm]}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </Card>
+            </div>
+            {can('positions') && list.length > 1 && (
+              <span className="flex shrink-0 flex-col justify-center gap-1.5">
+                <button
+                  type="button"
+                  aria-label={t.positions.moveUp}
+                  disabled={i === 0 || reorder.isPending}
+                  onClick={() => move(i, -1)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-hairline active:scale-90 disabled:opacity-30"
+                >
+                  <IconChevronDown size={16} className="rotate-180" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t.positions.moveDown}
+                  disabled={i === list.length - 1 || reorder.isPending}
+                  onClick={() => move(i, 1)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-hairline active:scale-90 disabled:opacity-30"
+                >
+                  <IconChevronDown size={16} />
+                </button>
               </span>
-              {p.isDefault && <Badge tone="hint">{t.positions.defaultBadge}</Badge>}
-              <span className="text-[13px] text-hint">{t.positions.people(p.memberCount)}</span>
-            </div>
-            {p.description && (
-              <p className="mt-1 line-clamp-2 text-[14px] text-hint">{p.description}</p>
             )}
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {p.permissions.length === 0 ? (
-                <Badge tone="hint">{t.positions.noRights}</Badge>
-              ) : p.permissions.length === PERMISSIONS.length ? (
-                <Badge>{t.positions.rightsCount(p.permissions.length, PERMISSIONS.length)}</Badge>
-              ) : (
-                p.permissions.map((perm) => (
-                  <Badge key={perm} tone="accent">
-                    {t.positions.perm[perm]}
-                  </Badge>
-                ))
-              )}
-            </div>
-          </Card>
+          </div>
         ))}
       </div>
       <Button onClick={() => push({ name: 'position', groupId })}>

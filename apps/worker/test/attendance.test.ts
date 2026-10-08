@@ -420,6 +420,15 @@ describe('stats', () => {
       streak: 0,
     });
     expect(mine.groups[0]!.nextMeeting?.title).toBe('Пятница');
+    // Plain members don't see their attendance until the ministry allows it.
+    expect(mine.groups[0]!.visible).toBe(false);
+    await apiJson(`/api/groups/${group}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { membersSeeAttendance: true },
+    });
+    const open = await apiJson<MyAttendanceResponse>('/api/me/attendance', { user: member });
+    expect(open.groups[0]!.visible).toBe(true);
     void ({} as GroupDetail);
   });
 });

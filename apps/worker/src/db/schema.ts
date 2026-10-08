@@ -94,6 +94,10 @@ export const groups = sqliteTable('groups', {
   inactivityThreshold: integer('inactivity_threshold').notNull().default(3),
   checkinTemplate: text('checkin_template'),
   membersSeeTreasury: integer('members_see_treasury', { mode: 'boolean' }).notNull().default(false),
+  /** Members without rights see their own attendance on the home screen (off by default). */
+  membersSeeAttendance: integer('members_see_attendance', { mode: 'boolean' })
+    .notNull()
+    .default(false),
   /** Expected monthly dues per paying member, in cents of the church currency. */
   monthlyFeeCents: integer('monthly_fee_cents').notNull().default(500),
   /** Link to the group's Telegram chat (t.me/…), shown to members. */
