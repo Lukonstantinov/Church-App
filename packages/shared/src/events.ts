@@ -110,6 +110,8 @@ export const createEventSchema = z.object({
 export type CreateEventInput = z.input<typeof createEventSchema>;
 
 export const updateEventSchema = z.object({
+  /** The look version the form was opened with: refused if someone changed the look since. */
+  lookVersion: z.number().int().min(0).optional(),
   title: z.string().trim().min(1).max(80).optional(),
   description: optionalText(4000).optional(),
   date: date.optional(),
@@ -196,6 +198,10 @@ export interface EventSummary {
   coverSlides: { mediaIds: number[]; urls: string[]; seconds: number } | null;
   /** The poster template its cover uses, with its layers (null = none). */
   posterTemplateId: number | null;
+  /** Its own choice of template (null = follows the ministry's default for events, if any). */
+  ownTemplateId: number | null;
+  /** Goes up with every change of its look (see `lookVersion` in the update). */
+  lookVersion: number;
   poster: PosterTemplate | null;
   countdown: boolean;
   /** Up to four speakers shown on the poster. */

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { GroupDetail, MeetingDetail } from '@church/shared';
+import { ApiError } from '../lib/api';
 import { useT } from '../lib/i18n';
 import { useGroup, useMeeting, useUpdateMeeting } from '../lib/queries';
 import { haptic } from '../lib/telegram';
@@ -54,13 +55,18 @@ function Editor({ m, g, onClose }: { m: MeetingDetail; g: GroupDetail; onClose: 
       await update.mutateAsync({
         id: m.id,
         ...meetingPosterPayload(state, templateId),
+        lookVersion: m.lookVersion,
         ...(toSeries ? { applyToSeries: true } : {}),
       });
       haptic.success();
       toast(t.common.saved);
       onClose();
-    } catch {
-      toast(t.common.saveFailed, 'error');
+    } catch (e) {
+      // Someone changed its look while this sheet was open: say so instead of overwriting.
+      toast(
+        e instanceof ApiError && e.status === 409 ? t.design.lookChanged : t.common.saveFailed,
+        'error',
+      );
     }
   }
   return (

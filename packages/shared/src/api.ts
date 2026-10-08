@@ -182,6 +182,8 @@ export interface GroupDetail extends GroupSummary {
   meetingMotion: MeetingMotion;
   /** The design template meetings without a look of their own wear (null = the ministry's). */
   meetingTemplateId: number | null;
+  /** The design template events without a look of their own wear (null = the ministry's). */
+  eventTemplateId: number | null;
   /** How speakers' photos show on its meetings (null = as designed). */
   speakerLook: SpeakerLook | null;
   /** Services saved for meetings (name, icon, speaker). */
@@ -555,6 +557,8 @@ export interface MeetingRow {
   ownPosterMotion: MeetingMotion | null;
   /** Its own choice of template (null = follows the ministry's default, if any). */
   ownTemplateId: number | null;
+  /** Goes up with every change of its look (see `lookVersion` in the update). */
+  lookVersion: number;
   /** Settings per animation: its own over its template's. */
   motionTunes: MotionTunes;
   ownMotionTunes: MotionTunes;
@@ -603,6 +607,8 @@ export const createMeetingSchema = z.object({
 export type CreateMeetingInput = z.input<typeof createMeetingSchema>;
 
 export const updateMeetingSchema = z.object({
+  /** The look version the sheet was opened with: refused if someone changed the look since. */
+  lookVersion: z.number().int().min(0).optional(),
   status: z.enum(['scheduled', 'cancelled']).optional(),
   title: name.optional(),
   notes: optionalText(500).optional(),

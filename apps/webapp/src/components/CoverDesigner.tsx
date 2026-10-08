@@ -150,6 +150,7 @@ export function CoverLookControls({
   g,
   groupId,
   followTemplateId,
+  followLabel,
 }: {
   state: CoverState;
   onChange: (s: CoverState) => void;
@@ -157,6 +158,8 @@ export function CoverLookControls({
   groupId: number;
   /** Meetings: the ministry's default template ("as for all meetings"). */
   followTemplateId?: number | null;
+  /** The name of following it (default: "as for all meetings"). */
+  followLabel?: (name: string) => string;
 }) {
   const t = useT();
   const { base, templates } = useCoverLook(state, g, followTemplateId);
@@ -172,7 +175,11 @@ export function CoverLookControls({
           <Pill
             on={source.kind === 'ministry'}
             onClick={() => setSource({ kind: 'ministry' })}
-            label={defaultTpl ? t.design.followDefault(defaultTpl.name) : t.feed.ministryLook}
+            label={
+              defaultTpl
+                ? (followLabel ?? t.design.followDefault)(defaultTpl.name)
+                : t.feed.ministryLook
+            }
           />
           <Pill
             on={source.kind === 'own'}

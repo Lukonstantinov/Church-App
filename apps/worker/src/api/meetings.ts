@@ -663,9 +663,13 @@ meetingRoutes.patch('/:id', async (c) => {
     if (g?.meetingTemplateId === input.templateId) input.templateId = null;
   }
   const given = (Object.keys(input) as (keyof typeof input)[]).filter(
-    (k) => input[k] !== undefined && k !== 'applyToSeries',
+    (k) => input[k] !== undefined && k !== 'applyToSeries' && k !== 'lookVersion',
   );
-  if (MEETING_LOOK.some((k) => lookDiffers(input[k], meeting[k]))) assertMayDesign(rights, a.edit);
+  const lookChanged = MEETING_LOOK.some((k) => lookDiffers(input[k], meeting[k]));
+  if (lookChanged) assertMayDesign(rights, a.edit);
+  // Someone else changed the look after this sheet was opened: don't overwrite it unseen.
+  if (lookChanged && input.lookVersion !== undefined && input.lookVersion !== meeting.lookVersion)
+    throw new HTTPException(409, { message: 'look_changed' });
   // Speakers are on the poster too, so a designer may set them.
   if (
     !a.edit &&
@@ -694,6 +698,7 @@ meetingRoutes.patch('/:id', async (c) => {
     await setAudience(db, meeting.groupId, meeting.id, input.audience ?? []);
 
   const patch: Partial<typeof meetings.$inferInsert> = {};
+  if (lookChanged) patch.lookVersion = meeting.lookVersion + 1;
   if (input.status !== undefined && meeting.status !== 'done') patch.status = input.status;
   if (input.title !== undefined) patch.title = input.title;
   if (input.notes !== undefined) patch.notes = input.notes;
@@ -783,7 +788,9 @@ meetingRoutes.patch('/:id', async (c) => {
         'posterMotion',
         'motionTunes',
       ] as const)
-        if (k in patch) (shared as Record<string, unknown>)[k] = patch[k];
+        // Only what this save really changed goes to the rest — their own edits stay.
+        if (k in patch && (patch[k] ?? null) !== (meeting[k] ?? null))
+          (shared as Record<string, unknown>)[k] = patch[k];
       if (Object.keys(shared).length > 0)
         await db
           .update(meetings)

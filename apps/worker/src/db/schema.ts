@@ -125,6 +125,8 @@ export const groups = sqliteTable('groups', {
    * (Design tab): looks come from the templates, single meetings can still be changed.
    */
   meetingTemplateId: integer('meeting_template_id'),
+  /** The same for events: the template events without a look of their own wear. */
+  eventTemplateId: integer('event_template_id'),
   /** How speakers' photos show on its meetings' posters and cards (SpeakerLook JSON). */
   speakerLook: text('speaker_look'),
   /** Services people do at meetings, saved for reuse: JSON [{name, icon, speaker}]. */
@@ -294,6 +296,8 @@ export const meetings = sqliteTable(
     motionTunes: text('motion_tunes'),
     /** A poster template from Design → Posters (null = the usual poster). */
     posterTemplateId: integer('poster_template_id'),
+    /** Goes up with every change of its look: a sheet opened before it can't overwrite it. */
+    lookVersion: integer('look_version').notNull().default(0),
     rollTakenBy: integer('roll_taken_by'),
     rollTakenAt: text('roll_taken_at'),
     /** Who last said "Can't" to leading / the snacks (the job was freed; shown with a red ✗). */
@@ -629,6 +633,8 @@ export const events = sqliteTable(
     coverSlides: text('cover_slides'),
     /** A poster template from Design → Posters for its cover (null = none). */
     posterTemplateId: integer('poster_template_id'),
+    /** Goes up with every change of its look: a sheet opened before it can't overwrite it. */
+    lookVersion: integer('look_version').notNull().default(0),
     status: text('status', { enum: ['scheduled', 'cancelled'] })
       .notNull()
       .default('scheduled'),

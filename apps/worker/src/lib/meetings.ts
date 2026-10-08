@@ -463,6 +463,7 @@ export async function toMeetingRows(
     design: readPostDesign(m.design),
     templateId: tplOf[i] ?? null,
     ownTemplateId: m.templateId,
+    lookVersion: m.lookVersion,
     look: looks[i]!,
     speakers: speakers[i]!,
     seriesId: m.seriesId,

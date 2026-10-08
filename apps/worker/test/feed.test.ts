@@ -556,6 +556,53 @@ describe('looks from the Design tab and profile photos', () => {
   });
 });
 
+describe('events follow the default look; edits made meanwhile are not overwritten', () => {
+  it('event default template, and a stale look version is refused', async () => {
+    const g = await createEnv('События по умолчанию');
+    const { id: tplId } = await apiJson<{ id: number }>('/api/templates', {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Событийный', brandColor: 'night', pattern: null },
+    });
+    await apiJson(`/api/groups/${g.id}/studio`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: { eventTemplateId: tplId },
+    });
+    const e = await apiJson<EventDetail>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'По шаблону',
+        date: new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10),
+        startTime: '18:00',
+      },
+    });
+    expect(e).toMatchObject({ templateId: tplId, ownTemplateId: null, lookVersion: 0 });
+    // A look change bumps the version…
+    const changed = await apiJson<EventDetail>(`/api/events/${e.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { lookVersion: 0, motion: 'snow' },
+    });
+    expect(changed.lookVersion).toBe(1);
+    // …so a form opened before it can't overwrite the look unseen.
+    const stale = await api(`/api/events/${e.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { lookVersion: 0, motion: 'rays' },
+    });
+    expect(stale.status).toBe(409);
+    // Other changes from that form still go through.
+    const titleOnly = await api(`/api/events/${e.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { lookVersion: 0, title: 'Новое имя', motion: 'snow' },
+    });
+    expect(titleOnly.status).toBe(200);
+  });
+});
+
 describe('event picture for the bot', () => {
   it('a cover photo goes as it is; the drawn poster only without one or with a poster template', async () => {
     const g = await createEnv('Картинка бота');

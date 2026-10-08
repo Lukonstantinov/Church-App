@@ -188,29 +188,35 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
             <span className="text-[14px] font-semibold">{t.design.newTemplate}</span>
           </button>
         </div>
-        {(templates.data?.length ?? 0) > 0 && (
-          <div className="mt-3">
-            <div className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-              {t.design.defaultForMeetings}
+        {(templates.data?.length ?? 0) > 0 &&
+          (
+            [
+              ['meetingTemplateId', t.design.defaultForMeetings, t.design.defaultForMeetingsHint],
+              ['eventTemplateId', t.design.defaultForEvents, t.design.defaultForEventsHint],
+            ] as const
+          ).map(([key, title, hint]) => (
+            <div key={key} className="mt-3">
+              <div className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+                {title}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5 px-1">
+                {[null, ...(templates.data ?? []).map((x) => x.id)].map((id) => (
+                  <Pill
+                    key={id ?? 'own'}
+                    on={(group.data?.[key] ?? null) === id}
+                    onClick={() =>
+                      saveStudio.mutate(
+                        { [key]: id },
+                        { onError: () => toast(t.common.saveFailed, 'error') },
+                      )
+                    }
+                    label={id === null ? t.design.ministryLook : (tplName(id) ?? '')}
+                  />
+                ))}
+              </div>
+              <p className="mt-1.5 px-3 text-[12px] text-hint">{hint}</p>
             </div>
-            <div className="mt-2 flex flex-wrap gap-1.5 px-1">
-              {[null, ...(templates.data ?? []).map((x) => x.id)].map((id) => (
-                <Pill
-                  key={id ?? 'own'}
-                  on={(group.data?.meetingTemplateId ?? null) === id}
-                  onClick={() =>
-                    saveStudio.mutate(
-                      { meetingTemplateId: id },
-                      { onError: () => toast(t.common.saveFailed, 'error') },
-                    )
-                  }
-                  label={id === null ? t.design.ministryLook : (tplName(id) ?? '')}
-                />
-              ))}
-            </div>
-            <p className="mt-1.5 px-3 text-[12px] text-hint">{t.design.defaultForMeetingsHint}</p>
-          </div>
-        )}
+          ))}
       </section>
 
       <MinistrySpeakerLook g={active} />
@@ -652,11 +658,14 @@ function ApplySheet({
   const updateEvent = useUpdateEvent(item.kind === 'event' ? item.e.id : 0);
   const thing = item.kind === 'meeting' ? item.m : item.e;
   const groupDetail = useGroup(g.id);
-  const defaultTpl =
-    templates.data?.find((x) => x.id === groupDetail.data?.meetingTemplateId) ?? null;
-  // A meeting wearing the default template counts as "no own choice".
+  const defaultId =
+    item.kind === 'meeting'
+      ? groupDetail.data?.meetingTemplateId
+      : groupDetail.data?.eventTemplateId;
+  const defaultTpl = templates.data?.find((x) => x.id === defaultId) ?? null;
+  // Wearing the default template counts as "no own choice".
   const start: Choice =
-    thing.templateId && !(item.kind === 'meeting' && thing.templateId === defaultTpl?.id)
+    thing.templateId && thing.templateId !== defaultTpl?.id
       ? thing.templateId
       : thing.design?.custom
         ? 'own'
@@ -687,7 +696,7 @@ function ApplySheet({
   const tpl =
     typeof choice === 'number'
       ? templates.data?.find((x) => x.id === choice)
-      : choice === 'ministry' && item.kind === 'meeting'
+      : choice === 'ministry'
         ? defaultTpl
         : null;
   const look: PosterLook =
@@ -801,8 +810,10 @@ function ApplySheet({
               onClick={() => setChoice('ministry')}
               // With a default template for meetings, "no own choice" means following it.
               label={
-                item.kind === 'meeting' && defaultTpl
-                  ? t.design.followDefault(defaultTpl.name)
+                defaultTpl
+                  ? (item.kind === 'meeting'
+                      ? t.design.followDefault
+                      : t.design.followDefaultEvents)(defaultTpl.name)
                   : t.design.ministryLook
               }
             />

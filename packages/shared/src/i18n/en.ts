@@ -869,6 +869,8 @@ export const en: Messages = {
     noneYet: 'No posters yet — make one in Design → Posters.',
   },
   studio: {
+    themeUndo: 'Undo the theme — back as it was',
+    themeUndone: 'Back as it was',
     playMotion: 'Play animations',
     stopMotion: 'Stop animations',
     samplePinned: 'Youth camp',
@@ -1038,6 +1040,11 @@ export const en: Messages = {
     srcOwnChanges: 'Own changes over the shared ones',
     srcInherited: 'As for all meetings',
     srcReset: 'Reset',
+    followDefaultEvents: (name: string) => `As for all events («${name}»)`,
+    defaultForEvents: 'Look of all events',
+    defaultForEventsHint:
+      'Events without a look of their own wear this template. A single event can be changed in its form.',
+    lookChanged: 'Someone changed the look while this was open. Close and open again to see it.',
     defaultForMeetings: 'Look of all meetings',
     defaultForMeetingsHint:
       'Meetings without a look of their own (and new scheduled ones) wear this template. A single meeting can be changed below — «Meetings».',

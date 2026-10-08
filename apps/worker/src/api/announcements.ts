@@ -539,5 +539,6 @@ templateRoutes.delete('/:id', async (c) => {
     .update(groups)
     .set({ meetingTemplateId: null })
     .where(eq(groups.meetingTemplateId, row.id));
+  await db.update(groups).set({ eventTemplateId: null }).where(eq(groups.eventTemplateId, row.id));
   return c.json({ ok: true });
 });

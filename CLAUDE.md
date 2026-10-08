@@ -128,8 +128,13 @@ a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).
 **Design** — the `design` right ("designer") gives a Design tab (`screens/Design.tsx`): church-wide
 templates (`design_templates`, with `motion` = the meeting animation; PUT to change) with live
 previews (meeting hero, home tile, poster) and restyling of upcoming meetings/events and posts.
-Ministry default meeting look: `groups.meeting_template_id` («Оформление всех встреч») — meetings with
-no template or own design wear it (resolved in `toMeetingRows`), single meetings can differ.
+Design precedence, one rule everywhere: own → template → ministry default → app default. Defaults live in
+the Design tab: `groups.meeting_template_id` / `event_template_id` («Оформление всех встреч/событий»),
+`groups.speaker_look`, Studio; exceptions in one place per item: the meeting's «🎨 Оформление» sheet
+(`MeetingDesignSheet`: where each part comes from + ↺ reset) or the event form. Only an own look
+(`design.custom`) leaves the default; forms store only changed fields (speaker look / tunes merged
+field by field); a form sending the default template back stores none. `look_version` on meetings and
+events refuses (409) a look save from a sheet opened before someone else's change.
 Church setting `designLock`: when on, only designers (and admins) change looks — enforced in the
 meeting/event/post PATCH routes via `designRights` / `assertMayDesign` / `lookDiffers`
 (`lib/access.ts`; unchanged values resent by forms don't count); rows carry `canDesign`.

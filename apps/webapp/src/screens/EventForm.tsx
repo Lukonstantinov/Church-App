@@ -31,6 +31,7 @@ import {
   type SpeakerDraft,
 } from '../components/Speakers';
 import { capturePoster } from '../lib/poster';
+import { ApiError } from '../lib/api';
 import { Sheet } from '../components/Sheet';
 import {
   IconCalendar,
@@ -195,9 +196,10 @@ function EventFormBody({
   const [speakers, setSpeakers] = useState<SpeakerDraft[]>(() => toDrafts(event?.speakers));
   // Without a cover photo the event shows a designed cover, like posts.
   const [look, setLook] = useState<CoverState>(() =>
-    initCover(event?.design, event?.templateId, event?.look, true),
+    // Its own choice only: following the ministry's default shows as "as for all events".
+    initCover(event?.design, event?.ownTemplateId ?? null, event?.look, true),
   );
-  const coverLook = useCoverLook(look, group.data);
+  const coverLook = useCoverLook(look, group.data, group.data?.eventTemplateId);
   const setDesign = (patch: Partial<PostDesign>) =>
     setLook((c) => ({ ...c, design: { ...c.design, ...patch } }));
   const previewPaint = burnPaint(
@@ -322,7 +324,7 @@ function EventFormBody({
     };
     try {
       if (event) {
-        await update.mutateAsync(common);
+        await update.mutateAsync({ ...common, lookVersion: event.lookVersion });
         if (features.duties) await setRoles.mutateAsync({ roles: cleanRoles });
         haptic.success();
         toast(t.common.saved);
@@ -341,9 +343,13 @@ function EventFormBody({
         toast(t.events.created);
         replace({ name: 'event', eventId: created.id });
       }
-    } catch {
+    } catch (e) {
       haptic.error();
-      toast(t.common.saveFailed, 'error');
+      // Someone changed its look while this form was open: say so instead of overwriting.
+      toast(
+        e instanceof ApiError && e.status === 409 ? t.design.lookChanged : t.common.saveFailed,
+        'error',
+      );
     } finally {
       setSaving(false);
     }
@@ -467,7 +473,14 @@ function EventFormBody({
           />
           {look.design.banner && (
             <div className="flex flex-col gap-5 border-t border-hairline p-4">
-              <CoverLookControls state={look} onChange={setLook} g={group.data} groupId={groupId} />
+              <CoverLookControls
+                state={look}
+                onChange={setLook}
+                g={group.data}
+                groupId={groupId}
+                followTemplateId={group.data?.eventTemplateId}
+                followLabel={t.design.followDefaultEvents}
+              />
               <div>
                 <div className="mb-2 text-[13px] text-hint">{t.meetings.posterLayout}</div>
                 <div className="flex flex-wrap gap-2">

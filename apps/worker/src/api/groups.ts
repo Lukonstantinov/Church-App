@@ -334,6 +334,7 @@ groupRoutes.get('/:id', async (c) => {
     meetingReminders: readReminders(group.meetingReminders),
     meetingMotion: readMotion(group.meetingMotion) ?? 'calm',
     meetingTemplateId: group.meetingTemplateId,
+    eventTemplateId: group.eventTemplateId,
     speakerLook: readSpeakerLook(group.speakerLook),
     meetingServices: readServices(group.meetingServices),
     managedChat: group.tgChatId
@@ -405,15 +406,15 @@ groupRoutes.put('/:id/studio', async (c) => {
   if (input.pageBackground !== undefined) patch.pageBackground = input.pageBackground;
   if (input.speakerLook !== undefined)
     patch.speakerLook = input.speakerLook ? JSON.stringify(input.speakerLook) : null;
-  if (input.meetingTemplateId !== undefined) {
+  for (const key of ['meetingTemplateId', 'eventTemplateId'] as const) {
+    const id = input[key];
+    if (id === undefined) continue;
     if (
-      input.meetingTemplateId !== null &&
-      !(await db.query.designTemplates.findFirst({
-        where: eq(designTemplates.id, input.meetingTemplateId),
-      }))
+      id !== null &&
+      !(await db.query.designTemplates.findFirst({ where: eq(designTemplates.id, id) }))
     )
       throw new HTTPException(400, { message: 'unknown_template' });
-    patch.meetingTemplateId = input.meetingTemplateId;
+    patch[key] = id;
   }
   if (Object.keys(patch).length > 0)
     await db.update(groups).set(patch).where(eq(groups.id, group.id));

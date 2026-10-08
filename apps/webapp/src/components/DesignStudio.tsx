@@ -301,6 +301,8 @@ function PinnedPiece({ g }: { g: GroupSummary }) {
     countdown: false,
     speakers: [],
     speakerLook: null,
+    ownTemplateId: null,
+    lookVersion: 0,
     createdAt: new Date().toISOString(),
     look: null,
     myRsvp: null,
@@ -1383,9 +1385,27 @@ function ThemeRow({ scope, g }: { scope: Scope; g: GroupSummary }) {
   const toast = useToast();
   const saveChurch = useSaveChurchStudio();
   const saveMinistry = useSaveMinistryStudio(g.id);
+  const me = useMe();
+  const group = useGroup(g.id);
+  // What the page looked like before the last theme, to put back with one tap.
+  const [undo, setUndo] = useState<(() => Promise<unknown>) | null>(null);
   async function apply(key: ThemeKey) {
     if (!(await confirmDialog(t.studio.themeConfirm))) return;
     const th = THEMES[key];
+    if (scope === 'church') {
+      const prev = {
+        screenLook: me.data?.church.screenLook ?? {},
+        appBackground: me.data?.church.appBackground ?? null,
+      };
+      setUndo(() => () => saveChurch.mutateAsync(prev));
+    } else {
+      const prev = {
+        screenLook: g.screenLook ?? {},
+        meetingMotion: group.data?.meetingMotion ?? null,
+        pageBackground: g.pageBackground ?? null,
+      };
+      setUndo(() => () => saveMinistry.mutateAsync(prev));
+    }
     const modules = scope === 'church' ? CHURCH_SPOTS : MINISTRY_SPOTS;
     const screenLook: ScreenLook = {};
     if (key !== 'clean') for (const m of modules) screenLook[m] = th.parts?.[m] ?? th.base;
@@ -1421,6 +1441,25 @@ function ThemeRow({ scope, g }: { scope: Scope; g: GroupSummary }) {
           </button>
         ))}
       </div>
+      {undo && (
+        <button
+          type="button"
+          disabled={saveChurch.isPending || saveMinistry.isPending}
+          onClick={async () => {
+            try {
+              await undo();
+              setUndo(null);
+              haptic.success();
+              toast(t.studio.themeUndone);
+            } catch {
+              toast(t.common.saveFailed, 'error');
+            }
+          }}
+          className="mx-1 self-start rounded-full bg-hairline px-3.5 py-1.5 text-[13px] font-semibold active:scale-95"
+        >
+          ↺ {t.studio.themeUndo}
+        </button>
+      )}
       <p className="px-3 text-[12px] text-hint">{t.studio.themesHint}</p>
     </div>
   );

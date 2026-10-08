@@ -36,7 +36,7 @@ import {
 import { accessIn, can, designRights } from './access';
 import { posterLook, lookSources } from './looks';
 import { signedMediaUrl } from './media';
-import { readMotion, speakersOf } from './meetings';
+import { mergeLooks, readMotion, speakersOf } from './meetings';
 import { eventPictureId } from './eventRoster';
 import { posterTemplatesById } from './posterTemplates';
 import { toTransactionRows } from './treasury';
@@ -324,10 +324,30 @@ async function summarize(
   ]);
   const goingBy = new Map(going.map((g) => [g.eventId, Number(g.n)]));
   const mineBy = new Map(mine.map((m) => [m.eventId, m.status]));
+  // An event without a look of its own wears its ministry's default template for events.
+  const gIds = [...new Set(rows.map((r) => r.groupId))];
+  const groupRows = gIds.length
+    ? await db
+        .select({
+          id: groups.id,
+          template: groups.eventTemplateId,
+          speakerLook: groups.speakerLook,
+        })
+        .from(groups)
+        .where(inArray(groups.id, gIds))
+    : [];
+  const defaults = new Map(groupRows.map((g) => [g.id, g.template]));
+  const groupSpeakerLooks = new Map(groupRows.map((g) => [g.id, readSpeakerLook(g.speakerLook)]));
+  const tplOf = new Map(
+    rows.map((r) => [
+      r.id,
+      r.templateId ?? (readPostDesign(r.design)?.custom ? null : defaults.get(r.groupId)) ?? null,
+    ]),
+  );
   const { brandOf, templateOf } = await lookSources(
     db,
     rows.map((r) => r.groupId),
-    rows.map((r) => r.templateId),
+    rows.map((r) => tplOf.get(r.id) ?? null),
   );
   const posters = await posterTemplatesById(
     db,
@@ -338,7 +358,8 @@ async function summarize(
     rows.map(async (e) => {
       const design = readPostDesign(e.design);
       const brand = brandOf.get(e.groupId);
-      const tpl = e.templateId ? templateOf.get(e.templateId) : undefined;
+      const tplId = tplOf.get(e.id) ?? null;
+      const tpl = tplId ? templateOf.get(tplId) : undefined;
       return {
         id: e.id,
         groupId: e.groupId,
@@ -360,7 +381,9 @@ async function summarize(
           .filter((r) => r.eventId === e.id)
           .map((r) => ({ name: r.name, description: r.description })),
         design,
-        templateId: e.templateId,
+        templateId: tplId,
+        ownTemplateId: e.templateId,
+        lookVersion: e.lookVersion,
         motion: readMotion(e.motion),
         motionTune: readTune(e.motionTune),
         motionLayers: readLayers(e.motionLayers),
@@ -369,7 +392,12 @@ async function summarize(
         poster: (e.posterTemplateId && posters.get(e.posterTemplateId)) || null,
         countdown: e.countdown,
         speakers: await speakersOf(db, e.speakers, secret),
-        speakerLook: design?.speakerLook ?? readSpeakerLook(tpl?.speakerLook) ?? null,
+        // Field by field: own changes over the template's over the ministry's.
+        speakerLook: mergeLooks(
+          groupSpeakerLooks.get(e.groupId),
+          readSpeakerLook(tpl?.speakerLook),
+          design?.speakerLook,
+        ),
         createdAt: e.createdAt,
         look: brand ? await posterLook(secret, brand, design, tpl) : null,
       };

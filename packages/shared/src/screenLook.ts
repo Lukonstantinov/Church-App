@@ -171,6 +171,8 @@ export const ministryStudioSchema = z.object({
   pageBackground: appBackgroundSchema.nullable().optional(),
   /** The design template meetings without a look of their own wear (null = the ministry's). */
   meetingTemplateId: z.number().int().positive().nullable().optional(),
+  /** The same for events. */
+  eventTemplateId: z.number().int().positive().nullable().optional(),
   /** How speakers' photos show on its meetings (a template or a meeting can differ). */
   speakerLook: speakerLookSchema.nullable().optional(),
 });

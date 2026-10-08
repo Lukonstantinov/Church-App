@@ -880,6 +880,8 @@ export const lt: Messages = {
     noneYet: 'Plakatų dar nėra — sukurkite Dizainas → Plakatai.',
   },
   studio: {
+    themeUndo: 'Atšaukti temą — grąžinti kaip buvo',
+    themeUndone: 'Grąžinta kaip buvo',
     playMotion: 'Rodyti animacijas',
     stopMotion: 'Sustabdyti animacijas',
     samplePinned: 'Jaunimo stovykla',
@@ -1063,6 +1065,11 @@ export const lt: Messages = {
     srcOwnChanges: 'Savi pakeitimai virš bendrų',
     srcInherited: 'Kaip visiems susitikimams',
     srcReset: 'Grąžinti',
+    followDefaultEvents: (name: string) => `Kaip visiems renginiams («${name}»)`,
+    defaultForEvents: 'Visų renginių išvaizda',
+    defaultForEventsHint:
+      'Renginiai be savo išvaizdos naudoja šį šabloną. Atskirą renginį galima pakeisti jo formoje.',
+    lookChanged: 'Kažkas pakeitė išvaizdą, kol buvo atidaryta. Uždarykite ir atidarykite iš naujo.',
     defaultForMeetings: 'Visų susitikimų išvaizda',
     defaultForMeetingsHint:
       'Susitikimai be savo išvaizdos (ir nauji pagal tvarkaraštį) naudoja šį šabloną. Atskirą susitikimą galima pakeisti žemiau — «Susitikimai».',

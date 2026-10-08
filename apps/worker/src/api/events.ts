@@ -116,7 +116,9 @@ groupEventRoutes.post('/:id/events', async (c) => {
       coverMediaId: input.coverMediaId ?? null,
       posterMediaId: input.posterMediaId ?? null,
       design: input.design ? JSON.stringify(input.design) : null,
-      templateId: input.templateId ?? null,
+      // The default template itself is "follow the default".
+      templateId:
+        input.templateId && input.templateId !== group.eventTemplateId ? input.templateId : null,
       motion: input.motion ?? null,
       motionTune: input.motionTune ? JSON.stringify(input.motionTune) : null,
       motionLayers: input.motionLayers?.length ? JSON.stringify(input.motionLayers) : null,
@@ -354,16 +356,28 @@ eventRoutes.patch('/:id', async (c) => {
   // A designer may change only the look of an event they can't otherwise manage.
   if (!canManage && !rights.designer) throw new HTTPException(403, { message: 'forbidden' });
   const input = await parseBody(c, updateEventSchema);
-  const given = (Object.keys(input) as (keyof typeof input)[]).filter(
-    (k) => input[k] !== undefined,
-  );
+  // The ministry's default template sent back by the form is "follow the default".
+  if (input.templateId != null) {
+    const g = await db.query.groups.findFirst({
+      columns: { eventTemplateId: true },
+      where: eq(groups.id, event.groupId),
+    });
+    if (g?.eventTemplateId === input.templateId) input.templateId = null;
+  }
+  const { lookVersion, ...rest } = input;
+  const given = (Object.keys(rest) as (keyof typeof rest)[]).filter((k) => rest[k] !== undefined);
   // The poster picture is drawn from the event on every save, so it isn't "the look".
   const isLook = (k: string) =>
     (EVENT_LOOK as readonly string[]).includes(k) || k === 'posterMediaId';
-  if (EVENT_LOOK.some((k) => lookDiffers(input[k], event[k]))) assertMayDesign(rights, canManage);
+  const lookChanged = EVENT_LOOK.some((k) => lookDiffers(input[k], event[k]));
+  if (lookChanged) assertMayDesign(rights, canManage);
+  // Someone else changed the look after this form was opened: don't overwrite it unseen.
+  if (lookChanged && lookVersion !== undefined && lookVersion !== event.lookVersion)
+    throw new HTTPException(409, { message: 'look_changed' });
   if (!canManage && given.some((k) => !isLook(k)))
     throw new HTTPException(403, { message: 'forbidden' });
   const patch: Partial<typeof events.$inferInsert> = {};
+  if (lookChanged) patch.lookVersion = event.lookVersion + 1;
   if (input.title !== undefined) patch.title = input.title;
   if (input.description !== undefined) patch.description = input.description;
   if (input.location !== undefined) patch.location = input.location;
