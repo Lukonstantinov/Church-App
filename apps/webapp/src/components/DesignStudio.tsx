@@ -76,6 +76,7 @@ export function DesignStudio({ g }: { g: GroupSummary }) {
   const isAdmin = me.data?.user.isAdmin ?? false;
   const [scope, setScope] = useState<Scope>('ministry');
   const [spot, setSpot] = useState<Spot | null>(null);
+  const [moving, setMoving] = useState(false);
   const church = me.data?.church;
   const look: ScreenLook = (scope === 'church' ? church?.screenLook : g.screenLook) ?? {};
   const meetingMotion = group.data?.meetingMotion ?? 'calm';
@@ -120,8 +121,17 @@ export function DesignStudio({ g }: { g: GroupSummary }) {
         )}
       </div>
       <ThemeRow scope={scope} g={g} />
+      {/* The copy of the page stands still unless asked: the real page around it already
+          moves, and both at once made the Design tab heavy on phones. */}
+      <div className="flex justify-end px-1">
+        <Pill
+          on={moving}
+          onClick={() => setMoving((v) => !v)}
+          label={moving ? `⏸ ${t.studio.stopMotion}` : `▶ ${t.studio.playMotion}`}
+        />
+      </div>
       <div
-        className="relative isolate overflow-hidden rounded-[30px] border-4 border-[var(--color-section)] p-3 shadow-float"
+        className={`relative isolate overflow-hidden rounded-[30px] border-4 border-[var(--color-section)] p-3 shadow-float ${moving ? '' : 'motion-still'}`}
         style={{ background: 'var(--color-bg-secondary)' }}
       >
         <AppBackdrop bg={bg} look={backdropLook} preview />

@@ -7,6 +7,8 @@ const n = (count: number, one: string, other: string) =>
 export const en: Messages = {
   appName: 'Youth',
   common: {
+    reload: 'Refresh the app',
+    reloadHint: 'If something is stuck or out of date — restarts the app; nothing is lost.',
     crashTitle: 'This screen broke',
     crashHint: 'The error has been sent to the developer. Go back or reload the app.',
     crashBack: 'Back',
@@ -867,6 +869,8 @@ export const en: Messages = {
     noneYet: 'No posters yet — make one in Design → Posters.',
   },
   studio: {
+    playMotion: 'Play animations',
+    stopMotion: 'Stop animations',
     samplePinned: 'Youth camp',
     pinnedHint:
       'Animations chosen here show on every pinned event on the main page instead of the event’s own cover effects. With none here, each event keeps its own effects.',

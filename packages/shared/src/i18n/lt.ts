@@ -8,6 +8,9 @@ const n = (count: number, one: string, few: string, other: string) =>
 export const lt: Messages = {
   appName: 'Jaunimas',
   common: {
+    reload: 'Atnaujinti programėlę',
+    reloadHint:
+      'Jei kas nors užstrigo ar neatsinaujino — paleidžia programėlę iš naujo; duomenys išlieka.',
     crashTitle: 'Šis ekranas sugedo',
     crashHint: 'Klaida jau išsiųsta kūrėjui. Grįžkite atgal arba perkraukite programą.',
     crashBack: 'Atgal',
@@ -877,6 +880,8 @@ export const lt: Messages = {
     noneYet: 'Plakatų dar nėra — sukurkite Dizainas → Plakatai.',
   },
   studio: {
+    playMotion: 'Rodyti animacijas',
+    stopMotion: 'Sustabdyti animacijas',
     samplePinned: 'Jaunimo stovykla',
     pinnedHint:
       'Čia pasirinktos animacijos rodomos visuose prisegtuose pagrindinio puslapio renginiuose vietoje paties renginio viršelio efektų. Be animacijų čia – kiekvienas renginys su savo efektais.',

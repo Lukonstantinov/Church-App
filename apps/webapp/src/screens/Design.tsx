@@ -140,7 +140,7 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
           {t.design.templates}
         </h2>
         <p className="mb-2.5 px-3 text-[13px] text-hint">{t.design.templatesHint}</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="motion-still grid grid-cols-2 gap-3">
           {(templates.data ?? []).map((tpl) => (
             <button
               key={tpl.id}
@@ -243,6 +243,11 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
             }
           />
         ))}
+      </Section>
+
+      {/* If something looks stuck or slow, start the app over (keeps the open tab). */}
+      <Section footer={t.common.reloadHint}>
+        <Row title={`↻ ${t.common.reload}`} onClick={() => window.location.reload()} />
       </Section>
 
       {editing && (

@@ -161,7 +161,7 @@ export function PosterStudio({ g }: { g: GroupSummary }) {
         {t.posters.title}
       </h2>
       <p className="mb-2.5 px-3 text-[13px] text-hint">{t.posters.hint}</p>
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="motion-still grid grid-cols-3 gap-2.5">
         {(list.data ?? []).map((tpl) => (
           <button
             key={tpl.id}
@@ -1014,7 +1014,7 @@ export function PosterPicker({
   const { texts: sample } = useSample();
   if (!list.data?.length) return <p className="text-[13px] text-hint">{t.posters.noneYet}</p>;
   return (
-    <div className="grid grid-cols-4 gap-2">
+    <div className="motion-still grid grid-cols-4 gap-2">
       <button
         type="button"
         onClick={() => onChange(null)}

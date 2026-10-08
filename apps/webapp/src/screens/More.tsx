@@ -152,6 +152,14 @@ export function More({ groups }: { groups: GroupSummary[] }) {
         </Section>
       )}
 
+      <Section footer={t.common.reloadHint}>
+        <Row
+          before={iconTile(<span className="text-[17px]">↻</span>)}
+          title={t.common.reload}
+          onClick={() => window.location.reload()}
+        />
+      </Section>
+
       <p className="px-4 text-[13px] leading-snug text-hint">{t.home.privacyNote}</p>
       <LanguageSheet open={langOpen} onClose={() => setLangOpen(false)} />
     </Screen>

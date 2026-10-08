@@ -4102,3 +4102,16 @@ html[data-quality='still'] .label-shimmer::after {
 .living-warp {
   rotate: var(--a);
 }
+
+/* Small previews in lists (templates, posters): drawn as one still frame — dozens of moving
+   previews at once made the Design tab heavy on phones. They move when opened. */
+.motion-still *,
+.motion-still *::before,
+.motion-still *::after {
+  animation-play-state: paused !important;
+}
+
+/* A poster being turned into the bot's picture: without its moving effects (lib/poster.ts). */
+.capturing .living-clip {
+  display: none !important;
+}
