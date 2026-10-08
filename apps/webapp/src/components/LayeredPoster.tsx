@@ -127,20 +127,7 @@ function Layer({
     translate: '-50% -50%',
     ...(layer.rotate ? { rotate: `${layer.rotate}deg` } : {}),
   };
-  if (layer.type === 'image')
-    return layer.url ? (
-      <img
-        src={layer.url}
-        alt=""
-        className="absolute max-w-none"
-        style={{
-          ...at,
-          ...look,
-          width: `${layer.size}cqmin`,
-          filter: pictureFilter(layer.style),
-        }}
-      />
-    ) : null;
+  if (layer.type === 'image') return layer.url ? <Picture layer={layer} look={look} /> : null;
   const words = layer.source === 'custom' ? layer.text : (texts[layer.source] ?? layer.text);
   if (!words) return null;
   return (
@@ -159,6 +146,100 @@ function Layer({
       }}
     >
       {words}
+    </span>
+  );
+}
+
+/**
+ * A picture layer: a box with the picture's own shape, the picture in it and its effects
+ * over it (photo effects change copies of the same picture, so they line up exactly). A
+ * cut-out keeps its effects inside its outline (masked by its own transparency). "cover"
+ * fills the whole poster like a background photo: x/y pick the part kept in view.
+ */
+function Picture({
+  layer,
+  look,
+}: {
+  layer: Extract<PosterLayer, { type: 'image' }>;
+  look: CSSProperties;
+}) {
+  const url = layer.url!;
+  const effects = (layer.effects ?? []).filter((e) => e.kind !== 'off');
+  const ratio = layer.ratio ?? null;
+  const masked = !!layer.cutout && effects.length > 0;
+  const inner = (
+    <span
+      className="absolute inset-0"
+      style={
+        masked
+          ? {
+              maskImage: `url("${url}")`,
+              WebkitMaskImage: `url("${url}")`,
+              maskSize: '100% 100%',
+              WebkitMaskSize: '100% 100%',
+            }
+          : undefined
+      }
+    >
+      <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      {effects.map((e, i) => (
+        <LivingLayer key={`${e.kind}${i}`} kind={e.kind} tune={e.tune} image={url} />
+      ))}
+    </span>
+  );
+  const turn = layer.rotate ? { rotate: `${layer.rotate}deg` } : {};
+  if (layer.fit === 'cover') {
+    const zoom = Math.max(1, layer.size / 100);
+    const fx = Math.min(100, Math.max(0, layer.x)) / 100;
+    const fy = Math.min(100, Math.max(0, layer.y)) / 100;
+    // The box is the picture's shape, just big enough to cover the poster (times the zoom);
+    // x/y slide it so that part of the picture stays in view, whatever the poster's shape.
+    const w = ratio ? `calc(max(100cqw, ${ratio} * 100cqh) * ${zoom})` : `${zoom * 100}cqw`;
+    const h = ratio ? `calc(max(100cqh, 100cqw / ${ratio}) * ${zoom})` : `${zoom * 100}cqh`;
+    return (
+      <span
+        className="absolute inset-0 overflow-hidden"
+        style={{ ...look, filter: pictureFilter(layer.style) }}
+      >
+        <span
+          className="absolute"
+          style={{
+            width: w,
+            height: h,
+            left: `calc((100cqw - ${w}) * ${fx})`,
+            top: `calc((100cqh - ${h}) * ${fy})`,
+            ...turn,
+          }}
+        >
+          {inner}
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span
+      className="absolute"
+      style={{
+        left: `${layer.x}%`,
+        top: `${layer.y}%`,
+        translate: '-50% -50%',
+        ...turn,
+        ...look,
+        width: `${layer.size}cqmin`,
+        filter: pictureFilter(layer.style),
+      }}
+    >
+      {ratio ? (
+        <span className="relative block" style={{ aspectRatio: ratio }}>
+          {inner}
+        </span>
+      ) : (
+        // Older layers without a known shape: the picture sets the height.
+        <span className="relative block">
+          <img src={url} alt="" className="invisible block w-full" />
+          {inner}
+        </span>
+      )}
     </span>
   );
 }

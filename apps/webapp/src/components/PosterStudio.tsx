@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   BLEND_MODES,
   TEXT_SOURCES,
@@ -24,24 +24,30 @@ import { confirmDialog, haptic } from '../lib/telegram';
 import { FontPicker } from './FontPicker';
 import { IconChevronDown, IconPlus, IconX } from './icons';
 import { LayeredPoster } from './LayeredPoster';
+import { LookTop } from './LookTop';
 import { Group, Pill } from './LookControls';
 import { MotionPicker } from './MotionPicker';
 import { Knob, PALETTE } from './MotionTune';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
-import { Button, Toggle } from './ui';
+import { Button, DateBadge, Toggle } from './ui';
 
-/** The three shapes a poster is shown in: the poster itself, a home tile, an event's screen. */
-const VIEWS = [
-  { key: 'poster', box: 'aspect-[4/5] w-[62%]' },
-  { key: 'tile', box: 'aspect-[16/10] w-[78%]' },
-  { key: 'screen', box: 'aspect-[16/9] w-full' },
-] as const;
+/**
+ * Where a poster is shown, in the app's real shapes: the poster sent by the bot (4:5), a
+ * home tile (16:10), the event or meeting screen (4:3) and, for events, the pinned card on
+ * the main page.
+ */
+type View = 'poster' | 'tile' | 'screen' | 'pinned';
+type Kind = 'event' | 'meeting';
+const VIEWS: Record<Kind, View[]> = {
+  event: ['poster', 'tile', 'screen', 'pinned'],
+  meeting: ['poster', 'tile', 'screen'],
+};
 
 const newId = () => `l${Date.now().toString(36)}${Math.floor(Math.random() * 99)}`;
 
-/** Sample words for the previews (a real event or meeting fills in its own). */
-function useSampleTexts(): PosterTexts {
+/** Made-up details for the previews (a real event or meeting fills in its own). */
+function useSample(kind: Kind = 'meeting') {
   const t = useT();
   const f = useFmt();
   // A sample day nine days ahead at 18:00, fixed while the screen is open.
@@ -50,15 +56,92 @@ function useSampleTexts(): PosterTexts {
     d.setHours(18, 0, 0, 0);
     return d.toISOString();
   });
-  return useMemo(
-    () => ({
-      title: t.design.sampleTitle,
+  const texts = useMemo(
+    (): PosterTexts => ({
+      title: kind === 'event' ? t.posters.sampleEvent : t.design.sampleTitle,
       date: f.weekdayDayMonth(when),
       time: f.time(when),
       place: t.design.sampleLocation,
       topic: t.design.sampleTopic,
     }),
-    [t, f, when],
+    [t, f, when, kind],
+  );
+  return { texts, when };
+}
+
+/** The poster as it will look in the app, with made-up details around it. */
+function Mockup({
+  view,
+  kind,
+  tpl,
+  g,
+}: {
+  view: View;
+  kind: Kind;
+  tpl: Pick<PosterTemplate, 'background' | 'layers'>;
+  g: GroupSummary;
+}) {
+  const t = useT();
+  const f = useFmt();
+  const { texts, when } = useSample(kind);
+  const poster = (className: string) => (
+    <LayeredPoster tpl={tpl} texts={texts} className={className} />
+  );
+  if (view === 'poster') return poster('aspect-[4/5] h-full rounded-2xl shadow-card');
+  if (view === 'pinned')
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="px-1 text-[12px] font-semibold uppercase tracking-wide text-section-header">
+          📌 {t.posters.views.pinned}
+        </span>
+        <div className="relative h-[150px] w-[280px] overflow-hidden rounded-[24px] shadow-cta">
+          <LayeredPoster fill tpl={tpl} texts={texts} />
+        </div>
+      </div>
+    );
+  if (view === 'tile')
+    return (
+      <div className="glass flex w-[172px] flex-col overflow-hidden rounded-2xl shadow-card">
+        {kind === 'meeting' ? (
+          <LookTop
+            look={g}
+            className="isolate flex aspect-[16/10] flex-col justify-between p-2.5"
+            under={<LayeredPoster fill tpl={tpl} texts={texts} />}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+              {t.meetings.details}
+            </span>
+            <DateBadge {...f.dateBadge(when)} onBrand />
+          </LookTop>
+        ) : (
+          poster('aspect-[16/10] w-full')
+        )}
+        <div className="flex flex-col gap-0.5 p-2.5">
+          <span className="truncate text-[14px] font-semibold">
+            {kind === 'meeting' ? texts.topic : texts.title}
+          </span>
+          <span className="truncate text-[12px] text-hint">
+            {kind === 'meeting' ? f.relativeDay(when) : texts.date} · {texts.time}
+          </span>
+        </div>
+      </div>
+    );
+  // The top of the event or meeting screen, as on a phone.
+  return (
+    <div className="flex h-full w-[220px] flex-col gap-2 overflow-hidden rounded-[26px] border-4 border-[var(--color-text)]/80 bg-[var(--color-bg)] p-2 shadow-card">
+      {poster('aspect-[4/3] w-full shrink-0 rounded-[14px] shadow-card')}
+      <div className="brand-gradient shrink-0 rounded-[14px] p-3 text-white shadow-card">
+        <div className="text-[9px] font-bold uppercase tracking-wider opacity-80">{g.name}</div>
+        <div className="truncate text-[15px] font-bold leading-tight">{texts.title}</div>
+        <div className="text-[11px] opacity-85">
+          {texts.date} · {texts.time}
+        </div>
+        {kind === 'meeting' && (
+          <div className="mt-1 truncate text-[11px] font-semibold">«{texts.topic}»</div>
+        )}
+      </div>
+      <div className="h-8 shrink-0 rounded-[12px] bg-hairline" />
+    </div>
   );
 }
 
@@ -70,7 +153,7 @@ function useSampleTexts(): PosterTexts {
 export function PosterStudio({ g }: { g: GroupSummary }) {
   const t = useT();
   const list = usePosterTemplates();
-  const texts = useSampleTexts();
+  const { texts } = useSample();
   const [editing, setEditing] = useState<PosterTemplate | 'new' | null>(null);
   return (
     <section>
@@ -155,7 +238,6 @@ function PosterEditor({
 }) {
   const t = useT();
   const toast = useToast();
-  const texts = useSampleTexts();
   const save = useSavePosterTemplate();
   const remove = useDeletePosterTemplate();
   const upload = useUploadMedia(g.id, 'event');
@@ -165,7 +247,8 @@ function PosterEditor({
   );
   const [layers, setLayers] = useState<PosterLayer[]>(tpl?.layers ?? STARTER.layers);
   const [selected, setSelected] = useState<string | null>(null);
-  const [view, setView] = useState(0);
+  const [view, setView] = useState<View>('poster');
+  const [kind, setKind] = useState<Kind>('event');
   const picture = useRef<HTMLInputElement>(null);
   const [pictureFor, setPictureFor] = useState<string | null>(null);
 
@@ -189,12 +272,16 @@ function PosterEditor({
   async function pickPicture(file: File | undefined) {
     if (!file) return;
     try {
-      const up = await upload.mutateAsync(await prepareCutout(file));
+      const cut = await prepareCutout(file);
+      const up = await upload.mutateAsync(cut.blob);
+      const shape = { ratio: cut.ratio, cutout: cut.transparent };
       if (pictureFor === 'background') {
         setBackground((b) => ({ ...b, type: 'photo', mediaId: up.id, url: up.url }));
       } else if (pictureFor) {
-        patch(pictureFor, { mediaId: up.id, url: up.url } as Partial<PosterLayer>);
+        patch(pictureFor, { mediaId: up.id, url: up.url, ...shape } as Partial<PosterLayer>);
       } else {
+        // A cut-out (letters, a logo) is placed like a sticker; a plain photo fills the
+        // poster, so it lines up the same in the poster, the tile and the screen.
         add({
           type: 'image',
           id: newId(),
@@ -202,8 +289,10 @@ function PosterEditor({
           url: up.url,
           x: 50,
           y: 50,
-          size: 70,
+          size: cut.transparent ? 70 : 100,
           rotate: 0,
+          fit: cut.transparent ? 'free' : 'cover',
+          ...shape,
         });
       }
     } catch {
@@ -257,27 +346,43 @@ function PosterEditor({
       <div className="flex flex-col gap-4 px-4 pb-4">
         {/* The poster in the chosen shape, pinned while the settings scroll. */}
         <div className="sticky top-0 z-20 -mx-4 rounded-b-[22px] bg-[var(--color-section)] px-4 pb-3 pt-1 shadow-card">
-          <div className="mb-2 flex justify-center gap-1.5">
-            {VIEWS.map((v, i) => (
+          <div className="mb-1.5 flex justify-center gap-1.5">
+            {(['event', 'meeting'] as const).map((k) => (
               <button
-                key={v.key}
+                key={k}
                 type="button"
-                onClick={() => setView(i)}
+                onClick={() => {
+                  setKind(k);
+                  if (!VIEWS[k].includes(view)) setView('poster');
+                }}
                 className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
-                  view === i ? 'brand-gradient text-white shadow-cta' : 'bg-hairline text-hint'
+                  kind === k
+                    ? 'bg-[var(--color-text)] text-[var(--color-bg)]'
+                    : 'bg-hairline text-hint'
                 }`}
               >
-                {t.posters.views[v.key]}
+                {k === 'event' ? t.posters.forEvent : t.posters.forMeeting}
               </button>
             ))}
           </div>
-          <div className="flex h-[230px] items-center justify-center">
-            <LayeredPoster
-              tpl={{ background, layers }}
-              texts={texts}
-              className={`max-h-full rounded-2xl shadow-card ${VIEWS[view]!.box}`}
-            />
+          <div className="mb-2 flex justify-center gap-1.5">
+            {VIEWS[kind].map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                  view === v ? 'brand-gradient text-white shadow-cta' : 'bg-hairline text-hint'
+                }`}
+              >
+                {t.posters.views[v]}
+              </button>
+            ))}
           </div>
+          <div className="flex h-[262px] items-center justify-center">
+            <Mockup view={view} kind={kind} tpl={{ background, layers }} g={g} />
+          </div>
+          <p className="mt-1.5 text-center text-[11px] text-hint">{t.posters.mockHint}</p>
         </div>
 
         <input
@@ -532,6 +637,8 @@ function PlaceAndLook({
   onChange: (p: Partial<PosterLayer>) => void;
 }) {
   const t = useT();
+  // A photo filling the poster: x/y pick the part in view, size zooms in.
+  const cover = layer.type === 'image' && layer.fit === 'cover';
   return (
     <>
       {layer.type !== 'effect' && (
@@ -540,8 +647,8 @@ function PlaceAndLook({
             <Knob
               label={t.posters.x}
               value={layer.x}
-              min={-20}
-              max={120}
+              min={cover ? 0 : -20}
+              max={cover ? 100 : 120}
               step={1}
               show={pct}
               onChange={(x) => onChange({ x })}
@@ -549,17 +656,17 @@ function PlaceAndLook({
             <Knob
               label={t.posters.y}
               value={layer.y}
-              min={-20}
-              max={120}
+              min={cover ? 0 : -20}
+              max={cover ? 100 : 120}
               step={1}
               show={pct}
               onChange={(y) => onChange({ y })}
             />
             <Knob
-              label={t.posters.size}
+              label={cover ? t.posters.zoom : t.posters.size}
               value={layer.size}
-              min={4}
-              max={200}
+              min={cover ? 100 : 4}
+              max={cover ? 300 : 200}
               step={1}
               show={pct}
               onChange={(size) => onChange({ size })}
@@ -655,6 +762,55 @@ function StyleControls({
   );
 }
 
+/** Effects drawn on the picture itself: several at once, tap again to remove. */
+function PictureEffects({
+  layer,
+  onChange,
+}: {
+  layer: Extract<PosterLayer, { type: 'image' }>;
+  onChange: (p: Partial<PosterLayer>) => void;
+}) {
+  const t = useT();
+  const list = layer.effects ?? [];
+  const kinds = list.map((e) => e.kind);
+  // Pictures saved before their shape was known get it now (their effects line up then).
+  const url = layer.url;
+  const known = layer.ratio != null;
+  useEffect(() => {
+    if (known || !url) return;
+    const img = new Image();
+    img.onload = () =>
+      img.naturalHeight && onChange({ ratio: img.naturalWidth / img.naturalHeight });
+    img.src = url;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [known, url]);
+  return (
+    <Group title={t.posters.pictureEffects}>
+      <p className="mb-2 px-1 text-[12px] text-hint">{t.posters.pictureEffectsHint}</p>
+      <MotionPicker
+        value={null}
+        onChange={() => undefined}
+        many={{
+          values: kinds,
+          toggle: (m) =>
+            onChange({
+              effects:
+                m === 'off'
+                  ? []
+                  : kinds.includes(m)
+                    ? list.filter((e) => e.kind !== m)
+                    : [...list, { kind: m }].slice(-4),
+            }),
+        }}
+        tuneOf={(m) => list.find((e) => e.kind === m)?.tune ?? null}
+        onTune={(m, tune) =>
+          onChange({ effects: list.map((e) => (e.kind === m ? { ...e, tune } : e)) })
+        }
+      />
+    </Group>
+  );
+}
+
 function LayerSettings({
   layer,
   onChange,
@@ -670,7 +826,8 @@ function LayerSettings({
       <>
         <MotionPicker
           value={layer.kind}
-          onChange={(m) => m && m !== 'off' && onChange({ kind: m })}
+          // Tapping the chosen effect again takes it off (the layer stays, empty).
+          onChange={(m) => onChange({ kind: m ?? 'off', tune: null })}
           tuneOf={(m) => (m === layer.kind ? (layer.tune ?? null) : null)}
           onTune={(m, tune) => m === layer.kind && onChange({ tune: tune ?? {} })}
         />
@@ -683,7 +840,22 @@ function LayerSettings({
         <Button variant="secondary" onClick={onPicture}>
           🖼 {t.posters.replacePicture}
         </Button>
+        <div>
+          <Toggle
+            label={t.posters.fill}
+            checked={layer.fit === 'cover'}
+            onChange={(on) =>
+              onChange(
+                on
+                  ? { fit: 'cover', x: 50, y: 50, size: 100, rotate: 0 }
+                  : { fit: 'free', x: 50, y: 50, size: 70 },
+              )
+            }
+          />
+          <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.fillHint}</p>
+        </div>
         <PlaceAndLook layer={layer} onChange={onChange} />
+        <PictureEffects layer={layer} onChange={onChange} />
         <StyleControls value={layer.style} onChange={(style) => onChange({ style })} />
       </>
     );
@@ -839,7 +1011,7 @@ export function PosterPicker({
 }) {
   const t = useT();
   const list = usePosterTemplates();
-  const sample = useSampleTexts();
+  const { texts: sample } = useSample();
   if (!list.data?.length) return <p className="text-[13px] text-hint">{t.posters.noneYet}</p>;
   return (
     <div className="grid grid-cols-4 gap-2">

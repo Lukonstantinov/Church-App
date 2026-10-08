@@ -116,7 +116,10 @@ export async function squareJpeg(src: File | string, side = 640): Promise<Blob> 
  * (letters or a cut-out on a see-through background). WebP where the browser can encode
  * it, else PNG; shrunk until it fits the upload limit.
  */
-export async function prepareCutout(file: File, maxSide = 1400): Promise<Blob> {
+export async function prepareCutout(
+  file: File,
+  maxSide = 1400,
+): Promise<{ blob: Blob; ratio: number; transparent: boolean }> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -134,14 +137,30 @@ export async function prepareCutout(file: File, maxSide = 1400): Promise<Blob> {
       canvas.width = Math.max(1, Math.round(w * scale));
       canvas.height = Math.max(1, Math.round(h * scale));
       // No background fill: see-through stays see-through.
-      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       let blob = await canvasToBlob(canvas, 'image/webp', attempt < 2 ? 0.9 : 0.75);
       if (!blob || blob.type !== 'image/webp') blob = await canvasToBlob(canvas, 'image/png');
-      if (blob && blob.size <= MEDIA_MAX_BYTES) return blob;
+      if (blob && blob.size <= MEDIA_MAX_BYTES)
+        return { blob, ratio: canvas.width / canvas.height, transparent: hasSeeThrough(ctx) };
       side = Math.round(side * 0.75);
     }
     throw new Error('too large');
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/**
+ * Whether a picture has see-through parts (a cut-out, letters), judged from a sparse grid
+ * of pixels — a plain photo is placed to fill the poster, a cut-out like a sticker.
+ */
+function hasSeeThrough(ctx: CanvasRenderingContext2D): boolean {
+  const { width, height } = ctx.canvas;
+  const data = ctx.getImageData(0, 0, width, height).data;
+  const stepX = Math.max(1, Math.floor(width / 60));
+  const stepY = Math.max(1, Math.floor(height / 60));
+  for (let y = 0; y < height; y += stepY)
+    for (let x = 0; x < width; x += stepX) if (data[(y * width + x) * 4 + 3]! < 250) return true;
+  return false;
 }

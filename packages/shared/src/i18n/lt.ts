@@ -747,7 +747,19 @@ export const lt: Messages = {
     new: 'Naujas plakatas',
     defaultName: 'Mano plakatas',
     name: 'Plakato pavadinimas',
-    views: { poster: 'Plakatas', tile: 'Plytelė', screen: 'Ekranas' },
+    views: { poster: 'Plakatas', tile: 'Plytelė', screen: 'Ekranas', pinned: 'Prisegta' },
+    forEvent: 'Renginys',
+    forMeeting: 'Susitikimas',
+    sampleEvent: 'Jaunimo stovykla',
+    mockHint:
+      'Pavyzdys su išgalvotais duomenimis — renginys ar susitikimas rodys savo pavadinimą, datą ir vietą.',
+    fill: 'Užpildyti visą plakatą',
+    fillHint:
+      'Nuotrauka vienodai užpildo plakatą, plytelę ir ekraną; slankikliai parenka, kuri nuotraukos dalis matoma.',
+    zoom: 'Priartinimas',
+    pictureEffects: 'Efektai ant paveikslėlio',
+    pictureEffectsHint:
+      'Piešiami tiesiai ant paveikslėlio (ant skaidraus — tik jo kontūro viduje). Paspauskite dar kartą, kad pašalintumėte.',
     addLayer: 'Pridėti sluoksnį',
     picture: 'Paveikslėlis',
     text: 'Tekstas',

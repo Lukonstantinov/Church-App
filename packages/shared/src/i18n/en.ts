@@ -743,7 +743,19 @@ export const en: Messages = {
     new: 'New poster',
     defaultName: 'My poster',
     name: 'Poster name',
-    views: { poster: 'Poster', tile: 'Tile', screen: 'Screen' },
+    views: { poster: 'Poster', tile: 'Tile', screen: 'Screen', pinned: 'Pinned' },
+    forEvent: 'Event',
+    forMeeting: 'Meeting',
+    sampleEvent: 'Youth camp',
+    mockHint:
+      'A sample with made-up details — an event or meeting shows its own name, date and place.',
+    fill: 'Fill the whole poster',
+    fillHint:
+      'The photo fills the poster, the tile and the screen alike; the sliders pick which part of it shows.',
+    zoom: 'Zoom',
+    pictureEffects: 'Effects on the picture',
+    pictureEffectsHint:
+      'Drawn right on the picture (on a see-through one, only inside its outline). Tap again to remove.',
     addLayer: 'Add a layer',
     picture: 'Picture',
     text: 'Text',

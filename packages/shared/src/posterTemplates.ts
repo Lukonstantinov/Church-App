@@ -68,6 +68,21 @@ export const posterLayerSchema = z.discriminatedUnion('type', [
     /** Filled by the server when reading (a signed link). */
     url: z.string().max(600).nullish(),
     style: layerStyleSchema.nullish(),
+    /**
+     * "cover" fills the whole box like a background photo, so it lines up the same in the
+     * poster, the tile and the screen: x/y then pick the part kept in view (0–100) and
+     * size zooms in (100 = just fills). "free" (default) places it like a sticker.
+     */
+    fit: z.enum(['free', 'cover']).nullish(),
+    /** The picture's width ÷ height, so its box (and effects on it) has its exact shape. */
+    ratio: z.number().min(0.05).max(20).nullish(),
+    /** It has see-through parts: effects on it follow its outline. */
+    cutout: z.boolean().nullish(),
+    /** Effects on the picture itself (drawn inside its outline, the photo effects change it). */
+    effects: z
+      .array(z.object({ kind: z.enum(MEETING_MOTIONS), tune: motionTuneSchema.nullish() }))
+      .max(4)
+      .nullish(),
   }),
   z.object({
     type: z.literal('text'),
