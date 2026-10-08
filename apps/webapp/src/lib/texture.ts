@@ -27,6 +27,9 @@ function draw(css: string): Promise<string> {
       c.height = img.naturalHeight || 300;
       c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
       const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/png'));
+      // Its memory back straight away (iPhones allow only so much canvas memory).
+      c.width = 0;
+      c.height = 0;
       // A phone that can't draw it keeps the SVG.
       return blob ? `url("${URL.createObjectURL(blob)}")` : css;
     } catch {

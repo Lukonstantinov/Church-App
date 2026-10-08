@@ -15,9 +15,17 @@ import { Button } from './ui';
  */
 const QUALITY = {
   standard: { video: 720, gif: 540, fps: 20, bitrate: 0.12 },
-  high: { video: 1080, gif: 720, fps: 20, bitrate: 0.12 },
-  max: { video: 1080, gif: 900, fps: 24, bitrate: 0.2 },
+  high: { video: 1080, gif: 640, fps: 20, bitrate: 0.12 },
+  max: { video: 1080, gif: 720, fps: 24, bitrate: 0.2 },
 } as const;
+
+/**
+ * Telegram plays a GIF in the chat only while it is small enough; a bigger one arrives as
+ * a file to download (a 13 MB one did). A GIF over this is made again, narrower.
+ */
+const GIF_MAX_BYTES = 9_000_000;
+
+const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
 /**
  * «Send me the animation»: records the poster with its moving effects (lib/recorder.ts)
@@ -43,6 +51,7 @@ export function MotionExport({
   const [quality, setQuality] = useState<keyof typeof QUALITY>('standard');
   const [progress, setProgress] = useState(0);
   const [sending, setSending] = useState(false);
+  const [shrinking, setShrinking] = useState(false);
 
   async function run(kind: 'video' | 'gif') {
     if (busy) return;
@@ -60,15 +69,28 @@ export function MotionExport({
         return;
       }
       const q = QUALITY[quality];
-      const rec = await recordLoop(el, {
-        gif: kind === 'gif',
-        // The picture is drawn at least as wide as the file that is made from it.
-        width: kind === 'gif' ? Math.max(720, q.gif) : q.video,
-        gifWidth: q.gif,
-        fps: q.fps,
-        quality: q.bitrate,
-        onProgress: setProgress,
-      });
+      const record = (gifWidth: number) =>
+        recordLoop(el, {
+          gif: kind === 'gif',
+          // A GIF only: no video is made alongside (quicker).
+          video: kind === 'video',
+          // The picture is drawn at least as wide as the file that is made from it.
+          width: kind === 'gif' ? Math.max(720, q.gif) : q.video,
+          gifWidth,
+          fps: q.fps,
+          quality: q.bitrate,
+          onProgress: setProgress,
+        });
+      let rec = await record(q.gif);
+      // Too big for Telegram to play: again, narrower by about as much as needed.
+      let width: number = q.gif;
+      for (let tries = 0; rec.gif && rec.gif.size > GIF_MAX_BYTES && tries < 3; tries++) {
+        width = even(width * Math.sqrt(GIF_MAX_BYTES / rec.gif.size) * 0.92);
+        if (width < 300) break;
+        setShrinking(true);
+        setProgress(0);
+        rec = await record(width);
+      }
       const file = kind === 'gif' ? rec.gif : (rec.mp4 ?? rec.gif);
       if (!file) throw new Error('no_file');
       if (kind === 'video' && !rec.mp4) toast(t.motionExport.noVideo);
@@ -84,6 +106,7 @@ export function MotionExport({
     } finally {
       onRecording?.(false);
       setSending(false);
+      setShrinking(false);
       setBusy(null);
     }
   }
@@ -103,7 +126,9 @@ export function MotionExport({
           <div className="text-center text-[13px] text-hint">
             {sending
               ? t.motionExport.sending
-              : t.motionExport.recording(Math.round(progress * 100))}
+              : shrinking
+                ? t.motionExport.shrinking(Math.round(progress * 100))
+                : t.motionExport.recording(Math.round(progress * 100))}
           </div>
         </div>
       ) : (

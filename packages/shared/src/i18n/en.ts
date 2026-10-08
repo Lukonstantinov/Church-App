@@ -1646,9 +1646,10 @@ export const en: Messages = {
     quality: { standard: 'Standard', high: 'High', max: 'Maximum' },
     qualityHint: {
       standard: 'Video 720p, GIF 540 px — quick and light',
-      high: 'Video 1080p, GIF 720 px — sharper, takes longer, bigger file',
-      max: 'Video 1080p with extra detail, GIF 900 px, smoother — the longest, GIF up to 20–30 MB',
+      high: 'Video 1080p, GIF 640 px — sharper, takes longer',
+      max: 'Video 1080p with extra detail, GIF 720 px — the sharpest Telegram still plays as a GIF (up to 9 MB)',
     },
+    shrinking: (p: number) => `Making the GIF smaller so Telegram plays it as an animation… ${p}%`,
     coverTitle: '🎬 Video cover',
     coverHint:
       'The cover photo with its effects is recorded as one short video — phones play it instead of every effect (cards, the pinned event, the event screen). After changing the photo or effects, record it again.',

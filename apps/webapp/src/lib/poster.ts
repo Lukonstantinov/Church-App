@@ -273,6 +273,17 @@ function hide(els: HTMLElement[]): () => void {
 }
 
 /**
+ * Gives a canvas's memory back at once. iPhones keep a dropped canvas's pixels until much
+ * later and allow only so much canvas memory in all: a recording makes hundreds of
+ * them, and the next recording got empty canvases (no photo, only effects).
+ */
+export function freeCanvas(c: HTMLCanvasElement | null | undefined) {
+  if (!c) return;
+  c.width = 0;
+  c.height = 0;
+}
+
+/**
  * The poster as one picture. Photos are not left to the drawing library (iPhones drop big
  * photos from it): it draws everything below the photos, the photos are drawn here, then
  * it draws everything above them on a see-through layer, and the small top photos (speaker
@@ -297,10 +308,15 @@ async function compose(node: HTMLElement, pixelRatio: number, skipFonts: boolean
   out.height = Math.round(H * pixelRatio);
   const ctx = out.getContext('2d')!;
   ctx.scale(pixelRatio, pixelRatio);
+  const paint = async () => {
+    const pic = await toCanvas(node, { pixelRatio, skipFonts });
+    ctx.drawImage(pic, 0, 0, W, H);
+    freeCanvas(pic);
+  };
   if (last >= 0) {
     let show = hide([...kids.slice(last + 1), ...unders]);
     try {
-      ctx.drawImage(await toCanvas(node, { pixelRatio, skipFonts }), 0, 0, W, H);
+      await paint();
     } finally {
       show();
     }
@@ -310,12 +326,12 @@ async function compose(node: HTMLElement, pixelRatio: number, skipFonts: boolean
     const bgs = chain.map((e) => e.style.background);
     chain.forEach((e) => (e.style.background = 'none'));
     try {
-      ctx.drawImage(await toCanvas(node, { pixelRatio, skipFonts }), 0, 0, W, H);
+      await paint();
     } finally {
       show();
       chain.forEach((e, i) => (e.style.background = bgs[i]!));
     }
-  } else ctx.drawImage(await toCanvas(node, { pixelRatio, skipFonts }), 0, 0, W, H);
+  } else await paint();
   for (const t of tops) drawShot(ctx, node, t);
   return out;
 }
@@ -351,6 +367,7 @@ export async function capturePoster(node: HTMLElement, sharp = false): Promise<B
         for (const [pixelRatio, quality] of attempts) {
           const canvas = await compose(node, pixelRatio, skipFonts);
           const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          freeCanvas(canvas);
           // Blank = no poster rather than a black one.
           if (await looksBlank(dataUrl)) return null;
           const blob = await (await fetch(dataUrl)).blob();

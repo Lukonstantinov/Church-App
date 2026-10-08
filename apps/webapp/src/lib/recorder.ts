@@ -1,6 +1,6 @@
 import type { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import { holdParticles, seekParticles } from '../components/ParticleCanvas';
-import { boxIn, drawShot, picturesReady } from './poster';
+import { boxIn, drawShot, freeCanvas, picturesReady } from './poster';
 
 /**
  * Records a poster (or any block) with its moving effects as a short seamless loop: an MP4
@@ -23,6 +23,8 @@ export interface RecordOptions {
   width?: number;
   /** Also make a GIF (fewer frames and colours). */
   gif?: boolean;
+  /** Make the video too (default); off when only the GIF is wanted, which is quicker. */
+  video?: boolean;
   /** Width of the GIF in pixels (default 540). */
   gifWidth?: number;
   /** Video quality: bits per pixel per frame (0.12 for posters; less for backgrounds). */
@@ -108,7 +110,9 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
   const b = below.getContext('2d')!;
   let undo = hideFor([...effects, ...after, ...unders]);
   try {
-    b.drawImage(await draw(), 0, 0, outW, outH);
+    const pic = await draw();
+    b.drawImage(pic, 0, 0, outW, outH);
+    freeCanvas(pic);
   } finally {
     undo();
   }
@@ -127,7 +131,11 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
   keep.forEach((e) => (e.style.visibility = 'visible'));
   undo = hideFor(topShots);
   try {
-    if (keep.length) a.drawImage(await draw(), 0, 0, outW, outH);
+    if (keep.length) {
+      const pic = await draw();
+      a.drawImage(pic, 0, 0, outW, outH);
+      freeCanvas(pic);
+    }
   } finally {
     undo();
     [node, ...keep].forEach((e, i) => (e.style.visibility = was[i]!));
@@ -178,6 +186,7 @@ async function rasterizeTextures(roots: HTMLElement[]): Promise<() => void> {
           c.height = img.naturalHeight || 150;
           c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
           png = c.toDataURL('image/png');
+          freeCanvas(c);
           done.set(url, png);
         } catch {
           continue;
@@ -223,7 +232,7 @@ async function drawEffects(
 ) {
   const { toCanvas } = await import('html-to-image');
   for (const fx of list) {
-    let pic: CanvasImageSource;
+    let pic: HTMLCanvasElement;
     if (fx.canvas) {
       seekParticles(fx.el, t);
       pic = fx.canvas;
@@ -242,6 +251,8 @@ async function drawEffects(
     ctx.globalCompositeOperation = fx.blend;
     ctx.drawImage(pic, fx.box.x * k, fx.box.y * k, fx.box.w * k, fx.box.h * k);
     ctx.restore();
+    // A drawn copy of the layer is used once; the particle canvas is the live one.
+    if (!fx.canvas) freeCanvas(pic);
   }
 }
 
@@ -307,14 +318,18 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
   await document.fonts?.ready;
   await nextFrame();
   let restoreTextures: (() => void) | undefined;
+  // Every canvas of this recording, freed at the end (see freeCanvas).
+  const used: HTMLCanvasElement[] = [];
   try {
     const { below, above, effects } = await stillParts(node, k, outW, outH);
+    used.push(below, above);
     const list = prepareEffects(node, effects);
     restoreTextures = await rasterizeTextures(effects);
     const total = Math.round(seconds * fps);
     const fade = Math.round(fps * 0.75);
 
-    const config = await videoConfig(outW, outH, fps, opts.quality ?? 0.12);
+    const config =
+      opts.video === false ? null : await videoConfig(outW, outH, fps, opts.quality ?? 0.12);
     let encoder: VideoEncoder | null = null;
     let muxer: Muxer<ArrayBufferTarget> | null = null;
     if (config) {
@@ -338,6 +353,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     const gifW = even(Math.min(outW, opts.gifWidth ?? 540));
     const gifH = even((outH * gifW) / outW);
     const gifCanvas = wantGif ? canvasOf(gifW, gifH) : null;
+    if (gifCanvas) used.push(gifCanvas);
     const gifCtx = gifCanvas?.getContext('2d', { willReadFrequently: true }) ?? null;
     const gifenc = wantGif ? await import('gifenc') : null;
     const gif = gifenc?.GIFEncoder() ?? null;
@@ -346,6 +362,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     const f = frame.getContext('2d')!;
     const out = canvasOf(outW, outH);
     const o = out.getContext('2d')!;
+    used.push(frame, out);
     // The first moments, kept to fade the loop's end into.
     const start: HTMLCanvasElement[] = [];
 
@@ -359,6 +376,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
         const keep = canvasOf(outW, outH);
         keep.getContext('2d')!.drawImage(frame, 0, 0);
         start.push(keep);
+        used.push(keep);
         opts.onProgress?.(i / (total + fade));
         continue;
       }
@@ -412,6 +430,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     opts.onProgress?.(1);
     return { mp4, gif: gifBlob };
   } finally {
+    used.forEach(freeCanvas);
     restoreTextures?.();
     holdParticles(node, false);
     for (const a of node.getAnimations({ subtree: true })) a.play();
