@@ -122,7 +122,8 @@ Church setting `designLock`: when on, only designers (and admins) change looks �
 meeting/event/post PATCH routes via `designRights` / `assertMayDesign` / `lookDiffers`
 (`lib/access.ts`; unchanged values resent by forms don't count); rows carry `canDesign`.
 Screen studio (`components/DesignStudio.tsx`): tap a part on a live copy of the ministry page or
-the church main page; per part (`ScreenLook` in `shared/screenLook.ts`, stored in
+the church main page (its parts: header, pinned events — their animations replace the events' own
+cover effects there —, ministry cards, profile and menu); per part (`ScreenLook` in `shared/screenLook.ts`, stored in
 `groups.screen_look` / `church_settings.screen_look`, PUT `/api/groups/:id/studio`,
 `/api/church/studio`): surface, own gradient, edge, picture with opacity, font, animation +
 layers, per-animation settings opened under the picked animation (`tunes` by kind: speed, size,

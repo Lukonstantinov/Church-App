@@ -723,6 +723,9 @@ export const en: Messages = {
     archiveConfirm: 'Archive this group? Members will no longer see it.',
   },
   studio: {
+    samplePinned: 'Youth camp',
+    pinnedHint:
+      'Animations chosen here show on every pinned event on the main page instead of the event’s own cover effects. With none here, each event keeps its own effects.',
     everywhere: 'Use this background in the whole app (main page and every ministry)',
     chip: 'Button icons',
     chipSize: 'Icon size',
@@ -813,6 +816,7 @@ export const en: Messages = {
     adminOnly: 'The church main page is changed by church admins.',
     modules: {
       header: 'Header',
+      pinned: 'Pinned events',
       cards: 'Ministry cards',
       list: 'Profile and menu',
       actions: 'Quick buttons',

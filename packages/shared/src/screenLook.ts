@@ -8,7 +8,8 @@ import { isFontKey } from './posts';
  * The parts of a screen the designer styles in the Design studio, by tapping them on a
  * live copy of the screen. The church's main page and each ministry's page have their own.
  */
-export const CHURCH_MODULES = ['header', 'cards', 'list'] as const;
+/** (`pinned`: the pinned events on the church's main page.) */
+export const CHURCH_MODULES = ['header', 'pinned', 'cards', 'list'] as const;
 export const MINISTRY_MODULES = [
   'header',
   'actions',

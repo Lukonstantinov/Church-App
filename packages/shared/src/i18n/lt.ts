@@ -727,6 +727,9 @@ export const lt: Messages = {
     archiveConfirm: 'Archyvuoti grupę? Nariai jos nebematys.',
   },
   studio: {
+    samplePinned: 'Jaunimo stovykla',
+    pinnedHint:
+      'Čia pasirinktos animacijos rodomos visuose prisegtuose pagrindinio puslapio renginiuose vietoje paties renginio viršelio efektų. Be animacijų čia – kiekvienas renginys su savo efektais.',
     everywhere: 'Šis fonas visai programėlei (pagrindinis ir visos tarnystės)',
     chip: 'Mygtukų ikonos',
     chipSize: 'Ikonos dydis',
@@ -831,6 +834,7 @@ export const lt: Messages = {
     adminOnly: 'Pagrindinį bažnyčios puslapį keičia administratoriai.',
     modules: {
       header: 'Antraštė',
+      pinned: 'Prisegti renginiai',
       cards: 'Tarnysčių kortelės',
       list: 'Profilis ir meniu',
       actions: 'Greiti mygtukai',

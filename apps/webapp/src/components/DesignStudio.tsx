@@ -10,6 +10,7 @@ import {
   resolveBrand,
   tuneFor,
   type EnterAnimation,
+  type EventSummary,
   type AppBackground,
   type GroupSummary,
   type MeetingMotion,
@@ -27,13 +28,14 @@ import {
   useGroup,
   useGroups,
   useMe,
+  usePinnedEvents,
   useSaveChurchStudio,
   useSaveMinistryStudio,
   useUploadMedia,
 } from '../lib/queries';
 import { preparePhoto } from '../lib/image';
 import { confirmDialog, haptic } from '../lib/telegram';
-import { EnvCard } from '../screens/Hub';
+import { EnvCard, PinnedEventCard } from '../screens/Hub';
 import { FontPicker } from './FontPicker';
 import { AppBackdrop } from './AppBackdrop';
 import { BackgroundEditor } from './BackgroundEditor';
@@ -165,7 +167,7 @@ export function DesignStudio({ g }: { g: GroupSummary }) {
   );
 }
 
-const CHURCH_SPOTS = ['header', 'cards', 'list'] as const;
+const CHURCH_SPOTS = ['header', 'pinned', 'cards', 'list'] as const;
 const MINISTRY_SPOTS = ['header', 'actions', 'calendar', 'meetings', 'posts', 'tabbar'] as const;
 
 /** A tappable part of the copy: dashed outline and its name; the part itself doesn't react. */
@@ -218,6 +220,7 @@ function SpotPiece({
       <BrandHeader title={g.name} subtitle={t.common.members(g.activeCount)} />
     );
   if (spot === 'cards') return <CardsPiece g={g} />;
+  if (spot === 'pinned') return <PinnedPiece g={g} />;
   if (spot === 'list') return <ListPiece />;
   if (spot === 'actions') return <ActionsPiece g={g} />;
   if (spot === 'calendar')
@@ -253,6 +256,51 @@ function CardsPiece({ g }: { g: GroupSummary }) {
           onClick={() => undefined}
         />
       ))}
+    </div>
+  );
+}
+
+/** The first pinned event as on the main page (or a sample one when none is pinned). */
+function PinnedPiece({ g }: { g: GroupSummary }) {
+  const t = useT();
+  const me = useMe();
+  const pinned = usePinnedEvents();
+  const [sample] = useState((): EventSummary => ({
+    id: 0,
+    groupId: g.id,
+    groupName: g.name,
+    title: t.studio.samplePinned,
+    startsAt: new Date(Date.now() + 9 * 86_400_000).toISOString(),
+    endsAt: null,
+    location: null,
+    coverUrl: null,
+    features: { gallery: false, rsvp: false, duties: false, cost: false },
+    priceCents: null,
+    status: 'scheduled',
+    goingCount: 0,
+    pinned: true,
+    brandColor: g.brandColor,
+    design: null,
+    templateId: null,
+    motion: null,
+    motionTune: null,
+    motionLayers: [],
+    countdown: false,
+    speakers: [],
+    createdAt: new Date().toISOString(),
+    look: null,
+    myRsvp: null,
+    myRoles: [],
+    myDuties: [],
+  }));
+  const e = pinned.data?.[0] ?? sample;
+  return (
+    <div className="flex">
+      <PinnedEventCard
+        e={e}
+        fallbackTheme={me.data?.church.brandColor ?? 'blue'}
+        onClick={() => undefined}
+      />
     </div>
   );
 }
@@ -429,39 +477,42 @@ function ModuleSheet({
           </ScreenLookPreview>
         </div>
 
-        <Group title={t.studio.surface}>
-          <div className="grid grid-cols-4 gap-2">
-            {MODULE_SURFACES.map((s) => {
-              const on = (draft.surface ?? 'default') === s;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => {
-                    haptic.tap();
-                    // Tapping the chosen one again goes back to the app's own look.
-                    set({ surface: s === 'default' || on ? null : s });
-                  }}
-                  className={`flex flex-col items-center gap-1 rounded-2xl p-1 ${on ? 'ring-2 ring-[var(--brand)]' : ''}`}
-                >
-                  <span
-                    className={`glass relative block h-11 w-full overflow-hidden rounded-xl ${s === 'default' ? '' : `skin skin-${s}`}`}
-                    style={
-                      s === 'gradient'
-                        ? skinStyle({ surface: 'gradient', colors, angle: draft.angle })
-                        : undefined
-                    }
-                  />
-                  <span
-                    className={`text-center text-[11px] leading-tight ${on ? 'font-bold text-accent' : 'text-hint'}`}
+        {/* Pinned events are photos and designed covers: a surface wouldn't show on them. */}
+        {spot !== 'pinned' && (
+          <Group title={t.studio.surface}>
+            <div className="grid grid-cols-4 gap-2">
+              {MODULE_SURFACES.map((s) => {
+                const on = (draft.surface ?? 'default') === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      haptic.tap();
+                      // Tapping the chosen one again goes back to the app's own look.
+                      set({ surface: s === 'default' || on ? null : s });
+                    }}
+                    className={`flex flex-col items-center gap-1 rounded-2xl p-1 ${on ? 'ring-2 ring-[var(--brand)]' : ''}`}
                   >
-                    {t.studio.surfaces[s]}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </Group>
+                    <span
+                      className={`glass relative block h-11 w-full overflow-hidden rounded-xl ${s === 'default' ? '' : `skin skin-${s}`}`}
+                      style={
+                        s === 'gradient'
+                          ? skinStyle({ surface: 'gradient', colors, angle: draft.angle })
+                          : undefined
+                      }
+                    />
+                    <span
+                      className={`text-center text-[11px] leading-tight ${on ? 'font-bold text-accent' : 'text-hint'}`}
+                    >
+                      {t.studio.surfaces[s]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </Group>
+        )}
 
         <Group title={t.studio.edge}>
           <div className="grid grid-cols-4 gap-2">
@@ -749,6 +800,9 @@ function ModuleSheet({
               onTune={onTune}
             />
             <p className="mt-2 text-[12px] text-hint">{t.studio.tip}</p>
+            {spot === 'pinned' && (
+              <p className="mt-1 text-[12px] text-hint">{t.studio.pinnedHint}</p>
+            )}
           </Group>
         )}
 

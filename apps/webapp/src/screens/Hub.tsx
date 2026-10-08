@@ -6,9 +6,18 @@ import {
   type GroupSummary,
   type LiveItem,
   type MeResponse,
+  tuneFor,
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
-import { SkinLayer, fs, skinClass, skinStyle, useModuleLook } from '../components/ModuleSkin';
+import {
+  SkinLayer,
+  fs,
+  shineStyle,
+  skinClass,
+  skinMotions,
+  skinStyle,
+  useModuleLook,
+} from '../components/ModuleSkin';
 import { BurnFrame } from '../components/Burn';
 import { LiveBadge, LiveNow } from '../components/Live';
 import { CountdownBadge, hasCountdown } from '../components/Countdown';
@@ -19,7 +28,16 @@ import { BackdropLayer, PatternLayer, onBrandStyle } from '../components/Pattern
 import { UnreadBadges } from '../components/FeedEntry';
 import { IconChevronDown, IconPlus, IconSettings, IconUsers } from '../components/icons';
 import { MyAssignments } from '../components/MyAssignments';
-import { Badge, Card, EmptyState, Loading, Row, Screen, Section } from '../components/ui';
+import {
+  Badge,
+  Card,
+  EmptyState,
+  LivingLayer,
+  Loading,
+  Row,
+  Screen,
+  Section,
+} from '../components/ui';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import { CoverEffectLayers } from '../components/CoverEffects';
@@ -325,7 +343,7 @@ function SoonButton({ item, now }: { item: LiveItem; now: number }) {
 }
 
 /** A pinned church-wide event on the main page, in its ministry's colours. */
-function PinnedEventCard({
+export function PinnedEventCard({
   e,
   fallbackTheme,
   onClick,
@@ -336,6 +354,10 @@ function PinnedEventCard({
 }) {
   const when = useEventWhen();
   const groups = useGroups();
+  // The "Pinned events" part from the Design studio: its animations, when it has any, take
+  // the place of the event's own cover effects here; its edge and shine are added.
+  const part = useModuleLook('pinned');
+  const partMotions = skinMotions(part);
   // The event's own look, else its ministry's (colour, pattern, photo).
   const look = e.look ?? groups.data?.find((g) => g.id === e.groupId) ?? null;
   return (
@@ -343,7 +365,8 @@ function PinnedEventCard({
       <button
         type="button"
         onClick={onClick}
-        className="block h-full w-full overflow-hidden rounded-[24px] text-left shadow-cta transition active:scale-[0.98]"
+        className={`block h-full w-full overflow-hidden rounded-[24px] text-left shadow-cta transition active:scale-[0.98] ${part.edge && part.edge !== 'none' ? `skin edge edge-${part.edge}` : ''}`}
+        style={part.radius != null ? { borderRadius: part.radius } : undefined}
       >
         <LookTop
           look={look}
@@ -359,7 +382,22 @@ function PinnedEventCard({
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               )}
-              <CoverEffectLayers e={e} image={e.coverUrl} />
+              {partMotions.length ? (
+                partMotions.map((m) => (
+                  <LivingLayer
+                    key={m}
+                    kind={m}
+                    tune={tuneFor(part, m)}
+                    icon={part.icon}
+                    image={e.coverUrl}
+                  />
+                ))
+              ) : (
+                <CoverEffectLayers e={e} image={e.coverUrl} />
+              )}
+              {part.shine && part.shine !== 'none' && (
+                <span className={`shine shine-${part.shine}`} style={shineStyle(part.shineTune)} />
+              )}
               {e.coverUrl && (
                 <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
               )}
