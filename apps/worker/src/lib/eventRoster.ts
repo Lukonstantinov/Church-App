@@ -103,8 +103,15 @@ export const eventPictureId = (
 export function coverLoopKey(
   e: Pick<Event, 'coverMediaId' | 'motion' | 'motionTune' | 'motionLayers'>,
 ): string {
-  return fingerprint(JSON.stringify([e.coverMediaId, e.motion, e.motionTune, e.motionLayers]));
+  // The recorder's version: loops made before iPhones drew the cover photo (v2) left the
+  // photo out, so they no longer count and the live effects show until recorded again.
+  return fingerprint(
+    JSON.stringify([LOOP_RECORDER, e.coverMediaId, e.motion, e.motionTune, e.motionLayers]),
+  );
 }
+
+/** Raised when older recordings of covers are known to be wrong. */
+const LOOP_RECORDER = 2;
 
 /** May the cover be recorded as a loop (a single photo with effects)? */
 export const loopableCover = (
