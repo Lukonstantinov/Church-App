@@ -3,7 +3,7 @@ import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
 import { IconChevronDown } from './icons';
 import { MotionPicker } from './MotionPicker';
-import { Button, LivingLayer, Section } from './ui';
+import { Button, LivingLayers, Section } from './ui';
 
 /** How many effects one cover can wear at once (the first plus three layers). */
 export const MAX_EFFECTS = 4;
@@ -45,11 +45,7 @@ export function effectsPayload(s: EffectsState): Required<Saved> {
 export function CoverEffectLayers({ e, image }: { e: Saved; image?: string | null }) {
   const { effects, tunes } = initEffects(e);
   return (
-    <>
-      {effects.map((kind) => (
-        <LivingLayer key={kind} kind={kind} tune={tunes[kind]} image={image} />
-      ))}
-    </>
+    <LivingLayers layers={effects.map((kind) => ({ kind, tune: tunes[kind] }))} image={image} />
   );
 }
 

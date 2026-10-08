@@ -7,7 +7,7 @@ import {
   type PosterTexts,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
-import { LivingLayer } from './ui';
+import { LivingLayer, LivingLayers } from './ui';
 
 /**
  * A poster template drawn inside any box — the poster, a home tile, an event's cover or
@@ -182,9 +182,7 @@ function Picture({
       }
     >
       <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover" />
-      {effects.map((e, i) => (
-        <LivingLayer key={`${e.kind}${i}`} kind={e.kind} tune={e.tune} image={url} />
-      ))}
+      <LivingLayers layers={effects} image={url} />
     </span>
   );
   const turn = layer.rotate ? { rotate: `${layer.rotate}deg` } : {};

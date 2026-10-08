@@ -32,7 +32,7 @@ import {
   Badge,
   Card,
   EmptyState,
-  LivingLayer,
+  LivingLayers,
   Loading,
   Row,
   Screen,
@@ -385,16 +385,13 @@ export function PinnedEventCard({
               ) : (
                 <CoverPicture e={e} />
               )}
-              {partMotions.length > 0 &&
-                partMotions.map((m) => (
-                  <LivingLayer
-                    key={m}
-                    kind={m}
-                    tune={tuneFor(part, m)}
-                    icon={part.icon}
-                    image={e.coverUrl}
-                  />
-                ))}
+              {partMotions.length > 0 && (
+                <LivingLayers
+                  layers={partMotions.map((m) => ({ kind: m, tune: tuneFor(part, m) }))}
+                  icon={part.icon}
+                  image={e.coverUrl}
+                />
+              )}
               {part.shine && part.shine !== 'none' && (
                 <span className={`shine shine-${part.shine}`} style={shineStyle(part.shineTune)} />
               )}

@@ -12,7 +12,7 @@ import {
 } from '@church/shared';
 import { useEnv } from '../lib/env';
 import { useGroups, useMe } from '../lib/queries';
-import { LivingLayer } from './ui';
+import { LivingLayer, LivingLayers } from './ui';
 
 /** The Design studio shows its draft instead of what is saved. */
 const PreviewLook = createContext<ScreenLook | null>(null);
@@ -100,9 +100,11 @@ export function SkinLayer({ look }: { look: ModuleLook }) {
       {look.surface === 'fire' && !skinMotions(look).includes('flames') && (
         <LivingLayer kind="flames" behind tune={{ size: 0.7, speed: 1 }} />
       )}
-      {skinMotions(look).map((m, i) => (
-        <LivingLayer key={`${m}${i}`} kind={m} behind tune={tuneFor(look, m)} icon={look.icon} />
-      ))}
+      <LivingLayers
+        layers={skinMotions(look).map((m) => ({ kind: m, tune: tuneFor(look, m) }))}
+        behind
+        icon={look.icon}
+      />
     </>
   );
 }

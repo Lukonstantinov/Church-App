@@ -11,6 +11,8 @@ import { useQuality, watchOffscreen } from '../lib/perf';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { PHOTO_EFFECTS, PhotoEffect } from './PhotoEffects';
+import { PARTICLES, SEASON_ITEMS, particleSpots, type Particle } from './particleData';
+import { PARTICLE_KINDS, ParticleCanvas } from './ParticleCanvas';
 
 /** Page container. `tabs` leaves room for the floating tab bar. */
 export function Screen({ children, tabs }: { children: ReactNode; tabs?: boolean }) {
@@ -404,6 +406,49 @@ export function Card({
  * emoji or a picture rising, raining or circling). `tune` sets its speed, size, direction
  * and colour. Nothing for "off". Parent: relative + overflow-hidden.
  */
+/**
+ * Several animations over one block: the particle ones share one canvas (one picture drawn
+ * by one clock instead of a layer each), the others are drawn as layers of their own.
+ */
+export function LivingLayers({
+  layers,
+  behind,
+  icon,
+  image,
+  preview,
+}: {
+  layers: readonly { kind: MeetingMotion; tune?: MotionTune | null }[];
+  behind?: boolean;
+  icon?: MotionIcon | null;
+  image?: string | null;
+  preview?: boolean;
+}) {
+  const quality = useQuality();
+  if (quality === 'still') return null;
+  const shown = layers.filter((l) => l.kind !== 'off');
+  const particles = shown.filter((l) => PARTICLE_KINDS.has(l.kind));
+  return (
+    <>
+      {shown
+        .filter((l) => !PARTICLE_KINDS.has(l.kind))
+        .map((l, i) => (
+          <LivingLayer
+            key={`${l.kind}${i}`}
+            kind={l.kind}
+            tune={l.tune}
+            behind={behind}
+            icon={icon}
+            image={image}
+            preview={preview}
+          />
+        ))}
+      {particles.length > 0 && (
+        <ParticleCanvas layers={particles} icon={icon} behind={behind} preview={preview} />
+      )}
+    </>
+  );
+}
+
 export function LivingLayer({
   kind,
   live,
@@ -446,6 +491,11 @@ export function LivingLayer({
   }, [speed, kind, tune?.density, tune?.sharp]);
   // On "still" phones the animation layers aren't drawn at all.
   if (kind === 'off' || quality === 'still') return null;
+  // Particles are drawn on one canvas instead of one moving element each.
+  if (PARTICLE_KINDS.has(kind))
+    return (
+      <ParticleCanvas layers={[{ kind, tune }]} icon={icon} behind={behind} preview={preview} />
+    );
   // Weaker phones draw every other particle.
   const few = <T,>(list: readonly T[]): readonly T[] =>
     quality === 'lite' ? list.filter((_, i) => i % 2 === 0) : list;
@@ -741,15 +791,6 @@ export function LivingLayer({
   );
 }
 
-/** What falls in the season animations. */
-const SEASON_ITEMS = {
-  leaves: ['🍁', '🍂', '🍃', '🍂'],
-  snowfall: ['❄️', '❅', '❆', '•'],
-  petals: ['🌸', '💮', '🌸', '🏵️'],
-} as const;
-
-type Particle = (typeof PARTICLES)[number];
-
 /** Columns of the digital rain: a fixed jumble of digits and katakana each. */
 const CODE = ['1ｱ0ｶ7ﾀ3ﾅ9ｻ', 'ﾊ8ﾏ2ﾔ5ﾗ0ﾜ1', '0ｲ4ｷ1ﾁ6ﾆ3ｼ', 'ﾋ7ﾐ0ﾕ9ﾘ2ｦ5', '3ｳ8ｸ5ﾂ0ﾇ7ｽ', 'ﾌ1ﾑ6ﾖ4ﾙ8ﾝ0'];
 
@@ -806,21 +847,6 @@ function Glitch({
       <i className="gl-tear" />
     </span>
   );
-}
-
-/**
- * As many particles as asked for (density 1 = the 12 fixed spots): more are spread between
- * the fixed ones, each round shifted across and in time so they never line up.
- */
-function particleSpots(base: readonly Particle[], density: number): Particle[] {
-  const n = Math.max(3, Math.round(base.length * density));
-  return Array.from({ length: n }, (_, i) => {
-    const p = base[i % base.length]!;
-    const round = Math.floor(i / base.length);
-    return round
-      ? { ...p, x: (p.x + round * 37) % 100, t: p.t + round * 2.7, d: p.d * (1 + round * 0.12) }
-      : p;
-  });
 }
 
 /** How tall each tongue of fire is, in turn, and how long one flicker takes. */
@@ -890,25 +916,6 @@ function Flames({ sharp, weight, density }: { sharp: number; weight: number; den
     </span>
   );
 }
-
-/**
- * Fixed spots for particles (embers, bubbles, snow, fireflies, confetti, icons): place
- * across, size, how long one trip takes, where in its trip it starts, and how far it sways.
- */
-const PARTICLES = [
-  { x: 6, s: 4, d: 9, t: 1, w: 14 },
-  { x: 15, s: 6, d: 12, t: 7, w: -18 },
-  { x: 24, s: 3, d: 8, t: 4, w: 10 },
-  { x: 33, s: 5, d: 11, t: 9, w: -12 },
-  { x: 42, s: 4, d: 10, t: 2, w: 16 },
-  { x: 51, s: 7, d: 14, t: 11, w: -20 },
-  { x: 60, s: 3, d: 9, t: 6, w: 12 },
-  { x: 69, s: 5, d: 12, t: 3, w: -14 },
-  { x: 78, s: 4, d: 10, t: 8, w: 18 },
-  { x: 87, s: 6, d: 13, t: 5, w: -10 },
-  { x: 94, s: 3, d: 9, t: 10, w: 12 },
-  { x: 47, s: 2, d: 7, t: 5, w: -8 },
-];
 
 export function HeroCard({
   children,

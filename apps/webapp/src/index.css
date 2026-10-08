@@ -2773,6 +2773,14 @@ html[data-motion='off'] .edge {
   -webkit-mask-image: -webkit-radial-gradient(white, black);
   mask-image: radial-gradient(white, black);
 }
+/* A particle canvas rounds its own corners: no mask to redo on every frame it draws. */
+.living-clip.living-canvas {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.living-canvas > canvas {
+  border-radius: inherit;
+}
 /* A clip path is what iPhones honour for sure: the pictures follow the card's own corners. */
 .card-clip {
   clip-path: inset(0 round var(--clip-r, 0px));

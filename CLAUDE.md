@@ -64,6 +64,8 @@ Deploy → Run workflow → production.
   Running `LivingLayer`s are capped (`watchOffscreen(el, true)`; the biggest on screen run first); never animate
   `background-position` or `box-shadow` smoothly — fade a pseudo copy (`flow-fade`), slide a
   strip with transform, or use `steps()`.
+  Particle kinds (`PARTICLE_KINDS`) are drawn on one canvas per block (`ParticleCanvas`, shared 24 fps clock);
+  stack several animations with `LivingLayers` so a block's particle effects share that canvas.
   Long decorative animations are capped at 30 changes a second (`capAnimations` in `lib/perf.ts`);
   backdrop blur is redone whenever anything behind or inside it moves — keep moving things
   out from under glass (the page background steps 4×/s; glass with a living layer skips blur).
