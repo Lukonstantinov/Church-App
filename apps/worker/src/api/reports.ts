@@ -5,16 +5,32 @@ import { and, asc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import {
   DOCUMENT_MAX_BYTES,
   IMAGE_SEND_MAX_BYTES,
+  POSTER_AUDIENCES,
   addDays,
   zonedToUtc,
+  type PosterAudience,
   type AttendanceExport,
   type TreasuryExport,
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
-import { attendance, meetings, memberships, transactions, users } from '../db/schema';
+import {
+  attendance,
+  events,
+  meetings,
+  memberships,
+  transactions,
+  users,
+  type EventRow,
+  type Meeting,
+} from '../db/schema';
 import { assertCan } from '../lib/access';
+import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
+import { recordNotification } from '../lib/notifications';
+import { drainOutbox, enqueue } from '../lib/outbox';
+import { posterRecipients } from '../lib/posterSend';
+import { mayPublish } from '../lib/publishRequests';
 import { botApi, isUnreachableError } from '../lib/telegram';
 import { groupStatistics } from '../lib/statistics';
 import { toTransactionRows } from '../lib/treasury';
@@ -235,6 +251,11 @@ const ANIMATION_MAX_BYTES = 45_000_000;
  * A moving poster recorded on the phone (lib/recorder.ts) to the person's own chat, with
  * what / when / where under it: an MP4 or a GIF, both sent as an animation so they play in
  * the chat (long-press to save to the phone or forward to WhatsApp).
+ *
+ * `?to=` sends it on to others as well (`people` with `users=1,2`, `group`, `church`,
+ * `serving`) for the event or meeting `kind` + `id`: those who may publish there (church
+ * admins for the whole church). The sender gets it first; the others get the very same
+ * file through the outbox, so it is uploaded only once.
  */
 export const animationRoutes = new Hono<App>();
 
@@ -253,11 +274,81 @@ animationRoutes.post('/', async (c) => {
   const raw = (c.req.query('name') ?? 'poster').replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 60);
   const file = new InputFile(bytes, `${raw || 'poster'}.${mp4 ? 'mp4' : 'gif'}`);
   const caption = (c.req.query('caption') ?? '').slice(0, 1024) || undefined;
+  const db = c.get('db');
+  const to = (c.req.query('to') ?? 'me') as PosterAudience;
+  if (!POSTER_AUDIENCES.includes(to)) throw new HTTPException(400, { message: 'audience' });
+  // Others too: check first, so nothing is sent when it isn't allowed.
+  let target: { kind: 'event' | 'meeting'; item: EventRow | Meeting } | null = null;
+  if (to !== 'me') {
+    const kind = c.req.query('kind') === 'meeting' ? 'meeting' : 'event';
+    const id = Number(c.req.query('id'));
+    const item = Number.isSafeInteger(id)
+      ? kind === 'meeting'
+        ? await db.query.meetings.findFirst({ where: eq(meetings.id, id) })
+        : await db.query.events.findFirst({ where: eq(events.id, id) })
+      : undefined;
+    if (!item) throw new HTTPException(404, { message: 'not_found' });
+    if (!(await mayPublish(db, user, item.groupId, kind)) || (to === 'church' && !user.isAdmin))
+      throw new HTTPException(403, { message: 'forbidden' });
+    target = { kind, item };
+  }
+  let sent;
   try {
-    await botApi(c.env).sendAnimation(user.telegramId, file, { caption });
+    sent = await botApi(c.env).sendAnimation(user.telegramId, file, { caption });
   } catch (err) {
     if (isUnreachableError(err)) throw new HTTPException(409, { message: 'bot_blocked' });
     throw err;
   }
-  return c.json({ ok: true });
+  if (!target) return c.json({ ok: true, sent: 0 });
+
+  // The file Telegram now keeps (an animation, or a video/document it turned it into).
+  const kept = sent as typeof sent & { video?: { file_id: string } };
+  const fileId = kept.animation?.file_id ?? kept.video?.file_id ?? kept.document?.file_id;
+  if (!fileId) throw new HTTPException(502, { message: 'no_file' });
+  const chosen = (c.req.query('users') ?? '')
+    .split(',')
+    .map(Number)
+    .filter((n) => Number.isSafeInteger(n) && n > 0)
+    .slice(0, 500);
+  const recipients = await posterRecipients(db, {
+    audience: to as Exclude<PosterAudience, 'me'>,
+    kind: target.kind,
+    item: target.item,
+    userIds: chosen,
+    senderId: user.id,
+    senderChatId: user.telegramId,
+  });
+  const batch = `${sent.message_id}:${user.telegramId}`;
+  for (const r of recipients) {
+    await enqueue(db, {
+      chatId: r.chatId,
+      method: 'sendAnimation',
+      payload: { chat_id: r.chatId, animation: fileId, ...(caption ? { caption } : {}) },
+      dedupeKey: `poster:${batch}:${r.chatId}`,
+    });
+    await recordNotification(db, {
+      userId: r.userId,
+      kind: target.kind === 'event' ? 'event_reminder' : 'meeting_announce',
+      title: target.item.title,
+      body: caption ?? '',
+      link:
+        target.kind === 'event'
+          ? { type: 'event', eventId: target.item.id }
+          : { type: 'task', meetingId: target.item.id },
+    });
+  }
+  await audit(db, {
+    actorUserId: user.id,
+    action: 'poster_sent',
+    entity: target.kind === 'event' ? 'event' : 'group',
+    entityId: target.kind === 'event' ? target.item.id : target.item.groupId,
+    groupId: target.item.groupId,
+    data: { to, kind: target.kind, refId: target.item.id, sent: recipients.length },
+  });
+  c.executionCtx.waitUntil(
+    drainOutbox(db, botApi(c.env), { limit: 100 }).catch((err) =>
+      console.error('poster drain', err),
+    ),
+  );
+  return c.json({ ok: true, sent: recipients.length });
 });

@@ -1649,6 +1649,29 @@ export const en: Messages = {
     },
   },
   motionExport: {
+    textLabel: 'Text under the poster',
+    toLabel: 'To',
+    to: {
+      me: 'Me',
+      people: 'Chosen people',
+      group: 'Whole ministry',
+      church: 'Whole church',
+      serving: 'Those serving',
+    },
+    toHint: {
+      me: 'Only you — in your chat with the bot.',
+      people: 'Tick people below. You get a copy too.',
+      group: 'Everyone in the ministry who has Telegram. You get a copy too.',
+      church: 'Everyone in every ministry of the church. You get a copy too.',
+      serving:
+        'Only those serving: people on duty at the event / leader, speakers and helpers at the meeting.',
+    },
+    noneChosen: 'Choose at least one person',
+    confirmTo: (who: string) => `Send the animated poster: ${who}?`,
+    sentTo: (n: number) =>
+      n === 0 ? 'Sent to you — nobody else to send to' : `Sent: to you and ${n} more`,
+    sendVideo: '🎬 Send video',
+    sendGif: '🎞 Send GIF',
     quality: { standard: 'Standard', high: 'High', max: 'Maximum' },
     qualityHint: {
       standard: 'Video 720p, GIF 540 px — quick and light',

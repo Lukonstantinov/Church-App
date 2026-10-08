@@ -1,13 +1,14 @@
 import { useRef, useState, type RefObject } from 'react';
+import { displayName, type PosterAudience } from '@church/shared';
 import type { EventDetail, EventSummary } from '@church/shared';
 import { FullMotion } from '../lib/perf';
 import { CoverPicture } from './CoverSlideshow';
 import { useT } from '../lib/i18n';
-import { sendAnimationToChat, useCoverLoop } from '../lib/queries';
-import { haptic } from '../lib/telegram';
+import { sendAnimationToChat, useContacts, useCoverLoop, useMe } from '../lib/queries';
+import { confirmDialog, haptic } from '../lib/telegram';
 import { EventCover, EventHeroText, useEventWhen } from './EventCard';
 import { useToast } from './Toast';
-import { Button } from './ui';
+import { Button, TextArea } from './ui';
 
 /**
  * Quality of a moving poster: the video's and the GIF's width, frames a second and how much
@@ -39,14 +40,31 @@ export function MotionExport({
   name,
   caption,
   onRecording,
+  share,
 }: {
   node: RefObject<HTMLElement | null>;
   name: string;
   caption?: string;
   onRecording?: (on: boolean) => void;
+  /**
+   * The event or meeting it is for, when the person may publish there: then it can go to
+   * chosen people, the whole ministry, the whole church (church admins) or those serving.
+   */
+  share?: { kind: 'event' | 'meeting'; id: number; groupId: number };
 }) {
   const t = useT();
   const toast = useToast();
+  const me = useMe();
+  // The text under the poster: prepared from the event/meeting, editable; follows the
+  // prepared text until the person changes it.
+  const [ownText, setOwnText] = useState<string | null>(null);
+  const text = ownText ?? caption ?? '';
+  const [to, setTo] = useState<PosterAudience>('me');
+  const [chosen, setChosen] = useState<number[]>([]);
+  const contacts = useContacts(share?.groupId ?? 0, !!share && to === 'people');
+  const audiences: PosterAudience[] = share
+    ? ['me', 'people', 'group', ...(me.data?.user.isAdmin ? (['church'] as const) : []), 'serving']
+    : ['me'];
   const [busy, setBusy] = useState<'video' | 'gif' | null>(null);
   const [quality, setQuality] = useState<keyof typeof QUALITY>('standard');
   const [progress, setProgress] = useState(0);
@@ -55,6 +73,12 @@ export function MotionExport({
 
   async function run(kind: 'video' | 'gif') {
     if (busy) return;
+    if (to === 'people' && chosen.length === 0) {
+      toast(t.motionExport.noneChosen, 'error');
+      return;
+    }
+    if (to !== 'me' && !(await confirmDialog(t.motionExport.confirmTo(t.motionExport.to[to]))))
+      return;
     setBusy(kind);
     setProgress(0);
     onRecording?.(true);
@@ -96,9 +120,14 @@ export function MotionExport({
       if (kind === 'video' && !rec.mp4) toast(t.motionExport.noVideo);
       setSending(true);
       const safe = name.replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 50) || 'poster';
-      await sendAnimationToChat(file, safe, caption);
+      const res = await sendAnimationToChat(
+        file,
+        safe,
+        text.trim() || undefined,
+        share && to !== 'me' ? { to, kind: share.kind, id: share.id, users: chosen } : undefined,
+      );
       haptic.success();
-      toast(t.motionExport.sent);
+      toast(to === 'me' ? t.motionExport.sent : t.motionExport.sentTo(res.sent));
     } catch (err) {
       console.warn('recording failed', err);
       haptic.error();
@@ -148,12 +177,62 @@ export function MotionExport({
             ))}
           </div>
           <p className="text-[11px] text-hint">{t.motionExport.qualityHint[quality]}</p>
+          <div className="text-[12px] font-semibold text-hint">{t.motionExport.textLabel}</div>
+          <TextArea value={text} onChange={setOwnText} maxLength={1024} rows={3} />
+          {audiences.length > 1 && (
+            <>
+              <div className="text-[12px] font-semibold text-hint">{t.motionExport.toLabel}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {audiences.map((a) => (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => {
+                      haptic.tap();
+                      setTo(a);
+                    }}
+                    className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                      to === a ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                    }`}
+                  >
+                    {t.motionExport.to[a]}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] leading-snug text-hint">{t.motionExport.toHint[to]}</p>
+              {to === 'people' && (
+                <div className="flex max-h-56 flex-wrap gap-1.5 overflow-y-auto">
+                  {(contacts.data ?? [])
+                    .filter((c) => c.id !== me.data?.user.id)
+                    .map((c) => {
+                      const on = chosen.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          disabled={c.offline}
+                          onClick={() =>
+                            setChosen(on ? chosen.filter((x) => x !== c.id) : [...chosen, c.id])
+                          }
+                          className={`rounded-full px-3 py-1.5 text-[13px] font-medium disabled:opacity-40 ${
+                            on ? 'bg-[var(--brand)] text-white' : 'glass'
+                          }`}
+                        >
+                          {on ? '✓ ' : ''}
+                          {displayName(c)}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+            </>
+          )}
           <div className="flex gap-2">
             <Button small onClick={() => void run('video')}>
-              {t.motionExport.video}
+              {to === 'me' ? t.motionExport.video : t.motionExport.sendVideo}
             </Button>
             <Button small variant="secondary" onClick={() => void run('gif')}>
-              {t.motionExport.gif}
+              {to === 'me' ? t.motionExport.gif : t.motionExport.sendGif}
             </Button>
           </div>
         </>

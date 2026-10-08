@@ -268,6 +268,11 @@ export function MeetingAnnounceSheet({
                   name={meeting.title}
                   caption={text.trim() || meeting.title}
                   onRecording={setRecording}
+                  share={
+                    canPublish
+                      ? { kind: 'meeting', id: meeting.id, groupId: meeting.groupId }
+                      : undefined
+                  }
                 />
               </div>
             )}

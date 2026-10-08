@@ -131,6 +131,13 @@ export function mockTelegram({
         can_read_all_group_messages: false,
         supports_inline_queries: false,
       };
+    } else if (method === 'sendAnimation') {
+      result = {
+        message_id: ++messageSeq,
+        date: 0,
+        chat: { id: body.chat_id, type: 'private' },
+        animation: { file_id: `anim${messageSeq}`, file_unique_id: `u${messageSeq}` },
+      };
     } else if (method === 'sendMessage') {
       result = {
         message_id: ++messageSeq,

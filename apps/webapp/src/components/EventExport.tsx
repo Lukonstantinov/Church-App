@@ -173,6 +173,7 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
             .filter(Boolean)
             .join('\n')}
           onRecording={setRecording}
+          share={e.canPublish ? { kind: 'event', id: e.id, groupId: e.groupId } : undefined}
         />
         <CoverLoopSection e={e} />
         {btn('picture', t.events.exportPicture, 'primary')}

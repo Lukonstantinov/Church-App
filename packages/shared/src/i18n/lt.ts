@@ -1684,6 +1684,29 @@ export const lt: Messages = {
     },
   },
   motionExport: {
+    textLabel: 'Tekstas po plakatu',
+    toLabel: 'Kam',
+    to: {
+      me: 'Man',
+      people: 'Pasirinktiems',
+      group: 'Visai tarnystei',
+      church: 'Visai bažnyčiai',
+      serving: 'Tarnaujantiems',
+    },
+    toHint: {
+      me: 'Tik jums — į pokalbį su botu.',
+      people: 'Pažymėkite žmones žemiau. Kopiją gausite ir jūs.',
+      group: 'Visiems tarnystės nariams, turintiems Telegram. Kopiją gausite ir jūs.',
+      church: 'Visiems visų bažnyčios tarnysčių nariams. Kopiją gausite ir jūs.',
+      serving:
+        'Tik tarnaujantiems: atsakingiems renginyje / vedančiajam, kalbėtojams ir padėjėjams susitikime.',
+    },
+    noneChosen: 'Pasirinkite bent vieną žmogų',
+    confirmTo: (who: string) => `Siųsti animuotą plakatą: ${who}?`,
+    sentTo: (n: number) =>
+      n === 0 ? 'Išsiųsta jums — kitų gavėjų nėra' : `Išsiųsta: jums ir dar ${n}`,
+    sendVideo: '🎬 Siųsti vaizdo įrašą',
+    sendGif: '🎞 Siųsti GIF',
     quality: { standard: 'Standartinė', high: 'Aukšta', max: 'Maksimali' },
     qualityHint: {
       standard: 'Vaizdo įrašas 720p, GIF 540 px — greita ir lengva',

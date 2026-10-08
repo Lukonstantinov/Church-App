@@ -1,4 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { PosterAudience } from '@church/shared';
 import type {
   ChurchStudioInput,
   MinistryStudioInput,
@@ -335,10 +336,11 @@ export function useCreateMeeting(groupId: number) {
 }
 
 /** Everyone active in the ministry with their position (any member may see it). */
-export function useContacts(groupId: number) {
+export function useContacts(groupId: number, enabled = true) {
   return useQuery({
     queryKey: ['groups', groupId, 'contacts'],
     queryFn: () => apiFetch<ContactRow[]>(`/groups/${groupId}/contacts`),
+    enabled,
   });
 }
 
@@ -1345,10 +1347,22 @@ export const sendPictureToChat = (image: Blob, name: string, asFile = false) =>
   });
 
 /** The bot sends a recorded moving poster (MP4 or GIF, playing in the chat) to the user. */
-export const sendAnimationToChat = (file: Blob, name: string, caption?: string) =>
-  apiFetch<{ ok: true }>(
+export const sendAnimationToChat = (
+  file: Blob,
+  name: string,
+  caption?: string,
+  /** Also to others (the bot sends it to the person first, then to them). */
+  share?: { to: PosterAudience; kind: 'event' | 'meeting'; id: number; users?: number[] },
+) =>
+  apiFetch<{ ok: true; sent: number }>(
     `/me/animation?name=${encodeURIComponent(name)}${
-      caption ? `&caption=${encodeURIComponent(caption.slice(0, 1000))}` : ''
+      caption ? `&caption=${encodeURIComponent(caption.slice(0, 1024))}` : ''
+    }${
+      share && share.to !== 'me'
+        ? `&to=${share.to}&kind=${share.kind}&id=${share.id}${
+            share.users?.length ? `&users=${share.users.join(',')}` : ''
+          }`
+        : ''
     }`,
     {
       method: 'POST',

@@ -1180,6 +1180,13 @@ export interface Telemetry {
 
 // ---------- Notifications inbox ----------
 
+/**
+ * Who a moving poster goes to: the sender only, chosen people of the ministry, the whole
+ * ministry, everyone in the church (church admins), or those serving at the event/meeting.
+ */
+export const POSTER_AUDIENCES = ['me', 'people', 'group', 'church', 'serving'] as const;
+export type PosterAudience = (typeof POSTER_AUDIENCES)[number];
+
 export type NotificationKind =
   | 'event_reminder'
   | 'event_duty'
