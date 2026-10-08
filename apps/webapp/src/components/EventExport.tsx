@@ -166,7 +166,14 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
             </FullMotion.Provider>
           </div>
         )}
-        <MotionExport node={motionNode} name={e.title} onRecording={setRecording} />
+        <MotionExport
+          node={motionNode}
+          name={e.title}
+          caption={[e.title, when(e), e.location ? `📍 ${e.location}` : null]
+            .filter(Boolean)
+            .join('\n')}
+          onRecording={setRecording}
+        />
         <CoverLoopSection e={e} />
         {btn('picture', t.events.exportPicture, 'primary')}
         {btn('file', t.events.exportPictureFile)}

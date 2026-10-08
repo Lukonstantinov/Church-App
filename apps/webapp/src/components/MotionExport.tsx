@@ -11,17 +11,20 @@ import { Button } from './ui';
 
 /**
  * «Send me the animation»: records the poster with its moving effects (lib/recorder.ts)
- * and the bot sends it to the person's own chat — as a short video that plays like a GIF
- * (Telegram, WhatsApp) or as a real GIF file. `onRecording` switches the poster's effects
- * fully on while it records, whatever this phone's graphics setting.
+ * and the bot sends it to the person's own chat with `caption` (what, when, where) under it
+ * — as a short video or a GIF, both playing in the chat (long-press to save or forward).
+ * `onRecording` switches the poster's effects fully on while it records, whatever this
+ * phone's graphics setting.
  */
 export function MotionExport({
   node,
   name,
+  caption,
   onRecording,
 }: {
   node: RefObject<HTMLElement | null>;
   name: string;
+  caption?: string;
   onRecording?: (on: boolean) => void;
 }) {
   const t = useT();
@@ -51,7 +54,7 @@ export function MotionExport({
       if (kind === 'video' && !rec.mp4) toast(t.motionExport.noVideo);
       setSending(true);
       const safe = name.replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 50) || 'poster';
-      await sendAnimationToChat(file, safe);
+      await sendAnimationToChat(file, safe, caption);
       haptic.success();
       toast(t.motionExport.sent);
     } catch (err) {
@@ -98,7 +101,8 @@ export function MotionExport({
 }
 
 /**
- * An event's cover as a poster to record (laid out at phone size, recorded sharper): the poster template, the designed cover or
+ * An event's cover as a poster to record (laid out at phone size, recorded sharper), always
+ * with what, when and where: the poster template, the designed cover or
  * the cover photo with its effects (a photo gets the title, date and place over it).
  */
 export function EventMotionPoster({
@@ -112,7 +116,7 @@ export function EventMotionPoster({
   const photo = !!e.coverUrl && !e.poster;
   return (
     <div ref={ref} className="relative w-[400px] overflow-hidden bg-black text-white">
-      <EventCover e={e} className="aspect-[4/5]" />
+      <EventCover e={{ ...e, coverLoop: null }} className="aspect-[4/5]" />
       {photo && (
         <>
           <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
@@ -127,6 +131,17 @@ export function EventMotionPoster({
             {e.location && <div className="mt-0.5 text-[14px] opacity-90">📍 {e.location}</div>}
           </div>
         </>
+      )}
+      {/* A designed cover or poster template shows its own title: the date and place go
+          in a band under it, so the shared poster still says when and where. */}
+      {!photo && (
+        <div className="flex flex-col gap-0.5 bg-[#111] px-5 py-3.5">
+          <div className="text-[11px] font-bold uppercase tracking-wider opacity-70">
+            {e.groupName}
+          </div>
+          <div className="text-[16px] font-semibold">{when(e)}</div>
+          {e.location && <div className="text-[14px] opacity-85">📍 {e.location}</div>}
+        </div>
       )}
     </div>
   );

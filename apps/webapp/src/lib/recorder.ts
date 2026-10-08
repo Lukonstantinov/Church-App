@@ -147,6 +147,50 @@ interface Effect {
   anims: Animation[];
 }
 
+/**
+ * Generated textures (smoke, frost, grain, TV static, grunge, crack…) are small SVG pictures
+ * with noise filters; the drawing library turns them black. Each is drawn once into an
+ * ordinary picture at the size it shows, and that is used while recording. Returns how to
+ * put the originals back.
+ */
+async function rasterizeTextures(roots: HTMLElement[]): Promise<() => void> {
+  const undo: (() => void)[] = [];
+  const done = new Map<string, string>();
+  const els = roots.flatMap((r) => [r, ...r.querySelectorAll<HTMLElement>('*')]);
+  for (const el of els) {
+    const css = getComputedStyle(el);
+    if (!css.backgroundImage.includes('data:image/svg+xml')) continue;
+    let replaced = css.backgroundImage;
+    // Computed values quote their links; the SVG itself holds brackets (url(#filter)).
+    for (const m of css.backgroundImage.matchAll(/url\("(data:image\/svg\+xml[^"]*)"\)/g)) {
+      const url = m[1]!;
+      let png = done.get(url);
+      if (!png) {
+        try {
+          // At the picture's own size, so it lays out exactly as the SVG did (and stays small).
+          const img = new Image();
+          img.src = url;
+          await img.decode();
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth || 300;
+          c.height = img.naturalHeight || 150;
+          c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+          png = c.toDataURL('image/png');
+          done.set(url, png);
+        } catch {
+          continue;
+        }
+      }
+      replaced = replaced.replace(m[0], `url("${png}")`);
+    }
+    if (replaced === css.backgroundImage) continue;
+    const before = el.style.backgroundImage;
+    el.style.backgroundImage = replaced;
+    undo.push(() => (el.style.backgroundImage = before));
+  }
+  return () => undo.forEach((u) => u());
+}
+
 function prepareEffects(node: HTMLElement, effects: HTMLElement[]): Effect[] {
   return effects.map((el) => {
     const css = getComputedStyle(el);
@@ -199,6 +243,26 @@ async function drawEffects(
   }
 }
 
+/** A 4×4 ordered (Bayer) pattern, -0.5…0.5. */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(
+  (v) => (v + 0.5) / 16 - 0.5,
+);
+
+/**
+ * Fine fixed noise before a GIF's colours are cut to 256: smooth gradients become an even
+ * grain instead of visible stripes (GIFs can't hold more colours).
+ */
+function dither(data: Uint8ClampedArray, width: number) {
+  const amount = 10;
+  for (let i = 0; i < data.length; i += 4) {
+    const p = i / 4;
+    const d = BAYER[((p / width) & 3) * 4 + ((p % width) & 3)]! * amount;
+    data[i] = data[i]! + d;
+    data[i + 1] = data[i + 1]! + d;
+    data[i + 2] = data[i + 2]! + d;
+  }
+}
+
 /** The best H.264 setting this phone can encode at this size, or null. */
 async function videoConfig(width: number, height: number, fps: number, bpp: number) {
   if (typeof VideoEncoder === 'undefined') return null;
@@ -240,9 +304,11 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
   await picturesReady(node);
   await document.fonts?.ready;
   await nextFrame();
+  let restoreTextures: (() => void) | undefined;
   try {
     const { below, above, effects } = await stillParts(node, k, outW, outH);
     const list = prepareEffects(node, effects);
+    restoreTextures = await rasterizeTextures(effects);
     const total = Math.round(seconds * fps);
     const fade = Math.round(fps * 0.75);
 
@@ -264,10 +330,10 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
       encoder.configure(config);
     }
 
-    // The GIF: half the frames, half the size. A phone that can't make videos gets one too.
+    // The GIF: half the frames, 540 px wide. A phone that can't make videos gets one too.
     const wantGif = opts.gif || !encoder;
     const gifStep = Math.max(1, Math.round(fps / 10));
-    const gifW = even(Math.min(outW, 400));
+    const gifW = even(Math.min(outW, 540));
     const gifH = even((outH * gifW) / outW);
     const gifCanvas = wantGif ? canvasOf(gifW, gifH) : null;
     const gifCtx = gifCanvas?.getContext('2d', { willReadFrequently: true }) ?? null;
@@ -315,6 +381,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
       if (gif && gifCtx && gifenc && j % gifStep === 0) {
         gifCtx.drawImage(out, 0, 0, gifW, gifH);
         const { data } = gifCtx.getImageData(0, 0, gifW, gifH);
+        dither(data, gifW);
         const palette = gifenc.quantize(data, 256, { format: 'rgb565' });
         const index = gifenc.applyPalette(data, palette, 'rgb565');
         gif.writeFrame(index, gifW, gifH, {
@@ -343,6 +410,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     opts.onProgress?.(1);
     return { mp4, gif: gifBlob };
   } finally {
+    restoreTextures?.();
     holdParticles(node, false);
     for (const a of node.getAnimations({ subtree: true })) a.play();
     if (motion === 'off') html.dataset.motion = motion;

@@ -1344,13 +1344,18 @@ export const sendPictureToChat = (image: Blob, name: string, asFile = false) =>
     headers: { 'content-type': image.type || 'image/png' },
   });
 
-/** The bot sends a recorded moving poster (MP4 as an animation, GIF as a file) to the user. */
-export const sendAnimationToChat = (file: Blob, name: string) =>
-  apiFetch<{ ok: true }>(`/me/animation?name=${encodeURIComponent(name)}`, {
-    method: 'POST',
-    body: file,
-    headers: { 'content-type': file.type || 'video/mp4' },
-  });
+/** The bot sends a recorded moving poster (MP4 or GIF, playing in the chat) to the user. */
+export const sendAnimationToChat = (file: Blob, name: string, caption?: string) =>
+  apiFetch<{ ok: true }>(
+    `/me/animation?name=${encodeURIComponent(name)}${
+      caption ? `&caption=${encodeURIComponent(caption.slice(0, 1000))}` : ''
+    }`,
+    {
+      method: 'POST',
+      body: file,
+      headers: { 'content-type': file.type || 'video/mp4' },
+    },
+  );
 
 /** The bot sends the file to the user's own chat. */
 export const sendDocumentToChat = (file: Blob, name: string) =>

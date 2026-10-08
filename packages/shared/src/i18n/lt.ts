@@ -1677,9 +1677,9 @@ export const lt: Messages = {
     sendMovingHint:
       'Plakatas bus išsiųstas trumpu vaizdo įrašu — Telegram groja kaip GIF. Įrašymas užtrunka 10–30 sekundžių; be efektų ar senesniame telefone išsiųs paprastą paveikslėlį.',
     title: '🎬 Animuotas plakatas',
-    hint: 'Plakatas su efektais — trumpu vaizdo įrašu (Telegram ir WhatsApp groja kaip GIF) arba GIF failu. Botas atsiųs jį jums, toliau galite persiųsti kur norite.',
+    hint: 'Plakatas su efektais ir užrašu — kas, kada, kur. Vaizdo įrašas ar GIF ateis į pokalbį su botu ir gros ten pat: palaikykite, kad išsaugotumėte telefone ar persiųstumėte į WhatsApp.',
     video: '🎬 Įrašas man',
-    gif: 'GIF failu',
+    gif: '🎞 GIF man',
     recording: (p: number) => `Įrašoma animacija… ${p}%`,
     sending: 'Siunčiama…',
     sent: 'Paruošta — žiūrėkite pokalbį su botu',

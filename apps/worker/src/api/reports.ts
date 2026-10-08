@@ -232,9 +232,9 @@ photoRoutes.post('/', async (c) => {
 const ANIMATION_MAX_BYTES = 20_000_000;
 
 /**
- * A moving poster recorded on the phone (lib/recorder.ts) to the person's own chat: an MP4
- * plays like a GIF in Telegram (easy to forward or save for WhatsApp); a GIF goes as a file
- * so it stays a real GIF.
+ * A moving poster recorded on the phone (lib/recorder.ts) to the person's own chat, with
+ * what / when / where under it: an MP4 or a GIF, both sent as an animation so they play in
+ * the chat (long-press to save to the phone or forward to WhatsApp).
  */
 export const animationRoutes = new Hono<App>();
 
@@ -252,14 +252,9 @@ animationRoutes.post('/', async (c) => {
   if (!mp4 && !gif) throw new HTTPException(415, { message: 'unsupported_file' });
   const raw = (c.req.query('name') ?? 'poster').replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 60);
   const file = new InputFile(bytes, `${raw || 'poster'}.${mp4 ? 'mp4' : 'gif'}`);
-  const caption = (c.req.query('caption') ?? '').slice(0, 200) || undefined;
+  const caption = (c.req.query('caption') ?? '').slice(0, 1024) || undefined;
   try {
-    if (mp4) await botApi(c.env).sendAnimation(user.telegramId, file, { caption });
-    else
-      await botApi(c.env).sendDocument(user.telegramId, file, {
-        caption,
-        disable_content_type_detection: true,
-      });
+    await botApi(c.env).sendAnimation(user.telegramId, file, { caption });
   } catch (err) {
     if (isUnreachableError(err)) throw new HTTPException(409, { message: 'bot_blocked' });
     throw err;

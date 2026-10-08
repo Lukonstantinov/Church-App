@@ -1,5 +1,5 @@
 import { asc, eq, inArray } from 'drizzle-orm';
-import { displayName, dutyColor, messages, type Locale } from '@church/shared';
+import { displayName, dutyColor, fingerprint, messages, type Locale } from '@church/shared';
 import type { Db } from '../db/client';
 import { eventRoleAssignees, eventRoles, users, type events } from '../db/schema';
 import { escapeHtml, personLink } from './html';
@@ -95,3 +95,35 @@ export const eventPictureId = (
   event.posterTemplateId
     ? (event.posterMediaId ?? event.coverMediaId ?? null)
     : (event.coverMediaId ?? event.posterMediaId ?? null);
+
+/**
+ * What a recorded cover loop shows: the cover photo and its effects. Only a single photo
+ * (no slideshow, no poster template) is recorded; texts stay live over it.
+ */
+export function coverLoopKey(
+  e: Pick<Event, 'coverMediaId' | 'motion' | 'motionTune' | 'motionLayers'>,
+): string {
+  return fingerprint(JSON.stringify([e.coverMediaId, e.motion, e.motionTune, e.motionLayers]));
+}
+
+/** May the cover be recorded as a loop (a single photo with effects)? */
+export const loopableCover = (
+  e: Pick<Event, 'coverMediaId' | 'motion' | 'coverSlides' | 'posterTemplateId'>,
+) => !!e.coverMediaId && !!e.motion && e.motion !== 'off' && !e.coverSlides && !e.posterTemplateId;
+
+/** The recorded cover loop while it still shows the cover as it is. */
+export function freshCoverLoop(e: Event): { mediaId: number } | null {
+  if (!e.coverLoop || !loopableCover(e)) return null;
+  try {
+    const v = JSON.parse(e.coverLoop) as { mediaId?: number; key?: string };
+    return v.mediaId && v.key === coverLoopKey(e) ? { mediaId: v.mediaId } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The event's moving picture for the bot: its recorded cover loop (the cover photo with its
+ * effects; sent as an animation, playing like a GIF), when there is a current one.
+ */
+export const eventMovingId = (event: Event) => freshCoverLoop(event)?.mediaId ?? null;

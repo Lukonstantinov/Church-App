@@ -1,6 +1,13 @@
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
+const openSheets = new Set<symbol>();
+function markSheets() {
+  const html = document.documentElement;
+  if (openSheets.size) html.dataset.sheet = String(openSheets.size);
+  else delete html.dataset.sheet;
+}
+
 /** Bottom sheet: dims the page, slides up, closes on backdrop tap or Escape. */
 export function Sheet({
   open,
@@ -21,15 +28,16 @@ export function Sheet({
     document.body.style.overflow = 'hidden';
     // The page behind stands still and drops its animation layers while a sheet is open
     // (index.css): moving things under the sheet's glass made it redo its blur every frame,
-    // and with the sheet's own previews it was too much for iPhones.
-    const html = document.documentElement;
-    html.dataset.sheet = String(Number(html.dataset.sheet ?? 0) + 1);
+    // and with the sheet's own previews it was too much for iPhones. Kept as a set of open
+    // sheets, so the page can never stay frozen after the last one closes.
+    const me = Symbol('sheet');
+    openSheets.add(me);
+    markSheets();
     return () => {
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
-      const n = Number(html.dataset.sheet ?? 1) - 1;
-      if (n > 0) html.dataset.sheet = String(n);
-      else delete html.dataset.sheet;
+      openSheets.delete(me);
+      markSheets();
     };
   }, [open, onClose]);
 

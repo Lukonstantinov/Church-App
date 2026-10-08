@@ -11,7 +11,13 @@ import {
   type events,
 } from '../db/schema';
 import { recordNotification } from './notifications';
-import { eventPictureId, eventRoster, rosterLines, type Roster } from './eventRoster';
+import {
+  eventMovingId,
+  eventPictureId,
+  eventRoster,
+  rosterLines,
+  type Roster,
+} from './eventRoster';
 
 type Event = typeof events.$inferSelect;
 import { churchDefaultLocale, getAppUrl, getChurch, localeOf } from './church';
@@ -193,7 +199,9 @@ export async function sendEventReminder(
     : await recipients(db, args.group.id, args.userIds);
   const stamp = args.dedupe ?? String(Date.now());
   const roster = await eventRoster(db, args.event.id);
-  const picture = args.poster === false ? null : eventPictureId(args.event);
+  // The moving cover when one is recorded (it plays like a GIF), else the still picture.
+  const picture =
+    args.poster === false ? null : (eventMovingId(args.event) ?? eventPictureId(args.event));
   let bot = 0;
   for (const r of list) {
     const locale = localeOf({ locale: r.locale }, fallback);

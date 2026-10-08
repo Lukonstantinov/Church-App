@@ -121,7 +121,8 @@ Studio parts with one block a screen (`BAKE_PARTS`) can be recorded as a looping
 part's look, `bakeKey`/`freshLoop`; `/api/groups/:id/loops`, `/api/church/loops`; public `/media/v/:id`
 with byte ranges): SkinLayer plays it instead of the live layers.
 Event photo covers with effects can be recorded too (`events.cover_loop`, `coverLoopKey`, POST/DELETE
-`/api/events/:id/cover-loop`; rows carry `coverLoop` while it matches; `LoopVideo` in CoverPicture).
+`/api/events/:id/cover-loop`; rows carry `coverLoop` while it matches; `LoopVideo` in CoverPicture;
+reminders send it as the picture, `eventMovingId`).
 
 **Live & reminders** — LIVE badge (pulsing, outline kept) while an event/meeting is on;
 "🔴 LIVE now" bot message at the start (`lib/liveNotice.ts`, `live_notified_at`, skipped if

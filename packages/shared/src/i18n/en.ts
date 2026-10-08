@@ -1642,9 +1642,9 @@ export const en: Messages = {
     sendMovingHint:
       'The poster goes as a short video — it plays like a GIF in Telegram. Recording takes 10–30 seconds; without effects or on an older phone the still picture goes.',
     title: '🎬 Animated poster',
-    hint: 'The poster with its effects as a short video (plays like a GIF in Telegram and WhatsApp) or as a GIF file. The bot sends it to you — forward it anywhere.',
+    hint: 'The poster with its effects and a caption — what, when, where. The video or GIF comes to your chat with the bot and plays right there: long-press to save it to the phone or forward it to WhatsApp.',
     video: '🎬 Video to me',
-    gif: 'As a GIF file',
+    gif: '🎞 GIF to me',
     recording: (p: number) => `Recording the animation… ${p}%`,
     sending: 'Sending…',
     sent: 'Done — see your chat with the bot',

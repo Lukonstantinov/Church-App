@@ -44,6 +44,7 @@ export function EventCover({
         | 'motionTune'
         | 'motionLayers'
         | 'coverSlides'
+        | 'coverLoop'
         | 'poster'
         | 'startsAt'
         | 'endsAt'

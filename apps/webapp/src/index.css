@@ -695,14 +695,60 @@ html[data-motion='lively'] body::before {
   }
 }
 
-/* Patterns over a label's fill, in its text colour. */
+/* Patterns over a label's fill, in its text colour. They slide gently, one tile per loop
+   (a moved layer, not a moved background: no repainting); the layer is larger than the
+   label so its edges never show. */
 .lk-tex {
   position: absolute;
-  inset: 0;
+  inset: -12px;
   z-index: 0;
   pointer-events: none;
   color: inherit;
   opacity: 0.22;
+}
+.lk-tex-stripes {
+  animation: lk-slide-stripes 1.6s linear infinite;
+}
+.lk-tex-dots {
+  animation: lk-slide-dots 2.2s linear infinite;
+}
+.lk-tex-checks {
+  animation: lk-slide-checks 2.6s linear infinite;
+}
+.lk-tex-waves {
+  animation: lk-slide-waves 1.4s linear infinite;
+}
+.lk-tex-grain {
+  animation: lk-jitter 0.6s steps(3) infinite;
+}
+/* Exactly one tile: stripes repeat every 7px across their 45° slant (7 × √2 ≈ 9.9px). */
+@keyframes lk-slide-stripes {
+  to {
+    transform: translateX(9.9px);
+  }
+}
+@keyframes lk-slide-dots {
+  to {
+    transform: translate(5px, 5px);
+  }
+}
+@keyframes lk-slide-checks {
+  to {
+    transform: translate(8px, 0);
+  }
+}
+@keyframes lk-slide-waves {
+  to {
+    transform: translateX(8px);
+  }
+}
+@keyframes lk-jitter {
+  33% {
+    transform: translate(-3px, 2px);
+  }
+  66% {
+    transform: translate(2px, -3px);
+  }
 }
 .lk-tex-stripes {
   background: repeating-linear-gradient(-45deg, currentColor 0 3px, transparent 3px 7px);

@@ -263,7 +263,12 @@ export function MeetingAnnounceSheet({
             )}
             {withPoster && notice !== 'cancelled' && (
               <div className="px-3 pb-3">
-                <MotionExport node={poster} name={meeting.title} onRecording={setRecording} />
+                <MotionExport
+                  node={poster}
+                  name={meeting.title}
+                  caption={text.trim() || meeting.title}
+                  onRecording={setRecording}
+                />
               </div>
             )}
           </div>

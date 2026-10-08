@@ -22,7 +22,7 @@ import {
 import { accessIn } from './access';
 import { audit } from './audit';
 import { churchDefaultLocale, getAppUrl, localeOf } from './church';
-import { eventPictureId } from './eventRoster';
+import { eventMovingId, eventPictureId } from './eventRoster';
 import { sendEventReminder } from './eventReminder';
 import { escapeHtml } from './html';
 import { signedMediaUrl } from './media';
@@ -154,7 +154,7 @@ export async function requestPublish(
       ? ((input as AnnounceMeetingInput).posterMediaId ?? null)
       : (input as RemindEventInput).poster === false
         ? null
-        : (eventPictureId(item as Event) ?? null);
+        : (eventMovingId(item as Event) ?? eventPictureId(item as Event) ?? null);
   await db
     .update(publishRequests)
     .set({ status: 'withdrawn' })
