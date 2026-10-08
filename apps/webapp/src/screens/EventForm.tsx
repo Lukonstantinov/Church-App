@@ -8,7 +8,7 @@ import {
   useCoverLook,
   type CoverState,
 } from '../components/CoverDesigner';
-import { BURN_COLORS, BURN_STYLES, BurnColorPicker, burnPaint } from '../components/Burn';
+import { BURN_COLORS, BURN_STYLES, BurnColorPicker, BurnFx, burnPaint } from '../components/Burn';
 import { COUNTDOWN_COLORS, COUNTDOWN_SIZES, CountdownBadge } from '../components/Countdown';
 import { Pill } from '../components/LookControls';
 import {
@@ -173,7 +173,21 @@ function EventFormBody({
   const coverLook = useCoverLook(look, group.data);
   const setDesign = (patch: Partial<PostDesign>) =>
     setLook((c) => ({ ...c, design: { ...c.design, ...patch } }));
-  const previewPaint = burnPaint(look.design.burnColor ?? BURN_COLORS[0]!);
+  const previewPaint = burnPaint(
+    look.design.burnColor ?? BURN_COLORS[0]!,
+    look.design.burnStyle ?? 'flame',
+  );
+  const BURN_LABEL = {
+    flame: t.events.burnFlame,
+    glow: t.events.burnGlow,
+    pulse: t.events.burnPulse,
+    orbit: t.events.burnOrbit,
+    neon: t.events.burnNeon,
+    sparks: t.events.burnSparks,
+    electric: t.events.burnElectric,
+    shimmer: t.events.burnShimmer,
+    off: t.events.burnOff,
+  };
   const [rolePicker, setRolePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const posterNode = useRef<HTMLDivElement>(null);
@@ -535,17 +549,7 @@ function EventFormBody({
                 key={b}
                 on={(look.design.burnStyle ?? 'flame') === b}
                 onClick={() => setLook({ ...look, design: { ...look.design, burnStyle: b } })}
-                label={
-                  b === 'flame'
-                    ? t.events.burnFlame
-                    : b === 'glow'
-                      ? t.events.burnGlow
-                      : b === 'pulse'
-                        ? t.events.burnPulse
-                        : b === 'orbit'
-                          ? t.events.burnOrbit
-                          : t.events.burnOff
-                }
+                label={BURN_LABEL[b]}
               />
             ))}
           </div>
@@ -581,6 +585,7 @@ function EventFormBody({
                 >
                   {/* The card's face sits over the glow, as on a real event card. */}
                   <div className="h-full w-full rounded-2xl bg-[var(--color-section)]" />
+                  <BurnFx style={look.design.burnStyle ?? 'flame'} />
                 </div>
               </div>
             </>

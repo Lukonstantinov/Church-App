@@ -925,23 +925,26 @@ html[data-motion='off'] *::after {
   mask-composite: exclude;
   animation: burn-orbit 2.4s steps(36) infinite;
 }
-/* Rainbow or a gradient of two: a ring in those colours on the edge and a soft glow of the
-   same around it (the outline's own glow is left out). Rainbow slowly turns its colours. */
-.burn.burn-multi {
+/* ---------- Ring outlines: any colour, a gradient of two or rainbow ---------- */
+/* A crisp ring in the colours on the edge (::after) and a soft glow of the same around it
+   (::before); each style moves them its own way. Used for gradients, rainbow and the
+   newer styles (neon, sparks, electric, shimmer); everything moves in steps or by
+   transform / opacity, so the phone redraws little. */
+.burn.burn-ring {
   position: relative;
   isolation: isolate;
   box-shadow: none;
   animation: none;
 }
-.burn.burn-multi::before,
-.burn.burn-multi::after {
+.burn.burn-ring::before,
+.burn.burn-ring::after {
   content: '';
   position: absolute;
   border-radius: inherit;
   pointer-events: none;
   background: var(--burn-grad);
 }
-.burn.burn-multi::after {
+.burn.burn-ring::after {
   inset: -3px;
   padding: 3px;
   z-index: 2;
@@ -951,20 +954,119 @@ html[data-motion='off'] *::after {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
-.burn.burn-multi::before {
+.burn.burn-ring::before {
   inset: -5px;
   z-index: -1;
+  padding: 0;
   filter: blur(10px);
   opacity: 0.85;
-  mask: none;
   -webkit-mask: none;
+  mask: none;
   animation: burn-breathe 2.4s steps(24) infinite alternate;
 }
-.burn.burn-rainbow::after {
-  animation: edge-hue 5s steps(60) infinite;
+/* Flame: the glow flickers and licks up. */
+.burn.burn-ring.burn-flame::before {
+  animation: burn-flicker 1.6s steps(20) infinite;
 }
-.burn.burn-rainbow::before {
-  animation: burn-rainbow-glow 5s steps(60) infinite;
+/* Pulse: waves of glow spreading out from the edge. */
+.burn.burn-ring.burn-pulse::before {
+  animation: burn-wave 1.8s steps(22) infinite;
+}
+/* Orbit: a bright spark in the colours running round the ring. */
+.burn.burn-ring.burn-orbit::after {
+  background: conic-gradient(
+    from var(--burn-a),
+    color-mix(in srgb, var(--burn-c1) 35%, transparent) 0 50%,
+    var(--burn-c1) 75%,
+    var(--burn-c2) 92%,
+    #fff 100%
+  );
+  animation: burn-orbit 2.4s steps(36) infinite;
+}
+/* Neon: a glowing tube that now and then flickers like a real sign. */
+.burn.burn-ring.burn-neon::before {
+  inset: -7px;
+  filter: blur(12px);
+  animation: burn-neon 4s steps(1, end) infinite;
+}
+.burn.burn-ring.burn-neon::after {
+  inset: -2px;
+  padding: 2px;
+  animation: burn-neon 4s steps(1, end) infinite;
+}
+/* Electric: the glow trembles, lightning arcs crackle along the edges. */
+.burn.burn-ring.burn-electric::before {
+  animation: burn-jitter 0.9s steps(1, end) infinite;
+}
+@keyframes burn-flicker {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1) translateY(0);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.04, 1.08) translateY(-3px);
+  }
+  40% {
+    opacity: 0.6;
+    transform: scale(1) translateY(0);
+  }
+  60% {
+    opacity: 0.95;
+    transform: scale(1.05, 1.1) translateY(-4px);
+  }
+  80% {
+    opacity: 0.75;
+    transform: scale(1.02) translateY(-1px);
+  }
+}
+@keyframes burn-wave {
+  0% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.14, 1.4);
+  }
+}
+@keyframes burn-neon {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  62% {
+    opacity: 0.25;
+  }
+  64% {
+    opacity: 1;
+  }
+  67% {
+    opacity: 0.4;
+  }
+  69% {
+    opacity: 1;
+  }
+}
+@keyframes burn-jitter {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.85;
+  }
+  25% {
+    transform: translate(1px, -1px);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-1px, 1px);
+    opacity: 0.6;
+  }
+  75% {
+    transform: translate(1px, 1px);
+    opacity: 1;
+  }
 }
 @keyframes burn-breathe {
   from {
@@ -974,6 +1076,41 @@ html[data-motion='off'] *::after {
     opacity: 0.95;
   }
 }
+/* Rainbow: the colours turn round as well (their own animation added to the style's). */
+.burn.burn-rainbow::after {
+  animation: edge-hue 5s steps(60) infinite;
+}
+.burn.burn-rainbow::before {
+  animation:
+    burn-breathe 2.4s steps(24) infinite alternate,
+    burn-rainbow-glow 5s steps(60) infinite;
+}
+.burn.burn-rainbow.burn-flame::before {
+  animation:
+    burn-flicker 1.6s steps(20) infinite,
+    burn-rainbow-glow 5s steps(60) infinite;
+}
+.burn.burn-rainbow.burn-pulse::before {
+  animation:
+    burn-wave 1.8s steps(22) infinite,
+    burn-rainbow-glow 5s steps(60) infinite;
+}
+.burn.burn-rainbow.burn-orbit::after {
+  animation:
+    burn-orbit 2.4s steps(36) infinite,
+    edge-hue 5s steps(60) infinite;
+}
+.burn.burn-rainbow.burn-neon::before,
+.burn.burn-rainbow.burn-neon::after {
+  animation:
+    burn-neon 4s steps(1, end) infinite,
+    edge-hue 5s steps(60) infinite;
+}
+.burn.burn-rainbow.burn-electric::before {
+  animation:
+    burn-jitter 0.9s steps(1, end) infinite,
+    burn-rainbow-glow 5s steps(60) infinite;
+}
 @keyframes burn-rainbow-glow {
   from {
     filter: blur(10px) hue-rotate(0deg);
@@ -982,8 +1119,162 @@ html[data-motion='off'] *::after {
     filter: blur(10px) hue-rotate(360deg);
   }
 }
-html[data-motion='off'] .burn-multi::before,
-html[data-motion='off'] .burn-multi::after {
+/* What some styles add over the ring: sparks, lightning, a running glint. */
+.burn-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.burn-fx .spark {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 9999px;
+  background: var(--burn-c1);
+  box-shadow: 0 0 6px 1px var(--burn-c1);
+  opacity: 0;
+  animation: burn-spark 1.9s linear infinite;
+}
+.burn-fx .spark:nth-child(even) {
+  background: var(--burn-c2);
+  box-shadow: 0 0 6px 1px var(--burn-c2);
+  animation-name: burn-spark-b;
+  animation-duration: 2.3s;
+}
+@keyframes burn-spark {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(8px, -26px) scale(0.3);
+    opacity: 0;
+  }
+}
+@keyframes burn-spark-b {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-10px, -22px) scale(0.3);
+    opacity: 0;
+  }
+}
+/* Lightning: a jagged line in the colours, flashing for a moment at a time. */
+.burn-fx .arc {
+  position: absolute;
+  height: 16px;
+  background: var(--burn-grad);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 24' preserveAspectRatio='none'%3E%3Cpath d='M0 12 L14 4 L22 18 L36 6 L46 16 L58 2 L70 20 L82 8 L94 17 L106 5 L120 13' fill='none' stroke='white' stroke-width='3.4' stroke-linejoin='bevel'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 24' preserveAspectRatio='none'%3E%3Cpath d='M0 12 L14 4 L22 18 L36 6 L46 16 L58 2 L70 20 L82 8 L94 17 L106 5 L120 13' fill='none' stroke='white' stroke-width='3.4' stroke-linejoin='bevel'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+  filter: drop-shadow(0 0 3px #fff);
+  opacity: 0;
+  animation: burn-arc 2.2s steps(1, end) infinite;
+}
+.burn-fx .arc.a0 {
+  top: -8px;
+  left: 12%;
+  width: 38%;
+}
+.burn-fx .arc.a1 {
+  bottom: -8px;
+  right: 10%;
+  width: 44%;
+  animation-delay: -0.8s;
+  animation-duration: 2.9s;
+}
+.burn-fx .arc.a2 {
+  top: 40%;
+  right: -10px;
+  width: 30%;
+  rotate: 90deg;
+  transform-origin: 100% 50%;
+  animation-delay: -1.6s;
+  animation-duration: 1.7s;
+}
+@keyframes burn-arc {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+  15% {
+    opacity: 1;
+  }
+  19% {
+    opacity: 0.4;
+    transform: scaleX(-1);
+  }
+  23% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  27%,
+  64% {
+    opacity: 0;
+  }
+  67% {
+    opacity: 1;
+    transform: scaleX(-1);
+  }
+  71% {
+    opacity: 0.5;
+    transform: scaleX(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  79% {
+    opacity: 0;
+  }
+}
+/* Shimmer: a bright glint running round the ring (a strip seen only through the ring). */
+.burn-fx .glint-ring {
+  position: absolute;
+  inset: -3px;
+  padding: 3px;
+  border-radius: inherit;
+  overflow: hidden;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.burn-fx .glint-ring i {
+  position: absolute;
+  top: -50%;
+  bottom: -50%;
+  left: 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95), transparent);
+  rotate: 20deg;
+  animation: burn-glint 2.6s ease-in-out infinite;
+}
+@keyframes burn-glint {
+  0% {
+    transform: translateX(-120%);
+  }
+  60%,
+  100% {
+    transform: translateX(380%);
+  }
+}
+html[data-motion='off'] .burn-ring::before,
+html[data-motion='off'] .burn-ring::after,
+html[data-motion='off'] .burn-fx * {
   animation: none !important;
 }
 html[data-motion='calm'] .burn-flame,
