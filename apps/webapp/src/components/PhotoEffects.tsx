@@ -19,6 +19,16 @@ export const PHOTO_EFFECTS: readonly MeetingMotion[] = [
   'oil',
   'gloss',
   'foil',
+  'vignette',
+  'duotone',
+  'photofilter',
+  'crossprocess',
+  'hdr',
+  'halftone',
+  'lensflare',
+  'grunge',
+  'tiltshift',
+  'motionblur',
 ];
 
 /** An SVG drawing as a CSS picture. */
@@ -226,6 +236,95 @@ export function PhotoEffect({
           <i className="iris" />
           <i className="crinkle" style={{ backgroundImage: crinkle(sharp ?? 0.4) }} />
           <i className="puff" />
+        </span>
+      );
+    // ---------- Colour and processing ----------
+    case 'vignette': {
+      const clear = Math.max(10, 62 - weight * 22);
+      return (
+        <span
+          className="fx"
+          style={{
+            background: `radial-gradient(ellipse at center, transparent ${clear}%, rgba(0,0,0,0.75) 100%)`,
+          }}
+        />
+      );
+    }
+    case 'duotone':
+      // The picture in two colours: its shadows in one, its lights in the other.
+      return (
+        <span className="fx fx-duo">
+          {image && <i className="pic" style={photo} />}
+          <i className="dark" />
+          <i className="light" />
+        </span>
+      );
+    case 'photofilter':
+      return <span className="fx fx-filter" />;
+    case 'crossprocess':
+      return (
+        <span className="fx fx-cross">
+          {image && <i className="pic" style={photo} />}
+          <i className="tint" />
+        </span>
+      );
+    case 'hdr':
+      return (
+        <span className="fx fx-hdr">
+          {image && <i className="pic" style={photo} />}
+          <i className="glow" />
+        </span>
+      );
+    case 'halftone':
+      return (
+        <span
+          className="fx fx-halftone"
+          style={{ backgroundSize: `${(6 * weight).toFixed(1)}px ${(6 * weight).toFixed(1)}px` }}
+        />
+      );
+    case 'lensflare':
+      return (
+        <span className="fx fx-flare" style={weight !== 1 ? { scale: weight } : undefined}>
+          <i className="core" />
+          <i className="rays" />
+          <i className="ghost g0" />
+          <i className="ghost g1" />
+          <i className="ghost g2" />
+        </span>
+      );
+    case 'grunge':
+      return (
+        <span
+          className="fx fx-grunge"
+          style={{
+            backgroundImage: svg(
+              `<filter id='g'><feTurbulence type='fractalNoise' baseFrequency='${(0.03 / weight).toFixed(3)} ${(0.09 / weight).toFixed(3)}' numOctaves='4' seed='11'/><feColorMatrix values='0 0 0 0 0.12  0 0 0 0 0.1  0 0 0 0 0.08  0 0 0 -2.4 1.25'/></filter><rect width='100%' height='100%' filter='url(#g)'/>`,
+              360,
+              360,
+            ),
+          }}
+        />
+      );
+    case 'tiltshift':
+      // Lens blur: sharp across the middle, softly out of focus above and below.
+      return (
+        <span className="fx fx-tilt">
+          {image && (
+            <i className="pic" style={{ ...photo, filter: `blur(${(4 * weight).toFixed(1)}px)` }} />
+          )}
+        </span>
+      );
+    case 'motionblur':
+      return (
+        <span className="fx fx-motion">
+          <svg width="0" height="0" className="absolute">
+            {/* Blurred only sideways: things look like they rush past. */}
+            <filter id={id} x="-10%" y="0" width="120%" height="100%">
+              <feGaussianBlur stdDeviation={`${(10 * weight).toFixed(1)} 0`} />
+            </filter>
+          </svg>
+          {image && <i className="pic" style={{ ...photo, filter: `url(#${id})` }} />}
+          <i className="streak" />
         </span>
       );
     default:

@@ -96,7 +96,8 @@ past meeting), expenses against a budget, calendar with notes (last 12 months + 
 past meetings are never auto-removed, only `DELETE /api/meetings/:id` after two confirmations). Meeting screen has a living animated hero.
 
 **Events** — cover photo or designed cover with up to 4 combined effects (`events.motion`, `motion_tune`,
-`motion_layers`; `components/CoverEffects.tsx`, folds away; the TV glitch tears the cover photo itself), speakers, countdown, burning outline,
+`motion_layers`; `components/CoverEffects.tsx`, folds away; the TV glitch tears the cover photo itself), cover
+slideshow (`cover_slides`: up to 9 more photos in turn, each settling from a slight zoom; `CoverSlideshow.tsx`), speakers, countdown, burning outline,
 RSVP, duties (with bot notices), burning outline colour any / rainbow / two-colour gradient (`design.burnColor`), cost and payments, gallery, programme, in-app chat or a
 bot-managed Telegram chat, pin to the main page, picture/PDF export.
 
@@ -144,5 +145,5 @@ money records (`DELETE …/treasury`, ministry name typed back).
 set from church settings via `setMyProfilePhoto`, `PUT /api/church/bot-photo`), dynamic `/manifest.webmanifest` + `/apple-touch-icon.png` from the church
 logo. Phone notifications = bot messages (Telegram push).
 
-**Developer** — Telemetry screen and the Instructions screen (`screens/Guide.tsx`,
+**Developer** — Telemetry screen (with app errors reported by `CrashGuard` → `client_errors`) and the Instructions screen (`screens/Guide.tsx`,
 content in `lib/guide.ts`): update the guide whenever a feature is added or changed.

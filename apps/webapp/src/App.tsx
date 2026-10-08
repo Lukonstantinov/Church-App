@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { messages, type MeResponse } from '@church/shared';
 import { ToastProvider, useToast } from './components/Toast';
-import { CenterMessage, ErrorState, Loading } from './components/ui';
+import { CrashGuard } from './components/CrashGuard';
+import { Button, CenterMessage, ErrorState, Loading } from './components/ui';
 import { I18nProvider, useT } from './lib/i18n';
 import { QUALITY_LOWERED } from './lib/perf';
 import { NavProvider, useNav, type Route } from './lib/nav';
@@ -193,7 +194,7 @@ function Gate() {
       <NavProvider initial={initial}>
         <Themed me={me.data}>
           <QualityNotice />
-          <Router me={me.data} />
+          <GuardedRouter me={me.data} />
         </Themed>
       </NavProvider>
     </I18nProvider>
@@ -220,4 +221,43 @@ function QualityNotice() {
     return () => window.removeEventListener(QUALITY_LOWERED, said);
   }, [toast, t]);
   return null;
+}
+
+/** The screens, guarded: a crash shows a short note instead of a white screen. */
+function GuardedRouter({ me }: { me: MeResponse }) {
+  const { route, back } = useNav();
+  const t = useT();
+  const key = JSON.stringify(route);
+  return (
+    <CrashGuard
+      resetKey={key}
+      place={key}
+      fallback={(error, reset) => (
+        <CenterMessage>
+          <div className="flex max-w-sm flex-col items-center gap-3 px-6 text-center">
+            <span className="text-[44px]">🛠</span>
+            <div className="text-[18px] font-bold">{t.common.crashTitle}</div>
+            <div className="text-[14px] text-hint">{t.common.crashHint}</div>
+            <code className="max-w-full break-words rounded-xl bg-hairline px-3 py-2 text-[11px] text-hint">
+              {error.message}
+            </code>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  reset();
+                  back();
+                }}
+              >
+                {t.common.crashBack}
+              </Button>
+              <Button onClick={() => window.location.reload()}>{t.common.crashReload}</Button>
+            </div>
+          </div>
+        </CenterMessage>
+      )}
+    >
+      <Router me={me} />
+    </CrashGuard>
+  );
 }

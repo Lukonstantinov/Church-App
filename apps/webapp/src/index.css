@@ -3798,6 +3798,174 @@ html[data-motion='off'] .shine::before {
   }
 }
 
+/* ---------- Colour and processing (Photoshop-style adjustments) ---------- */
+.fx .pic {
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+/* Duotone: the picture in grey, shadows lifted to one colour, lights pressed to the other. */
+.fx-duo {
+  isolation: isolate;
+}
+.fx-duo .pic {
+  /* Brightened and hardened first, so dark-on-colour pictures keep their shapes. */
+  filter: grayscale(1) brightness(2.2) contrast(1.6);
+}
+.fx-duo .dark {
+  inset: 0;
+  background: var(--live-c);
+  mix-blend-mode: lighten;
+}
+.fx-duo .light {
+  inset: 0;
+  background: color-mix(in srgb, var(--live-a) 80%, #fff);
+  mix-blend-mode: multiply;
+}
+/* Photo filter: a warm (or chosen) colour laid softly over everything. */
+.fx-filter {
+  background: var(--p-color, #ff9a3d);
+  mix-blend-mode: soft-light;
+  opacity: 0.7;
+}
+/* Cross processing: punchy, shifted colours — yellow-green lights, cyan shadows. */
+.fx-cross .pic {
+  filter: contrast(1.3) saturate(1.45) hue-rotate(-12deg);
+}
+.fx-cross .tint {
+  inset: 0;
+  background: linear-gradient(160deg, rgba(220, 255, 90, 0.35), rgba(0, 200, 255, 0.3));
+  mix-blend-mode: soft-light;
+}
+/* HDR toning: deep contrast and colour, a soft glow in the lights. */
+.fx-hdr .pic {
+  filter: contrast(1.35) saturate(1.5) brightness(1.05);
+}
+.fx-hdr .glow {
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(255, 255, 255, 0.25), transparent 65%),
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35) 100%);
+  mix-blend-mode: overlay;
+}
+/* Halftone: a grid of print dots over the picture. */
+.fx-halftone {
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.55) 32%, transparent 36%);
+  mix-blend-mode: multiply;
+  opacity: 0.75;
+}
+/* Lens flare: a bright sun in the corner with rays and ghost circles across the frame. */
+.fx-flare {
+  transform-origin: 18% 20%;
+}
+.fx-flare .core {
+  left: 18%;
+  top: 20%;
+  width: 46%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: radial-gradient(
+    circle,
+    #fff 0 6%,
+    rgba(255, 236, 190, 0.85) 12%,
+    rgba(255, 170, 90, 0.35) 30%,
+    transparent 62%
+  );
+  mix-blend-mode: screen;
+  animation: fx-breathe 4s ease-in-out infinite;
+}
+.fx-flare .rays {
+  left: 18%;
+  top: 20%;
+  width: 120%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: repeating-conic-gradient(rgba(255, 240, 210, 0.22) 0 2deg, transparent 2deg 14deg);
+  -webkit-mask-image: radial-gradient(circle, #000 4%, transparent 45%);
+  mask-image: radial-gradient(circle, #000 4%, transparent 45%);
+  mix-blend-mode: screen;
+  animation: living-spin 60s linear infinite;
+}
+.fx-flare .ghost {
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  mix-blend-mode: screen;
+}
+.fx-flare .g0 {
+  left: 46%;
+  top: 48%;
+  width: 9%;
+  background: radial-gradient(circle, rgba(120, 220, 255, 0.45), transparent 70%);
+}
+.fx-flare .g1 {
+  left: 60%;
+  top: 64%;
+  width: 16%;
+  background: radial-gradient(
+    circle,
+    transparent 50%,
+    rgba(255, 200, 120, 0.35) 62%,
+    transparent 72%
+  );
+}
+.fx-flare .g2 {
+  left: 76%;
+  top: 82%;
+  width: 6%;
+  background: radial-gradient(circle, rgba(200, 140, 255, 0.5), transparent 70%);
+}
+/* Grunge: dirt and wear printed over the picture. */
+.fx-grunge {
+  background-size: cover;
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+}
+/* Lens blur (tilt-shift): only the middle band stays sharp. */
+.fx-tilt .pic {
+  inset: -4%;
+  -webkit-mask-image: linear-gradient(#000 0%, transparent 38%, transparent 62%, #000 100%);
+  mask-image: linear-gradient(#000 0%, transparent 38%, transparent 62%, #000 100%);
+}
+/* Motion blur: the picture smeared sideways, a streak of light passing. */
+.fx-motion .pic {
+  inset: 0 -6%;
+  opacity: 0.85;
+}
+.fx-motion .streak {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 250%;
+  background: linear-gradient(
+    90deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 60%
+  );
+  animation: fx-glint 2.4s ease-in-out infinite;
+}
+
+/* ---------- Cover slideshow: each photo fades in and settles from a little larger ---------- */
+.cover-slide {
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+.cover-slide.on {
+  opacity: 1;
+  animation: cover-settle var(--slide-d, 6s) ease-out both;
+}
+@keyframes cover-settle {
+  from {
+    transform: scale(1.14);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+html[data-quality='still'] .cover-slide.on {
+  animation: none;
+}
+
 /* ---------- Performance ---------- */
 @keyframes edge-slide {
   to {

@@ -18,6 +18,7 @@ import {
   initEffects,
   type EffectsState,
 } from '../components/CoverEffects';
+import { CoverPicture } from '../components/CoverSlideshow';
 import { PosterMedia } from '../components/Poster';
 import {
   SpeakersEditor,
@@ -164,6 +165,15 @@ function EventFormBody({
   // The cover's effects (several can combine), folded away until wanted.
   const [effects, setEffects] = useState<EffectsState>(() => initEffects(event));
   const [effectsOpen, setEffectsOpen] = useState(false);
+  // The cover slideshow: more photos shown in turn after the cover.
+  const [slides, setSlides] = useState<{ id: number; url: string }[]>(() =>
+    (event?.coverSlides?.mediaIds ?? []).map((id, i) => ({
+      id,
+      url: event?.coverSlides?.urls[i] ?? '',
+    })),
+  );
+  const [slideSeconds, setSlideSeconds] = useState(event?.coverSlides?.seconds ?? 5);
+  const slideInput = useRef<HTMLInputElement>(null);
   const coverLayer = <CoverEffectLayers e={effectsPayload(effects)} image={cover?.url} />;
   const [speakers, setSpeakers] = useState<SpeakerDraft[]>(() => toDrafts(event?.speakers));
   // Without a cover photo the event shows a designed cover, like posts.
@@ -212,6 +222,21 @@ function EventFormBody({
     haptic.tap();
     setFeatures((x) => ({ ...x, [k]: !x[k] }));
   };
+
+  async function addSlides(files: FileList | null) {
+    if (!files?.length) return;
+    try {
+      const room = 9 - slides.length;
+      for (const file of Array.from(files).slice(0, room)) {
+        const up = await upload.mutateAsync(await preparePhoto(file));
+        setSlides((all) => [...all, up]);
+      }
+    } catch {
+      toast(t.treasury.uploadFailed, 'error');
+    } finally {
+      if (slideInput.current) slideInput.current.value = '';
+    }
+  }
 
   async function pickCover(file: File | undefined) {
     if (!file) return;
@@ -265,6 +290,10 @@ function EventFormBody({
       endDate: hasEnd ? endDate : null,
       endTime: hasEnd ? endTime : null,
       coverMediaId: cover?.id ?? null,
+      coverSlides:
+        cover && slides.length
+          ? { mediaIds: slides.map((x) => x.id), seconds: slideSeconds }
+          : null,
       ...coverPayload(look, coverLook.templateId),
       features,
       countdown,
@@ -323,8 +352,13 @@ function EventFormBody({
           }
         >
           <div className="relative overflow-hidden rounded-[var(--radius-card)] shadow-card">
-            <img src={cover.url} alt="" className="aspect-[16/9] w-full object-cover" />
-            {coverLayer}
+            <div className="relative aspect-[16/9] w-full">
+              <CoverPicture
+                e={{ coverUrl: cover.url, ...effectsPayload(effects) }}
+                photos={[cover.url, ...slides.map((x) => x.url)]}
+                seconds={slideSeconds}
+              />
+            </div>
             <div className={`absolute bottom-2 right-2 flex gap-2 ${mayDesign ? '' : 'hidden'}`}>
               <button
                 type="button"
@@ -423,6 +457,60 @@ function EventFormBody({
               <TitleStyleControls design={look.design} set={setDesign} />
             </div>
           )}
+        </Section>
+      )}
+
+      {cover && mayDesign && (
+        <Section title={t.events.slideshow} footer={t.events.slideshowHint}>
+          <input
+            ref={slideInput}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => void addSlides(e.target.files)}
+          />
+          <div className="flex flex-col gap-3 p-3">
+            <div className="flex flex-wrap gap-2">
+              <img
+                src={cover.url}
+                alt=""
+                className="h-16 w-16 rounded-xl object-cover ring-2 ring-[var(--brand)]"
+              />
+              {slides.map((x, i) => (
+                <span key={x.id} className="relative h-16 w-16">
+                  <img src={x.url} alt="" className="h-full w-full rounded-xl object-cover" />
+                  <button
+                    type="button"
+                    aria-label="remove"
+                    onClick={() => setSlides((all) => all.filter((_, k) => k !== i))}
+                    className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white"
+                  >
+                    <IconX size={13} />
+                  </button>
+                </span>
+              ))}
+              {slides.length < 9 && (
+                <button
+                  type="button"
+                  disabled={upload.isPending}
+                  onClick={() => slideInput.current?.click()}
+                  className="flex h-16 w-16 items-center justify-center rounded-xl border-2 border-dashed border-hint/40 text-hint active:scale-95"
+                >
+                  {upload.isPending ? '…' : <IconPlus size={22} />}
+                </button>
+              )}
+            </div>
+            {slides.length > 0 && (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[15px]">{t.events.slideSeconds(slideSeconds)}</span>
+                <Stepper
+                  value={slideSeconds}
+                  onChange={(v) => setSlideSeconds(Math.min(20, Math.max(2, v)))}
+                />
+              </div>
+            )}
+          </div>
         </Section>
       )}
 

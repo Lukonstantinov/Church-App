@@ -5,6 +5,7 @@ import {
   readPostDesign,
   motionTuneSchema,
   motionLayersSchema,
+  coverSlidesSchema,
   type MotionLayer,
   type EventDetail,
   type EventFinance,
@@ -257,6 +258,26 @@ function readTune(raw: string | null): MotionTune | null {
   }
 }
 
+/** An event's cover slideshow with signed links to its photos, read defensively. */
+async function readSlides(
+  raw: string | null,
+  secret: string,
+): Promise<EventSummary['coverSlides']> {
+  if (!raw) return null;
+  try {
+    const parsed = coverSlidesSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success || parsed.data.mediaIds.length === 0) return null;
+    const { mediaIds, seconds } = parsed.data;
+    return {
+      mediaIds,
+      seconds,
+      urls: await Promise.all(mediaIds.map((id) => signedMediaUrl(secret, id))),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** An event's extra cover effects, read defensively. */
 function readLayers(raw: string | null): MotionLayer[] {
   if (!raw) return [];
@@ -335,6 +356,7 @@ async function summarize(
         motion: readMotion(e.motion),
         motionTune: readTune(e.motionTune),
         motionLayers: readLayers(e.motionLayers),
+        coverSlides: await readSlides(e.coverSlides, secret),
         countdown: e.countdown,
         speakers: await speakersOf(e.speakers, secret),
         createdAt: e.createdAt,

@@ -1030,6 +1030,15 @@ export type AddExistingMemberInput = z.input<typeof addExistingMemberSchema>;
 
 // ---------- Developer telemetry ----------
 
+/** An error the app hit on a phone, sent so the developer can see what broke. */
+export const clientErrorSchema = z.object({
+  message: z.string().trim().min(1).max(500),
+  stack: z.string().max(3000).nullish(),
+  place: z.string().max(200).nullish(),
+  userAgent: z.string().max(300).nullish(),
+});
+export type ClientErrorInput = z.input<typeof clientErrorSchema>;
+
 export interface Telemetry {
   environment: string;
   generatedAt: string;
@@ -1052,6 +1061,8 @@ export interface Telemetry {
     recentErrors: { method: string; error: string | null; at: string }[];
   };
   jobs: { job: string; lastRun: string }[];
+  /** The latest errors the app hit on people's phones. */
+  clientErrors: { message: string; place: string | null; device: string | null; at: string }[];
   /** Cloudflare free-plan limits this app is designed around. */
   limits: { key: string; value: string }[];
 }

@@ -7,6 +7,10 @@ const n = (count: number, one: string, other: string) =>
 export const en: Messages = {
   appName: 'Youth',
   common: {
+    crashTitle: 'This screen broke',
+    crashHint: 'The error has been sent to the developer. Go back or reload the app.',
+    crashBack: 'Back',
+    crashReload: 'Reload',
     loading: 'Loading…',
     retry: 'Try again',
     save: 'Save',
@@ -339,6 +343,16 @@ export const en: Messages = {
       oil: 'Oil painting',
       gloss: 'Gloss',
       foil: 'Inflated foil',
+      vignette: 'Vignette',
+      duotone: 'Duotone',
+      photofilter: 'Photo filter',
+      crossprocess: 'Cross processing',
+      hdr: 'HDR',
+      halftone: 'Halftone',
+      lensflare: 'Lens flare',
+      grunge: 'Grunge',
+      tiltshift: 'Lens blur',
+      motionblur: 'Motion blur',
     },
     motionGroups: {
       light: 'Light and colour',
@@ -346,6 +360,7 @@ export const en: Messages = {
       liquid: 'Liquid and waves',
       texture: 'Textures',
       photo: 'Photo effects',
+      adjust: 'Colour and processing',
       retro: 'Retro and digital',
       stage: 'Stage and party',
       icons: 'Icons',
@@ -1169,6 +1184,10 @@ export const en: Messages = {
     coverLook: 'Cover without a photo',
     coverLookHint:
       'Without a cover photo the event shows colours, a pattern and its title — like posts.',
+    slideshow: 'Cover slideshow',
+    slideshowHint:
+      'Add more photos — they take turns on the cover, each slowly settling to its size. The cover effects stay on top.',
+    slideSeconds: (n: number) => `Each photo: ${n} s`,
     coverMotion: 'Cover animation',
     coverMotionHint:
       'Moves on the cover everywhere: the event screen, the tile and the list. “TV glitch” tears and shifts the picture itself. The picked animation’s settings open under it.',
@@ -1689,6 +1708,9 @@ export const en: Messages = {
     dead: 'Undelivered',
     errors: 'Recent errors',
     jobs: 'Background jobs',
+    appErrors: 'App errors',
+    appErrorsHint: 'Screens that broke on people’s phones: what broke, where and on which phone.',
+    noAppErrors: 'No errors',
     tables: 'Rows per table',
     limits: 'Cloudflare free-plan limits',
     unknown: 'unknown',

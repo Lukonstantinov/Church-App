@@ -50,6 +50,16 @@ export const MEETING_MOTIONS = [
   'oil',
   'gloss',
   'foil',
+  'vignette',
+  'duotone',
+  'photofilter',
+  'crossprocess',
+  'hdr',
+  'halftone',
+  'lensflare',
+  'grunge',
+  'tiltshift',
+  'motionblur',
 ] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
 
@@ -61,6 +71,7 @@ export const MOTION_GROUPS: {
     | 'liquid'
     | 'texture'
     | 'photo'
+    | 'adjust'
     | 'retro'
     | 'stage'
     | 'icons'
@@ -87,6 +98,21 @@ export const MOTION_GROUPS: {
   {
     key: 'photo',
     items: ['lightleak', 'film', 'rgb', 'oil', 'gloss', 'foil', 'smoke', 'frost', 'crack'],
+  },
+  {
+    key: 'adjust',
+    items: [
+      'vignette',
+      'duotone',
+      'photofilter',
+      'crossprocess',
+      'hdr',
+      'halftone',
+      'lensflare',
+      'grunge',
+      'tiltshift',
+      'motionblur',
+    ],
   },
   { key: 'retro', items: ['glitch', 'crt', 'static', 'matrix'] },
   { key: 'stage', items: ['spotlight', 'disco', 'sparkle', 'hearts'] },
@@ -164,4 +190,10 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   rgb: ['weight'],
   oil: ['weight'],
   foil: ['sharp'],
+  vignette: ['weight'],
+  halftone: ['weight'],
+  lensflare: ['weight'],
+  grunge: ['weight'],
+  tiltshift: ['weight'],
+  motionblur: ['weight'],
 };

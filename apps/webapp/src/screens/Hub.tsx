@@ -40,7 +40,7 @@ import {
 } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
-import { CoverEffectLayers } from '../components/CoverEffects';
+import { CoverPicture } from '../components/CoverSlideshow';
 import { useAssignments, useGroups, useMyEvents, usePinnedEvents } from '../lib/queries';
 import { useEventWhen } from '../components/EventCard';
 import { useFmt } from '../lib/format';
@@ -375,14 +375,12 @@ export function PinnedEventCard({
           // The cover fills the whole card (past its padding) and wears the event's effects.
           under={
             <>
-              {e.coverUrl && (
-                <img
-                  src={e.coverUrl}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              )}
               {partMotions.length ? (
+                <CoverPicture e={{ ...e, motion: null, motionLayers: [] }} />
+              ) : (
+                <CoverPicture e={e} />
+              )}
+              {partMotions.length > 0 &&
                 partMotions.map((m) => (
                   <LivingLayer
                     key={m}
@@ -391,10 +389,7 @@ export function PinnedEventCard({
                     icon={part.icon}
                     image={e.coverUrl}
                   />
-                ))
-              ) : (
-                <CoverEffectLayers e={e} image={e.coverUrl} />
-              )}
+                ))}
               {part.shine && part.shine !== 'none' && (
                 <span className={`shine shine-${part.shine}`} style={shineStyle(part.shineTune)} />
               )}

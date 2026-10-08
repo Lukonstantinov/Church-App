@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, desc, gte, isNotNull, sql } from 'drizzle-orm';
-import type { Telemetry } from '@church/shared';
+import { clientErrorSchema, type Telemetry } from '@church/shared';
 import { isDeveloper, type Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
-import { groups, jobRuns, media, outbox, users } from '../db/schema';
+import { clientErrors, groups, jobRuns, media, outbox, users } from '../db/schema';
+import { parseBody } from './util';
 
 type App = { Bindings: Env; Variables: AuthVariables };
 
@@ -48,7 +49,7 @@ devRoutes.get('/telemetry', async (c) => {
     TABLES.map((t) => c.env.DB.prepare(`select count(*) as n from "${t}"`)),
   );
 
-  const [mediaRows, userRow, groupRow, outboxRow, errors, jobs] = await Promise.all([
+  const [mediaRows, userRow, groupRow, outboxRow, errors, jobs, crashes] = await Promise.all([
     db
       .select({
         kind: media.kind,
@@ -90,6 +91,16 @@ devRoutes.get('/telemetry', async (c) => {
       .select({ job: jobRuns.job, lastRun: sql<string>`max(${jobRuns.ranAt})` })
       .from(jobRuns)
       .groupBy(jobRuns.job),
+    db
+      .select({
+        message: clientErrors.message,
+        place: clientErrors.place,
+        device: clientErrors.userAgent,
+        at: clientErrors.createdAt,
+      })
+      .from(clientErrors)
+      .orderBy(desc(clientErrors.id))
+      .limit(15),
   ]);
   const u = userRow[0]!;
   const g = groupRow[0]!;
@@ -121,6 +132,7 @@ devRoutes.get('/telemetry', async (c) => {
       recentErrors: errors.map((e) => ({ method: e.method, error: e.error, at: e.at })),
     },
     jobs: jobs.map((j) => ({ job: j.job, lastRun: j.lastRun })),
+    clientErrors: crashes,
     limits: [
       { key: 'workers.requests', value: '100 000 / day' },
       { key: 'workers.cpu', value: '10 ms / request' },
@@ -133,4 +145,39 @@ devRoutes.get('/telemetry', async (c) => {
     ],
   };
   return c.json(body);
+});
+
+/**
+ * POST /api/dev/client-error — any signed-in person's app reports an error it hit (a screen
+ * that crashed). The same message from the same person within a minute is kept once, and
+ * only the latest 200 are kept at all.
+ */
+devRoutes.post('/client-error', async (c) => {
+  const user = c.get('user');
+  const db = c.get('db');
+  const input = await parseBody(c, clientErrorSchema);
+  const recent = await db
+    .select({ id: clientErrors.id })
+    .from(clientErrors)
+    .where(
+      and(
+        sql`${clientErrors.userId} = ${user.id}`,
+        sql`${clientErrors.message} = ${input.message}`,
+        gte(clientErrors.createdAt, new Date(Date.now() - 60_000).toISOString()),
+      ),
+    )
+    .limit(1);
+  if (recent.length === 0) {
+    await db.insert(clientErrors).values({
+      userId: user.id,
+      message: input.message,
+      stack: input.stack ?? null,
+      place: input.place ?? null,
+      userAgent: input.userAgent ?? null,
+    });
+    await c.env.DB.prepare(
+      'delete from client_errors where id <= (select max(id) - 200 from client_errors)',
+    ).run();
+  }
+  return c.json({ ok: true });
 });

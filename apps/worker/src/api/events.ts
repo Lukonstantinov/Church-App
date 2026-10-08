@@ -102,6 +102,7 @@ groupEventRoutes.post('/:id/events', async (c) => {
   const times = eventTimes(input, timezone);
   if (input.coverMediaId) await assertGroupMedia(db, group.id, input.coverMediaId);
   if (input.posterMediaId) await assertGroupMedia(db, group.id, input.posterMediaId);
+  for (const id of input.coverSlides?.mediaIds ?? []) await assertGroupMedia(db, group.id, id);
   await assertDesign(db, group.id, input.design, input.templateId);
   await assertSpeakerPhotos(db, group.id, input.speakers);
   const [row] = await db
@@ -119,6 +120,7 @@ groupEventRoutes.post('/:id/events', async (c) => {
       motion: input.motion ?? null,
       motionTune: input.motionTune ? JSON.stringify(input.motionTune) : null,
       motionLayers: input.motionLayers?.length ? JSON.stringify(input.motionLayers) : null,
+      coverSlides: input.coverSlides?.mediaIds.length ? JSON.stringify(input.coverSlides) : null,
       countdown: input.countdown ?? false,
       speakers: input.speakers.length ? JSON.stringify(input.speakers) : null,
       hasGallery: input.features.gallery,
@@ -338,6 +340,7 @@ const EVENT_LOOK = [
   'motion',
   'motionTune',
   'motionLayers',
+  'coverSlides',
 ] as const;
 
 eventRoutes.patch('/:id', async (c) => {
@@ -376,6 +379,13 @@ eventRoutes.patch('/:id', async (c) => {
   if (input.motion !== undefined) patch.motion = input.motion;
   if (input.motionTune !== undefined)
     patch.motionTune = input.motionTune ? JSON.stringify(input.motionTune) : null;
+  if (input.coverSlides !== undefined) {
+    for (const id of input.coverSlides?.mediaIds ?? [])
+      await assertGroupMedia(db, event.groupId, id);
+    patch.coverSlides = input.coverSlides?.mediaIds.length
+      ? JSON.stringify(input.coverSlides)
+      : null;
+  }
   if (input.motionLayers !== undefined)
     patch.motionLayers = input.motionLayers?.length ? JSON.stringify(input.motionLayers) : null;
   if (input.speakers !== undefined) {

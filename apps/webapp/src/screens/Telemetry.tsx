@@ -79,6 +79,17 @@ export function Telemetry() {
         </Section>
       )}
 
+      <Section title={t.dev.appErrors} footer={t.dev.appErrorsHint}>
+        {(d.clientErrors ?? []).length === 0 && <Row title={t.dev.noAppErrors} />}
+        {(d.clientErrors ?? []).map((e, i) => (
+          <Row
+            key={i}
+            title={e.message}
+            subtitle={`${when(e.at)} · ${e.place ?? ''} · ${(e.device ?? '').slice(0, 60)}`}
+          />
+        ))}
+      </Section>
+
       <Section title={t.dev.jobs}>
         {d.jobs.map((j) => (
           <Row key={j.job} title={j.job} after={when(j.lastRun)} />

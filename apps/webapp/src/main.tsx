@@ -5,6 +5,7 @@ import { ApiError } from './lib/api';
 import { watchForNewVersion } from './lib/freshness';
 import { applyMotion } from './lib/motion';
 import { startPerformanceWatch } from './lib/perf';
+import { watchErrors } from './components/CrashGuard';
 import { initTelegram, isInsideTelegram } from './lib/telegram';
 import { App } from './App';
 import './index.css';
@@ -13,6 +14,7 @@ import './fonts.css';
 initTelegram();
 applyMotion();
 startPerformanceWatch();
+watchErrors();
 watchForNewVersion();
 
 const queryClient = new QueryClient({

@@ -285,6 +285,7 @@ function PinnedPiece({ g }: { g: GroupSummary }) {
     motion: null,
     motionTune: null,
     motionLayers: [],
+    coverSlides: null,
     countdown: false,
     speakers: [],
     createdAt: new Date().toISOString(),

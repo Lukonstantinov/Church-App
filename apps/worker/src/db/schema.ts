@@ -421,6 +421,18 @@ export const livePins = sqliteTable(
   (t) => [index('live_pins_ends').on(t.endsAt)],
 );
 
+/** Errors the app hit on people's phones (a screen that crashed, an unhandled error), for the developer. */
+export const clientErrors = sqliteTable('client_errors', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id'),
+  message: text('message').notNull(),
+  stack: text('stack'),
+  /** Which screen it happened on. */
+  place: text('place'),
+  userAgent: text('user_agent'),
+  createdAt: createdAt(),
+});
+
 export const jobRuns = sqliteTable(
   'job_runs',
   {
@@ -592,6 +604,8 @@ export const events = sqliteTable(
     motionTune: text('motion_tune'),
     /** More cover effects over the first: JSON [{kind, tune}] (up to three). */
     motionLayers: text('motion_layers'),
+    /** Cover slideshow: JSON {mediaIds, seconds} — more photos after the cover, in turn. */
+    coverSlides: text('cover_slides'),
     status: text('status', { enum: ['scheduled', 'cancelled'] })
       .notNull()
       .default('scheduled'),

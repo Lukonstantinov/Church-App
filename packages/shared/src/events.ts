@@ -31,6 +31,13 @@ export const motionLayersSchema = z
   .max(3);
 export type MotionLayer = { kind: MeetingMotion; tune?: MotionTune | null };
 
+/** More cover photos shown in turn after the cover (up to 9), each for `seconds`. */
+export const coverSlidesSchema = z.object({
+  mediaIds: z.array(z.number().int().positive()).max(9),
+  seconds: z.number().int().min(2).max(20).default(5),
+});
+export type CoverSlidesInput = z.input<typeof coverSlidesSchema>;
+
 const optionalText = (max: number) =>
   z
     .string()
@@ -79,6 +86,7 @@ export const createEventSchema = z.object({
   motion: z.enum(MEETING_MOTIONS).nullish(),
   motionTune: motionTuneSchema.nullish(),
   motionLayers: motionLayersSchema.nullish(),
+  coverSlides: coverSlidesSchema.nullish(),
   /** Show a "🔥 N days left" countdown. */
   countdown: z.boolean().default(false),
   /** Up to four speakers, shown on the poster. */
@@ -107,6 +115,7 @@ export const updateEventSchema = z.object({
   motion: z.enum(MEETING_MOTIONS).nullable().optional(),
   motionTune: motionTuneSchema.nullable().optional(),
   motionLayers: motionLayersSchema.nullable().optional(),
+  coverSlides: coverSlidesSchema.nullable().optional(),
   countdown: z.boolean().optional(),
   speakers: speakersSchema.optional(),
   features: featuresSchema.partial().optional(),
@@ -173,6 +182,8 @@ export interface EventSummary {
   motionTune: MotionTune | null;
   /** More effects drawn over it. */
   motionLayers: MotionLayer[];
+  /** Cover slideshow: the extra photos (after the cover) and how long each one shows. */
+  coverSlides: { mediaIds: number[]; urls: string[]; seconds: number } | null;
   countdown: boolean;
   /** Up to four speakers shown on the poster. */
   speakers: Speaker[];

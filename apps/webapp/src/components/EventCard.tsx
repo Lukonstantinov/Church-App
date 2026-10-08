@@ -8,6 +8,7 @@ import { IconCheck, IconMapPin, IconUsers } from './icons';
 import { PosterMedia } from './Poster';
 import { useMoney } from './money';
 import { CoverEffectLayers } from './CoverEffects';
+import { CoverPicture } from './CoverSlideshow';
 import { Badge, DateBadge } from './ui';
 
 /** "пт, 2 окт · 18:00" or a date range for multi-day events. */
@@ -33,7 +34,9 @@ export function EventCover({
   compact,
 }: {
   e: Pick<EventSummary, 'coverUrl' | 'design' | 'look' | 'title'> &
-    Partial<Pick<EventSummary, 'speakers' | 'motion' | 'motionTune' | 'motionLayers'>>;
+    Partial<
+      Pick<EventSummary, 'speakers' | 'motion' | 'motionTune' | 'motionLayers' | 'coverSlides'>
+    >;
   className?: string;
   compact?: boolean;
 }) {
@@ -41,8 +44,7 @@ export function EventCover({
   if (e.coverUrl)
     return (
       <div className={`relative w-full overflow-hidden ${className}`}>
-        <img src={e.coverUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-        {layer}
+        <CoverPicture e={e} />
       </div>
     );
   if (!e.design?.banner) return null;
