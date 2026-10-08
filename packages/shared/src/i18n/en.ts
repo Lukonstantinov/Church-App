@@ -770,7 +770,7 @@ export const en: Messages = {
     nextMeetingIn: (group: string) => `Next meeting · ${group}`,
     noNextMeeting: (group: string) => `No upcoming meetings yet — ${group}`,
     privacyNote:
-      'Only group leaders and church admins can see your data. More info and deletion requests: the /privacy command in the bot.',
+      'Only group leaders and church admins can see your data. To get a copy or have it deleted, write to a church admin.',
     announcements: 'Announcements',
   },
   groups: {
@@ -2073,19 +2073,15 @@ export const en: Messages = {
       `Hi, ${name}! 👋\n\nThis is the youth ministry bot. Attendance, announcements and reminders all happen here.\n\nTap “Open app” to get started.`,
     openApp: 'Open app',
     menuButton: 'Open',
-    help: 'Commands:\n/app — open the app\n/services — my services\n/events — nearest events\n/schedule — meeting schedule\n/privacy — privacy policy\n/help — help\n\nTo join a group, ask a leader for an invite link.',
+    help: 'Commands:\n/app — open the app\n/services — my services\n/events — nearest events\n/schedule — meeting schedule\n/help — help\n\nTo join a group, ask a leader for an invite link.',
     privacyNotice:
       '<b>Before we continue</b>\n\n' +
       'We only keep what the ministry needs: your name and Telegram account, which groups you’re in, meeting attendance and (if you make any) donation records.\n\n' +
       'Only your group leaders and church admins can see this data. We don’t share it with anyone else. ' +
-      'You can ask for a copy or for deletion at any time with the /privacy command.\n\n' +
+      'You can ask for a copy or for deletion at any time — just write to a church admin.\n\n' +
       'If you’re under 16, a leader will ask your parents for consent.',
     privacyAccept: 'I agree',
     privacyAccepted: 'Thank you! ✅',
-    privacyInfo:
-      '<b>Your data</b>\n\nWe keep: your name, Telegram account, groups, attendance and donation records. ' +
-      'Only your group leaders and admins have access.\n\n' +
-      'To get a copy of your data or have it deleted, write to a church admin.',
     inviteNotFound: 'This invite link is invalid or expired. Ask a leader for a new one.',
     joinRequested: (group: string) =>
       `Request to join “${group}” sent ✅\nA leader will review it soon — I’ll let you know when you’re in.`,
@@ -2113,6 +2109,35 @@ export const en: Messages = {
       'This Telegram account is already registered in groups. Ask an admin to merge the profiles.',
     claimDone: (name: string) => `Done! The profile “${name}” is now linked to your Telegram ✅`,
   },
+  testAs: {
+    title: '🧪 Open as another role',
+    menu: 'Open as another role',
+    entry: 'See the app as a member, designer, leader…',
+    hint: 'The app opens as the test person “🧪 Tester” with the chosen position — the same rights and screens. The bot stays yours. Go back with the button at the top or the /testas command.',
+    personName: '🧪 Tester',
+    admin: 'Church admin',
+    adminHint: 'Everything, without the developer screens',
+    member: 'Member without a position',
+    pending: 'Waiting for approval',
+    newcomer: 'New person, no ministry',
+    rights: (n: number) => (n === 0 ? 'no rights' : `${n} rights`),
+    banner: (label: string) => `🧪 ${label}`,
+    change: 'Change',
+    exit: 'Back to me',
+    exitShort: 'Exit',
+    now: 'Now',
+    church: 'Whole church',
+    botIntro:
+      '🧪 <b>Open the app as another role</b>\n\nPick a ministry and a position — the app opens as the test person “🧪 Tester” with those rights. The bot stays yours.',
+    botCurrent: (label: string) => `Now: <b>${label}</b>`,
+    botChooseGroup: (group: string) => `🧪 <b>${group}</b>\nOpen the app as…`,
+    botStarted: (label: string) =>
+      `🧪 The app now opens as: <b>${label}</b>\n\nOpen it with the button below (if it is already open, close it and open again).`,
+    botStopped: '↩️ The app opens as you again.',
+    botOnlyDev: 'This command is for the developer only.',
+    open: 'Open the app',
+    back: '← Back',
+  },
   commands: {
     services: 'My services',
     events: 'Nearest events',
@@ -2120,7 +2145,7 @@ export const en: Messages = {
     roster: 'Who serves where at events',
     start: 'Start',
     app: 'Open the app',
-    privacy: 'My data and privacy',
+    testas: '🧪 Open as another role (developer)',
     help: 'Help',
   },
 };

@@ -360,7 +360,6 @@ audit_log        (id PK, actor_user_id, action, entity, entity_id, group_id NULL
 | `/start`              | all    | Приветствие; handles `g_…` (join) and `c_…` (claim) payloads |
 | `/app`                | all    | Открыть приложение                                           |
 | `/me`                 | all    | Моя посещаемость и пожертвования                             |
-| `/privacy`            | all    | Политика конфиденциальности, мои данные                      |
 | `/help`               | all    | Помощь                                                       |
 | `/roll`               | leader | Отметить посещаемость сегодняшней встречи                    |
 | `/доход`, `/income`   | leader | Записать доход                                               |

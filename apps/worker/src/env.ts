@@ -23,7 +23,18 @@ export function adminTelegramIds(env: Env): Set<number> {
   );
 }
 
-/** The people who deploy and run the app (ADMIN_TELEGRAM_IDS) get the telemetry screen. */
-export function isDeveloper(env: Env, user: { telegramId: number | null; isAdmin: boolean }) {
-  return user.isAdmin && user.telegramId !== null && adminTelegramIds(env).has(user.telegramId);
+/**
+ * The people who deploy and run the app (ADMIN_TELEGRAM_IDS) get the telemetry screen.
+ * A developer's test person never is one (it carries the developer's Telegram id).
+ */
+export function isDeveloper(
+  env: Env,
+  user: { telegramId: number | null; isAdmin: boolean; testOf?: number | null },
+) {
+  return (
+    !user.testOf &&
+    user.isAdmin &&
+    user.telegramId !== null &&
+    adminTelegramIds(env).has(user.telegramId)
+  );
 }

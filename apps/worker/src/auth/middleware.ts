@@ -3,12 +3,16 @@ import { HTTPException } from 'hono/http-exception';
 import { adminTelegramIds, type Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import type { User } from '../db/schema';
+import { testPersonFor } from '../lib/testing';
 import { upsertTelegramUser } from '../lib/users';
 import { InitDataValidationError, validateInitData } from './initData';
 
 export interface AuthVariables {
   db: Db;
+  /** Who the app works as: the person, or a developer's test person while they test. */
   user: User;
+  /** The person who actually signed in (the developer while testing; else `user`). */
+  realUser: User;
 }
 
 /**
@@ -32,9 +36,10 @@ export const requireTelegramAuth = createMiddleware<{ Bindings: Env; Variables: 
       throw e;
     }
     const db = getDb(c.env.DB);
-    const user = await upsertTelegramUser(db, validated.user, adminTelegramIds(c.env));
+    const real = await upsertTelegramUser(db, validated.user, adminTelegramIds(c.env));
     c.set('db', db);
-    c.set('user', user);
+    c.set('realUser', real);
+    c.set('user', await testPersonFor(db, c.env, real));
     await next();
   },
 );

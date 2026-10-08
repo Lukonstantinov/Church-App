@@ -111,8 +111,38 @@ export interface MeResponse {
     privacyAccepted: boolean;
     /** Effective UI language (own choice, else church default). */
     locale: Locale;
+    /**
+     * A developer trying the app as another role ("Дизайнер · Молодежка"): the app works
+     * as their test person until they go back. Null otherwise.
+     */
+    testing: string | null;
   };
   memberships: MeMembership[];
+}
+
+/** What a developer can try the app as (lib/testing.ts on the server). */
+export const testAsSchema = z.discriminatedUnion('kind', [
+  /** A member with this position (and so its rights). */
+  z.object({ kind: z.literal('position'), positionId: z.number().int().positive() }),
+  /** A member without a position. */
+  z.object({ kind: z.literal('member'), groupId: z.number().int().positive() }),
+  /** Asked to join, not approved yet. */
+  z.object({ kind: z.literal('pending'), groupId: z.number().int().positive() }),
+  /** Someone who isn't in any ministry yet. */
+  z.object({ kind: z.literal('newcomer') }),
+  /** A church admin (everything, but without the developer screens). */
+  z.object({ kind: z.literal('admin') }),
+]);
+export type TestAsInput = z.infer<typeof testAsSchema>;
+
+export interface TestAsOptions {
+  /** What is being tried now, or null. */
+  current: string | null;
+  groups: {
+    id: number;
+    name: string;
+    positions: { id: number; name: string; rights: number }[];
+  }[];
 }
 
 export interface ApiErrorBody {

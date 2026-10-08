@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { displayName, LOCALE_NAMES, type GroupSummary } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { BrandHeader, LanguageSheet } from '../components/BrandHeader';
+import { TestAsSheet } from '../components/TestAs';
 import {
   IconBell,
   IconTag,
@@ -28,6 +29,7 @@ export function More({ groups }: { groups: GroupSummary[] }) {
   const { can } = useEnv();
   const me = useMe();
   const [langOpen, setLangOpen] = useState(false);
+  const [testAs, setTestAs] = useState(false);
   const motion = useMotion();
   const user = me.data?.user;
   const env = groups[0];
@@ -141,6 +143,14 @@ export function More({ groups }: { groups: GroupSummary[] }) {
               onClick={() => push({ name: 'guide' })}
             />
           )}
+          {user.isDeveloper && (
+            <Row
+              before={iconTile(<span className="text-[17px]">🧪</span>)}
+              title={t.testAs.menu}
+              subtitle={t.testAs.entry}
+              onClick={() => setTestAs(true)}
+            />
+          )}
           {user.isAdmin && (
             <Row
               before={iconTile(<IconSettings size={19} />)}
@@ -162,6 +172,7 @@ export function More({ groups }: { groups: GroupSummary[] }) {
 
       <p className="px-4 text-[13px] leading-snug text-hint">{t.home.privacyNote}</p>
       <LanguageSheet open={langOpen} onClose={() => setLangOpen(false)} />
+      {user.isDeveloper && <TestAsSheet open={testAs} onClose={() => setTestAs(false)} />}
     </Screen>
   );
 }

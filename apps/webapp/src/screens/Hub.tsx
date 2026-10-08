@@ -44,6 +44,7 @@ import { CoverPicture } from '../components/CoverSlideshow';
 import { LayeredPoster, usePosterTexts } from '../components/LayeredPoster';
 import { useAssignments, useGroups, useMyEvents, usePinnedEvents } from '../lib/queries';
 import { useEventWhen } from '../components/EventCard';
+import { TestAsSheet } from '../components/TestAs';
 import { useFmt } from '../lib/format';
 import { isLiveWindow, useNowSecond } from '../lib/live';
 
@@ -56,6 +57,7 @@ export function Hub({ me }: { me: MeResponse }) {
   const myEvents = useMyEvents();
   const myJobs = useAssignments();
   const [showMine, setShowMine] = useState(false);
+  const [testAs, setTestAs] = useState(false);
   const listLook = useModuleLook('list');
   // Open duties: at events, plus meetings that still need an answer.
   const mine =
@@ -187,6 +189,18 @@ export function Hub({ me }: { me: MeResponse }) {
             onClick={() => push({ name: 'guide' })}
           />
         )}
+        {me.user.isDeveloper && (
+          <Row
+            before={
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-text/85 text-[17px] text-[var(--color-section)]">
+                🧪
+              </span>
+            }
+            title={t.testAs.menu}
+            subtitle={t.testAs.entry}
+            onClick={() => setTestAs(true)}
+          />
+        )}
         {isAdmin && (
           <Row
             before={
@@ -201,6 +215,7 @@ export function Hub({ me }: { me: MeResponse }) {
         )}
       </Section>
       <p className="px-4 text-[13px] leading-snug text-hint">{t.home.privacyNote}</p>
+      {me.user.isDeveloper && <TestAsSheet open={testAs} onClose={() => setTestAs(false)} />}
     </Screen>
   );
 }

@@ -777,7 +777,7 @@ export const lt: Messages = {
     nextMeetingIn: (group: string) => `Artimiausias susitikimas · ${group}`,
     noNextMeeting: (group: string) => `Artimiausių susitikimų dar nėra — ${group}`,
     privacyNote:
-      'Jūsų duomenis mato tik grupių vadovai ir bažnyčios administratoriai. Daugiau informacijos ir prašymas ištrinti — komanda /privacy bote.',
+      'Jūsų duomenis mato tik grupių vadovai ir bažnyčios administratoriai. Norėdami gauti duomenų kopiją ar juos ištrinti, parašykite bažnyčios administratoriui.',
     announcements: 'Skelbimai',
   },
   groups: {
@@ -2115,19 +2115,15 @@ export const lt: Messages = {
       `Sveiki, ${name}! 👋\n\nTai jaunimo tarnystės botas. Čia žymimas lankomumas, gaunami skelbimai ir priminimai.\n\nSpauskite „Atidaryti programėlę“, kad pradėtumėte.`,
     openApp: 'Atidaryti programėlę',
     menuButton: 'Atidaryti',
-    help: 'Komandos:\n/app — atidaryti programėlę\n/services — mano tarnystės\n/events — artimiausi renginiai\n/schedule — susitikimų tvarkaraštis\n/privacy — privatumo politika\n/help — pagalba\n\nNorėdami prisijungti prie grupės, paprašykite vadovo kvietimo nuorodos.',
+    help: 'Komandos:\n/app — atidaryti programėlę\n/services — mano tarnystės\n/events — artimiausi renginiai\n/schedule — susitikimų tvarkaraštis\n/help — pagalba\n\nNorėdami prisijungti prie grupės, paprašykite vadovo kvietimo nuorodos.',
     privacyNotice:
       '<b>Prieš tęsiant</b>\n\n' +
       'Saugome tik tai, ko reikia tarnystei: jūsų vardą ir Telegram paskyrą, kurioms grupėms priklausote, susitikimų lankomumą ir (jei aukojate) aukų įrašus.\n\n' +
       'Duomenis mato tik jūsų grupių vadovai ir bažnyčios administratoriai. Jų neperduodame tretiesiems asmenims. ' +
-      'Bet kada galite paprašyti duomenų kopijos arba jų ištrynimo komanda /privacy.\n\n' +
+      'Bet kada galite paprašyti duomenų kopijos arba jų ištrynimo — parašykite bažnyčios administratoriui.\n\n' +
       'Jei jums mažiau nei 16 metų, vadovas paprašys tėvų sutikimo.',
     privacyAccept: 'Sutinku',
     privacyAccepted: 'Ačiū! ✅',
-    privacyInfo:
-      '<b>Jūsų duomenys</b>\n\nSaugome: vardą, Telegram paskyrą, grupes, lankomumą ir aukų įrašus. ' +
-      'Prieigą turi tik jūsų grupių vadovai ir administratoriai.\n\n' +
-      'Norėdami gauti duomenų kopiją arba juos ištrinti, parašykite bažnyčios administratoriui.',
     inviteNotFound: 'Kvietimo nuoroda negalioja arba pasibaigė. Paprašykite vadovo naujos.',
     joinRequested: (group: string) =>
       `Prašymas prisijungti prie „${group}“ išsiųstas ✅\nVadovas netrukus jį peržiūrės — pranešiu, kai būsite priimti.`,
@@ -2155,6 +2151,35 @@ export const lt: Messages = {
       'Ši Telegram paskyra jau užregistruota grupėse. Kreipkitės į administratorių, kad sujungtų profilius.',
     claimDone: (name: string) => `Atlikta! Profilis „${name}“ dabar susietas su jūsų Telegram ✅`,
   },
+  testAs: {
+    title: '🧪 Atidaryti kaip kitą vaidmenį',
+    menu: 'Atidaryti kaip kitą vaidmenį',
+    entry: 'Pažiūrėti programėlę nario, dizainerio, vadovo akimis…',
+    hint: 'Programėlė atsidarys kaip bandomasis žmogus „🧪 Testuotojas“ su pasirinkta pareiga — tos pačios teisės ir ekranai. Botas lieka jūsų. Grįžti — mygtuku viršuje arba komanda /testas.',
+    personName: '🧪 Testuotojas',
+    admin: 'Bažnyčios administratorius',
+    adminHint: 'Viskas, bet be kūrėjo ekranų',
+    member: 'Narys be pareigos',
+    pending: 'Laukia patvirtinimo',
+    newcomer: 'Naujas žmogus be tarnystės',
+    rights: (n: number) => (n === 0 ? 'be teisių' : `teisių: ${n}`),
+    banner: (label: string) => `🧪 ${label}`,
+    change: 'Keisti',
+    exit: 'Grįžti į save',
+    exitShort: 'Išeiti',
+    now: 'Dabar',
+    church: 'Visa bažnyčia',
+    botIntro:
+      '🧪 <b>Atidaryti programėlę kaip kitą vaidmenį</b>\n\nPasirinkite tarnystę ir pareigą — programėlė atsidarys kaip bandomasis žmogus „🧪 Testuotojas“ su tomis teisėmis. Botas lieka jūsų.',
+    botCurrent: (label: string) => `Dabar: <b>${label}</b>`,
+    botChooseGroup: (group: string) => `🧪 <b>${group}</b>\nKuo atidaryti programėlę?`,
+    botStarted: (label: string) =>
+      `🧪 Programėlė dabar atsidaro kaip: <b>${label}</b>\n\nAtidarykite ją mygtuku žemiau (jei ji jau atidaryta — uždarykite ir atidarykite iš naujo).`,
+    botStopped: '↩️ Programėlė vėl atsidaro kaip jūs.',
+    botOnlyDev: 'Ši komanda — tik kūrėjui.',
+    open: 'Atidaryti programėlę',
+    back: '← Atgal',
+  },
   commands: {
     services: 'Mano tarnystės',
     events: 'Artimiausi renginiai',
@@ -2162,7 +2187,7 @@ export const lt: Messages = {
     roster: 'Kas kur tarnauja renginiuose',
     start: 'Pradėti',
     app: 'Atidaryti programėlę',
-    privacy: 'Mano duomenys ir privatumas',
+    testas: '🧪 Atidaryti kaip kitą vaidmenį (kūrėjas)',
     help: 'Pagalba',
   },
 };

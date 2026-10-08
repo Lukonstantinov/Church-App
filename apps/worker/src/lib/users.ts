@@ -1,10 +1,11 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { memberships, groups, positions, users, type User } from '../db/schema';
-import type { MeResponse } from '@church/shared';
+import { messages, type MeResponse } from '@church/shared';
 import { getChurch, localeOf } from './church';
 import { groupLogoUrl } from './groups';
 import { effectivePermissions } from './positions';
+import { testLabel } from './testing';
 
 export interface TelegramProfile {
   id: number;
@@ -89,6 +90,7 @@ export async function loadMe(db: Db, user: User, developer = false): Promise<MeR
     .orderBy(groups.name);
 
   const church = await getChurch(db);
+  const locale = localeOf(user, church.defaultLocale);
   return {
     church,
     user: {
@@ -100,7 +102,8 @@ export async function loadMe(db: Db, user: User, developer = false): Promise<MeR
       isAdmin: user.isAdmin,
       isDeveloper: developer && user.isAdmin,
       privacyAccepted: user.privacyAcceptedAt !== null,
-      locale: localeOf(user, church.defaultLocale),
+      locale,
+      testing: user.testOf ? testLabel(messages(locale), user.isAdmin, rows) : null,
     },
     memberships: rows
       .filter((r) => r.status === 'active' || r.status === 'pending')

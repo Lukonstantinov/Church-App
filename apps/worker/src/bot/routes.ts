@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { GrammyError, webhookCallback } from 'grammy';
-import type { Env } from '../env';
+import { adminTelegramIds, type Env } from '../env';
 import { commandsFor, createBot } from './bot';
 import { LOCALES, messages } from '@church/shared';
 import { churchDefaultLocale } from '../lib/church';
@@ -61,6 +61,17 @@ botRoutes.post('/setup', async (c) => {
     await bot.api.setMyCommands(commandsFor(messages(churchLocale)));
     for (const locale of LOCALES) {
       await bot.api.setMyCommands(commandsFor(messages(locale)), { language_code: locale });
+    }
+    // Developers' own chats also list /testas (open the app as another role). A developer
+    // who hasn't started the bot yet has no chat: skipped.
+    step = 'setDeveloperCommands';
+    const t = messages(churchLocale);
+    for (const id of adminTelegramIds(c.env)) {
+      await bot.api
+        .setMyCommands([...commandsFor(t), { command: 'testas', description: t.commands.testas }], {
+          scope: { type: 'chat', chat_id: id },
+        })
+        .catch(() => undefined);
     }
     step = 'setChatMenuButton';
     await bot.api.setChatMenuButton({

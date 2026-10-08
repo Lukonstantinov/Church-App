@@ -1,10 +1,11 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, desc, gte, isNotNull, sql } from 'drizzle-orm';
-import { clientErrorSchema, type Telemetry } from '@church/shared';
+import { and, desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import { clientErrorSchema, testAsSchema, type Telemetry } from '@church/shared';
 import { isDeveloper, type Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
-import { clientErrors, groups, jobRuns, media, outbox, users } from '../db/schema';
+import { clientErrors, groups, jobRuns, media, outbox, positions, users } from '../db/schema';
+import { startTesting, stopTesting, testOptions } from '../lib/testing';
 import { parseBody } from './util';
 
 type App = { Bindings: Env; Variables: AuthVariables };
@@ -179,5 +180,37 @@ devRoutes.post('/client-error', async (c) => {
       'delete from client_errors where id <= (select max(id) - 200 from client_errors)',
     ).run();
   }
+  return c.json({ ok: true });
+});
+
+// ---------- Trying the app as another role (lib/testing.ts) ----------
+
+/** Only the developer who signed in (not their test person) may switch roles. */
+function developerOf(c: Context<App>) {
+  const real = c.get('realUser');
+  if (!isDeveloper(c.env, real)) throw new HTTPException(403, { message: 'forbidden' });
+  return real;
+}
+
+devRoutes.get('/test-as', async (c) => c.json(await testOptions(c.get('db'), developerOf(c))));
+
+devRoutes.post('/test-as', async (c) => {
+  const dev = developerOf(c);
+  const input = await parseBody(c, testAsSchema);
+  const db = c.get('db');
+  if (input.kind === 'member' || input.kind === 'pending') {
+    const group = await db.query.groups.findFirst({ where: eq(groups.id, input.groupId) });
+    if (!group) throw new HTTPException(404, { message: 'group_not_found' });
+  }
+  if (input.kind === 'position') {
+    const pos = await db.query.positions.findFirst({ where: eq(positions.id, input.positionId) });
+    if (!pos) throw new HTTPException(404, { message: 'position_not_found' });
+  }
+  return c.json({ label: await startTesting(db, dev, input) });
+});
+
+devRoutes.delete('/test-as', async (c) => {
+  const dev = developerOf(c);
+  await stopTesting(c.get('db'), dev);
   return c.json({ ok: true });
 });

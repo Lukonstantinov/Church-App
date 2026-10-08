@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { messages, type MeResponse } from '@church/shared';
 import { ToastProvider, useToast } from './components/Toast';
 import { CrashGuard } from './components/CrashGuard';
+import { TestingBanner } from './components/TestAs';
 import { Button, CenterMessage, ErrorState, Loading } from './components/ui';
 import { I18nProvider, useT } from './lib/i18n';
 import { QUALITY_LOWERED, isSafeStart } from './lib/perf';
@@ -193,6 +194,7 @@ function Gate() {
     <I18nProvider locale={me.data.user.locale}>
       <NavProvider initial={initial}>
         <Themed me={me.data}>
+          {me.data.user.testing && <TestingBanner label={me.data.user.testing} />}
           <QualityNotice />
           <GuardedRouter me={me.data} />
         </Themed>

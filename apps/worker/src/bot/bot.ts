@@ -1,8 +1,8 @@
 import { decidePublish } from '../lib/publishRequests';
 import { eq } from 'drizzle-orm';
 import { Bot, InlineKeyboard, type Context } from 'grammy';
-import { displayName, messages, type Messages } from '@church/shared';
-import { adminTelegramIds, type Env } from '../env';
+import { displayName, messages, type Messages, type TestAsInput } from '@church/shared';
+import { adminTelegramIds, isDeveloper, type Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { events, meetings, memberships, type User } from '../db/schema';
 import { eventPictureId, eventRoster, rosterMessage } from '../lib/eventRoster';
@@ -37,6 +37,8 @@ import {
 } from '../lib/eventChats';
 import { answerHelper } from '../lib/meetingHelpers';
 import { answerMeetingRole } from '../lib/meetingNotify';
+import { escapeHtml } from '../lib/html';
+import { startTesting, stopTesting, testOptions } from '../lib/testing';
 
 export interface BotDeps {
   env: Env;
@@ -436,8 +438,83 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
     await ctx.answerCallbackQuery();
   });
 
-  pm.command('privacy', async (ctx) => {
-    await ctx.reply(ctx.t.bot.privacyInfo, { parse_mode: 'HTML' });
+  // Developers open the app as another role (a test person with that position).
+  const testMenu = async (ctx: Ctx, groupId?: number) => {
+    const t = ctx.t.testAs;
+    const opts = await testOptions(db, ctx.dbUser);
+    const kb = new InlineKeyboard();
+    const group =
+      groupId !== undefined
+        ? opts.groups.find((g) => g.id === groupId)
+        : opts.groups.length === 1
+          ? opts.groups[0]
+          : undefined;
+    if (group) {
+      for (const p of group.positions)
+        kb.text(`${p.name} · ${t.rights(p.rights)}`, `ta:p:${p.id}`).row();
+      kb.text(t.member, `ta:m:${group.id}`).row();
+      kb.text(`⏳ ${t.pending}`, `ta:w:${group.id}`).row();
+    } else for (const g of opts.groups) kb.text(`⛪ ${g.name}`, `ta:g:${g.id}`).row();
+    if (groupId === undefined) {
+      kb.text(`🙋 ${t.newcomer}`, 'ta:n').row();
+      kb.text(`👑 ${t.admin}`, 'ta:a').row();
+    } else if (opts.groups.length > 1) kb.text(t.back, 'ta:h').row();
+    if (opts.current) kb.text(`↩️ ${t.exit}`, 'ta:x');
+    const head =
+      group && groupId !== undefined ? t.botChooseGroup(escapeHtml(group.name)) : t.botIntro;
+    const text = opts.current ? `${head}\n\n${t.botCurrent(escapeHtml(opts.current))}` : head;
+    return { text, kb };
+  };
+
+  pm.command('testas', async (ctx) => {
+    if (!isDeveloper(env, ctx.dbUser)) return void (await ctx.reply(ctx.t.testAs.botOnlyDev));
+    const { text, kb } = await testMenu(ctx);
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+  });
+
+  pm.callbackQuery(/^ta:([hgpmwnax])(?::(\d+))?$/, async (ctx) => {
+    if (!isDeveloper(env, ctx.dbUser))
+      return void (await ctx.answerCallbackQuery({ text: ctx.t.testAs.botOnlyDev }));
+    const [, what, raw] = ctx.match;
+    const id = Number(raw);
+    await ctx.answerCallbackQuery();
+    if (what === 'h' || what === 'g') {
+      const { text, kb } = await testMenu(ctx, what === 'g' ? id : undefined);
+      await ctx
+        .editMessageText(text, { parse_mode: 'HTML', reply_markup: kb })
+        .catch(() => undefined);
+      return;
+    }
+    if (what === 'x') {
+      await stopTesting(db, ctx.dbUser);
+      await ctx
+        .editMessageText(ctx.t.testAs.botStopped, { reply_markup: openAppKeyboard(ctx.t) })
+        .catch(() => undefined);
+      return;
+    }
+    const input: TestAsInput =
+      what === 'p'
+        ? { kind: 'position', positionId: id }
+        : what === 'm'
+          ? { kind: 'member', groupId: id }
+          : what === 'w'
+            ? { kind: 'pending', groupId: id }
+            : what === 'a'
+              ? { kind: 'admin' }
+              : { kind: 'newcomer' };
+    const label = await startTesting(db, ctx.dbUser, input).catch(() => null);
+    if (!label) return;
+    const kb = new InlineKeyboard()
+      .webApp(ctx.t.testAs.open, appUrl)
+      .row()
+      .text(ctx.t.testAs.change, 'ta:h')
+      .text(`↩️ ${ctx.t.testAs.exit}`, 'ta:x');
+    await ctx
+      .editMessageText(ctx.t.testAs.botStarted(escapeHtml(label)), {
+        parse_mode: 'HTML',
+        reply_markup: kb,
+      })
+      .catch(() => undefined);
   });
 
   pm.command('help', async (ctx) => {
@@ -467,7 +544,7 @@ async function handleClaim(ctx: Ctx, db: Db, code: string, keyboard: InlineKeybo
   await ctx.reply(ctx.t.bot.claimDone(displayName(result.user)), { reply_markup: keyboard });
 }
 
-/** Commands shown in the Telegram menu. Leader/admin scopes are added later. */
+/** Commands shown in the Telegram menu (developers also get /testas, see bot/routes.ts). */
 export function commandsFor(t: Messages) {
   return [
     { command: 'start', description: t.commands.start },
@@ -476,7 +553,6 @@ export function commandsFor(t: Messages) {
     { command: 'events', description: t.commands.events },
     { command: 'schedule', description: t.commands.schedule },
     { command: 'roster', description: t.commands.roster },
-    { command: 'privacy', description: t.commands.privacy },
     { command: 'help', description: t.commands.help },
   ];
 }
