@@ -229,6 +229,10 @@ export function SpeakerBackdrop({ url, look }: { url: string; look: SpeakerLook 
       className={`pointer-events-none absolute inset-y-0 h-full w-auto max-w-[62%] object-cover ${
         x === 'left' ? 'left-0' : x === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2'
       }`}
+      // For the bot's poster picture the fade and crop are baked into the photo (lib/poster.ts):
+      // iPhones leave a masked photo out of the drawing.
+      data-fade={x}
+      data-pos={y}
       style={{
         opacity: look?.opacity ?? 1,
         objectPosition: at,

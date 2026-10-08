@@ -22,7 +22,7 @@ async function picturesReady(node: HTMLElement): Promise<void> {
  * a ready PNG is drawn every time. Big photos are scaled to what the poster needs.
  */
 async function inlinePictures(node: HTMLElement): Promise<() => void> {
-  const swaps: { img: HTMLImageElement; src: string; srcset: string }[] = [];
+  const swaps: { img: HTMLImageElement; src: string; srcset: string; style?: string }[] = [];
   for (const img of [...node.querySelectorAll('img')]) {
     if (!img.currentSrc && !img.src) continue;
     if (img.src.startsWith('data:')) continue;
@@ -30,6 +30,20 @@ async function inlinePictures(node: HTMLElement): Promise<() => void> {
       if (!img.complete) await new Promise((r) => img.addEventListener('load', r, { once: true }));
       await img.decode().catch(() => undefined);
       if (!img.naturalWidth) continue;
+      // A faded speaker photo: crop and fade drawn into the copy itself, no mask needed.
+      if (img.dataset.fade) {
+        const data = fadedCopy(img);
+        if (data) {
+          swaps.push({ img, src: img.src, srcset: img.srcset, style: img.style.cssText });
+          img.srcset = '';
+          img.src = data;
+          img.style.maskImage = 'none';
+          img.style.webkitMaskImage = 'none';
+          img.style.objectFit = 'fill';
+          await img.decode().catch(() => undefined);
+          continue;
+        }
+      }
       const box = img.getBoundingClientRect();
       // Enough for a sharp poster (drawn at up to twice its size), never more than the photo.
       const want = Math.max(box.width, box.height, 64) * 2.5;
@@ -55,8 +69,60 @@ async function inlinePictures(node: HTMLElement): Promise<() => void> {
     for (const s of swaps) {
       s.img.src = s.src;
       s.img.srcset = s.srcset;
+      if (s.style !== undefined) s.img.style.cssText = s.style;
     }
   };
+}
+
+/**
+ * A speaker photo as it shows on the poster — cropped like `object-fit: cover` to its box
+ * (keeping the top, middle or bottom in view) and fading out towards the poster's middle —
+ * as one PNG. Null when it can't be drawn.
+ */
+function fadedCopy(img: HTMLImageElement): string | null {
+  // The box in poster pixels (unscaled), drawn at twice that for a sharp picture.
+  const bw = img.offsetWidth;
+  const bh = img.offsetHeight;
+  if (!bw || !bh) return null;
+  const k = Math.min(2, 1400 / Math.max(bw, bh));
+  const w = Math.round(bw * k);
+  const h = Math.round(bh * k);
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  const fit = Math.max(bw / iw, bh / ih);
+  const sw = bw / fit;
+  const sh = bh / fit;
+  const pos = img.dataset.pos;
+  const sy = pos === 'top' ? 0 : pos === 'bottom' ? ih - sh : (ih - sh) / 2;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(img, (iw - sw) / 2, sy, sw, sh, 0, 0, w, h);
+  // Keep the photo only where the fade lets it through (the same fade as on screen).
+  ctx.globalCompositeOperation = 'destination-in';
+  const side = img.dataset.fade;
+  if (side === 'center') {
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.scale((w / 2) * Math.SQRT2, (h / 2) * Math.SQRT2);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0.4, '#000');
+    g.addColorStop(0.72, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(-1, -1, 2, 2);
+    ctx.restore();
+  } else {
+    const g =
+      side === 'left' ? ctx.createLinearGradient(0, 0, w, 0) : ctx.createLinearGradient(w, 0, 0, 0);
+    g.addColorStop(0, '#000');
+    g.addColorStop(0.45, '#000');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  }
+  return c.toDataURL('image/png');
 }
 
 /**
