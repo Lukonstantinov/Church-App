@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore, type RefObject } from 'react';
 import { storage } from './storage';
 
 /**
@@ -132,6 +132,38 @@ export function watchOffscreen(el: Element, limited = false): () => void {
     visible.delete(el);
     rebalance();
   };
+}
+
+// ---------- Mounted only near the screen ----------
+
+let nearIo: IntersectionObserver | undefined;
+const nearCallbacks = new WeakMap<Element, (near: boolean) => void>();
+
+/**
+ * Whether an element is on or near the screen. Long lists of live previews (the animation
+ * picker has about fifty) draw only the ones in view: all of them at once took more memory
+ * than an iPhone gives the app, and Telegram showed a blank page.
+ */
+export function useNearScreen(ref: RefObject<Element | null>): boolean {
+  // Without the observer (very old phones) everything is drawn, as before.
+  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    nearIo ??= new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) nearCallbacks.get(e.target)?.(e.isIntersecting);
+      },
+      { rootMargin: '150px' },
+    );
+    nearCallbacks.set(el, setNear);
+    nearIo.observe(el);
+    return () => {
+      nearIo?.unobserve(el);
+      nearCallbacks.delete(el);
+    };
+  }, [ref]);
+  return near;
 }
 
 // ---------- Still while scrolling ----------

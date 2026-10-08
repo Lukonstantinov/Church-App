@@ -19,9 +19,17 @@ export function Sheet({
     window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // The page behind stands still and drops its animation layers while a sheet is open
+    // (index.css): moving things under the sheet's glass made it redo its blur every frame,
+    // and with the sheet's own previews it was too much for iPhones.
+    const html = document.documentElement;
+    html.dataset.sheet = String(Number(html.dataset.sheet ?? 0) + 1);
     return () => {
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
+      const n = Number(html.dataset.sheet ?? 1) - 1;
+      if (n > 0) html.dataset.sheet = String(n);
+      else delete html.dataset.sheet;
     };
   }, [open, onClose]);
 

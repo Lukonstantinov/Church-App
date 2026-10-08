@@ -4123,3 +4123,16 @@ html[data-quality='still'] .label-shimmer::after {
 .capturing .living-clip {
   display: none !important;
 }
+
+/* A sheet is open: the page behind it (#root; sheets live outside it) stands still and drops
+   its animation layers — fewer layers for the phone to hold, and the sheet's glass blurs a
+   still picture once instead of every frame. */
+html[data-sheet] #root .living-clip,
+html[data-sheet] #root .shine {
+  display: none;
+}
+html[data-sheet] #root *,
+html[data-sheet] #root *::before,
+html[data-sheet] #root *::after {
+  animation-play-state: paused !important;
+}

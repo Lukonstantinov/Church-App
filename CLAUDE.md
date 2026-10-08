@@ -66,6 +66,8 @@ Deploy → Run workflow → production.
   strip with transform, or use `steps()`.
   Particle kinds (`PARTICLE_KINDS`) are drawn on one canvas per block (`ParticleCanvas`, shared 24 fps clock);
   stack several animations with `LivingLayers` so a block's particle effects share that canvas.
+  An open sheet pauses and hides the page's animation layers (`html[data-sheet]`); long lists of live
+  previews mount only near the screen (`useNearScreen`).
   Long decorative animations are capped at 30 changes a second (`capAnimations` in `lib/perf.ts`);
   backdrop blur is redone whenever anything behind or inside it moves — keep moving things
   out from under glass (the page background steps 4×/s; glass with a living layer skips blur).

@@ -642,7 +642,8 @@ function tick(now: number) {
     for (const e of engines) {
       // Off screen or over the running limit (watchOffscreen marks it): nothing to draw.
       if (e.clip.hasAttribute('data-off') && e.last >= 0) continue;
-      if (still) {
+      // A copy kept still (the Design tab's page copy until "play") gets one frame too.
+      if (still || e.clip.closest('.motion-still')) {
         // One still frame, a few seconds in so the particles are spread out.
         if (e.last < 0) {
           e.draw(4);

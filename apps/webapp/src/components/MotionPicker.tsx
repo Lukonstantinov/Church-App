@@ -8,7 +8,24 @@ import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
 import { Group } from './LookControls';
 import { MotionTuneControls, TunePanel } from './MotionTune';
+import { useRef } from 'react';
+import { useNearScreen } from '../lib/perf';
 import { LivingLayer } from './ui';
+
+/** A preview's animation, drawn only while its tile is on or near the screen. */
+function LivePreview(props: {
+  kind: MeetingMotion;
+  icon?: MotionIcon | null;
+  tune?: MotionTune | null;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const near = useNearScreen(ref);
+  return (
+    <span ref={ref} className="absolute inset-0">
+      {near && <LivingLayer kind={props.kind} icon={props.icon} tune={props.tune} preview />}
+    </span>
+  );
+}
 
 /**
  * Every animation as a small live preview to pick from, sorted by type (light and colour,
@@ -68,7 +85,7 @@ export function MotionPicker({
         }`}
       >
         <span className="brand-gradient relative block aspect-[4/3] w-full overflow-hidden rounded-xl">
-          {m && <LivingLayer kind={m} icon={icon} tune={tuneOf?.(m)} preview />}
+          {m && <LivePreview kind={m} icon={icon} tune={tuneOf?.(m)} />}
           {!m && (
             <span className="absolute inset-0 flex items-center justify-center text-[20px] text-white">
               ⛪
