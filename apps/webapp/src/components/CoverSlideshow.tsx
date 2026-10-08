@@ -39,19 +39,32 @@ export function CoverPicture({
   seconds?: number;
 }) {
   const i = useSlide(photos.length, seconds);
+  // Photos are marked `data-shot="under"`: posters and recordings draw them with our own
+  // code, because iPhones often leave a big photo out of the drawing library's picture
+  // (a recorded cover came out as effects over black).
   if (photos.length === 0) return <CoverEffectLayers e={e} />;
   // The photo with its effects recorded as one video: it plays instead of the live effects.
   if (e.coverLoop && photos.length === 1)
     return (
       <>
-        <img src={photos[0]} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={photos[0]}
+          alt=""
+          data-shot="under"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
         <LoopVideo mediaId={e.coverLoop.mediaId} />
       </>
     );
   return (
     <>
       {photos.length === 1 ? (
-        <img src={photos[0]} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={photos[0]}
+          alt=""
+          data-shot="under"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
       ) : (
         photos.map((url, k) => (
           <img
@@ -59,6 +72,7 @@ export function CoverPicture({
             src={url}
             alt=""
             loading={k === 0 ? 'eager' : 'lazy'}
+            data-shot="under"
             className={`cover-slide absolute inset-0 h-full w-full object-cover ${k === i ? 'on' : ''}`}
             style={{ '--slide-d': `${seconds + 1}s` } as CSSProperties}
           />

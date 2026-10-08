@@ -192,7 +192,9 @@ export function drawShot(ctx: CanvasRenderingContext2D, node: HTMLElement, el: H
   if (box.w <= 0 || box.h <= 0) return;
   const css = getComputedStyle(el);
   ctx.save();
-  ctx.globalAlpha = Number(css.opacity) || 1;
+  // A hidden slideshow photo (opacity 0) stays hidden.
+  const opacity = Number.parseFloat(css.opacity);
+  ctx.globalAlpha = Number.isFinite(opacity) ? opacity : 1;
   if (el instanceof HTMLImageElement) {
     if (!el.naturalWidth) return void ctx.restore();
     const faded = el.dataset.fade ? fadedCopy(el) : null;
