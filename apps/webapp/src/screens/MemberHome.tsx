@@ -55,11 +55,15 @@ export function MemberHome({ me, groupId }: { me: MeResponse; groupId?: number }
 
   return (
     <Screen>
+      {/* Inside a ministry it is that ministry's page (its name, as leaders see it); the
+          greeting is for the home of someone in several ministries. */}
       <BrandHeader
-        title={t.home.hello(user.firstName)}
+        title={env ? env.name : t.home.hello(user.firstName)}
         subtitle={
-          active[0] && groupId !== undefined
-            ? [active[0].groupName, active[0].positionName].filter(Boolean).join(' · ')
+          env
+            ? [active[0]?.positionName, t.common.members(env.activeCount)]
+                .filter(Boolean)
+                .join(' · ')
             : undefined
         }
       />
