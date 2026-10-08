@@ -338,13 +338,17 @@ function MeetingPiece({ g, motion }: { g: GroupSummary; motion: MeetingMotion })
       >
         {/* Layers cover the tile; the main animation sits in its coloured top. */}
         <SkinLayer look={{ ...look, motion: null }} />
-        <LookTop look={g} className="tile-top isolate flex aspect-[16/10] flex-col p-2.5">
-          <LivingLayer
-            kind={look.own ? (look.motion ?? 'off') : motion}
-            behind
-            tune={tuneFor(look, look.own ? look.motion : motion)}
-            icon={look.icon}
-          />
+        <LookTop
+          look={g}
+          className="tile-top isolate flex aspect-[16/10] flex-col p-2.5"
+          under={
+            <LivingLayer
+              kind={look.own ? (look.motion ?? 'off') : motion}
+              tune={tuneFor(look, look.own ? look.motion : motion)}
+              icon={look.icon}
+            />
+          }
+        >
           <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
             {t.meetings.details}
           </span>

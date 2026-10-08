@@ -23,7 +23,7 @@ import {
   type AudiencePreset,
 } from './AudienceChoice';
 import { IconCheck, IconSend } from './icons';
-import { MeetingPoster } from './MeetingPoster';
+import { MeetingPoster, PosterPhotoWarning } from './MeetingPoster';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
 import { Button, Switch, Toggle } from './ui';
@@ -192,6 +192,7 @@ export function MeetingAnnounceSheet({
                 </div>
               </div>
             )}
+            {withPoster && <PosterPhotoWarning m={meeting} />}
           </div>
         )}
         {notice !== 'cancelled' && (

@@ -32,6 +32,7 @@ import type { AuthVariables } from '../auth/middleware';
 import type { Db } from '../db/client';
 import {
   attendance,
+  designTemplates,
   groupLabels,
   groups,
   memberLabels,
@@ -331,6 +332,7 @@ groupRoutes.get('/:id', async (c) => {
     eventReminderHours: group.eventReminderHours,
     meetingReminders: readReminders(group.meetingReminders),
     meetingMotion: readMotion(group.meetingMotion) ?? 'calm',
+    meetingTemplateId: group.meetingTemplateId,
     meetingServices: readServices(group.meetingServices),
     managedChat: group.tgChatId
       ? { title: group.tgChatTitle, pending: group.chatLinkCode !== null }
@@ -399,6 +401,16 @@ groupRoutes.put('/:id/studio', async (c) => {
   if (input.animation !== undefined) patch.animation = input.animation;
   if (input.meetingMotion !== undefined) patch.meetingMotion = input.meetingMotion;
   if (input.pageBackground !== undefined) patch.pageBackground = input.pageBackground;
+  if (input.meetingTemplateId !== undefined) {
+    if (
+      input.meetingTemplateId !== null &&
+      !(await db.query.designTemplates.findFirst({
+        where: eq(designTemplates.id, input.meetingTemplateId),
+      }))
+    )
+      throw new HTTPException(400, { message: 'unknown_template' });
+    patch.meetingTemplateId = input.meetingTemplateId;
+  }
   if (Object.keys(patch).length > 0)
     await db.update(groups).set(patch).where(eq(groups.id, group.id));
   await audit(db, {
@@ -510,7 +522,16 @@ groupRoutes.get('/:id/members', async (c) => {
         )
         .orderBy(asc(groupLabels.sort), asc(groupLabels.id))
     : [];
+  const secret = c.env.WEBHOOK_SECRET;
+  const photos = new Map(
+    await Promise.all(
+      rows
+        .filter(({ u }) => u.photoMediaId)
+        .map(async ({ u }) => [u.id, await signedMediaUrl(secret, u.photoMediaId!)] as const),
+    ),
+  );
   const result: MemberRow[] = rows.map(({ m, u, positionName, positionLook }) => ({
+    photoUrl: photos.get(u.id) ?? null,
     labels: labelRows.filter((l) => l.userId === u.id).map((l) => toLabelRef(l.label)),
     membershipId: m.id,
     positionId: m.positionId,

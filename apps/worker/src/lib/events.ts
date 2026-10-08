@@ -366,7 +366,7 @@ async function summarize(
         posterTemplateId: e.posterTemplateId,
         poster: (e.posterTemplateId && posters.get(e.posterTemplateId)) || null,
         countdown: e.countdown,
-        speakers: await speakersOf(e.speakers, secret),
+        speakers: await speakersOf(db, e.speakers, secret),
         createdAt: e.createdAt,
         look: brand ? await posterLook(secret, brand, design, tpl) : null,
       };

@@ -12,13 +12,25 @@ export function Avatar({
   firstName,
   lastName,
   size = 40,
+  photoUrl,
 }: {
   id: number;
   firstName: string;
   lastName?: string | null;
   size?: number;
+  /** The person's profile photo; without it, their initials. */
+  photoUrl?: string | null;
 }) {
   const hue = HUES[Math.abs(id) % HUES.length]!;
+  if (photoUrl)
+    return (
+      <img
+        src={photoUrl}
+        alt=""
+        className="shrink-0 select-none rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
   return (
     <span
       aria-hidden="true"

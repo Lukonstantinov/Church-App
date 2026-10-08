@@ -168,6 +168,8 @@ export const ministryStudioSchema = z.object({
   animation: z.enum(ENTER_ANIMATIONS).optional(),
   meetingMotion: z.enum(MEETING_MOTIONS).nullable().optional(),
   pageBackground: appBackgroundSchema.nullable().optional(),
+  /** The design template meetings without a look of their own wear (null = the ministry's). */
+  meetingTemplateId: z.number().int().positive().nullable().optional(),
 });
 export type MinistryStudioInput = z.input<typeof ministryStudioSchema>;
 

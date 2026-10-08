@@ -481,7 +481,7 @@ function TileMotion({
 }) {
   const look = useModuleLook('meetings');
   const kind = tile ?? (look.own ? (look.motion ?? 'off') : (motion ?? 'calm'));
-  return <LivingLayer kind={kind} live={live} behind tune={tuneFor(look, kind)} icon={look.icon} />;
+  return <LivingLayer kind={kind} live={live} tune={tuneFor(look, kind)} icon={look.icon} />;
 }
 
 function Tile({
@@ -606,12 +606,16 @@ function MeetingTile({
         <LookTop
           look={meetingLook(m) ?? g}
           className="tile-top isolate flex aspect-[16/10] flex-col p-2.5"
+          // The meeting's living animation, as on its own screen (a poster has its own). It
+          // goes over the look's photo and pattern — drawn behind, a photo would hide it.
           under={
-            m.poster ? <LayeredPoster fill tpl={m.poster} texts={posterTexts(m)} /> : undefined
+            m.poster ? (
+              <LayeredPoster fill tpl={m.poster} texts={posterTexts(m)} />
+            ) : (
+              <TileMotion motion={m.motion} tile={m.tileMotion} live={live} />
+            )
           }
         >
-          {/* The meeting's living animation, as on its own screen (a poster has its own). */}
-          {!m.poster && <TileMotion motion={m.motion} tile={m.tileMotion} live={live} />}
           <span className="flex min-w-0 items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
             {/* While live the badge takes the label's place, so nothing spills out. */}
             {live ? (
@@ -667,8 +671,8 @@ function MeetingDayTile({
         <LookTop
           look={meetingLook(list[0]!) ?? g}
           className="tile-top isolate flex flex-col gap-1.5 p-2"
+          under={<TileMotion motion={next.motion} tile={next.tileMotion} />}
         >
-          <TileMotion motion={next.motion} tile={next.tileMotion} />
           <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
             <span>{f.relativeDay(list[0]!.startsAt)}</span>
             {soon ? (

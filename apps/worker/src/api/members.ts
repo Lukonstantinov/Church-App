@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import {
   PERMISSIONS,
+  personPhotoSchema,
   setAdminSchema,
   updateMembershipSchema,
   updateUserSchema,
@@ -12,11 +13,20 @@ import {
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
-import { groupLabels, groups, memberLabels, memberships, positions, users } from '../db/schema';
+import {
+  groupLabels,
+  groups,
+  media,
+  memberLabels,
+  memberships,
+  positions,
+  users,
+} from '../db/schema';
 import { toLabelRef } from './labels';
 import { accessIn, canManageUser, visibleGroupIds } from '../lib/access';
 import { defaultPositionId, effectivePermissions, permsOf, roleFor } from '../lib/positions';
 import { groupLogoUrl } from '../lib/groups';
+import { signedMediaUrl } from '../lib/media';
 import { removeFromChat } from '../lib/chats';
 import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
@@ -228,6 +238,9 @@ userRoutes.get('/:id', async (c) => {
       isReachable: target.isReachable,
       guardianConsentAt: target.guardianConsentAt,
       hasActiveClaimCode: target.claimCode !== null && (target.claimExpiresAt ?? '') > now,
+      photoUrl: target.photoMediaId
+        ? await signedMediaUrl(c.env.WEBHOOK_SECRET, target.photoMediaId)
+        : null,
     },
     memberships: rows.map(
       ({ m, groupName, brandColor, logoMediaId, positionName, positionLook, permissions }) => ({
@@ -247,6 +260,7 @@ userRoutes.get('/:id', async (c) => {
     ),
     permissions: {
       canEditProfile: canManage,
+      canEditPhoto: canManage || isSelf,
       canIssueClaimCode: canManage && target.telegramId === null,
       canSetAdmin: actor.isAdmin && !isSelf && target.telegramId !== null,
     },
@@ -277,6 +291,34 @@ userRoutes.patch('/:id', async (c) => {
       data: input,
     });
   }
+  return c.json({ ok: true });
+});
+
+/**
+ * A person's profile photo — on meeting cards and the speakers of generated posters. The
+ * person sets their own, whoever manages them anyone's. The picture must be an upload of
+ * a ministry the person is in.
+ */
+userRoutes.put('/:id/photo', async (c) => {
+  const db = c.get('db');
+  const actor = c.get('user');
+  const id = idParam(c);
+  if (id !== actor.id && !(await canManageUser(db, actor, id)))
+    throw new HTTPException(404, { message: 'not_found' });
+  const { mediaId } = await parseBody(c, personPhotoSchema);
+  if (mediaId) {
+    const [ok] = await db
+      .select({ id: media.id })
+      .from(media)
+      .innerJoin(
+        memberships,
+        and(eq(memberships.groupId, media.groupId), eq(memberships.userId, id)),
+      )
+      .where(eq(media.id, mediaId))
+      .limit(1);
+    if (!ok) throw new HTTPException(400, { message: 'invalid_media' });
+  }
+  await db.update(users).set({ photoMediaId: mediaId }).where(eq(users.id, id));
   return c.json({ ok: true });
 });
 

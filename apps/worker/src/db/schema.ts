@@ -120,6 +120,11 @@ export const groups = sqliteTable('groups', {
   meetingReminders: text('meeting_reminders'),
   /** How lively the meetings' backgrounds move: off / calm / lively (null = calm). */
   meetingMotion: text('meeting_motion'),
+  /**
+   * The design template every meeting of the ministry wears unless it has a look of its own
+   * (Design tab): looks come from the templates, single meetings can still be changed.
+   */
+  meetingTemplateId: integer('meeting_template_id'),
   /** Services people do at meetings, saved for reuse: JSON [{name, icon, speaker}]. */
   meetingServices: text('meeting_services'),
   /** Photo behind the ministry card (BackdropConfig JSON), NULL = colours only. */

@@ -77,7 +77,9 @@ time zone, poster label, main-window background); ministries ("environments") wi
 look (colour, pattern, logo, photo), background, default place, Telegram chat; archive.
 
 **People** — invite link/QR via the bot, join approval, offline members with claim codes,
-positions with rights, labels, contacts, person photos (`users.photo_media_id`).
+positions with rights, labels, contacts, profile photos (`users.photo_media_id`, set on the person
+screen via `PUT /api/users/:id/photo`; used on meeting cards and as speakers' photos on posters —
+speakers can be picked from people, `speaker.userId`; missing photos give a warning).
 
 **Meetings** — one-off, repeating series (weekly / biweekly / monthly, all dates created
 at once: `meetings.series_id`, `repeat_rule`; edits can apply to the rest of the series),
@@ -119,6 +121,8 @@ a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).
 **Design** — the `design` right ("designer") gives a Design tab (`screens/Design.tsx`): church-wide
 templates (`design_templates`, with `motion` = the meeting animation; PUT to change) with live
 previews (meeting hero, home tile, poster) and restyling of upcoming meetings/events and posts.
+Ministry default meeting look: `groups.meeting_template_id` («Оформление всех встреч») — meetings with
+no template or own design wear it (resolved in `toMeetingRows`), single meetings can differ.
 Church setting `designLock`: when on, only designers (and admins) change looks — enforced in the
 meeting/event/post PATCH routes via `designRights` / `assertMayDesign` / `lookDiffers`
 (`lib/access.ts`; unchanged values resent by forms don't count); rows carry `canDesign`.

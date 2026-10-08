@@ -168,6 +168,13 @@ export const speakerInputSchema = z.object({
     .positive()
     .nullish()
     .transform((v) => v ?? null),
+  /** A member of the ministry: without an own photo, their profile photo is used. */
+  userId: z
+    .number()
+    .int()
+    .positive()
+    .nullish()
+    .transform((v) => v ?? null),
 });
 export const speakersSchema = z.array(speakerInputSchema).max(MAX_SPEAKERS);
 export type SpeakerInput = z.input<typeof speakerInputSchema>;
@@ -177,6 +184,8 @@ export interface Speaker {
   name: string;
   role: string | null;
   mediaId: number | null;
+  /** A member picked as the speaker (their profile photo stands in for an own one). */
+  userId?: number | null;
   photoUrl: string | null;
 }
 

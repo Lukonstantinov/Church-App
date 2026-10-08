@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   PERMISSIONS,
   displayName,
@@ -33,10 +33,13 @@ import {
   useMe,
   usePositions,
   useMemberDetail,
+  useProfilePhoto,
   useSetAdmin,
+  useUploadMedia,
   useUpdateMembership,
   useUpdateUser,
 } from '../lib/queries';
+import { preparePhoto } from '../lib/image';
 import { confirmDialog, haptic } from '../lib/telegram';
 
 export function MemberScreen({ userId }: { userId: number }) {
@@ -88,7 +91,11 @@ export function MemberScreen({ userId }: { userId: number }) {
   return (
     <Screen>
       <header className="flex flex-col items-center gap-2 pt-4 text-center">
-        <Avatar id={user.id} firstName={user.firstName} lastName={user.lastName} size={84} />
+        <ProfilePhoto
+          user={user}
+          groupId={memberships.find((m) => m.status === 'active')?.groupId ?? null}
+          editable={permissions.canEditPhoto}
+        />
         <h1 className="text-[26px] font-bold leading-tight tracking-tight">
           <PersonName
             name={displayName(user)}
@@ -111,6 +118,9 @@ export function MemberScreen({ userId }: { userId: number }) {
             <Badge tone="danger">{t.common.unreachable}</Badge>
           )}
         </div>
+        {permissions.canEditPhoto && !user.photoUrl && (
+          <p className="max-w-[300px] text-[13px] leading-snug text-hint">{t.member.photoAdd}</p>
+        )}
       </header>
 
       {attendance.map((a) => (
@@ -273,5 +283,92 @@ function PositionSheet({
         />
       ))}
     </Sheet>
+  );
+}
+
+/**
+ * The person's photo, big, with a camera button to add or change it (themselves, or whoever
+ * manages them). It shows on meeting cards and is the speaker's photo on generated posters.
+ */
+function ProfilePhoto({
+  user,
+  groupId,
+  editable,
+}: {
+  user: MemberDetail['user'];
+  /** A ministry the person is in: the picture is stored as its upload. */
+  groupId: number | null;
+  editable: boolean;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const input = useRef<HTMLInputElement>(null);
+  const upload = useUploadMedia(groupId ?? 0, 'event');
+  const save = useProfilePhoto(user.id);
+  const [menu, setMenu] = useState(false);
+  const busy = upload.isPending || save.isPending;
+
+  async function pick(file: File | undefined) {
+    if (!file || !groupId) return;
+    try {
+      const media = await upload.mutateAsync(await preparePhoto(file, 800));
+      await save.mutateAsync(media.id);
+      haptic.success();
+    } catch {
+      toast(t.treasury.uploadFailed, 'error');
+    } finally {
+      if (input.current) input.current.value = '';
+    }
+  }
+
+  const avatar = (
+    <Avatar
+      id={user.id}
+      firstName={user.firstName}
+      lastName={user.lastName}
+      size={96}
+      photoUrl={user.photoUrl}
+    />
+  );
+  if (!editable || !groupId) return avatar;
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => void pick(e.target.files?.[0])}
+      />
+      <button
+        type="button"
+        aria-label={t.member.photoChange}
+        disabled={busy}
+        onClick={() => (user.photoUrl ? setMenu(true) : input.current?.click())}
+        className={`relative rounded-full active:scale-95 ${busy ? 'animate-pulse' : ''}`}
+      >
+        {avatar}
+        <span className="brand-gradient absolute -bottom-0.5 -right-0.5 flex h-8 w-8 items-center justify-center rounded-full text-[15px] text-white shadow-cta ring-2 ring-[var(--color-bg)]">
+          📷
+        </span>
+      </button>
+      <Sheet open={menu} onClose={() => setMenu(false)} title={t.member.photo}>
+        <SheetOption
+          label={t.member.photoChange}
+          onClick={() => {
+            setMenu(false);
+            input.current?.click();
+          }}
+        />
+        <SheetOption
+          label={t.member.photoRemove}
+          tone="destructive"
+          onClick={() => {
+            setMenu(false);
+            void save.mutateAsync(null).catch(() => toast(t.common.actionFailed, 'error'));
+          }}
+        />
+      </Sheet>
+    </>
   );
 }

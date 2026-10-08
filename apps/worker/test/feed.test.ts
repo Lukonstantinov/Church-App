@@ -10,6 +10,7 @@ import {
   type EventSummary,
   type GroupDetail,
   type GroupSummary,
+  type MeetingRow,
   type MemberRow,
 } from '@church/shared';
 import {
@@ -414,6 +415,109 @@ describe('ministry feed', () => {
     const plain = fakeUser('Без прав постеры');
     await join(plain, g);
     expect((await api('/api/poster-templates', { user: plain })).status).toBe(403);
+  });
+});
+
+describe('looks from the Design tab and profile photos', () => {
+  it('meetings without a look wear the ministry default template; one meeting can differ', async () => {
+    const g = await createEnv('По умолчанию');
+    const { id: tplId } = await apiJson<{ id: number }>('/api/templates', {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Огонь', brandColor: 'night', pattern: null, motion: 'rays' },
+    });
+    const date = new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10);
+    const make = (title: string) =>
+      apiJson<MeetingRow>(`/api/groups/${g.id}/meetings`, {
+        method: 'POST',
+        user: ADMIN,
+        json: { date, startTime: '19:00', durationMin: 120, title },
+      });
+    const plain = await make('Обычная');
+    const own = await make('Своя');
+    await apiJson(`/api/meetings/${own.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { motion: 'snow' },
+    });
+    await apiJson(`/api/groups/${g.id}/studio`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: { meetingTemplateId: tplId },
+    });
+    expect(
+      (await apiJson<GroupDetail>(`/api/groups/${g.id}`, { user: ADMIN })).meetingTemplateId,
+    ).toBe(tplId);
+    const list = await apiJson<MeetingRow[]>(`/api/groups/${g.id}/meetings`, { user: ADMIN });
+    expect(list.find((m) => m.id === plain.id)).toMatchObject({
+      templateId: tplId,
+      motion: 'rays',
+    });
+    // Its own animation wins over the template's.
+    expect(list.find((m) => m.id === own.id)).toMatchObject({ motion: 'snow' });
+    // Deleting the template takes the default away.
+    await apiJson(`/api/templates/${tplId}`, { method: 'DELETE', user: ADMIN });
+    expect(
+      (await apiJson<GroupDetail>(`/api/groups/${g.id}`, { user: ADMIN })).meetingTemplateId,
+    ).toBeNull();
+  });
+
+  it('profile photo: set by the person, shown in the list and on speakers picked from people', async () => {
+    const g = await createEnv('Фото');
+    const person = fakeUser('Спикер Фото');
+    await join(person, g);
+    const row = (await apiJson<MemberRow[]>(`/api/groups/${g.id}/members`, { user: ADMIN })).find(
+      (m) => m.firstName === person.first_name,
+    )!;
+    expect(row.photoUrl).toBeNull();
+    const mediaId = await upload(g.id);
+    // Someone else (not managing them) may not change it.
+    const stranger = fakeUser('Чужой');
+    await join(stranger, g);
+    expect(
+      (
+        await api(`/api/users/${row.userId}/photo`, {
+          method: 'PUT',
+          user: stranger,
+          json: { mediaId },
+        })
+      ).status,
+    ).toBe(404);
+    await apiJson(`/api/users/${row.userId}/photo`, {
+      method: 'PUT',
+      user: person,
+      json: { mediaId },
+    });
+    const again = (await apiJson<MemberRow[]>(`/api/groups/${g.id}/members`, { user: ADMIN })).find(
+      (m) => m.userId === row.userId,
+    )!;
+    expect(again.photoUrl).toMatch(/^\/media\//);
+    const e = await apiJson<EventDetail>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'С гостем',
+        date: new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10),
+        startTime: '18:00',
+        speakers: [{ name: 'Спикер', userId: row.userId }],
+      },
+    });
+    expect(e.speakers[0]).toMatchObject({ name: 'Спикер', userId: row.userId });
+    expect(e.speakers[0]!.photoUrl).toMatch(/^\/media\//);
+    // Someone outside the ministry can't be a picked speaker.
+    const outsider = fakeUser('Снаружи');
+    await sendText(outsider, '/start');
+    const bad = await api(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'Нет',
+        date: '2030-01-01',
+        startTime: '18:00',
+        speakers: [{ name: 'X', userId: 999999 }],
+      },
+    });
+    expect(bad.status).toBe(400);
   });
 });
 

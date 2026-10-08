@@ -1,9 +1,10 @@
-import { useRef } from 'react';
-import { MAX_SPEAKERS, type Speaker, type SpeakerInput } from '@church/shared';
+import { useRef, useState } from 'react';
+import { MAX_SPEAKERS, displayName, type Speaker, type SpeakerInput } from '@church/shared';
 import { preparePhoto } from '../lib/image';
 import { useT } from '../lib/i18n';
-import { useUploadMedia } from '../lib/queries';
+import { useMembers, useUploadMedia } from '../lib/queries';
 import { IconCamera, IconPlus, IconX } from './icons';
+import { PersonPicker } from './PersonPicker';
 import { useToast } from './Toast';
 
 /** A speaker while it is being edited (the photo is already uploaded; `photoUrl` previews it). */
@@ -12,6 +13,8 @@ export interface SpeakerDraft {
   role: string;
   mediaId: number | null;
   photoUrl: string | null;
+  /** Picked from the people: their profile photo stands in for an own one. */
+  userId?: number | null;
 }
 
 export const toDrafts = (list: Speaker[] | undefined): SpeakerDraft[] =>
@@ -20,6 +23,7 @@ export const toDrafts = (list: Speaker[] | undefined): SpeakerDraft[] =>
     role: s.role ?? '',
     mediaId: s.mediaId,
     photoUrl: s.photoUrl,
+    userId: s.userId ?? null,
   }));
 
 /** What the API stores: named speakers only, at most four. */
@@ -27,7 +31,12 @@ export const toSpeakerInputs = (drafts: SpeakerDraft[]): SpeakerInput[] =>
   drafts
     .filter((d) => d.name.trim())
     .slice(0, MAX_SPEAKERS)
-    .map((d) => ({ name: d.name.trim(), role: d.role.trim() || null, mediaId: d.mediaId }));
+    .map((d) => ({
+      name: d.name.trim(),
+      role: d.role.trim() || null,
+      mediaId: d.mediaId,
+      userId: d.userId ?? null,
+    }));
 
 /** The speakers as shown on a poster or a screen (drafts count too, for live previews). */
 export const toShown = (drafts: SpeakerDraft[]): Speaker[] =>
@@ -35,8 +44,13 @@ export const toShown = (drafts: SpeakerDraft[]): Speaker[] =>
     name: s.name,
     role: s.role ?? null,
     mediaId: s.mediaId ?? null,
+    userId: s.userId ?? null,
     photoUrl: drafts.filter((d) => d.name.trim())[i]?.photoUrl ?? null,
   }));
+
+/** Speakers that will show initials instead of a photo (a warning before sending). */
+export const withoutPhoto = (list: Speaker[]): string[] =>
+  list.filter((s) => s.name.trim() && !s.photoUrl).map((s) => s.name.trim());
 
 const initials = (name: string) =>
   name
@@ -126,6 +140,17 @@ export function SpeakersEditor({
   const upload = useUploadMedia(groupId, 'event');
   const file = useRef<HTMLInputElement>(null);
   const target = useRef(0);
+  const [picking, setPicking] = useState(false);
+  const members = useMembers(groupId, picking);
+  const people = (members.data ?? [])
+    .filter((m) => m.status === 'active')
+    .map((m) => ({
+      id: m.userId,
+      firstName: m.firstName,
+      lastName: m.lastName,
+      username: m.username,
+      photoUrl: m.photoUrl,
+    }));
   const set = (i: number, patch: Partial<SpeakerDraft>) =>
     onChange(value.map((s, k) => (k === i ? { ...s, ...patch } : s)));
 
@@ -186,6 +211,11 @@ export function SpeakersEditor({
               placeholder={t.meetings.speakerRole}
               onChange={(e) => set(i, { role: e.target.value })}
             />
+            {sp.name.trim() && !sp.photoUrl && (
+              <p className="mt-1 text-[12px] leading-snug text-[#d97706]">
+                ⚠️ {sp.userId ? t.meetings.speakerNoProfilePhoto : t.meetings.speakerNoPhoto}
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -198,16 +228,41 @@ export function SpeakersEditor({
         </div>
       ))}
       {value.length < MAX_SPEAKERS && (
-        <button
-          type="button"
-          onClick={() =>
-            onChange([...value, { name: '', role: '', mediaId: null, photoUrl: null }])
-          }
-          className="flex items-center justify-center gap-1.5 rounded-xl py-2 text-[15px] font-semibold text-link active:bg-hairline"
-        >
-          <IconPlus size={16} /> {t.meetings.addSpeaker.replace(/^\+\s*/, '')}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setPicking(true)}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand/10 py-2 text-[15px] font-semibold text-link active:scale-[0.98]"
+          >
+            👤 {t.meetings.speakerFromPeople}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              onChange([...value, { name: '', role: '', mediaId: null, photoUrl: null }])
+            }
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-[15px] font-semibold text-link active:bg-hairline"
+          >
+            <IconPlus size={16} /> {t.meetings.addSpeaker.replace(/^\+\s*/, '')}
+          </button>
+        </div>
       )}
+      <PersonPicker
+        open={picking}
+        title={t.meetings.speakerFromPeople}
+        people={people}
+        value={null}
+        onClose={() => setPicking(false)}
+        onPick={(id) => {
+          const p = people.find((x) => x.id === id);
+          if (!p) return;
+          // Their profile photo is used (kept up to date by the server); the name can be edited.
+          onChange([
+            ...value,
+            { name: displayName(p), role: '', mediaId: null, photoUrl: p.photoUrl, userId: p.id },
+          ]);
+        }}
+      />
     </div>
   );
 }

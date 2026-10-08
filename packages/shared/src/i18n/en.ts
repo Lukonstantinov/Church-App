@@ -404,6 +404,12 @@ export const en: Messages = {
     speakerName: 'Name',
     speakerRole: 'Who / about what (optional)',
     speakerPhoto: 'Photo',
+    speakerFromPeople: 'From the people',
+    speakerNoPhoto: 'No photo — the poster shows initials. Tap the circle to add one.',
+    speakerNoProfilePhoto:
+      'No profile photo — the poster shows initials. Add one in their profile or tap the circle.',
+    posterNoPhotos: (names: string) =>
+      `⚠️ No photo: ${names}. The poster shows initials — add a photo in the profile (People → person → 📷).`,
     removeSpeaker: 'Remove speaker',
     repeatTitle: 'Repeating meeting',
     repeatHint: 'The calendar is filled with all of them at once.',
@@ -686,6 +692,10 @@ export const en: Messages = {
     joinShare: (group: string) => `Join the “${group}” group`,
   },
   member: {
+    photo: 'Profile photo',
+    photoAdd: 'Add a photo — it shows on meeting cards and on speaker posters.',
+    photoChange: 'Choose another photo',
+    photoRemove: 'Remove photo',
     profile: 'Profile',
     groups: 'Groups',
     myGroups: 'My groups',
@@ -963,6 +973,10 @@ export const en: Messages = {
     templates: 'Templates',
     templatesHint:
       'Colour, pattern, photo and animation. Meetings and events using a template change with it.',
+    defaultForMeetings: 'Look of all meetings',
+    defaultForMeetingsHint:
+      'Meetings without a look of their own (and new scheduled ones) wear this template. A single meeting can be changed below — «Meetings».',
+    defaultBadge: 'For meetings',
     newTemplate: 'New template',
     editTemplate: 'Template',
     templateName: 'Template name',

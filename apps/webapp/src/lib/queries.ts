@@ -271,6 +271,16 @@ export function useUpdateUser(userId: number) {
   });
 }
 
+/** Sets a person's profile photo (their own, or someone they manage); null removes it. */
+export function useProfilePhoto(userId: number) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (mediaId: number | null) =>
+      apiFetch<{ ok: true }>(`/users/${userId}/photo`, { method: 'PUT', ...json({ mediaId }) }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useIssueClaimCode(userId: number) {
   const invalidate = useInvalidateAll();
   return useMutation({

@@ -5,6 +5,7 @@ import {
   resolveBrand,
   type GroupSummary,
   type MeetingHelper,
+  type MeetingPerson,
   type MeetingMotion,
   type PosterTemplate,
   type MeetingRow,
@@ -17,22 +18,60 @@ import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { LivingLayer } from './ui';
 import { LayeredPoster, usePosterTexts } from './LayeredPoster';
-import { SpeakerStrip } from './Speakers';
+import { SpeakerStrip, withoutPhoto } from './Speakers';
 
 const TITLE_PX = { s: 32, m: 40, l: 50, xl: 60 } as const;
 
-/** The poster's speakers: its own list, else the speakers from the meeting's people. */
-export function posterSpeakers(m: { speakers?: Speaker[]; helpers?: MeetingHelper[] }): Speaker[] {
+/**
+ * The poster's speakers: its own list, else the speakers from the meeting's people, else
+ * its leader (labelled `leaderRole`) — each with their profile photo.
+ */
+export function posterSpeakers(
+  m: { speakers?: Speaker[]; helpers?: MeetingHelper[]; leader?: MeetingPerson | null },
+  leaderRole?: string,
+): Speaker[] {
   if (m.speakers?.length) return m.speakers;
-  return (m.helpers ?? [])
+  const helpers = (m.helpers ?? [])
     .filter((h) => h.speaker)
     .slice(0, 4)
     .map((h) => ({
       name: displayName(h.person),
       role: h.role,
       mediaId: null,
+      userId: h.person.id,
       photoUrl: h.person.photoUrl ?? null,
     }));
+  if (helpers.length || !leaderRole || !m.leader) return helpers;
+  return [
+    {
+      name: displayName(m.leader),
+      role: leaderRole,
+      mediaId: null,
+      userId: m.leader.id,
+      photoUrl: m.leader.photoUrl ?? null,
+    },
+  ];
+}
+
+/** The names on a generated poster that will show initials (no photo): a warning to show. */
+export function posterMissingPhotos(
+  m: Parameters<typeof posterSpeakers>[0] & { poster?: PosterTemplate | null },
+  leaderRole: string,
+): string[] {
+  if (m.poster) return [];
+  return withoutPhoto(posterSpeakers(m, leaderRole));
+}
+
+/** A note under a poster preview when a speaker will show initials instead of a photo. */
+export function PosterPhotoWarning({ m }: { m: Parameters<typeof posterMissingPhotos>[0] }) {
+  const t = useT();
+  const names = posterMissingPhotos(m, t.meetings.leader);
+  if (!names.length) return null;
+  return (
+    <p className="px-3 py-2 text-center text-[12px] leading-snug text-[#d97706]">
+      {t.meetings.posterNoPhotos(names.join(', '))}
+    </p>
+  );
 }
 
 /** The ministry's own look, for a poster that has none of its own. */
@@ -83,7 +122,9 @@ export const MeetingPoster = forwardRef<
   const on = onBrandStyle(look.textColor, true);
   const badge = f.dateBadge(m.startsAt);
   const center = design?.align === 'center';
-  const speakers = posterSpeakers(m);
+  const speakers = posterSpeakers(m, t.meetings.leader);
+  // The leader already shows as the speaker (with photo): no second pill for them.
+  const leaderSpeaks = !!m.leader && speakers.some((sp) => sp.userId === m.leader!.id);
   const collage =
     design?.posterLayout === 'collage' ? speakers.filter((sp) => sp.photoUrl).slice(0, 4) : [];
   const place =
@@ -186,7 +227,7 @@ export const MeetingPoster = forwardRef<
         <div
           className={`flex flex-wrap gap-2 text-[19px] font-semibold ${center ? 'justify-center' : ''}`}
         >
-          {m.leader && (
+          {m.leader && !leaderSpeaks && (
             <span className="rounded-full bg-white px-4 py-1.5 text-[var(--brand)]">
               🎤 {displayName(m.leader)}
             </span>

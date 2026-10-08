@@ -173,6 +173,8 @@ export interface GroupDetail extends GroupSummary {
   meetingReminders: number[];
   /** How lively the ministry's meetings move. */
   meetingMotion: MeetingMotion;
+  /** The design template meetings without a look of their own wear (null = the ministry's). */
+  meetingTemplateId: number | null;
   /** Services saved for meetings (name, icon, speaker). */
   meetingServices: MeetingService[];
   /** Chat managed by the bot (members-only): its title; null when not linked. */
@@ -267,6 +269,8 @@ export interface MemberRow {
   guardianConsent: boolean;
   /** Attendance rate over the group's last 8 roll calls; null if none recorded yet. */
   recentPercent: number | null;
+  /** Profile photo; null = initials. */
+  photoUrl: string | null;
 }
 
 /** Someone in the ministry, for the contacts list (tap to write in Telegram). */
@@ -295,6 +299,8 @@ export interface MemberDetail {
     isReachable: boolean;
     guardianConsentAt: string | null;
     hasActiveClaimCode: boolean;
+    /** Profile photo (used on meeting cards and speaker posters); null = initials. */
+    photoUrl: string | null;
   };
   /** Memberships in groups the requester can see. */
   memberships: (MeMembership & {
@@ -308,6 +314,8 @@ export interface MemberDetail {
   attendance: MemberAttendance[];
   permissions: {
     canEditProfile: boolean;
+    /** The person themselves, or whoever manages them. */
+    canEditPhoto: boolean;
     canIssueClaimCode: boolean;
     canSetAdmin: boolean;
   };

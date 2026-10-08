@@ -51,6 +51,7 @@ import {
   useFeed,
   useGroup,
   useMe,
+  useSaveMinistryStudio,
   useSaveTemplate,
   usePosterTemplates,
   useTemplates,
@@ -84,6 +85,9 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
   const calendar = useCalendar(active.id);
   const feed = useFeed(active.id);
   const updateChurch = useUpdateChurch();
+  const group = useGroup(active.id);
+  const saveStudio = useSaveMinistryStudio(active.id);
+  const toast = useToast();
   const [editing, setEditing] = useState<DesignTemplate | 'new' | null>(null);
   const [applying, setApplying] = useState<
     { kind: 'meeting'; m: MeetingRow } | { kind: 'event'; e: EventSummary } | null
@@ -143,6 +147,11 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
             >
               <LookTop look={templateLook(tpl)} className="relative aspect-[16/10] p-2.5">
                 <LivingLayer kind={tpl.motion ?? 'calm'} />
+                {group.data?.meetingTemplateId === tpl.id && (
+                  <span className="relative self-start rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-black">
+                    ★ {t.design.defaultBadge}
+                  </span>
+                )}
                 <span className="relative mt-auto text-[12px] font-bold uppercase tracking-wider opacity-85">
                   {tpl.motion ? t.meetings.motions[tpl.motion] : t.design.motionInherit}
                 </span>
@@ -161,6 +170,29 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
             <span className="text-[14px] font-semibold">{t.design.newTemplate}</span>
           </button>
         </div>
+        {(templates.data?.length ?? 0) > 0 && (
+          <div className="mt-3">
+            <div className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+              {t.design.defaultForMeetings}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5 px-1">
+              {[null, ...(templates.data ?? []).map((x) => x.id)].map((id) => (
+                <Pill
+                  key={id ?? 'own'}
+                  on={(group.data?.meetingTemplateId ?? null) === id}
+                  onClick={() =>
+                    saveStudio.mutate(
+                      { meetingTemplateId: id },
+                      { onError: () => toast(t.common.saveFailed, 'error') },
+                    )
+                  }
+                  label={id === null ? t.design.ministryLook : (tplName(id) ?? '')}
+                />
+              ))}
+            </div>
+            <p className="mt-1.5 px-3 text-[12px] text-hint">{t.design.defaultForMeetingsHint}</p>
+          </div>
+        )}
       </section>
 
       <Section title={t.design.meetings}>
@@ -363,9 +395,14 @@ export function DesignPreviews({
             <LookTop
               look={look}
               className="tile-top isolate flex aspect-[16/10] flex-col p-2.5"
-              under={poster ? <LayeredPoster fill tpl={poster} texts={words} /> : undefined}
+              under={
+                poster ? (
+                  <LayeredPoster fill tpl={poster} texts={words} />
+                ) : (
+                  <LivingLayer kind={tileMotion ?? motion} />
+                )
+              }
             >
-              {!poster && <LivingLayer kind={tileMotion ?? motion} behind />}
               <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
                 {t.meetings.details}
               </span>

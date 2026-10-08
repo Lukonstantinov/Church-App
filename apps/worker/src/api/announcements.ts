@@ -526,5 +526,10 @@ templateRoutes.delete('/:id', async (c) => {
   if (row.createdBy !== user.id && !user.isAdmin)
     throw new HTTPException(403, { message: 'forbidden' });
   await db.delete(designTemplates).where(eq(designTemplates.id, row.id));
+  // Ministries whose meetings wore it go back to their own look.
+  await db
+    .update(groups)
+    .set({ meetingTemplateId: null })
+    .where(eq(groups.meetingTemplateId, row.id));
   return c.json({ ok: true });
 });

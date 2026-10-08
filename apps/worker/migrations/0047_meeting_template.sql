@@ -1,0 +1,1 @@
+ALTER TABLE `groups` ADD `meeting_template_id` integer;

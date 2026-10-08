@@ -18,7 +18,7 @@ import {
 } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
 import { IconSend } from './icons';
-import { MeetingPoster } from './MeetingPoster';
+import { MeetingPoster, PosterPhotoWarning } from './MeetingPoster';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
 import { Button, TextField, Toggle } from './ui';
@@ -260,6 +260,7 @@ export function NotifySheet({
                 </div>
               </div>
             )}
+            {withPoster && <PosterPhotoWarning m={meeting} />}
           </div>
         )}
         <Button disabled={loading || busy !== null || !text.trim()} onClick={() => void send()}>

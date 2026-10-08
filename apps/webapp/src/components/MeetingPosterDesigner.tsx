@@ -10,7 +10,7 @@ import {
   useCoverLook,
   type CoverState,
 } from './CoverDesigner';
-import { MeetingPoster } from './MeetingPoster';
+import { MeetingPoster, PosterPhotoWarning } from './MeetingPoster';
 import { SpeakersEditor, toDrafts, toShown, toSpeakerInputs, type SpeakerDraft } from './Speakers';
 import { Section } from './ui';
 
@@ -83,7 +83,7 @@ export function MeetingPosterDesigner({
     <>
       {g && (
         // Stays at the top while scrolling through the settings, so every change is seen.
-        <div className="sticky top-0 z-20 -mx-4 flex justify-center rounded-b-[22px] bg-[var(--color-section)] px-4 pb-3 pt-2 shadow-card">
+        <div className="sticky top-0 z-20 -mx-4 flex flex-col items-center rounded-b-[22px] bg-[var(--color-section)] px-4 pb-3 pt-2 shadow-card">
           <div className="h-[257px] w-[205px] overflow-hidden rounded-xl shadow-card">
             <div className="origin-top-left scale-[0.38]">
               <MeetingPoster
@@ -98,6 +98,7 @@ export function MeetingPosterDesigner({
               />
             </div>
           </div>
+          <PosterPhotoWarning m={{ ...meeting, speakers: toShown(state.speakers) }} />
         </div>
       )}
       <Section title={t.meetings.posterTitle} footer={t.meetings.posterHint}>

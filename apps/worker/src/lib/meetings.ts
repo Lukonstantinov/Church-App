@@ -240,13 +240,28 @@ export async function generateMeetings(
 
 // ---------- rows & counts ----------
 
-/** Speakers with their photo links; `secret` signs them (without it `photoUrl` stays null). */
-export async function speakersOf(raw: string | null, secret?: string): Promise<Speaker[]> {
+/**
+ * Speakers with their photo links; `secret` signs them (without it `photoUrl` stays null).
+ * A speaker picked from the members without an own photo shows their profile photo.
+ */
+export async function speakersOf(db: Db, raw: string | null, secret?: string): Promise<Speaker[]> {
+  const list = readSpeakers(raw);
+  const ids = list.filter((sp) => !sp.mediaId && sp.userId).map((sp) => sp.userId!);
+  const profile = new Map(
+    ids.length
+      ? (
+          await db
+            .select({ id: users.id, photo: users.photoMediaId })
+            .from(users)
+            .where(inArray(users.id, ids))
+        ).map((u) => [u.id, u.photo])
+      : [],
+  );
   return Promise.all(
-    readSpeakers(raw).map(async (sp) => ({
-      ...sp,
-      photoUrl: sp.mediaId && secret ? await signedMediaUrl(secret, sp.mediaId) : null,
-    })),
+    list.map(async (sp) => {
+      const photo = sp.mediaId ?? (sp.userId ? profile.get(sp.userId) : null) ?? null;
+      return { ...sp, photoUrl: photo && secret ? await signedMediaUrl(secret, photo) : null };
+    }),
   );
 }
 
@@ -285,12 +300,30 @@ export async function toMeetingRows(
       list.map((m) => m.id),
     ),
   ]);
-  const speakers = await Promise.all(list.map((m) => speakersOf(m.speakers, secret)));
+  const speakers = await Promise.all(list.map((m) => speakersOf(db, m.speakers, secret)));
+  // A meeting without a look of its own wears its ministry's default design template
+  // (Design tab), so looks come from the templates and one meeting can still differ.
+  const groupIds = [...new Set(list.map((m) => m.groupId))];
+  const groupRows = groupIds.length
+    ? await db
+        .select({
+          id: groups.id,
+          motion: groups.meetingMotion,
+          template: groups.meetingTemplateId,
+        })
+        .from(groups)
+        .where(inArray(groups.id, groupIds))
+    : [];
+  const motions = new Map(groupRows.map((g) => [g.id, readMotion(g.motion)]));
+  const defaults = new Map(groupRows.map((g) => [g.id, g.template]));
+  const tplOf = list.map(
+    (m) => m.templateId ?? (m.design ? null : defaults.get(m.groupId)) ?? null,
+  );
   const { brandOf, templateOf } = secret
     ? await lookSources(
         db,
         list.map((m) => m.groupId),
-        list.map((m) => m.templateId),
+        tplOf,
       )
     : { brandOf: new Map(), templateOf: new Map() };
   const helpers = await helpersOf(
@@ -298,19 +331,8 @@ export async function toMeetingRows(
     list.map((m) => m.id),
     secret,
   );
-  const groupIds = [...new Set(list.map((m) => m.groupId))];
-  const motions = new Map(
-    groupIds.length
-      ? (
-          await db
-            .select({ id: groups.id, motion: groups.meetingMotion })
-            .from(groups)
-            .where(inArray(groups.id, groupIds))
-        ).map((g) => [g.id, readMotion(g.motion)])
-      : [],
-  );
   // A template's animation sits between the meeting's own and the ministry's.
-  const templateIds = [...new Set(list.map((m) => m.templateId).filter((x): x is number => !!x))];
+  const templateIds = [...new Set(tplOf.filter((x): x is number => !!x))];
   const templateMotions = new Map(
     templateIds.length
       ? (
@@ -338,14 +360,14 @@ export async function toMeetingRows(
       )
     : new Map();
   const looks = await Promise.all(
-    list.map(async (m) => {
+    list.map(async (m, i) => {
       const brand = brandOf.get(m.groupId);
       return secret && brand
         ? posterLook(
             secret,
             brand,
             readPostDesign(m.design),
-            m.templateId ? templateOf.get(m.templateId) : undefined,
+            tplOf[i] ? templateOf.get(tplOf[i]!) : undefined,
           )
         : null;
     }),
@@ -378,18 +400,16 @@ export async function toMeetingRows(
     helpers: helpers.get(m.id) ?? [],
     motion:
       readMotion(m.motion) ??
-      (m.templateId ? templateMotions.get(m.templateId)?.motion : null) ??
+      (tplOf[i] ? templateMotions.get(tplOf[i]!)?.motion : null) ??
       motions.get(m.groupId) ??
       'calm',
     ownMotion: readMotion(m.motion),
     tileMotion:
-      readMotion(m.tileMotion) ??
-      (m.templateId ? templateMotions.get(m.templateId)?.tile : null) ??
-      null,
+      readMotion(m.tileMotion) ?? (tplOf[i] ? templateMotions.get(tplOf[i]!)?.tile : null) ?? null,
     ownTileMotion: readMotion(m.tileMotion),
     posterMotion:
       readMotion(m.posterMotion) ??
-      (m.templateId ? templateMotions.get(m.templateId)?.poster : null) ??
+      (tplOf[i] ? templateMotions.get(tplOf[i]!)?.poster : null) ??
       null,
     ownPosterMotion: readMotion(m.posterMotion),
     posterTemplateId: m.posterTemplateId,
@@ -397,7 +417,7 @@ export async function toMeetingRows(
     snackDeclined: (!m.snackUserId && m.snackDeclinedBy && people.get(m.snackDeclinedBy)) || null,
     counts: counts.get(m.id) ?? emptyCounts(),
     design: readPostDesign(m.design),
-    templateId: m.templateId,
+    templateId: tplOf[i] ?? null,
     look: looks[i]!,
     speakers: speakers[i]!,
     seriesId: m.seriesId,

@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
 import { InputFile } from 'grammy';
 import type { Db } from '../db/client';
-import { media } from '../db/schema';
+import { media, memberships } from '../db/schema';
 
 export type ImageMime = 'image/png' | 'image/jpeg' | 'image/webp';
 
@@ -178,7 +178,17 @@ export async function mediaFile(db: Db, id: number): Promise<InputFile | null> {
 export async function assertSpeakerPhotos(
   db: Db,
   groupId: number,
-  speakers: { mediaId?: number | null }[] | undefined,
+  speakers: { mediaId?: number | null; userId?: number | null }[] | undefined,
 ): Promise<void> {
-  for (const sp of speakers ?? []) if (sp.mediaId) await assertGroupMedia(db, groupId, sp.mediaId);
+  for (const sp of speakers ?? []) {
+    if (sp.mediaId) await assertGroupMedia(db, groupId, sp.mediaId);
+    // A speaker picked from the people must be in this ministry.
+    if (sp.userId) {
+      const row = await db.query.memberships.findFirst({
+        columns: { id: true },
+        where: and(eq(memberships.groupId, groupId), eq(memberships.userId, sp.userId)),
+      });
+      if (!row) throw new HTTPException(400, { message: 'invalid_speaker' });
+    }
+  }
 }

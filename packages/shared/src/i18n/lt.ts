@@ -405,6 +405,13 @@ export const lt: Messages = {
     speakerName: 'Vardas',
     speakerRole: 'Kas / apie ką (nebūtina)',
     speakerPhoto: 'Nuotrauka',
+    speakerFromPeople: 'Iš narių',
+    speakerNoPhoto:
+      'Nėra nuotraukos — plakate bus inicialai. Paspauskite apskritimą, kad pridėtumėte.',
+    speakerNoProfilePhoto:
+      'Profilyje nėra nuotraukos — plakate bus inicialai. Pridėkite ją žmogaus profilyje arba paspauskite apskritimą.',
+    posterNoPhotos: (names: string) =>
+      `⚠️ Be nuotraukos: ${names}. Plakate bus inicialai — pridėkite nuotrauką profilyje (Žmonės → žmogus → 📷).`,
     removeSpeaker: 'Pašalinti pranešėją',
     repeatTitle: 'Pasikartojantis susitikimas',
     repeatHint: 'Kalendorius užpildomas visais susitikimais iš karto.',
@@ -688,6 +695,10 @@ export const lt: Messages = {
     joinShare: (group: string) => `Prisijunk prie grupės „${group}“`,
   },
   member: {
+    photo: 'Profilio nuotrauka',
+    photoAdd: 'Pridėkite nuotrauką — ji bus susitikimų kortelėse ir kalbėtojų plakatuose.',
+    photoChange: 'Pasirinkti kitą nuotrauką',
+    photoRemove: 'Pašalinti nuotrauką',
     profile: 'Profilis',
     groups: 'Grupės',
     myGroups: 'Mano grupės',
@@ -985,6 +996,10 @@ export const lt: Messages = {
     templates: 'Šablonai',
     templatesHint:
       'Spalva, raštas, nuotrauka ir animacija. Susitikimai ir renginiai su šablonu keičiasi kartu.',
+    defaultForMeetings: 'Visų susitikimų išvaizda',
+    defaultForMeetingsHint:
+      'Susitikimai be savo išvaizdos (ir nauji pagal tvarkaraštį) naudoja šį šabloną. Atskirą susitikimą galima pakeisti žemiau — «Susitikimai».',
+    defaultBadge: 'Susitikimams',
     newTemplate: 'Naujas šablonas',
     editTemplate: 'Šablonas',
     templateName: 'Šablono pavadinimas',

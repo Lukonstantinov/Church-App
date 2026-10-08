@@ -58,7 +58,13 @@ export function PersonPicker({
             value === p.id ? 'bg-brand/10' : ''
           }`}
         >
-          <Avatar id={p.id} firstName={p.firstName} lastName={p.lastName} size={36} />
+          <Avatar
+            id={p.id}
+            firstName={p.firstName}
+            lastName={p.lastName}
+            size={36}
+            photoUrl={p.photoUrl}
+          />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[16px] font-medium">{displayName(p)}</span>
             {p.username && <span className="block text-[13px] text-hint">@{p.username}</span>}
