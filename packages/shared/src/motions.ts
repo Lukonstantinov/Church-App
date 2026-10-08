@@ -41,12 +41,30 @@ export const MEETING_MOTIONS = [
   'disco',
   'hearts',
   'sparkle',
+  'smoke',
+  'frost',
+  'crack',
+  'lightleak',
+  'film',
+  'rgb',
+  'oil',
+  'gloss',
+  'foil',
 ] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
 
 /** The animations sorted by type, for the pickers. */
 export const MOTION_GROUPS: {
-  key: 'light' | 'particles' | 'liquid' | 'texture' | 'retro' | 'stage' | 'icons' | 'seasons';
+  key:
+    | 'light'
+    | 'particles'
+    | 'liquid'
+    | 'texture'
+    | 'photo'
+    | 'retro'
+    | 'stage'
+    | 'icons'
+    | 'seasons';
   items: MeetingMotion[];
 }[] = [
   { key: 'light', items: ['calm', 'lively', 'mesh', 'aurora', 'silk', 'rays'] },
@@ -66,6 +84,10 @@ export const MOTION_GROUPS: {
   },
   { key: 'liquid', items: ['waves', 'goo', 'ripples'] },
   { key: 'texture', items: ['lines', 'grid', 'grain'] },
+  {
+    key: 'photo',
+    items: ['lightleak', 'film', 'rgb', 'oil', 'gloss', 'foil', 'smoke', 'frost', 'crack'],
+  },
   { key: 'retro', items: ['glitch', 'crt', 'static', 'matrix'] },
   { key: 'stage', items: ['spotlight', 'disco', 'sparkle', 'hearts'] },
   { key: 'icons', items: ['iconfloat', 'iconrain', 'iconorbit'] },
@@ -134,4 +156,12 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   disco: PARTICLE_KNOBS,
   hearts: PARTICLE_KNOBS,
   sparkle: PARTICLE_KNOBS,
+  smoke: ['density', 'sharp'],
+  frost: ['weight'],
+  crack: ['weight'],
+  lightleak: ['density', 'sharp'],
+  film: ['weight'],
+  rgb: ['weight'],
+  oil: ['weight'],
+  foil: ['sharp'],
 };

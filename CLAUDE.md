@@ -64,6 +64,9 @@ Deploy → Run workflow → production.
   Running `LivingLayer`s are capped (`watchOffscreen(el, true)`); never animate
   `background-position` or `box-shadow` smoothly — fade a pseudo copy (`flow-fade`), slide a
   strip with transform, or use `steps()`.
+  Long decorative animations are capped at 30 changes a second (`capAnimations` in `lib/perf.ts`);
+  backdrop blur is redone whenever anything behind or inside it moves — keep moving things
+  out from under glass (the page background steps 4×/s; glass with a living layer skips blur).
 - New public worker paths outside `/api`, `/bot`, `/media` must be added to
   `assets.run_worker_first` in `apps/worker/wrangler.jsonc`.
 
@@ -94,7 +97,7 @@ past meetings are never auto-removed, only `DELETE /api/meetings/:id` after two 
 
 **Events** — cover photo or designed cover with up to 4 combined effects (`events.motion`, `motion_tune`,
 `motion_layers`; `components/CoverEffects.tsx`, folds away; the TV glitch tears the cover photo itself), speakers, countdown, burning outline,
-RSVP, duties (with bot notices), cost and payments, gallery, programme, in-app chat or a
+RSVP, duties (with bot notices), burning outline colour any / rainbow / two-colour gradient (`design.burnColor`), cost and payments, gallery, programme, in-app chat or a
 bot-managed Telegram chat, pin to the main page, picture/PDF export.
 
 **Live & reminders** — LIVE badge (pulsing, outline kept) while an event/meeting is on;

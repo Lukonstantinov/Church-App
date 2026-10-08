@@ -118,9 +118,10 @@ export const postDesignSchema = z.object({
     .nullish(),
   /** Events: how the outline burns when the event is near (flame by default), its colour and from how many days. */
   burnStyle: z.enum(['off', 'flame', 'glow', 'pulse', 'orbit']).optional(),
+  /** A colour (#rrggbb), "rainbow", or a gradient of two colours ("grad:#rrggbb,#rrggbb"). */
   burnColor: z
     .string()
-    .regex(/^#[0-9a-f]{6}$/i)
+    .regex(/^(#[0-9a-f]{6}|rainbow|grad:#[0-9a-f]{6},#[0-9a-f]{6})$/i)
     .nullish(),
   burnDays: z.number().int().min(1).max(14).optional(),
   /** Poster layout: the usual one, or a collage of the speakers' photos. */

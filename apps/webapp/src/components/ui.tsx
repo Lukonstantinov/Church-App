@@ -10,6 +10,7 @@ import { useEnv } from '../lib/env';
 import { useQuality, watchOffscreen } from '../lib/perf';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
+import { PHOTO_EFFECTS, PhotoEffect } from './PhotoEffects';
 
 /** Page container. `tabs` leaves room for the floating tab bar. */
 export function Screen({ children, tabs }: { children: ReactNode; tabs?: boolean }) {
@@ -607,6 +608,9 @@ export function LivingLayer({
           </>
         )}
         {kind === 'flames' && <Flames sharp={sharp ?? 0.7} weight={weight} density={density} />}
+        {PHOTO_EFFECTS.includes(kind) && (
+          <PhotoEffect kind={kind} image={image} density={density} weight={weight} sharp={sharp} />
+        )}
         {kind === 'glitch' && <Glitch image={image} density={density} weight={weight} />}
         {kind === 'crt' && (
           <>
@@ -851,8 +855,8 @@ function Flames({ sharp, weight, density }: { sharp: number; weight: number; den
             left: `${-6 + i * step + (inner ? step * 0.3 : 0)}%`,
             width: `${step * (inner ? 0.9 : 1.6)}%`,
             height: `${t.h * (inner ? 70 : 100)}%`,
-            animationDuration: `${t.d}s`,
-            animationDelay: `${-i * 0.37}s`,
+            // Delays on the shared 64 ms beat, so every tongue changes at the same moment.
+            animationDelay: `${-((i * 7 + (inner ? 3 : 0)) % 25) * 0.064}s`,
           }}
         />
       );

@@ -7,6 +7,7 @@ export function LookTop({
   look,
   fallbackColor,
   className = '',
+  under,
   children,
 }: {
   look:
@@ -17,6 +18,8 @@ export function LookTop({
   /** Colour to use when the look has none of its own (the surrounding theme is another one). */
   fallbackColor?: string | null;
   className?: string;
+  /** Drawn over the whole card under the text, past its padding (a cover photo, effects). */
+  under?: ReactNode;
   children: ReactNode;
 }) {
   const on = onBrandStyle(look?.textColor, !!(look?.pattern || look?.backdropUrl));
@@ -39,6 +42,7 @@ export function LookTop({
       <span aria-hidden="true" className="card-clip">
         <PatternLayer pattern={look?.pattern} logoUrl={look?.logoUrl} />
         <BackdropLayer backdrop={look?.backdrop} url={look?.backdropUrl} />
+        {under}
       </span>
       <div className="relative flex min-h-full flex-1 flex-col justify-between">{children}</div>
     </div>

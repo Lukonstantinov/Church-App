@@ -22,6 +22,7 @@ import { MyAssignments } from '../components/MyAssignments';
 import { Badge, Card, EmptyState, Loading, Row, Screen, Section } from '../components/ui';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
+import { CoverEffectLayers } from '../components/CoverEffects';
 import { useAssignments, useGroups, useMyEvents, usePinnedEvents } from '../lib/queries';
 import { useEventWhen } from '../components/EventCard';
 import { useFmt } from '../lib/format';
@@ -344,17 +345,27 @@ function PinnedEventCard({
         onClick={onClick}
         className="block h-full w-full overflow-hidden rounded-[24px] text-left shadow-cta transition active:scale-[0.98]"
       >
-        <LookTop look={look} fallbackColor={e.brandColor ?? fallbackTheme} className="h-full p-4">
-          {e.coverUrl && (
+        <LookTop
+          look={look}
+          fallbackColor={e.brandColor ?? fallbackTheme}
+          className="h-full p-4"
+          // The cover fills the whole card (past its padding) and wears the event's effects.
+          under={
             <>
-              <img
-                src={e.coverUrl}
-                alt=""
-                className="absolute inset-0 -z-0 h-full w-full object-cover"
-              />
-              <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+              {e.coverUrl && (
+                <img
+                  src={e.coverUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              )}
+              <CoverEffectLayers e={e} image={e.coverUrl} />
+              {e.coverUrl && (
+                <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+              )}
             </>
-          )}
+          }
+        >
           <span className="flex gap-1.5 self-start">
             {hasCountdown(e) && <CountdownBadge startsAt={e.startsAt} design={e.design} />}
             <LiveNow startsAt={e.startsAt} endsAt={e.endsAt} cancelled={e.status === 'cancelled'} />

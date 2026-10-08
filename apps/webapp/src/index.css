@@ -88,17 +88,19 @@
 }
 
 /* Frosted, tinted glass. Falls back to solid where blur isn't available or wanted. */
+/* (The blur is redone whenever anything behind it moves, and its cost grows with the radius:
+   kept moderate, and the page background behind it moves only a few times a second.) */
 @utility glass {
   background: color-mix(in srgb, var(--color-section) var(--glass-alpha), transparent);
-  -webkit-backdrop-filter: blur(22px) saturate(1.6);
-  backdrop-filter: blur(22px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(16px) saturate(1.6);
   border: 1px solid var(--glass-border);
 }
 
 @utility glass-strong {
   background: color-mix(in srgb, var(--color-section) 88%, transparent);
-  -webkit-backdrop-filter: blur(28px) saturate(1.7);
-  backdrop-filter: blur(28px) saturate(1.7);
+  -webkit-backdrop-filter: blur(20px) saturate(1.7);
+  backdrop-filter: blur(20px) saturate(1.7);
   border: 1px solid var(--glass-border);
 }
 
@@ -461,8 +463,9 @@ body::before {
     transform: translate3d(3%, 2%, 0) scale(1.08);
   }
 }
+/* In small steps (four a second): the glass above re-blurs only then. */
 html[data-motion='lively'] body::before {
-  animation: aurora 22s ease-in-out infinite;
+  animation: aurora 22s steps(88) infinite;
 }
 
 /* Springy presses and a lift on touch. */
@@ -870,7 +873,8 @@ html[data-motion='off'] *::after {
   }
 }
 .burn-flame {
-  animation: burn-flame 1.6s ease-in-out infinite;
+  /* A flicker in small steps: the glow (a shadow) is repainted 12 times a second, not 60. */
+  animation: burn-flame 1.6s steps(5) infinite;
 }
 @keyframes burn-glow {
   50% {
@@ -880,7 +884,7 @@ html[data-motion='off'] *::after {
   }
 }
 .burn-glow {
-  animation: burn-glow 2.8s ease-in-out infinite;
+  animation: burn-glow 2.8s steps(16) infinite;
 }
 @keyframes burn-pulse {
   0% {
@@ -895,7 +899,7 @@ html[data-motion='off'] *::after {
   }
 }
 .burn-pulse {
-  animation: burn-pulse 1.8s ease-out infinite;
+  animation: burn-pulse 1.8s steps(20) infinite;
 }
 @keyframes burn-orbit {
   to {
@@ -919,7 +923,68 @@ html[data-motion='off'] *::after {
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: burn-orbit 2.4s linear infinite;
+  animation: burn-orbit 2.4s steps(36) infinite;
+}
+/* Rainbow or a gradient of two: a ring in those colours on the edge and a soft glow of the
+   same around it (the outline's own glow is left out). Rainbow slowly turns its colours. */
+.burn.burn-multi {
+  position: relative;
+  isolation: isolate;
+  box-shadow: none;
+  animation: none;
+}
+.burn.burn-multi::before,
+.burn.burn-multi::after {
+  content: '';
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--burn-grad);
+}
+.burn.burn-multi::after {
+  inset: -3px;
+  padding: 3px;
+  z-index: 2;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.burn.burn-multi::before {
+  inset: -5px;
+  z-index: -1;
+  filter: blur(10px);
+  opacity: 0.85;
+  mask: none;
+  -webkit-mask: none;
+  animation: burn-breathe 2.4s steps(24) infinite alternate;
+}
+.burn.burn-rainbow::after {
+  animation: edge-hue 5s steps(60) infinite;
+}
+.burn.burn-rainbow::before {
+  animation: burn-rainbow-glow 5s steps(60) infinite;
+}
+@keyframes burn-breathe {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 0.95;
+  }
+}
+@keyframes burn-rainbow-glow {
+  from {
+    filter: blur(10px) hue-rotate(0deg);
+  }
+  to {
+    filter: blur(10px) hue-rotate(360deg);
+  }
+}
+html[data-motion='off'] .burn-multi::before,
+html[data-motion='off'] .burn-multi::after {
+  animation: none !important;
 }
 html[data-motion='calm'] .burn-flame,
 html[data-motion='calm'] .burn-glow,
@@ -943,9 +1008,11 @@ html[data-motion='off'] .burn-orbit::before {
 }
 
 /* ---------- App background (church / ministry setting) ---------- */
+/* The background drifts so slowly that four small steps a second look the same as sixty —
+   and every glass card above it only has to re-blur four times a second, not sixty. */
 .app-bg-drift {
   background-size: 160% 160%;
-  animation: app-bg-drift 28s ease-in-out infinite alternate;
+  animation: app-bg-drift 28s steps(112) infinite alternate;
 }
 @keyframes app-bg-drift {
   from {
@@ -956,7 +1023,7 @@ html[data-motion='off'] .burn-orbit::before {
   }
 }
 .app-bg-breathe {
-  animation: app-bg-breathe 9s ease-in-out infinite;
+  animation: app-bg-breathe 9s steps(36) infinite;
 }
 @keyframes app-bg-breathe {
   50% {
@@ -964,10 +1031,11 @@ html[data-motion='off'] .burn-orbit::before {
   }
 }
 .app-bg-blob {
-  animation: app-bg-blob 24s ease-in-out infinite alternate;
+  animation: app-bg-blob 24s steps(96) infinite alternate;
 }
 .app-bg-blob-2 {
   animation-duration: 31s;
+  animation-timing-function: steps(124);
   animation-direction: alternate-reverse;
 }
 @keyframes app-bg-blob {
@@ -2652,18 +2720,22 @@ html[data-motion='off'] .shine::before {
     #a3180e 100%
   );
   transform-origin: 50% 100%;
-  animation: living-flame 1.5s ease-in-out infinite alternate;
+  animation: living-flame 1.6s infinite alternate;
 }
 /* The hotter inner row: yellow to white. */
 .living-flames.inner i {
   background: radial-gradient(ellipse 70% 60% at 50% 95%, #fffbea 0%, #ffe36b 45%, #ffb52e 100%);
 }
+/* All tongues move on one shared beat of 64 ms (about 15 a second): the sharpening filter
+   over them is redrawn only on the beat, not every frame — a flicker hides the steps. */
 @keyframes living-flame {
   0% {
     transform: scale(1, 0.84) translateY(3%) skewX(3deg);
+    animation-timing-function: steps(10);
   }
   40% {
     transform: scale(0.88, 1.08) translateY(-2%) skewX(-4deg);
+    animation-timing-function: steps(15);
   }
   100% {
     transform: scale(1.05, 0.95) translateY(0) skewX(5deg);
@@ -3091,6 +3163,350 @@ html[data-motion='off'] .shine::before {
   }
 }
 
+/* ---------- Photo effects (in the spirit of Photoshop's) ---------- */
+.fx {
+  position: absolute;
+  inset: 0;
+}
+.fx i {
+  position: absolute;
+  font-style: normal;
+}
+/* Smoke and clouds: soft white puffs drifting up and across, thinning out as they go. */
+.fx-smoke i {
+  bottom: -40%;
+  width: 120%;
+  aspect-ratio: 1;
+  background-size: cover;
+  -webkit-mask-image: radial-gradient(circle, #000 25%, transparent 68%);
+  mask-image: radial-gradient(circle, #000 25%, transparent 68%);
+  opacity: 0;
+  animation: fx-smoke 18s linear infinite;
+}
+.fx-smoke .p1 {
+  animation-duration: 23s;
+  width: 150%;
+}
+.fx-smoke .p2 {
+  animation-duration: 15s;
+  width: 95%;
+}
+.fx-smoke .p3 {
+  animation-duration: 27s;
+  width: 170%;
+}
+@keyframes fx-smoke {
+  0% {
+    transform: translate(0, 10%) scale(0.7) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.95;
+  }
+  70% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(18%, -95%) scale(1.25) rotate(25deg);
+    opacity: 0;
+  }
+}
+/* Ice on the screen: crystals creeping in from the edges, a cold light gliding over them. */
+.fx-frost {
+  background: rgba(205, 232, 255, 0.18);
+}
+.fx-frost .ice {
+  inset: 0;
+  background-size: 300px 300px;
+  opacity: 0.9;
+  animation: fx-breathe 7s ease-in-out infinite;
+}
+.fx-frost .glint,
+.fx-crack .glint {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 250%;
+  background: linear-gradient(
+    110deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 60%
+  );
+  animation: fx-glint 6s ease-in-out infinite;
+}
+@keyframes fx-breathe {
+  50% {
+    opacity: 0.65;
+  }
+}
+@keyframes fx-glint {
+  0%,
+  45% {
+    transform: translateX(-78%);
+  }
+  100% {
+    transform: translateX(18%);
+  }
+}
+/* Cracked glass: the lines stay, light catches them now and then. */
+.fx-crack .lines {
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+.fx-crack .glint {
+  -webkit-mask-image: none;
+  mix-blend-mode: overlay;
+  animation-duration: 5s;
+}
+/* Light leaks: warm, dreamy light washing in from the edges like on old film. */
+.fx-leak i {
+  width: 90%;
+  aspect-ratio: 1;
+  mix-blend-mode: screen;
+  opacity: 0.85;
+  animation: fx-leak 9s ease-in-out infinite alternate;
+}
+.fx-leak .l1 {
+  animation-duration: 12s;
+  animation-direction: alternate-reverse;
+}
+.fx-leak .l2 {
+  animation-duration: 15s;
+}
+.fx-leak .streak {
+  left: -20%;
+  right: -20%;
+  top: 30%;
+  height: 18%;
+  width: auto;
+  aspect-ratio: auto;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 220, 170, 0.5) 40%,
+    rgba(255, 255, 255, 0.7) 50%,
+    rgba(255, 180, 120, 0.5) 60%,
+    transparent
+  );
+  filter: blur(6px);
+  animation: fx-streak 11s ease-in-out infinite;
+}
+@keyframes fx-leak {
+  from {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.5;
+  }
+  to {
+    transform: translate(12%, 8%) scale(1.25);
+    opacity: 1;
+  }
+}
+@keyframes fx-streak {
+  0%,
+  100% {
+    transform: translateY(-40%) rotate(-8deg);
+    opacity: 0;
+  }
+  50% {
+    transform: translateY(60%) rotate(-4deg);
+    opacity: 0.8;
+  }
+}
+/* 35 mm film: faded warm colours, grain, a scratch now and then, dust and dark corners. */
+.fx-film .fade {
+  inset: 0;
+  background:
+    linear-gradient(rgba(255, 228, 180, 0.22), rgba(90, 50, 30, 0.18)), rgba(255, 255, 255, 0.06);
+  mix-blend-mode: soft-light;
+}
+.fx-film .grain {
+  inset: -40px;
+  background-size: 160px;
+  opacity: 0.32;
+  mix-blend-mode: overlay;
+  animation: tv-static 0.6s steps(1, end) infinite;
+}
+.fx-film .scratch {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.55);
+  opacity: 0;
+  animation: fx-scratch 3.7s steps(1, end) infinite;
+}
+.fx-film .scratch.s1 {
+  animation-duration: 5.3s;
+  animation-delay: -2s;
+  background: rgba(0, 0, 0, 0.4);
+}
+@keyframes fx-scratch {
+  0%,
+  80% {
+    transform: translateX(30cqw);
+    opacity: 0;
+  }
+  82% {
+    transform: translateX(31cqw);
+    opacity: 1;
+  }
+  86% {
+    transform: translateX(29cqw);
+    opacity: 0.7;
+  }
+  90% {
+    transform: translateX(68cqw);
+    opacity: 0.9;
+  }
+  94%,
+  100% {
+    transform: translateX(69cqw);
+    opacity: 0;
+  }
+}
+.fx-film .dust {
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 18% 30%, rgba(255, 255, 255, 0.8) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 72% 64%, rgba(0, 0, 0, 0.6) 0 1.2px, transparent 2px),
+    radial-gradient(circle at 44% 82%, rgba(255, 255, 255, 0.7) 0 0.8px, transparent 1.4px),
+    radial-gradient(circle at 86% 22%, rgba(0, 0, 0, 0.5) 0 1px, transparent 1.6px);
+  animation: tv-flicker 2.3s steps(1, end) infinite;
+}
+.fx-film .vignette {
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(30, 15, 5, 0.45) 100%);
+}
+/* RGB split: red and cyan copies of the picture sliding apart and back. */
+.fx-rgb i {
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  mix-blend-mode: screen;
+  opacity: 0.6;
+  isolation: isolate;
+  animation: fx-rgb 2.8s ease-in-out infinite alternate;
+}
+.fx-rgb i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #ff1744;
+  mix-blend-mode: multiply;
+}
+.fx-rgb .cyan {
+  animation-direction: alternate-reverse;
+}
+.fx-rgb .cyan::after {
+  background: #00e5ff;
+}
+.fx-rgb:not(.has-image) i {
+  opacity: 0.3;
+  -webkit-mask-image: repeating-linear-gradient(0deg, #000 0 2px, transparent 2px 5px);
+  mask-image: repeating-linear-gradient(0deg, #000 0 2px, transparent 2px 5px);
+}
+@keyframes fx-rgb {
+  from {
+    transform: translateX(-2px);
+  }
+  to {
+    transform: translateX(2px);
+  }
+}
+/* Oil painting: the picture as brush strokes, canvas weave on top, a soft light moving. */
+.fx-oil .paint {
+  inset: -2%;
+  background-size: cover;
+  background-position: center;
+}
+.fx-oil .canvas {
+  inset: 0;
+  background-size: 200px 200px;
+  mix-blend-mode: overlay;
+  opacity: 0.45;
+}
+.fx-oil .sheen,
+.fx-gloss .band {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 250%;
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.28) 48%,
+    rgba(255, 255, 255, 0.05) 54%,
+    transparent 62%
+  );
+  animation: fx-glint 8s ease-in-out infinite;
+}
+/* Gloss: lacquered, like a glossy print — bright upper half, a moving reflection, a rim. */
+.fx-gloss .top {
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.12) 42%,
+    transparent 43%,
+    transparent 100%
+  );
+}
+.fx-gloss .band {
+  mix-blend-mode: screen;
+  animation-duration: 5s;
+}
+.fx-gloss .rim {
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -10px 20px rgba(0, 0, 0, 0.18);
+}
+/* Inflated foil: rainbow sheen drifting over crumpled, puffed-up metal. */
+.fx-foil .iris {
+  top: -50%;
+  bottom: -50%;
+  left: -50%;
+  width: 300%;
+  background: linear-gradient(
+    115deg,
+    #ff9de2,
+    #9ee7ff,
+    #fff6a8,
+    #b39dff,
+    #9effd4,
+    #ff9de2,
+    #9ee7ff,
+    #fff6a8
+  );
+  mix-blend-mode: overlay;
+  opacity: 0.35;
+  animation: fx-iris 9s ease-in-out infinite alternate;
+}
+.fx-foil .crinkle {
+  inset: 0;
+  background-size: cover;
+  mix-blend-mode: overlay;
+  opacity: 0.4;
+}
+.fx-foil .puff {
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 55% 45% at 30% 22%, rgba(255, 255, 255, 0.6), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 75% 85%, rgba(0, 0, 0, 0.22), transparent 70%);
+  box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.35);
+}
+@keyframes fx-iris {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-30%);
+  }
+}
+
 /* ---------- Performance ---------- */
 @keyframes edge-slide {
   to {
@@ -3124,6 +3540,21 @@ html[data-lite='true'] .living-blob,
 html[data-lite='true'] .living-aurora,
 html[data-lite='true'] .living-mesh {
   filter: blur(14px);
+}
+/* A glass card with its own animation inside would re-blur its background on every frame
+   of that animation; the animation covers the background anyway, so it skips the blur. */
+.glass:has(.living-clip),
+.glass-strong:has(.living-clip) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--color-section) 92%, transparent);
+}
+/* Lite: glass is a plain, slightly see-through colour — no blur to redo at all. */
+html[data-lite='true'] .glass,
+html[data-lite='true'] .glass-strong {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--color-section) 94%, transparent);
 }
 html[data-lite='true'] .skin-liquid,
 html[data-lite='true'] .skin-glass {

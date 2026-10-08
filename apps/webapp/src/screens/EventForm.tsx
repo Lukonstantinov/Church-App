@@ -8,7 +8,7 @@ import {
   useCoverLook,
   type CoverState,
 } from '../components/CoverDesigner';
-import { BURN_COLORS, BURN_STYLES } from '../components/Burn';
+import { BURN_COLORS, BURN_STYLES, BurnColorPicker, burnPaint } from '../components/Burn';
 import { COUNTDOWN_COLORS, COUNTDOWN_SIZES, CountdownBadge } from '../components/Countdown';
 import { Pill } from '../components/LookControls';
 import {
@@ -173,6 +173,7 @@ function EventFormBody({
   const coverLook = useCoverLook(look, group.data);
   const setDesign = (patch: Partial<PostDesign>) =>
     setLook((c) => ({ ...c, design: { ...c.design, ...patch } }));
+  const previewPaint = burnPaint(look.design.burnColor ?? BURN_COLORS[0]!);
   const [rolePicker, setRolePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const posterNode = useRef<HTMLDivElement>(null);
@@ -552,25 +553,12 @@ function EventFormBody({
             <>
               <div>
                 <div className="mb-2 text-[13px] text-hint">{t.events.burnColor}</div>
-                <div className="flex flex-wrap gap-2.5">
-                  {BURN_COLORS.map((c) => {
-                    const on = (look.design.burnColor ?? BURN_COLORS[0]) === c;
-                    return (
-                      <button
-                        key={c}
-                        type="button"
-                        aria-label={c}
-                        onClick={() =>
-                          setLook({ ...look, design: { ...look.design, burnColor: c } })
-                        }
-                        className={`h-8 w-8 rounded-full transition active:scale-90 ${
-                          on ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
-                        }`}
-                        style={{ background: c }}
-                      />
-                    );
-                  })}
-                </div>
+                <BurnColorPicker
+                  value={look.design.burnColor ?? BURN_COLORS[0]!}
+                  onChange={(burnColor) =>
+                    setLook({ ...look, design: { ...look.design, burnColor } })
+                  }
+                />
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[15px]">
@@ -588,11 +576,12 @@ function EventFormBody({
               </div>
               <div className="flex min-h-[60px] items-center justify-center rounded-2xl bg-hairline/50 p-3">
                 <div
-                  className={`burn burn-${look.design.burnStyle ?? 'flame'} h-11 w-40 rounded-2xl bg-[var(--color-section)]`}
-                  style={
-                    { '--burn': look.design.burnColor ?? BURN_COLORS[0] } as React.CSSProperties
-                  }
-                />
+                  className={`burn burn-${look.design.burnStyle ?? 'flame'} ${previewPaint.className} h-11 w-40 rounded-2xl`}
+                  style={previewPaint.style}
+                >
+                  {/* The card's face sits over the glow, as on a real event card. */}
+                  <div className="h-full w-full rounded-2xl bg-[var(--color-section)]" />
+                </div>
               </div>
             </>
           )}

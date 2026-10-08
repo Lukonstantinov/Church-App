@@ -156,7 +156,7 @@ export const QUALITY_LOWERED = 'church:quality-lowered';
 
 /**
  * Now and then, while animations are on screen and the page isn't scrolling, counts the
- * frames drawn over two seconds. Two slow samples in a row (under 40 per second) step
+ * frames drawn over two seconds. Two slow samples in a row (under 28 per second) step
  * "auto" down: full → lite → still.
  */
 function watchFrames() {
@@ -179,7 +179,8 @@ function watchFrames() {
         // Scrolling or hiding during the sample makes it meaningless.
         const fair = !document.hidden && !html.dataset.scrolling;
         const fps = (frames * 1000) / (now - t0);
-        if (fair) slow = fps < 40 ? slow + 1 : 0;
+        // 30 a second is smooth enough; only below that does it step down.
+        if (fair) slow = fps < 28 ? slow + 1 : 0;
         wait = slow ? 4000 : Math.min(wait * 1.5, 60000);
         if (slow >= 2) {
           slow = 0;
@@ -196,9 +197,46 @@ function watchFrames() {
   setTimeout(sample, 3000);
 }
 
+// ---------- 30 frames a second for decorative animations ----------
+
+/** How many times a second the long decorative animations change (lite phones: fewer). */
+const capFps = () => (getQuality() === 'full' ? 30 : 24);
+const capped = new WeakSet<Animation>();
+
+/**
+ * Puts every long-running decorative animation (drifts, particles, flames, edges — not the
+ * short ones of opening sheets or pressing buttons) on a beat of 30 a second: its time moves
+ * in steps, so between beats nothing changes and the phone has nothing new to draw. Half
+ * the drawing work, and at these speeds it looks the same.
+ */
+function capAnimations() {
+  const fps = capFps();
+  for (const a of document.getAnimations()) {
+    if (capped.has(a) || typeof CSSAnimation === 'undefined' || !(a instanceof CSSAnimation))
+      continue;
+    capped.add(a);
+    const effect = a.effect;
+    if (!effect) continue;
+    const ms = Number(effect.getTiming().duration);
+    if (!Number.isFinite(ms) || ms < 1200 || effect.getTiming().iterations !== Infinity) continue;
+    // Faster playback (the speed setting) means more steps per cycle for the same beat.
+    const steps = Math.max(2, Math.round(((ms / 1000) * fps) / Math.abs(a.playbackRate || 1)));
+    effect.updateTiming({ easing: `steps(${steps})` });
+  }
+}
+
+function watchAnimations() {
+  // New animations appear as screens open; checking every 1.5 s is plenty and costs little.
+  setInterval(() => {
+    if (!document.hidden) capAnimations();
+  }, 1500);
+  setTimeout(capAnimations, 300);
+}
+
 /** Called once at start-up. */
 export function startPerformanceWatch(): void {
   applyQuality();
   watchScrolling();
   watchFrames();
+  watchAnimations();
 }

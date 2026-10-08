@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { EventSummary, PostDesign } from '@church/shared';
 import { isLiveWindow, useNowSecond } from '../lib/live';
+import { useT } from '../lib/i18n';
 
 export const BURN_STYLES = ['flame', 'glow', 'pulse', 'orbit', 'off'] as const;
 export const BURN_COLORS = ['#ff7a18', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'];
@@ -36,12 +37,144 @@ export function BurnFrame({
   useNowSecond();
   const b = burnOf(e);
   if (!b) return <div className={className}>{children}</div>;
+  const paint = burnPaint(b.color);
   return (
     <div
-      className={`burn burn-${b.style} ${className}`}
-      style={{ '--burn': b.color, borderRadius: radius } as CSSProperties}
+      className={`burn burn-${b.style} ${paint.className} ${className}`}
+      style={{ ...paint.style, borderRadius: radius } as CSSProperties}
     >
       {children}
+    </div>
+  );
+}
+
+const RAINBOW =
+  'conic-gradient(from 0deg, #ff3b3b, #ffb02e, #ffe14d, #3ddc84, #2ec5ff, #7a5cff, #ff4fd8, #ff3b3b)';
+
+/** Parses "grad:#a,#b" into its two colours. */
+export const burnGradient = (c: string): [string, string] | null => {
+  const m = /^grad:(#[0-9a-f]{6}),(#[0-9a-f]{6})$/i.exec(c);
+  return m ? [m[1]!, m[2]!] : null;
+};
+
+/**
+ * How a burn colour is drawn: one colour goes into the glow; rainbow and two-colour
+ * gradients become a ring in those colours with a glow of the same (rainbow turns round).
+ */
+export function burnPaint(color: string): { className: string; style: CSSProperties } {
+  const grad = burnGradient(color);
+  if (color === 'rainbow')
+    return {
+      className: 'burn-multi burn-rainbow',
+      style: { '--burn': '#ff4d4d', '--burn-grad': RAINBOW } as CSSProperties,
+    };
+  if (grad)
+    return {
+      className: 'burn-multi',
+      style: {
+        '--burn': grad[0],
+        '--burn-grad': `linear-gradient(135deg, ${grad[0]}, ${grad[1]})`,
+      } as CSSProperties,
+    };
+  return { className: '', style: { '--burn': color } as CSSProperties };
+}
+
+/** The fire's colour: ready colours, any colour, a gradient of two, or rainbow. */
+export function BurnColorPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (c: string) => void;
+}) {
+  const t = useT();
+  const grad = burnGradient(value);
+  const ring = (on: boolean) =>
+    `h-8 w-8 rounded-full ring-1 ring-black/10 transition active:scale-90 ${
+      on ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
+    }`;
+  const own = value.startsWith('#') && !BURN_COLORS.includes(value);
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2.5">
+        {BURN_COLORS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            aria-label={c}
+            onClick={() => onChange(c)}
+            className={ring(value === c)}
+            style={{ background: c }}
+          />
+        ))}
+        {/* Any colour. */}
+        <label
+          className={`relative cursor-pointer overflow-hidden ${ring(own)}`}
+          style={{
+            background: own
+              ? value
+              : 'conic-gradient(#ef4444,#f59e0b,#22c55e,#06b6d4,#6366f1,#d946ef,#ef4444)',
+          }}
+          aria-label={t.events.burnAnyColor}
+        >
+          <input
+            type="color"
+            value={own ? value : '#ff7a18'}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange('rainbow')}
+          className={`rounded-full px-3.5 py-1.5 text-[14px] font-semibold text-white shadow-sm transition active:scale-95 ${
+            value === 'rainbow' ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
+          }`}
+          style={{
+            background: 'linear-gradient(90deg,#ff3b3b,#ffb02e,#3ddc84,#2ec5ff,#7a5cff,#ff4fd8)',
+          }}
+        >
+          🌈 {t.events.burnRainbow}
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onChange(grad ? value : `grad:${value.startsWith('#') ? value : '#ff7a18'},#a855f7`)
+          }
+          className={`rounded-full px-3.5 py-1.5 text-[14px] font-semibold text-white shadow-sm transition active:scale-95 ${
+            grad ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
+          }`}
+          style={{
+            background: grad
+              ? `linear-gradient(90deg, ${grad[0]}, ${grad[1]})`
+              : 'linear-gradient(90deg,#ff7a18,#a855f7)',
+          }}
+        >
+          {t.events.burnGradient}
+        </button>
+        {/* The gradient's two colours, each any colour. */}
+        {grad &&
+          grad.map((c, i) => (
+            <label
+              key={i}
+              className={`relative cursor-pointer overflow-hidden ${ring(false)}`}
+              style={{ background: c }}
+            >
+              <input
+                type="color"
+                value={c}
+                onChange={(e) =>
+                  onChange(
+                    `grad:${i === 0 ? e.target.value : grad[0]},${i === 1 ? e.target.value : grad[1]}`,
+                  )
+                }
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
+            </label>
+          ))}
+      </div>
     </div>
   );
 }
