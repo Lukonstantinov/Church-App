@@ -12,6 +12,8 @@ import {
   useAnnounceMeeting,
   useMe,
   useMembers,
+  useRequestAnnounceMeeting,
+  useTestAnnounceMeeting,
   useUploadMedia,
 } from '../lib/queries';
 import { haptic } from '../lib/telegram';
@@ -31,7 +33,8 @@ import { Button, Switch, Toggle } from './ui';
 /**
  * Tell the ministry about a meeting: the message (who leads, the topic, when and where)
  * to read and change, the meeting poster on or off, and who gets it — everyone it is for,
- * the leaders, or chosen people. They see who sent it.
+ * the leaders, or chosen people. They see who sent it. Anyone preparing it can send a test
+ * to themselves first; a designer who may not send it to everyone hands it in for approval.
  */
 export function MeetingAnnounceSheet({
   meeting,
@@ -39,6 +42,7 @@ export function MeetingAnnounceSheet({
   onClose,
   notice = 'announce',
   previousStartsAt,
+  canPublish = true,
 }: {
   meeting: MeetingRow;
   group: GroupSummary | undefined;
@@ -47,12 +51,16 @@ export function MeetingAnnounceSheet({
   notice?: MeetingNotice;
   /** For a changed time: when it was. */
   previousStartsAt?: string | null;
+  /** May send it to everyone (else: test and send for approval). */
+  canPublish?: boolean;
 }) {
   const t = useT();
   const toast = useToast();
   const me = useMe();
   const members = useMembers(meeting.groupId);
   const announce = useAnnounceMeeting();
+  const test = useTestAnnounceMeeting();
+  const request = useRequestAnnounceMeeting();
   const upload = useUploadMedia(meeting.groupId, 'event');
   const poster = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
@@ -61,8 +69,9 @@ export function MeetingAnnounceSheet({
   // A leaders' meeting (or one for chosen people) asks who will come by default.
   const [ask, setAsk] = useState(notice !== 'cancelled' && meeting.audience !== null);
   const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
-  const [busy, setBusy] = useState<'poster' | 'send' | null>(null);
+  const [busy, setBusy] = useState<'poster' | 'send' | 'test' | null>(null);
   const [done, setDone] = useState<number | null>(null);
+  const [requested, setRequested] = useState<number | null>(null);
 
   const leaders = (members.data ?? [])
     .filter((m) => m.status === 'active' && m.role === 'leader')
@@ -102,11 +111,12 @@ export function MeetingAnnounceSheet({
     return (await upload.mutateAsync(blob)).id;
   }
 
-  async function send() {
+  /** Sends it to everyone, only to oneself (a test), or for approval. */
+  async function run(mode: 'send' | 'test' | 'request') {
     try {
       const posterMediaId = await posterId().catch(() => null);
-      setBusy('send');
-      const res = await announce.mutateAsync({
+      setBusy(mode === 'test' ? 'test' : 'send');
+      const input = {
         id: meeting.id,
         notice,
         ask: notice !== 'cancelled' && ask,
@@ -114,7 +124,22 @@ export function MeetingAnnounceSheet({
         text: text.trim() || undefined,
         userIds: audienceIds(audience, presets),
         posterMediaId,
-      });
+      };
+      if (mode === 'test') {
+        const res = await test.mutateAsync(input);
+        if (res.sent === 0) throw new Error('unreachable');
+        haptic.success();
+        toast(t.publish.testSent);
+        return;
+      }
+      if (mode === 'request') {
+        const res = await request.mutateAsync(input);
+        haptic.success();
+        toast(t.publish.requested(res.asked));
+        setRequested(res.asked);
+        return;
+      }
+      const res = await announce.mutateAsync(input);
       if (res.sent === 0) {
         haptic.error();
         toast(t.events.remindNobody, 'error');
@@ -216,22 +241,39 @@ export function MeetingAnnounceSheet({
           value={audience}
           onChange={setAudience}
         />
-        {done !== null ? (
+        {!canPublish && (
+          <p className="text-[13px] leading-snug text-hint">{t.publish.designerHint}</p>
+        )}
+        {done !== null || requested !== null ? (
           <div className="flex items-center justify-center gap-1.5 py-2 text-[15px] font-semibold text-present">
-            <IconCheck size={18} /> {t.events.remindSent(done)}
+            <IconCheck size={18} />{' '}
+            {done !== null ? t.events.remindSent(done) : t.publish.requested(requested ?? 0)}
           </div>
         ) : (
-          <Button
-            disabled={loading || busy !== null || !text.trim() || audienceEmpty(audience, presets)}
-            onClick={() => void send()}
-          >
-            <IconSend size={16} />{' '}
-            {busy === 'poster'
-              ? t.meetings.preparing
-              : busy === 'send'
-                ? t.common.saving
-                : t.events.remindSend}
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="secondary"
+              disabled={loading || busy !== null || !text.trim()}
+              onClick={() => void run('test')}
+            >
+              {busy === 'test' ? t.meetings.preparing : t.publish.testSend}
+            </Button>
+            <Button
+              disabled={
+                loading || busy !== null || !text.trim() || audienceEmpty(audience, presets)
+              }
+              onClick={() => void run(canPublish ? 'send' : 'request')}
+            >
+              <IconSend size={16} />{' '}
+              {busy === 'poster'
+                ? t.meetings.preparing
+                : busy === 'send'
+                  ? t.common.saving
+                  : canPublish
+                    ? t.events.remindSend
+                    : t.publish.request}
+            </Button>
+          </div>
         )}
       </div>
     </Sheet>

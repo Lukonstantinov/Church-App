@@ -1006,3 +1006,34 @@ export const eventProgram = sqliteTable(
   },
   (t) => [index('event_program_event').on(t.eventId)],
 );
+
+/**
+ * A designer's finished announcement (meeting) or reminder (event) waiting for someone who
+ * may publish it: what to send, exactly as prepared. The approver sends it with one tap
+ * (in the app or under the bot's message) or declines it; the designer hears either way.
+ */
+export const publishRequests = sqliteTable(
+  'publish_requests',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => groups.id),
+    kind: text('kind', { enum: ['meeting', 'event'] }).notNull(),
+    refId: integer('ref_id').notNull(),
+    /** The send request as JSON (text, poster, audience, ask / roster…). */
+    payload: text('payload').notNull(),
+    /** The prepared picture (meeting poster) or null (an event uses its own picture). */
+    posterMediaId: integer('poster_media_id').references(() => media.id),
+    requestedBy: integer('requested_by')
+      .notNull()
+      .references(() => users.id),
+    status: text('status', { enum: ['pending', 'sent', 'declined', 'withdrawn'] })
+      .notNull()
+      .default('pending'),
+    decidedBy: integer('decided_by').references(() => users.id),
+    decidedAt: text('decided_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('publish_requests_ref').on(t.kind, t.refId, t.status)],
+);

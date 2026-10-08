@@ -21,6 +21,7 @@ import { Pill } from '../components/LookControls';
 import { useMoney } from '../components/money';
 import { NotifySheet } from '../components/NotifySheet';
 import { MeetingAnnounceSheet } from '../components/MeetingAnnounceSheet';
+import { PublishRequestCard } from '../components/PublishRequestCard';
 import { MeetingPeople } from '../components/MeetingPeople';
 import { TeamChips, meetingLook } from '../components/TeamChips';
 import { useMeetingTune } from '../components/ModuleSkin';
@@ -231,13 +232,18 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
         onNotify={(role, person) => setNotify({ role, person })}
       />
 
-      {m.canManage && !cancelled && (
+      {m.publishRequest && (m.canPublish || m.publishRequest.mine) && (
+        <PublishRequestCard request={m.publishRequest} canPublish={m.canPublish} />
+      )}
+
+      {/* Designers prepare it too: they test it on themselves and send it for approval. */}
+      {m.canPrepare && !cancelled && (
         <Button onClick={() => setSheet({ notice: 'announce' })}>
           <IconSend size={17} />{' '}
           {m.announcedAt ? t.meetings.announceAgain : t.meetings.announceMeeting}
         </Button>
       )}
-      {m.canManage && cancelled && (
+      {m.canPublish && cancelled && (
         <Button variant="secondary" onClick={() => setSheet({ notice: 'cancelled' })}>
           <IconSend size={17} /> {t.meetings.noticeCancelled}
         </Button>
@@ -432,6 +438,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           group={group.data}
           notice={sheet.notice}
           previousStartsAt={sheet.previous}
+          canPublish={m.canPublish}
           onClose={() => setSheet(null)}
         />
       )}

@@ -485,6 +485,40 @@ export function useAnnounceMeeting() {
   });
 }
 
+/** The prepared announcement sent only to oneself, to see it in Telegram. */
+export function useTestAnnounceMeeting() {
+  return useMutation({
+    mutationFn: ({ id, ...input }: AnnounceMeetingInput & { id: number }) =>
+      apiFetch<{ sent: number }>(`/meetings/${id}/announce/test`, send('POST', input)),
+  });
+}
+
+/** A designer hands the prepared announcement to those who may send it. */
+export function useRequestAnnounceMeeting() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({ id, ...input }: AnnounceMeetingInput & { id: number }) =>
+      apiFetch<{ id: number; asked: number }>(
+        `/meetings/${id}/announce/request`,
+        send('POST', input),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/** An approver sends a prepared announcement / reminder to everyone, or declines it. */
+export function useDecidePublish() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({ id, send: go }: { id: number; send: boolean }) =>
+      apiFetch<{ sent: number }>(
+        `/publish-requests/${id}/${go ? 'send' : 'decline'}`,
+        send('POST'),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
 /** Deletes a meeting for good (the only way one disappears). */
 export function useDeleteMeeting() {
   const invalidate = useInvalidateAll();
@@ -1119,6 +1153,22 @@ export function useRemindEvent() {
   return useMutation({
     mutationFn: ({ id, ...input }: RemindEventInput & { id: number }) =>
       apiFetch<{ sent: number }>(`/events/${id}/remind`, send('POST', input)),
+  });
+}
+
+export function useTestRemindEvent() {
+  return useMutation({
+    mutationFn: ({ id, ...input }: RemindEventInput & { id: number }) =>
+      apiFetch<{ sent: number }>(`/events/${id}/remind/test`, send('POST', input)),
+  });
+}
+
+export function useRequestRemindEvent() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({ id, ...input }: RemindEventInput & { id: number }) =>
+      apiFetch<{ id: number; asked: number }>(`/events/${id}/remind/request`, send('POST', input)),
+    onSuccess: invalidate,
   });
 }
 

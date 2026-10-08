@@ -1635,6 +1635,7 @@ export const lt: Messages = {
     tplTreasurer: 'Iždininkas',
     tplMedia: 'Medija',
     tplHost: 'Vedėjas',
+    tplDesigner: 'Dizaineris',
     groups: {
       people: 'Žmonės',
       meetings: 'Susitikimai',
@@ -1652,11 +1653,28 @@ export const lt: Messages = {
       'money.manage': 'Tvarkyti kasą',
       reports: 'PDF ir Excel ataskaitos',
       'events.manage': 'Kurti ir tvarkyti renginius',
-      announce: 'Siųsti skelbimus',
+      announce: 'Skelbti: įrašai, susitikimų skelbimai, priminimai, plakatų tvirtinimas',
       settings: 'Tarnystės nustatymai (pavadinimas, tema, pokalbis)',
       positions: 'Pareigos ir teisės',
       design: 'Dizaineris: plakatai, šablonai ir susitikimų, renginių bei įrašų išvaizda',
     },
+  },
+  publish: {
+    testSend: '🧪 Atsiųsti man',
+    testSent: 'Išsiųsta jums į Telegram — pažiūrėkite, kaip atrodo',
+    request: 'Siųsti patvirtinti',
+    requested: (n: number) => (n > 0 ? `Išsiųsta patvirtinti (${n})` : 'Išsiųsta patvirtinti'),
+    designerHint:
+      'Atsisiųskite pavyzdį sau ir pažiūrėkite Telegram. Kai viskas gerai — siųskite patvirtinti: visiems išsiųs tas, kas turi teisę „Skelbti“.',
+    pendingTitle: 'Laukia patvirtinimo',
+    pendingBy: (name: string) => `Paruošė: ${name}`,
+    pendingMine: 'Jūsų žinutė laukia patvirtinimo',
+    approve: 'Siųsti visiems',
+    decline: 'Atmesti',
+    declined: 'Atmesta — dizaineriui pranešta',
+    handled: 'Jau nusprendė kažkas kitas',
+    designOnly: 'Keičiate tik išvaizdą: viršelį, plakatą, efektus ir kalbėtojus.',
+    design: 'Išvaizda',
   },
   env: {
     lookInDesign: 'Ekrano fonas, animacijos ir šablonai — «Dizainas»',
@@ -1969,6 +1987,17 @@ export const lt: Messages = {
     meetingSnack: (titleHtml: string, groupHtml: string, date: string, budget: string) =>
       `🍕 <b>Jūs perkate užkandžius</b>\n„${titleHtml}“ · ${groupHtml}\n${date}\n\nGalite išleisti iki <b>${budget}</b>. Išsaugokite čekį — išlaidos bus įrašytos į šio susitikimo kasą.`,
     sentBy: (name: string) => `Išsiuntė ${name}`,
+    testOnlyYou: 'Bandymas — tai matote tik jūs',
+    publishAsk: (name: string, title: string) =>
+      `🎨 <b>${name}</b> paruošė žinutę „${title}“. Patikrinkite ir išsiųskite:`,
+    publishAskTitle: (title: string) => `Laukia patvirtinimo: ${title}`,
+    publishSend: '✅ Siųsti visiems',
+    publishDecline: '✗ Atmesti',
+    publishOpen: 'Atidaryti',
+    publishDone: (name: string, title: string) => `✅ ${name} išsiuntė jūsų žinutę „${title}“`,
+    publishDeclined: (name: string, title: string) =>
+      `✗ ${name} atmetė žinutę „${title}“ — pataisykite ir siųskite dar kartą`,
+    publishSentCount: (n: number) => `Išsiųsta: ${n}`,
     eventLive: (titleHtml: string, placeHtml: string | null) =>
       `🔴 <b>Vyksta dabar</b>\n„${titleHtml}“${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     notifLiveTitle: (title: string) => `🔴 LIVE: „${title}“`,

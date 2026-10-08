@@ -80,13 +80,15 @@ export interface Recipient {
 
 /**
  * Telegram chats to notify for an environment: reachable members whose position has
- * the given right (managing people by default), else the church admins.
+ * the given right (managing people by default; with a list, any of them), else the
+ * church admins.
  */
 export async function leaderRecipients(
   db: Db,
   groupId: number,
-  perm: Permission = 'people.manage',
+  perm: Permission | Permission[] = 'people.manage',
 ): Promise<Recipient[]> {
+  const wanted = Array.isArray(perm) ? perm : [perm];
   const fallback = await churchDefaultLocale(db);
   const candidates = await db
     .select({
@@ -107,7 +109,9 @@ export async function leaderRecipients(
         eq(users.isReachable, true),
       ),
     );
-  const leaders = candidates.filter((c) => effectivePermissions(false, c).includes(perm));
+  const leaders = candidates.filter((c) =>
+    effectivePermissions(false, c).some((p) => wanted.includes(p)),
+  );
   const rows = leaders.length
     ? leaders
     : await db

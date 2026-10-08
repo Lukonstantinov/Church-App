@@ -19,6 +19,7 @@ import {
   type MotionTune,
 } from '@church/shared';
 import type { Db } from '../db/client';
+import { pendingRequests } from './publishRequests';
 import {
   eventPhotos,
   eventRoleAssignees,
@@ -466,7 +467,11 @@ export async function eventDetail(
     [{ ...event, groupName: group?.name ?? '', groupBrand: group?.brandColor }],
     user.id,
   );
-  const member = (await accessIn(db, user, event.groupId)).member;
+  const access = await accessIn(db, user, event.groupId);
+  const member = access.member;
+  // Publishers (posts, announcements, reminders) send reminders too.
+  const canPublish = member && (canManage || access.perms.has('announce'));
+  const canPrepare = canPublish || rights.designer;
 
   const [members, rsvps, roles, assignees, photos, money] = await Promise.all([
     db
@@ -582,6 +587,11 @@ export async function eventDetail(
     myPaidCents: paidBy.get(user.id) ?? 0,
     canManage,
     canDesign: rights.designer || (!rights.locked && canManage),
+    canPublish,
+    canPrepare,
+    publishRequest: canPrepare
+      ? ((await pendingRequests(db, 'event', [event.id], secret, user.id)).get(event.id) ?? null)
+      : null,
     member,
   };
 }

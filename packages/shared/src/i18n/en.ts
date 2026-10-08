@@ -1600,6 +1600,7 @@ export const en: Messages = {
     tplTreasurer: 'Treasurer',
     tplMedia: 'Media',
     tplHost: 'Host',
+    tplDesigner: 'Designer',
     groups: {
       people: 'People',
       meetings: 'Meetings',
@@ -1617,11 +1618,28 @@ export const en: Messages = {
       'money.manage': 'Keep the treasury',
       reports: 'PDF and Excel reports',
       'events.manage': 'Create and run events',
-      announce: 'Send announcements',
+      announce: 'Publish: posts, meeting announcements, reminders, approve posters',
       settings: 'Ministry settings (name, theme, chat)',
       positions: 'Positions and rights',
       design: 'Designer: posters, templates and the look of meetings, events and posts',
     },
+  },
+  publish: {
+    testSend: '🧪 Send to me',
+    testSent: 'Sent to you in Telegram — see how it looks',
+    request: 'Send for approval',
+    requested: (n: number) => (n > 0 ? `Sent for approval (${n})` : 'Sent for approval'),
+    designerHint:
+      'Send yourself a sample and check it in Telegram. When it looks right, send it for approval: someone with the “Publish” right sends it to everyone.',
+    pendingTitle: 'Waiting for approval',
+    pendingBy: (name: string) => `Prepared by ${name}`,
+    pendingMine: 'Your message is waiting for approval',
+    approve: 'Send to all',
+    decline: 'Decline',
+    declined: 'Declined — the designer has been told',
+    handled: 'Already decided by someone else',
+    designOnly: 'You change only the look: cover, poster, effects and speakers.',
+    design: 'Look',
   },
   env: {
     lookInDesign: 'Screen background, animations and templates — in «Design»',
@@ -1927,6 +1945,17 @@ export const en: Messages = {
     meetingSnack: (titleHtml: string, groupHtml: string, date: string, budget: string) =>
       `🍕 <b>You are buying snacks</b>\n“${titleHtml}” · ${groupHtml}\n${date}\n\nYou can spend up to <b>${budget}</b>. Keep the receipt — the expense goes into this meeting’s treasury.`,
     sentBy: (name: string) => `Sent by ${name}`,
+    testOnlyYou: 'Test — only you see this',
+    publishAsk: (name: string, title: string) =>
+      `🎨 <b>${name}</b> prepared the message “${title}”. Check it and send:`,
+    publishAskTitle: (title: string) => `Waiting for approval: ${title}`,
+    publishSend: '✅ Send to all',
+    publishDecline: '✗ Decline',
+    publishOpen: 'Open',
+    publishDone: (name: string, title: string) => `✅ ${name} sent your message “${title}”`,
+    publishDeclined: (name: string, title: string) =>
+      `✗ ${name} declined the message “${title}” — fix it and send it again`,
+    publishSentCount: (n: number) => `Sent: ${n}`,
     eventLive: (titleHtml: string, placeHtml: string | null) =>
       `🔴 <b>LIVE now</b>\n“${titleHtml}”${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     notifLiveTitle: (title: string) => `🔴 LIVE: “${title}”`,

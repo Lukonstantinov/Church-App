@@ -111,6 +111,11 @@ export async function announceMeeting(
     senderName: string;
     envAppUrl?: string;
     fallbackUrl: string | null;
+    /**
+     * A test: only this person gets it (marked as a test, no answer buttons, nothing in
+     * anyone's notifications) — to see how the poster and text look in Telegram.
+     */
+    testTo?: number;
   },
 ): Promise<{ total: number; bot: number }> {
   const { meeting } = args;
@@ -119,22 +124,25 @@ export async function announceMeeting(
   const audience = (await audienceOf(db, [meeting.id])).get(meeting.id) ?? null;
   // Chosen people, else everyone the meeting is for.
   const only = args.userIds?.length ? args.userIds : audience;
-  const people = await db
-    .select({
-      id: users.id,
-      chatId: users.telegramId,
-      reachable: users.isReachable,
-      locale: users.locale,
-    })
-    .from(memberships)
-    .innerJoin(users, eq(users.id, memberships.userId))
-    .where(
-      and(
-        eq(memberships.groupId, meeting.groupId),
-        eq(memberships.status, 'active'),
-        ...(only ? [inArray(users.id, only.length ? only : [-1])] : []),
-      ),
-    );
+  const person = {
+    id: users.id,
+    chatId: users.telegramId,
+    reachable: users.isReachable,
+    locale: users.locale,
+  };
+  const people = args.testTo
+    ? await db.select(person).from(users).where(eq(users.id, args.testTo))
+    : await db
+        .select(person)
+        .from(memberships)
+        .innerJoin(users, eq(users.id, memberships.userId))
+        .where(
+          and(
+            eq(memberships.groupId, meeting.groupId),
+            eq(memberships.status, 'active'),
+            ...(only ? [inArray(users.id, only.length ? only : [-1])] : []),
+          ),
+        );
   const stamp = Date.now();
   let bot = 0;
   for (const p of people) {
@@ -144,17 +152,21 @@ export async function announceMeeting(
       args.text ??
       (await defaultMeetingAnnouncement(db, meeting, locale, args.notice, args.previousStartsAt));
     const [first, ...rest] = escapeHtml(text).split('\n');
-    const ask = args.ask && args.notice !== 'cancelled';
-    const html = `${[`<b>${first}</b>`, ...rest].join('\n')}${
+    const ask = args.ask && args.notice !== 'cancelled' && !args.testTo;
+    const html = `${args.testTo ? `🧪 <i>${escapeHtml(t.testOnlyYou)}</i>\n\n` : ''}${[
+      `<b>${first}</b>`,
+      ...rest,
+    ].join('\n')}${
       ask ? `\n\n<b>${escapeHtml(t.rsvpAskLine)}</b>` : ''
     }\n\n<i>${escapeHtml(t.sentBy(args.senderName))}</i>`;
-    await recordNotification(db, {
-      userId: p.id,
-      kind: 'meeting_announce',
-      title: t.notifMeetingTitle(meeting.title),
-      body: `${text}\n${t.sentBy(args.senderName)}`,
-      link: { type: 'task', meetingId: meeting.id },
-    });
+    if (!args.testTo)
+      await recordNotification(db, {
+        userId: p.id,
+        kind: 'meeting_announce',
+        title: t.notifMeetingTitle(meeting.title),
+        body: `${text}\n${t.sentBy(args.senderName)}`,
+        link: { type: 'task', meetingId: meeting.id },
+      });
     if (!p.chatId || !p.reachable) continue;
     const kb = new InlineKeyboard();
     if (ask) kb.text(t.rsvpYes, `mr:y:${meeting.id}`).text(t.rsvpNo, `mr:n:${meeting.id}`).row();

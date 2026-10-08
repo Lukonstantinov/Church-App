@@ -1617,6 +1617,7 @@ export const ru = {
     tplTreasurer: 'Казначей',
     tplMedia: 'Медиа',
     tplHost: 'Ведущий',
+    tplDesigner: 'Дизайнер',
     groups: {
       people: 'Люди',
       meetings: 'Встречи',
@@ -1634,11 +1635,29 @@ export const ru = {
       'money.manage': 'Вести кассу',
       reports: 'Отчёты PDF и Excel',
       'events.manage': 'Создавать и вести события',
-      announce: 'Отправлять объявления',
+      announce: 'Публиковать: посты, объявления встреч, напоминания, одобрять постеры',
       settings: 'Настройки служения (название, тема, чат)',
       positions: 'Должности и права',
       design: 'Дизайнер: постеры, шаблоны и оформление встреч, событий и постов',
     },
+  },
+  publish: {
+    testSend: '🧪 Прислать мне',
+    testSent: 'Отправлено вам в Telegram — посмотрите, как выглядит',
+    request: 'Отправить на одобрение',
+    requested: (n: number) =>
+      n > 0 ? `Отправлено на одобрение (${n})` : 'Отправлено на одобрение',
+    designerHint:
+      'Пришлите себе пример и посмотрите в Telegram. Когда всё хорошо — отправьте на одобрение: всем отправит тот, у кого есть право «Публиковать».',
+    pendingTitle: 'Ждёт одобрения',
+    pendingBy: (name: string) => `Подготовил(а): ${name}`,
+    pendingMine: 'Ваше сообщение ждёт одобрения',
+    approve: 'Отправить всем',
+    decline: 'Отклонить',
+    declined: 'Отклонено — дизайнер получил уведомление',
+    handled: 'Уже решено кем-то другим',
+    designOnly: 'Вы меняете только оформление: обложку, постер, эффекты и спикеров.',
+    design: 'Оформление',
   },
   env: {
     lookInDesign: 'Фон экрана, анимации и шаблоны — в «Дизайн»',
@@ -1951,6 +1970,18 @@ export const ru = {
     meetingSnack: (titleHtml: string, groupHtml: string, date: string, budget: string) =>
       `🍕 <b>Вы отвечаете за снеки</b>\n«${titleHtml}» · ${groupHtml}\n${date}\n\nМожно потратить до <b>${budget}</b>. Сохраните чек — расход внесут в кассу этой встречи.`,
     sentBy: (name: string) => `Отправил(а): ${name}`,
+    testOnlyYou: 'Проверка — это видите только вы',
+    publishAsk: (name: string, title: string) =>
+      `🎨 <b>${name}</b> подготовил(а) сообщение «${title}». Проверьте и отправьте:`,
+    publishAskTitle: (title: string) => `Ждёт одобрения: ${title}`,
+    publishSend: '✅ Отправить всем',
+    publishDecline: '✗ Отклонить',
+    publishOpen: 'Открыть',
+    publishDone: (name: string, title: string) =>
+      `✅ ${name} отправил(а) ваше сообщение «${title}»`,
+    publishDeclined: (name: string, title: string) =>
+      `✗ ${name} отклонил(а) сообщение «${title}» — поправьте и отправьте снова`,
+    publishSentCount: (n: number) => `Отправлено: ${n}`,
     eventLive: (titleHtml: string, placeHtml: string | null) =>
       `🔴 <b>Прямо сейчас</b>\n«${titleHtml}»${placeHtml ? `\n📍 ${placeHtml}` : ''}`,
     notifLiveTitle: (title: string) => `🔴 LIVE: «${title}»`,

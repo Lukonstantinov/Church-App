@@ -4,23 +4,32 @@ import {
   type GroupDetail,
   type GroupSummary,
   type MeResponse,
+  type EventDetail,
+  type MeetingDetail,
   type MemberRow,
   type PersonSearchRow,
   type PositionRow,
 } from '@church/shared';
+import { env } from 'cloudflare:workers';
+import { getDb } from '../src/db/client';
+import { drainOutbox } from '../src/lib/outbox';
+import { botApi } from '../src/lib/telegram';
 import {
   ADMIN,
   api,
   apiJson,
+  callsTo,
   fakeUser,
   mockTelegram,
   pressButton,
   sendText,
   type FakeTgUser,
+  type TgCall,
 } from './helpers';
 
+let calls: TgCall[];
 beforeEach(() => {
-  mockTelegram();
+  calls = mockTelegram();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -430,5 +439,155 @@ describe('adding people and environment look', () => {
       json: { appBackground: null, everywhere: true },
     });
     await apiJson('/api/church/studio', { method: 'PUT', user: ADMIN, json: { screenLook: {} } });
+  });
+  it('designers test announcements on themselves and send them for approval; publishers send', async () => {
+    const g = await createEnv('Публикация');
+    const made = await apiJson<PositionRow[]>(`/api/groups/${g.id}/positions`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Дизайнер', permissions: ['design'] },
+    });
+    const withPublish = await apiJson<PositionRow[]>(`/api/groups/${g.id}/positions`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Медиа', permissions: ['announce'] },
+    });
+    const designer = fakeUser('Рисующий');
+    const publisher = fakeUser('Публикующий');
+    const member = fakeUser('Читающий');
+    await assign(
+      (await join(designer, g)).membershipId,
+      made.find((p) => p.name === 'Дизайнер')!.id,
+    );
+    await assign(
+      (await join(publisher, g)).membershipId,
+      withPublish.find((p) => p.name === 'Медиа')!.id,
+    );
+    await join(member, g);
+    const m = await apiJson<{ id: number }>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date: '2031-04-01', startTime: '18:00', durationMin: 60, title: 'Вечер' },
+    });
+    const drain = () => drainOutbox(getDb(env.DB), botApi(env), { limit: 100 });
+    const texts = (chatId: number) =>
+      [...callsTo(calls, 'sendMessage', chatId), ...callsTo(calls, 'sendPhoto', chatId)].map((c) =>
+        String(c.body.text ?? c.body.caption ?? ''),
+      );
+
+    const seen = await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: designer });
+    expect(seen).toMatchObject({ canPrepare: true, canPublish: false, publishRequest: null });
+    const body = { notice: 'announce', text: 'Приходите на вечер!' };
+    // A designer may not send it to everyone, and a plain member may not even test it.
+    expect(
+      (await api(`/api/meetings/${m.id}/announce`, { method: 'POST', user: designer, json: body }))
+        .status,
+    ).toBe(403);
+    expect(
+      (
+        await api(`/api/meetings/${m.id}/announce/test`, {
+          method: 'POST',
+          user: member,
+          json: body,
+        })
+      ).status,
+    ).toBe(403);
+
+    // The test goes only to the designer, marked as a test.
+    const test = await apiJson<{ sent: number }>(`/api/meetings/${m.id}/announce/test`, {
+      method: 'POST',
+      user: designer,
+      json: body,
+    });
+    expect(test.sent).toBe(1);
+    await drain();
+    expect(texts(designer.id).some((x) => x.includes('🧪') && x.includes('Приходите'))).toBe(true);
+    expect(texts(member.id).some((x) => x.includes('Приходите'))).toBe(false);
+
+    // Sent for approval: the publisher gets it with Send / Decline buttons.
+    const req = await apiJson<{ id: number; asked: number }>(
+      `/api/meetings/${m.id}/announce/request`,
+      { method: 'POST', user: designer, json: body },
+    );
+    expect(req.asked).toBeGreaterThan(0);
+    await drain();
+    const card = callsTo(calls, 'sendMessage', publisher.id).find((c) =>
+      JSON.stringify(c.body.reply_markup ?? {}).includes(`pq:s:${req.id}`),
+    );
+    expect(card).toBeTruthy();
+    const pending = await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: publisher });
+    expect(pending.canPublish).toBe(true);
+    expect(pending.publishRequest).toMatchObject({ id: req.id, text: 'Приходите на вечер!' });
+
+    // A member can't decide; the publisher sends it from the bot, once.
+    expect(
+      (await api(`/api/publish-requests/${req.id}/send`, { method: 'POST', user: member })).status,
+    ).toBe(403);
+    await pressButton(publisher, `pq:s:${req.id}`);
+    await drain();
+    await pressButton(publisher, `pq:s:${req.id}`);
+    await drain();
+    expect(texts(member.id).filter((x) => x.includes('Приходите на вечер!'))).toHaveLength(1);
+    expect(texts(designer.id).some((x) => x.includes('Публикующий'))).toBe(true);
+    const after = await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: publisher });
+    expect(after.publishRequest).toBeNull();
+    expect(after.announcedAt).not.toBeNull();
+
+    // A declined one isn't sent, and the designer hears it.
+    const again = await apiJson<{ id: number }>(`/api/meetings/${m.id}/announce/request`, {
+      method: 'POST',
+      user: designer,
+      json: { notice: 'announce', text: 'Вторая версия' },
+    });
+    await apiJson(`/api/publish-requests/${again.id}/decline`, { method: 'POST', user: publisher });
+    expect(
+      (await api(`/api/publish-requests/${again.id}/send`, { method: 'POST', user: publisher }))
+        .status,
+    ).toBe(409);
+    await drain();
+    expect(texts(member.id).some((x) => x.includes('Вторая версия'))).toBe(false);
+
+    // Publishers send announcements themselves.
+    const direct = await apiJson<{ sent: number }>(`/api/meetings/${m.id}/announce`, {
+      method: 'POST',
+      user: publisher,
+      json: { notice: 'announce', text: 'Сам отправил' },
+    });
+    expect(direct.sent).toBeGreaterThan(0);
+
+    // Events work the same way: the designer prepares, the publisher sends.
+    const ev = await apiJson<{ id: number }>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'Лагерь', date: '2031-05-01', startTime: '10:00' },
+    });
+    const evSeen = await apiJson<EventDetail>(`/api/events/${ev.id}`, { user: designer });
+    expect(evSeen).toMatchObject({ canPrepare: true, canPublish: false, canDesign: true });
+    // The designer may change the event's speakers (they are on its poster), not its title.
+    expect(
+      (
+        await api(`/api/events/${ev.id}`, {
+          method: 'PATCH',
+          user: designer,
+          json: { speakers: [{ name: 'Гость' }] },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await api(`/api/events/${ev.id}`, { method: 'PATCH', user: designer, json: { title: 'X' } }))
+        .status,
+    ).toBe(403);
+    const evReq = await apiJson<{ id: number }>(`/api/events/${ev.id}/remind/request`, {
+      method: 'POST',
+      user: designer,
+      json: { text: 'Едем в лагерь' },
+    });
+    const sent = await apiJson<{ sent: number }>(`/api/publish-requests/${evReq.id}/send`, {
+      method: 'POST',
+      user: publisher,
+    });
+    expect(sent.sent).toBeGreaterThan(0);
+    await drain();
+    expect(texts(member.id).some((x) => x.includes('Едем в лагерь'))).toBe(true);
   });
 });

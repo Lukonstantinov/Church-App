@@ -140,6 +140,9 @@ the Design tab: `groups.meeting_template_id` / `event_template_id` («Оформ
 (`design.custom`) leaves the default; forms store only changed fields (speaker look / tunes merged
 field by field); a form sending the default template back stores none. `look_version` on meetings and
 events refuses (409) a look save from a sheet opened before someone else's change.
+Designers send themselves a 🧪 test of a meeting announcement / event reminder and send it for approval
+(`publish_requests`, `lib/publishRequests.ts`: approvers get ✅ Send / ✗ Decline in the bot and a card on the
+screen); the `announce` right = publish (posts, announcements, reminders, approvals) alongside the manage rights.
 Church setting `designLock`: when on, only designers (and admins) change looks — enforced in the
 meeting/event/post PATCH routes via `designRights` / `assertMayDesign` / `lookDiffers`
 (`lib/access.ts`; unchanged values resent by forms don't count); rows carry `canDesign`.

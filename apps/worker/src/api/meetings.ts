@@ -77,6 +77,13 @@ import {
   meetingRsvpLists,
 } from '../lib/meetingAnnounce';
 import { appUrlFor, botApi } from '../lib/telegram';
+import {
+  mayPrepare,
+  mayPublish,
+  pendingRequests,
+  publishMeeting,
+  requestPublish,
+} from '../lib/publishRequests';
 import { audit } from '../lib/audit';
 import { churchDefaultLocale, getChurch, localeOf } from '../lib/church';
 import {
@@ -527,8 +534,15 @@ meetingRoutes.get('/:id', async (c) => {
   const a = await meetingAccess(db, user, meeting);
   if (!a.member) throw new HTTPException(404, { message: 'not_found' });
   const rights = await designRights(db, user, meeting.groupId);
-  // A meeting for chosen people is hidden from everyone else (managers see all).
-  if (!a.edit && !meetingIsFor(await audienceOf(db, [meeting.id]), meeting.id, user.id))
+  const canPublish = await mayPublish(db, user, meeting.groupId, 'meeting');
+  // A meeting for chosen people is hidden from everyone else (managers, publishers and
+  // designers see all: they prepare its announcement).
+  if (
+    !a.edit &&
+    !canPublish &&
+    !rights.designer &&
+    !meetingIsFor(await audienceOf(db, [meeting.id]), meeting.id, user.id)
+  )
     throw new HTTPException(404, { message: 'not_found' });
   const group = (await db.query.groups.findFirst({ where: eq(groups.id, meeting.groupId) }))!;
   const [row] = await toMeetingRows(db, [meeting], c.env.WEBHOOK_SECRET);
@@ -544,6 +558,14 @@ meetingRoutes.get('/:id', async (c) => {
     canEdit: a.edit,
     canManage: a.manage,
     canDesign: rights.designer || (!rights.locked && a.edit),
+    canPublish,
+    canPrepare: canPublish || rights.designer,
+    publishRequest:
+      canPublish || rights.designer
+        ? ((await pendingRequests(db, 'meeting', [meeting.id], c.env.WEBHOOK_SECRET, user.id)).get(
+            meeting.id,
+          ) ?? null)
+        : null,
     myRole:
       meeting.leaderUserId === user.id
         ? 'leader'
@@ -978,19 +1000,30 @@ meetingRoutes.post('/:id/notify', async (c) => {
   return c.json({ sent });
 });
 
-/** A meeting the user may announce (needs the right to manage meetings). */
-async function announceable(c: { get: (k: 'db' | 'user') => unknown }, id: number) {
+/**
+ * A meeting whose announcement the user may send (`publish`: meeting managers and
+ * publishers) or prepare and test on themselves (designers too).
+ */
+async function announceable(
+  c: { get: (k: 'db' | 'user') => unknown },
+  id: number,
+  need: 'publish' | 'prepare',
+) {
   const db = c.get('db') as AuthVariables['db'];
   const user = c.get('user') as AuthVariables['user'];
   const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, id) });
   if (!meeting) throw new HTTPException(404, { message: 'not_found' });
-  await assertCan(db, user, meeting.groupId, 'meetings.manage');
+  const ok =
+    need === 'publish'
+      ? await mayPublish(db, user, meeting.groupId, 'meeting')
+      : await mayPrepare(db, user, meeting.groupId, 'meeting');
+  if (!ok) throw new HTTPException(403, { message: 'forbidden' });
   return { db, user, meeting };
 }
 
 /** The default announcement, in the sender's language, to read and change before sending. */
 meetingRoutes.get('/:id/announce-text', async (c) => {
-  const { db, user, meeting } = await announceable(c, idParam(c));
+  const { db, user, meeting } = await announceable(c, idParam(c), 'prepare');
   const locale = localeOf(user, await churchDefaultLocale(db));
   const raw = c.req.query('notice');
   const notice = (MEETING_NOTICES as readonly string[]).includes(raw ?? '')
@@ -1005,30 +1038,16 @@ meetingRoutes.get('/:id/announce-text', async (c) => {
 
 /** Tell everyone (or leaders / chosen people) about the meeting, with its poster. */
 meetingRoutes.post('/:id/announce', async (c) => {
-  const { db, user, meeting } = await announceable(c, idParam(c));
+  const { db, user, meeting } = await announceable(c, idParam(c), 'publish');
   const input = await parseBody(c, announceMeetingSchema);
   // A cancelled meeting can only be announced as cancelled.
   if ((meeting.status === 'cancelled') !== (input.notice === 'cancelled'))
     throw new HTTPException(409, { message: 'cancelled' });
   if (input.posterMediaId) await assertGroupMedia(db, meeting.groupId, input.posterMediaId);
-  if (input.notice !== 'cancelled')
-    await db
-      .update(meetings)
-      .set({
-        announcedBy: user.id,
-        announcedAt: new Date().toISOString(),
-        ...(input.ask ? { askRsvp: true } : {}),
-      })
-      .where(eq(meetings.id, meeting.id));
-  const { total, bot } = await announceMeeting(db, {
+  const { total, bot } = await publishMeeting(db, {
     meeting,
-    notice: input.notice,
-    ask: input.ask,
-    previousStartsAt: input.previousStartsAt,
-    text: input.text,
-    userIds: input.userIds,
-    posterMediaId: input.posterMediaId,
-    senderName: displayName(user),
+    input,
+    sender: user,
     envAppUrl: c.env.APP_URL,
     fallbackUrl: appUrlFor(c.env, c.req.url),
   });
@@ -1038,15 +1057,50 @@ meetingRoutes.post('/:id/announce', async (c) => {
         console.error('announce drain', err),
       ),
     );
-  await audit(db, {
-    actorUserId: user.id,
-    action: 'meeting_announced',
-    entity: 'group',
-    entityId: meeting.groupId,
-    groupId: meeting.groupId,
-    data: { meetingId: meeting.id, sent: total, chosen: input.userIds?.length ?? null },
-  });
   return c.json({ sent: total, bot });
+});
+
+/** The announcement as prepared, sent only to the person preparing it (a test). */
+meetingRoutes.post('/:id/announce/test', async (c) => {
+  const { db, user, meeting } = await announceable(c, idParam(c), 'prepare');
+  const input = await parseBody(c, announceMeetingSchema);
+  if (input.posterMediaId) await assertGroupMedia(db, meeting.groupId, input.posterMediaId);
+  const { bot } = await announceMeeting(db, {
+    meeting,
+    notice: input.notice,
+    previousStartsAt: input.previousStartsAt,
+    text: input.text,
+    posterMediaId: input.posterMediaId,
+    senderName: displayName(user),
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+    testTo: user.id,
+  });
+  if (bot > 0) await drainOutbox(db, botApi(c.env), { limit: 5 }).catch(() => undefined);
+  return c.json({ sent: bot });
+});
+
+/** A designer hands the prepared announcement to those who may send it. */
+meetingRoutes.post('/:id/announce/request', async (c) => {
+  const { db, user, meeting } = await announceable(c, idParam(c), 'prepare');
+  const input = await parseBody(c, announceMeetingSchema);
+  if ((meeting.status === 'cancelled') !== (input.notice === 'cancelled'))
+    throw new HTTPException(409, { message: 'cancelled' });
+  if (input.posterMediaId) await assertGroupMedia(db, meeting.groupId, input.posterMediaId);
+  const res = await requestPublish(db, {
+    kind: 'meeting',
+    item: meeting,
+    input,
+    requester: user,
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+  });
+  c.executionCtx.waitUntil(
+    drainOutbox(db, botApi(c.env), { limit: 40 }).catch((err) =>
+      console.error('publish request drain', err),
+    ),
+  );
+  return c.json(res);
 });
 
 /** "Will you come?" — the person's own answer (from the app). */

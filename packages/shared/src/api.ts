@@ -642,8 +642,25 @@ export const updateMeetingSchema = z.object({
 export type UpdateMeetingInput = z.input<typeof updateMeetingSchema>;
 
 /** A meeting opened on its own: what everyone sees, plus attendance and money for those allowed. */
+/** A designer's prepared announcement / reminder waiting for someone who may publish it. */
+export interface PublishRequestRow {
+  id: number;
+  requestedBy: string;
+  /** The viewer prepared it. */
+  mine: boolean;
+  createdAt: string;
+  text: string | null;
+  posterUrl: string | null;
+}
+
 export interface MeetingDetail extends MeetingRow {
   groupName: string;
+  /** May send the announcement to everyone (meeting managers and publishers). */
+  canPublish: boolean;
+  /** May prepare it and send a test to themselves (designers and publishers). */
+  canPrepare: boolean;
+  /** The pending prepared announcement, for the approvers and its designer. */
+  publishRequest: PublishRequestRow | null;
   /** May change the meeting (managers, or its leader for place/topic/snacks). */
   canEdit: boolean;
   /** May change everything incl. leader and time. */
@@ -1123,7 +1140,8 @@ export type NotificationKind =
   | 'meeting_job'
   | 'meeting_announce'
   | 'meeting_rsvp'
-  | 'post_repeat';
+  | 'post_repeat'
+  | 'publish_request';
 
 export type NotificationLink =
   | { type: 'event'; eventId: number }

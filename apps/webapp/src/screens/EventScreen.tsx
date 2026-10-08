@@ -8,6 +8,7 @@ import { EventExport } from '../components/EventExport';
 import { EventCover } from '../components/EventCard';
 import { CoverPicture } from '../components/CoverSlideshow';
 import { EventReminderSheet } from '../components/EventReminderSheet';
+import { PublishRequestCard } from '../components/PublishRequestCard';
 import { ProgramBlock } from '../components/EventProgram';
 import { PosterBackfill } from '../components/PosterBackfill';
 import { useRef, useState } from 'react';
@@ -174,8 +175,12 @@ function EventBody({ e }: { e: EventDetail }) {
         </BurnFrame>
       )}
 
-      {(e.canManage || e.chatUrl) && (
-        <div className="flex gap-2">
+      {e.publishRequest && (e.canPublish || e.publishRequest.mine) && (
+        <PublishRequestCard request={e.publishRequest} canPublish={e.canPublish} />
+      )}
+
+      {(e.canManage || e.canPrepare || e.canDesign || e.chatUrl) && (
+        <div className="flex flex-wrap gap-2">
           {e.chatUrl && (
             <Button small variant="secondary" onClick={() => openTelegramLink(e.chatUrl!)}>
               <IconTelegram size={17} /> {t.events.openChat}
@@ -190,7 +195,17 @@ function EventBody({ e }: { e: EventDetail }) {
               <IconEdit size={16} /> {t.common.edit}
             </Button>
           )}
-          {e.canManage && !cancelled && (
+          {/* A designer who can't edit the event still designs its cover (look only). */}
+          {e.canDesign && !e.canManage && (
+            <Button
+              small
+              variant="glass"
+              onClick={() => push({ name: 'eventForm', groupId: e.groupId, eventId: e.id })}
+            >
+              🎨 {t.publish.design}
+            </Button>
+          )}
+          {e.canPrepare && !cancelled && (
             <Button small variant="glass" onClick={() => setReminding(true)}>
               <IconBell size={16} /> {t.events.remindTitleShort}
             </Button>

@@ -137,6 +137,25 @@ async function recipients(db: Db, groupId: number, userIds?: number[] | null) {
   }));
 }
 
+/** The one person a test goes to (even when they aren't a member, like a church admin). */
+async function testRecipient(db: Db, userId: number) {
+  const rows = await db
+    .select({
+      id: users.id,
+      chatId: users.telegramId,
+      reachable: users.isReachable,
+      locale: users.locale,
+    })
+    .from(users)
+    .where(eq(users.id, userId));
+  return rows.map((r) => ({
+    id: r.id,
+    chatId: r.chatId,
+    locale: r.locale,
+    bot: r.chatId !== null && r.reachable,
+  }));
+}
+
 /**
  * Reminds the ministry's members (or only chosen ones). With a custom text it goes as
  * written (plus the sender's name); without, each person gets the default in their own
@@ -163,11 +182,15 @@ export async function sendEventReminder(
     live?: boolean;
     /** With `live`: pin the message until this time, then remove it. */
     liveEndsAt?: string;
+    /** A test: only this person gets it, marked as a test and not in the notifications. */
+    testTo?: number;
   },
 ): Promise<{ total: number; bot: number }> {
   const fallback = await churchDefaultLocale(db);
   const appUrl = ((await getAppUrl(db, args.envAppUrl)) ?? args.fallbackUrl)?.replace(/\/+$/, '');
-  const list = await recipients(db, args.group.id, args.userIds);
+  const list = args.testTo
+    ? await testRecipient(db, args.testTo)
+    : await recipients(db, args.group.id, args.userIds);
   const stamp = args.dedupe ?? String(Date.now());
   const roster = await eventRoster(db, args.event.id);
   const picture = args.poster === false ? null : eventPictureId(args.event);
@@ -205,13 +228,15 @@ export async function sendEventReminder(
     if (args.roster && !args.live && roster.length)
       html += `\n\n👥 <b>${t.bot.responsible}</b>\n${rosterLines(roster, locale).join('\n')}`;
     if (args.senderName) html += `\n\n<i>${escapeHtml(t.bot.sentBy(args.senderName))}</i>`;
-    await recordNotification(db, {
-      userId: r.id,
-      kind: 'event_reminder',
-      title,
-      body: args.senderName ? `${body}\n${t.bot.sentBy(args.senderName)}` : body,
-      link: { type: 'event', eventId: args.event.id },
-    });
+    if (args.testTo) html = `🧪 <i>${escapeHtml(t.bot.testOnlyYou)}</i>\n\n${html}`;
+    if (!args.testTo)
+      await recordNotification(db, {
+        userId: r.id,
+        kind: 'event_reminder',
+        title,
+        body: args.senderName ? `${body}\n${t.bot.sentBy(args.senderName)}` : body,
+        link: { type: 'event', eventId: args.event.id },
+      });
     if (!r.bot) continue;
     const reply_markup = eventKeyboard(t, args.event.id, appUrl, roster.length > 0);
     const message = eventPayload(r.chatId!, html, picture, reply_markup);

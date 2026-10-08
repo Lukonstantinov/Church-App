@@ -1,3 +1,4 @@
+import { decidePublish } from '../lib/publishRequests';
 import { eq } from 'drizzle-orm';
 import { Bot, InlineKeyboard, type Context } from 'grammy';
 import { displayName, messages, type Messages } from '@church/shared';
@@ -348,6 +349,33 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
       await drainOutbox(db, botApi(env), { limit: 5 }).catch((err) =>
         console.error('rsvp drain', err),
       );
+  });
+
+  // "Send to all" / "Decline" under a designer's prepared announcement or reminder.
+  pm.callbackQuery(/^pq:([sd]):(\d+)$/, async (ctx) => {
+    const send = ctx.match[1] === 's';
+    const result = await decidePublish(db, {
+      id: Number(ctx.match[2]),
+      approver: ctx.dbUser,
+      approve: send,
+      envAppUrl: env.APP_URL,
+      fallbackUrl: appUrl,
+    });
+    if (result.kind === 'not_allowed')
+      return void (await ctx.answerCallbackQuery({ text: ctx.t.bot.notAllowed, show_alert: true }));
+    // Decided (here or by someone else): the buttons go, the way into the app stays.
+    await ctx.editMessageReplyMarkup().catch(() => undefined);
+    await ctx.answerCallbackQuery({
+      text:
+        result.kind === 'sent'
+          ? ctx.t.bot.publishSentCount(result.total)
+          : result.kind === 'declined'
+            ? ctx.t.publish.declined
+            : ctx.t.bot.alreadyHandled,
+    });
+    await drainOutbox(db, botApi(env), { limit: 100 }).catch((err) =>
+      console.error('publish drain', err),
+    );
   });
 
   // "Who serves where" under an event message, and as a command for the nearest events.

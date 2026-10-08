@@ -1,3 +1,4 @@
+import { mayPrepare, mayPublish, publishEvent, requestPublish } from '../lib/publishRequests';
 import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, desc, eq, isNull } from 'drizzle-orm';
@@ -293,28 +294,44 @@ eventRoutes.delete('/:id/chat/:messageId', async (c) => {
 
 /** The default reminder text, in the sender's language, to read and change before sending. */
 eventRoutes.get('/:id/reminder-text', async (c) => {
-  const { db, user, event } = await managed(c, idParam(c));
+  const { db, user, event } = await remindable(c, idParam(c), 'prepare');
   const locale = localeOf(user, await churchDefaultLocale(db));
   return c.json({ text: await defaultReminderText(db, event, locale) });
 });
 
 /**
- * Remind the ministry (or only chosen people) about this event. Leaders with the right to
- * manage events (church admins and developers included). The text goes as edited, with
- * who sent it.
+ * An event whose reminder the user may send (`publish`: event managers and publishers) or
+ * prepare and test on themselves (designers too).
+ */
+async function remindable(
+  c: { get: (k: 'db' | 'user') => unknown },
+  id: number,
+  need: 'publish' | 'prepare',
+) {
+  const db = c.get('db') as AuthVariables['db'];
+  const user = c.get('user') as AuthVariables['user'];
+  const event = await loadEventOr404(db, id);
+  const ok =
+    need === 'publish'
+      ? await mayPublish(db, user, event.groupId, 'event')
+      : await mayPrepare(db, user, event.groupId, 'event');
+  if (!ok) throw new HTTPException(403, { message: 'forbidden' });
+  return { db, user, event };
+}
+
+/**
+ * Remind the ministry (or only chosen people) about this event: event managers and
+ * publishers (church admins and developers included). The text goes as edited, with who
+ * sent it.
  */
 eventRoutes.post('/:id/remind', async (c) => {
-  const { db, user, event } = await managed(c, idParam(c));
+  const { db, user, event } = await remindable(c, idParam(c), 'publish');
   if (event.status === 'cancelled') throw new HTTPException(409, { message: 'cancelled' });
   const input = await parseBody(c, remindEventSchema);
-  const { total: sent, bot } = await sendEventReminder(db, {
+  const { total: sent, bot } = await publishEvent(db, {
     event,
-    group: { id: event.groupId },
-    text: input.text,
-    userIds: input.userIds,
-    roster: input.roster,
-    poster: input.poster,
-    senderName: displayName(user),
+    input,
+    sender: user,
     envAppUrl: c.env.APP_URL,
     fallbackUrl: appUrlFor(c.env, c.req.url),
   });
@@ -324,15 +341,47 @@ eventRoutes.post('/:id/remind', async (c) => {
         console.error('reminder drain', err),
       ),
     );
-  await audit(db, {
-    actorUserId: user.id,
-    action: 'event_reminder_sent',
-    entity: 'event',
-    entityId: event.id,
-    groupId: event.groupId,
-    data: { sent, chosen: input.userIds?.length ?? null },
-  });
   return c.json({ sent, bot });
+});
+
+/** The reminder as prepared, sent only to the person preparing it (a test). */
+eventRoutes.post('/:id/remind/test', async (c) => {
+  const { db, user, event } = await remindable(c, idParam(c), 'prepare');
+  const input = await parseBody(c, remindEventSchema);
+  const { bot } = await sendEventReminder(db, {
+    event,
+    group: { id: event.groupId },
+    text: input.text,
+    roster: input.roster,
+    poster: input.poster,
+    senderName: displayName(user),
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+    testTo: user.id,
+  });
+  if (bot > 0) await drainOutbox(db, botApi(c.env), { limit: 5 }).catch(() => undefined);
+  return c.json({ sent: bot });
+});
+
+/** A designer hands the prepared reminder to those who may send it. */
+eventRoutes.post('/:id/remind/request', async (c) => {
+  const { db, user, event } = await remindable(c, idParam(c), 'prepare');
+  if (event.status === 'cancelled') throw new HTTPException(409, { message: 'cancelled' });
+  const input = await parseBody(c, remindEventSchema);
+  const res = await requestPublish(db, {
+    kind: 'event',
+    item: event,
+    input,
+    requester: user,
+    envAppUrl: c.env.APP_URL,
+    fallbackUrl: appUrlFor(c.env, c.req.url),
+  });
+  c.executionCtx.waitUntil(
+    drainOutbox(db, botApi(c.env), { limit: 40 }).catch((err) =>
+      console.error('publish request drain', err),
+    ),
+  );
+  return c.json(res);
 });
 
 /** An event's look: designed cover, template and pictures. */
@@ -368,7 +417,7 @@ eventRoutes.patch('/:id', async (c) => {
   const given = (Object.keys(rest) as (keyof typeof rest)[]).filter((k) => rest[k] !== undefined);
   // The poster picture is drawn from the event on every save, so it isn't "the look".
   const isLook = (k: string) =>
-    (EVENT_LOOK as readonly string[]).includes(k) || k === 'posterMediaId';
+    (EVENT_LOOK as readonly string[]).includes(k) || k === 'posterMediaId' || k === 'speakers';
   const lookChanged = EVENT_LOOK.some((k) => lookDiffers(input[k], event[k]));
   if (lookChanged) assertMayDesign(rights, canManage);
   // Someone else changed the look after this form was opened: don't overwrite it unseen.

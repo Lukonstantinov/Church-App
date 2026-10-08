@@ -85,12 +85,14 @@ export function Positions({ groupId }: { groupId: number }) {
 }
 
 const TEMPLATES: {
-  key: 'tplHelper' | 'tplTreasurer' | 'tplMedia' | 'tplHost';
+  key: 'tplHelper' | 'tplTreasurer' | 'tplMedia' | 'tplHost' | 'tplDesigner';
   perms: Permission[];
 }[] = [
   { key: 'tplHelper', perms: ['attendance.take'] },
   { key: 'tplTreasurer', perms: ['money.manage', 'reports'] },
-  { key: 'tplMedia', perms: ['events.manage', 'announce'] },
+  // Media publish themselves; a designer prepares posters and sends them for approval.
+  { key: 'tplMedia', perms: ['events.manage', 'announce', 'design'] },
+  { key: 'tplDesigner', perms: ['design'] },
   { key: 'tplHost', perms: ['attendance.take', 'meetings.manage', 'announce'] },
 ];
 

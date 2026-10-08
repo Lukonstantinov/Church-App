@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 import { displayName } from '@church/shared';
 import { useT } from '../lib/i18n';
-import { fetchReminderText, useEvent, useMe, useRemindEvent } from '../lib/queries';
+import {
+  fetchReminderText,
+  useEvent,
+  useMe,
+  useRemindEvent,
+  useRequestRemindEvent,
+  useTestRemindEvent,
+} from '../lib/queries';
 import { haptic } from '../lib/telegram';
 import {
   AudienceChoice,
@@ -18,6 +25,7 @@ import { Button, Toggle } from './ui';
 /**
  * Remind people about an event: read and change the text, pick who gets it (everyone,
  * those who serve, those who are going, or chosen people) and send. They see who sent it.
+ * A test goes to oneself first; a designer who may not send it hands it in for approval.
  */
 export function EventReminderSheet({
   eventId,
@@ -35,6 +43,10 @@ export function EventReminderSheet({
   const me = useMe();
   const detail = useEvent(eventId);
   const remind = useRemindEvent();
+  const test = useTestRemindEvent();
+  const request = useRequestRemindEvent();
+  const canPublish = detail.data?.canPublish ?? true;
+  const [requested, setRequested] = useState<number | null>(null);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
@@ -75,15 +87,31 @@ export function EventReminderSheet({
     };
   }, [eventId]);
 
-  async function send() {
+  /** Sends it to everyone, only to oneself (a test), or for approval. */
+  async function run(mode: 'send' | 'test' | 'request') {
+    const input = {
+      id: eventId,
+      text: text.trim() || undefined,
+      userIds: audienceIds(audience, presets),
+      roster: withRoster,
+      poster: withPoster && !!picture,
+    };
     try {
-      const res = await remind.mutateAsync({
-        id: eventId,
-        text: text.trim() || undefined,
-        userIds: audienceIds(audience, presets),
-        roster: withRoster,
-        poster: withPoster && !!picture,
-      });
+      if (mode === 'test') {
+        const res = await test.mutateAsync(input);
+        if (res.sent === 0) throw new Error('unreachable');
+        haptic.success();
+        toast(t.publish.testSent);
+        return;
+      }
+      if (mode === 'request') {
+        const res = await request.mutateAsync(input);
+        haptic.success();
+        toast(t.publish.requested(res.asked));
+        setRequested(res.asked);
+        return;
+      }
+      const res = await remind.mutateAsync(input);
       if (res.sent === 0) {
         haptic.error();
         toast(t.events.remindNobody, 'error');
@@ -153,19 +181,36 @@ export function EventReminderSheet({
           value={audience}
           onChange={setAudience}
         />
-        {done !== null ? (
+        {!canPublish && (
+          <p className="text-[13px] leading-snug text-hint">{t.publish.designerHint}</p>
+        )}
+        {done !== null || requested !== null ? (
           <div className="flex items-center justify-center gap-1.5 py-2 text-[15px] font-semibold text-present">
-            <IconCheck size={18} /> {t.events.remindSent(done)}
+            <IconCheck size={18} />{' '}
+            {done !== null ? t.events.remindSent(done) : t.publish.requested(requested ?? 0)}
           </div>
         ) : (
-          <Button
-            disabled={
-              loading || remind.isPending || !text.trim() || audienceEmpty(audience, presets)
-            }
-            onClick={() => void send()}
-          >
-            <IconSend size={16} /> {t.events.remindSend}
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="secondary"
+              disabled={loading || test.isPending || !text.trim()}
+              onClick={() => void run('test')}
+            >
+              {t.publish.testSend}
+            </Button>
+            <Button
+              disabled={
+                loading ||
+                remind.isPending ||
+                request.isPending ||
+                !text.trim() ||
+                audienceEmpty(audience, presets)
+              }
+              onClick={() => void run(canPublish ? 'send' : 'request')}
+            >
+              <IconSend size={16} /> {canPublish ? t.events.remindSend : t.publish.request}
+            </Button>
+          </div>
         )}
       </div>
     </Sheet>

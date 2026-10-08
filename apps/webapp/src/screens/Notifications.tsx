@@ -14,6 +14,7 @@ const ICON: Record<NotificationKind, typeof IconBell> = {
   meeting_announce: IconCalendar,
   meeting_rsvp: IconUsers,
   post_repeat: IconMegaphone,
+  publish_request: IconMegaphone,
 };
 
 const routeOf = (l: NotificationLink): Route =>

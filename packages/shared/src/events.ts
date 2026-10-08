@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { PosterLook } from './api';
+import type { PosterLook, PublishRequestRow } from './api';
 import {
   postDesignSchema,
   speakersSchema,
@@ -275,6 +275,12 @@ export interface EventDetail extends EventSummary {
   canManage: boolean;
   /** May change the cover and template (designers; others unless the look is locked). */
   canDesign: boolean;
+  /** May send a reminder to everyone (event managers and publishers). */
+  canPublish: boolean;
+  /** May prepare a reminder and send a test to themselves (designers and publishers). */
+  canPrepare: boolean;
+  /** The pending prepared reminder, for the approvers and its designer. */
+  publishRequest: PublishRequestRow | null;
   /** Belongs to the ministry (can answer RSVP); false when seeing a pinned event. */
   member: boolean;
 }

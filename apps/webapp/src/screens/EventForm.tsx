@@ -129,6 +129,8 @@ function EventFormBody({
   // With looks locked to designers, others keep the cover as it is.
   const mayDesignHere = useMayDesign();
   const mayDesign = event ? event.canDesign : mayDesignHere;
+  // A designer who can't manage the event changes only its look (the rest stays hidden).
+  const designOnly = !!event && !event.canManage;
 
   const [title, setTitle] = useState(event?.title ?? '');
   const [description, setDescription] = useState(event?.description ?? '');
@@ -323,7 +325,22 @@ function EventFormBody({
       chatUrl: chatUrl.trim() || null,
     };
     try {
-      if (event) {
+      if (event && designOnly) {
+        // Only the look and the speakers (they are on the poster) — nothing else is theirs.
+        await update.mutateAsync({
+          posterMediaId,
+          coverMediaId: common.coverMediaId,
+          posterTemplateId: common.posterTemplateId,
+          coverSlides: common.coverSlides,
+          ...coverPayload(look, coverLook.templateId),
+          ...effectsPayload(effects),
+          speakers: common.speakers,
+          lookVersion: event.lookVersion,
+        });
+        haptic.success();
+        toast(t.common.saved);
+        back();
+      } else if (event) {
         await update.mutateAsync({ ...common, lookVersion: event.lookVersion });
         if (features.duties) await setRoles.mutateAsync({ roles: cleanRoles });
         haptic.success();
@@ -598,104 +615,118 @@ function EventFormBody({
         </Section>
       )}
 
-      <Section>
-        <TextField
-          label={t.events.name}
-          value={title}
-          onChange={setTitle}
-          maxLength={80}
-          autoFocus={!event}
-        />
-        <TextField
-          label={t.events.location}
-          value={location}
-          onChange={setLocation}
-          maxLength={120}
-        />
-      </Section>
-      <Section title={t.events.description}>
-        <TextArea
-          value={description}
-          onChange={setDescription}
-          placeholder={t.events.descriptionPlaceholder}
-          maxLength={2000}
-          rows={4}
-        />
-      </Section>
+      {designOnly && (
+        <p className="px-1 text-[13px] leading-snug text-hint">{t.publish.designOnly}</p>
+      )}
+      {!designOnly && (
+        <>
+          <Section>
+            <TextField
+              label={t.events.name}
+              value={title}
+              onChange={setTitle}
+              maxLength={80}
+              autoFocus={!event}
+            />
+            <TextField
+              label={t.events.location}
+              value={location}
+              onChange={setLocation}
+              maxLength={120}
+            />
+          </Section>
+          <Section title={t.events.description}>
+            <TextArea
+              value={description}
+              onChange={setDescription}
+              placeholder={t.events.descriptionPlaceholder}
+              maxLength={2000}
+              rows={4}
+            />
+          </Section>
 
-      <Section title={t.events.when}>
-        <TextField label={t.events.date} type="date" value={date} onChange={setDate} />
-        <TimeField label={t.events.start} value={startTime} onChange={setStartTime} />
-        <Toggle label={t.events.hasEnd} checked={hasEnd} onChange={setHasEnd} />
-        {hasEnd && (
-          <>
-            <TextField label={t.events.endDate} type="date" value={endDate} onChange={setEndDate} />
-            <TimeField label={t.events.end} value={endTime} onChange={setEndTime} />
-          </>
-        )}
-        <Toggle
-          label={
-            <span className="flex flex-col">
-              <span>{t.meetings.countdown}</span>
-              <span className="text-[12px] font-normal text-hint">{t.meetings.countdownHint}</span>
-            </span>
-          }
-          checked={countdown}
-          onChange={setCountdown}
-        />
-        {countdown && (
-          <fieldset
-            disabled={!mayDesign}
-            className="flex flex-col gap-3.5 px-4 pb-4 pt-1 disabled:opacity-60"
-          >
-            <div className="flex min-h-[44px] items-center">
-              <CountdownBadge
-                startsAt={new Date(`${date}T${startTime || '00:00'}`).toISOString()}
-                design={look.design}
-              />
-            </div>
-            <div>
-              <div className="mb-2 text-[13px] text-hint">{t.meetings.countdownSize}</div>
-              <div className="flex gap-2">
-                {COUNTDOWN_SIZES.map((sz) => (
-                  <Pill
-                    key={sz}
-                    on={(look.design.countdownSize ?? 'm') === sz}
-                    onClick={() =>
-                      setLook({ ...look, design: { ...look.design, countdownSize: sz } })
-                    }
-                    label={sz.toUpperCase()}
+          <Section title={t.events.when}>
+            <TextField label={t.events.date} type="date" value={date} onChange={setDate} />
+            <TimeField label={t.events.start} value={startTime} onChange={setStartTime} />
+            <Toggle label={t.events.hasEnd} checked={hasEnd} onChange={setHasEnd} />
+            {hasEnd && (
+              <>
+                <TextField
+                  label={t.events.endDate}
+                  type="date"
+                  value={endDate}
+                  onChange={setEndDate}
+                />
+                <TimeField label={t.events.end} value={endTime} onChange={setEndTime} />
+              </>
+            )}
+            <Toggle
+              label={
+                <span className="flex flex-col">
+                  <span>{t.meetings.countdown}</span>
+                  <span className="text-[12px] font-normal text-hint">
+                    {t.meetings.countdownHint}
+                  </span>
+                </span>
+              }
+              checked={countdown}
+              onChange={setCountdown}
+            />
+            {countdown && (
+              <fieldset
+                disabled={!mayDesign}
+                className="flex flex-col gap-3.5 px-4 pb-4 pt-1 disabled:opacity-60"
+              >
+                <div className="flex min-h-[44px] items-center">
+                  <CountdownBadge
+                    startsAt={new Date(`${date}T${startTime || '00:00'}`).toISOString()}
+                    design={look.design}
                   />
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="mb-2 text-[13px] text-hint">{t.meetings.countdownColor}</div>
-              <div className="flex flex-wrap items-center gap-2.5">
-                {[null, ...COUNTDOWN_COLORS].map((c) => {
-                  const on = (look.design.countdownColor ?? null) === c;
-                  return (
-                    <button
-                      key={c ?? 'auto'}
-                      type="button"
-                      aria-label={c ?? t.meetings.countdownAuto}
-                      onClick={() =>
-                        setLook({ ...look, design: { ...look.design, countdownColor: c } })
-                      }
-                      className={`h-8 w-8 rounded-full ring-1 ring-black/10 transition active:scale-90 ${
-                        on ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
-                      }`}
-                      style={{
-                        background: c ?? 'linear-gradient(135deg, #f59e0b, #ef4444)',
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </fieldset>
-        )}
-      </Section>
+                </div>
+                <div>
+                  <div className="mb-2 text-[13px] text-hint">{t.meetings.countdownSize}</div>
+                  <div className="flex gap-2">
+                    {COUNTDOWN_SIZES.map((sz) => (
+                      <Pill
+                        key={sz}
+                        on={(look.design.countdownSize ?? 'm') === sz}
+                        onClick={() =>
+                          setLook({ ...look, design: { ...look.design, countdownSize: sz } })
+                        }
+                        label={sz.toUpperCase()}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-2 text-[13px] text-hint">{t.meetings.countdownColor}</div>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {[null, ...COUNTDOWN_COLORS].map((c) => {
+                      const on = (look.design.countdownColor ?? null) === c;
+                      return (
+                        <button
+                          key={c ?? 'auto'}
+                          type="button"
+                          aria-label={c ?? t.meetings.countdownAuto}
+                          onClick={() =>
+                            setLook({ ...look, design: { ...look.design, countdownColor: c } })
+                          }
+                          className={`h-8 w-8 rounded-full ring-1 ring-black/10 transition active:scale-90 ${
+                            on ? 'ring-2 ring-[var(--text)] ring-offset-2' : ''
+                          }`}
+                          style={{
+                            background: c ?? 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              </fieldset>
+            )}
+          </Section>
+        </>
+      )}
 
       <Section
         title={t.events.burnTitle}
@@ -752,113 +783,117 @@ function EventFormBody({
         </fieldset>
       </Section>
 
-      <section>
-        <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-          {t.events.sections}
-        </h2>
-        <p className="mb-2.5 px-3 text-[13px] text-hint">{t.events.sectionsHint}</p>
-        <div className="grid grid-cols-2 gap-2.5">
-          <FeatureTile
-            on={features.rsvp}
-            onClick={() => toggle('rsvp')}
-            icon={<IconCheck size={20} />}
-            title={t.events.features.rsvp}
-            hint={t.events.featureHints.rsvp}
-          />
-          <FeatureTile
-            on={features.duties}
-            onClick={() => toggle('duties')}
-            icon={<IconUsers size={20} />}
-            title={t.events.features.duties}
-            hint={t.events.featureHints.duties}
-          />
-          <FeatureTile
-            on={features.gallery}
-            onClick={() => toggle('gallery')}
-            icon={<IconImage size={20} />}
-            title={t.events.features.gallery}
-            hint={t.events.featureHints.gallery}
-          />
-          <FeatureTile
-            on={features.cost}
-            onClick={() => toggle('cost')}
-            icon={<IconCoins size={20} />}
-            title={t.events.features.cost}
-            hint={t.events.featureHints.cost}
-          />
-        </div>
-      </section>
-
-      {features.cost && (
-        <Section title={t.events.features.cost}>
-          <label className="flex items-center gap-2 px-4 py-3">
-            <span className="flex-1 text-[17px]">{t.events.price}</span>
-            <input
-              inputMode="decimal"
-              placeholder="0"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="w-24 bg-transparent text-right text-[20px] font-semibold tabular-nums outline-none"
-            />
-            <span className="text-[17px] text-hint">{money.symbol}</span>
-          </label>
-        </Section>
-      )}
-
-      {features.duties && (
-        <Section title={t.events.roles}>
-          {roles.map((r) => (
-            <div key={r.key} className="flex flex-col border-b border-hairline px-4 py-2">
-              <div className="flex items-center gap-2">
-                <input
-                  value={r.name}
-                  placeholder={t.events.roleName}
-                  maxLength={40}
-                  onChange={(e) => editRole(r.key, { name: e.target.value })}
-                  className="min-w-0 flex-1 bg-transparent py-2 text-[17px] outline-none placeholder:text-hint"
-                />
-                <Stepper value={r.slots} onChange={(slots) => editRole(r.key, { slots })} />
-                <button
-                  type="button"
-                  aria-label="remove"
-                  onClick={() => setRoleDrafts((x) => x.filter((y) => y.key !== r.key))}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-hint active:bg-hairline"
-                >
-                  <IconX size={18} />
-                </button>
-              </div>
-              <textarea
-                value={r.description}
-                placeholder={t.events.roleDescription}
-                maxLength={600}
-                rows={2}
-                onChange={(e) => editRole(r.key, { description: e.target.value })}
-                className="mb-1 w-full resize-y rounded-xl bg-hairline px-3 py-2 text-[14px] leading-snug outline-none placeholder:text-hint"
+      {!designOnly && (
+        <>
+          <section>
+            <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+              {t.events.sections}
+            </h2>
+            <p className="mb-2.5 px-3 text-[13px] text-hint">{t.events.sectionsHint}</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <FeatureTile
+                on={features.rsvp}
+                onClick={() => toggle('rsvp')}
+                icon={<IconCheck size={20} />}
+                title={t.events.features.rsvp}
+                hint={t.events.featureHints.rsvp}
+              />
+              <FeatureTile
+                on={features.duties}
+                onClick={() => toggle('duties')}
+                icon={<IconUsers size={20} />}
+                title={t.events.features.duties}
+                hint={t.events.featureHints.duties}
+              />
+              <FeatureTile
+                on={features.gallery}
+                onClick={() => toggle('gallery')}
+                icon={<IconImage size={20} />}
+                title={t.events.features.gallery}
+                hint={t.events.featureHints.gallery}
+              />
+              <FeatureTile
+                on={features.cost}
+                onClick={() => toggle('cost')}
+                icon={<IconCoins size={20} />}
+                title={t.events.features.cost}
+                hint={t.events.featureHints.cost}
               />
             </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => setRolePicker(true)}
-            className="flex min-h-[52px] w-full items-center gap-2 px-4 text-[17px] text-accent active:bg-hairline"
-          >
-            <IconPlus size={20} /> {t.events.addRole}
-          </button>
-        </Section>
-      )}
+          </section>
 
-      <Section title={t.events.chat} footer={chatOk ? undefined : t.events.chatInvalid}>
-        <label className="flex items-center gap-3 px-4 py-3">
-          <IconTelegram size={20} className="shrink-0 text-accent" />
-          <input
-            value={chatUrl}
-            onChange={(e) => setChatUrl(e.target.value)}
-            placeholder={t.events.chatPlaceholder}
-            inputMode="url"
-            className="min-w-0 flex-1 bg-transparent text-[17px] outline-none placeholder:text-hint"
-          />
-        </label>
-      </Section>
+          {features.cost && (
+            <Section title={t.events.features.cost}>
+              <label className="flex items-center gap-2 px-4 py-3">
+                <span className="flex-1 text-[17px]">{t.events.price}</span>
+                <input
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  className="w-24 bg-transparent text-right text-[20px] font-semibold tabular-nums outline-none"
+                />
+                <span className="text-[17px] text-hint">{money.symbol}</span>
+              </label>
+            </Section>
+          )}
+
+          {features.duties && (
+            <Section title={t.events.roles}>
+              {roles.map((r) => (
+                <div key={r.key} className="flex flex-col border-b border-hairline px-4 py-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={r.name}
+                      placeholder={t.events.roleName}
+                      maxLength={40}
+                      onChange={(e) => editRole(r.key, { name: e.target.value })}
+                      className="min-w-0 flex-1 bg-transparent py-2 text-[17px] outline-none placeholder:text-hint"
+                    />
+                    <Stepper value={r.slots} onChange={(slots) => editRole(r.key, { slots })} />
+                    <button
+                      type="button"
+                      aria-label="remove"
+                      onClick={() => setRoleDrafts((x) => x.filter((y) => y.key !== r.key))}
+                      className="flex h-8 w-8 items-center justify-center rounded-full text-hint active:bg-hairline"
+                    >
+                      <IconX size={18} />
+                    </button>
+                  </div>
+                  <textarea
+                    value={r.description}
+                    placeholder={t.events.roleDescription}
+                    maxLength={600}
+                    rows={2}
+                    onChange={(e) => editRole(r.key, { description: e.target.value })}
+                    className="mb-1 w-full resize-y rounded-xl bg-hairline px-3 py-2 text-[14px] leading-snug outline-none placeholder:text-hint"
+                  />
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setRolePicker(true)}
+                className="flex min-h-[52px] w-full items-center gap-2 px-4 text-[17px] text-accent active:bg-hairline"
+              >
+                <IconPlus size={20} /> {t.events.addRole}
+              </button>
+            </Section>
+          )}
+
+          <Section title={t.events.chat} footer={chatOk ? undefined : t.events.chatInvalid}>
+            <label className="flex items-center gap-3 px-4 py-3">
+              <IconTelegram size={20} className="shrink-0 text-accent" />
+              <input
+                value={chatUrl}
+                onChange={(e) => setChatUrl(e.target.value)}
+                placeholder={t.events.chatPlaceholder}
+                inputMode="url"
+                className="min-w-0 flex-1 bg-transparent text-[17px] outline-none placeholder:text-hint"
+              />
+            </label>
+          </Section>
+        </>
+      )}
 
       {!event && (
         <Section footer={t.events.notifyHint}>
