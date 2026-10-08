@@ -291,6 +291,7 @@ function PinnedPiece({ g }: { g: GroupSummary }) {
     endsAt: null,
     location: null,
     coverUrl: null,
+    coverLoop: null,
     features: { gallery: false, rsvp: false, duties: false, cost: false },
     priceCents: null,
     status: 'scheduled',

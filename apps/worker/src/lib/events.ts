@@ -17,6 +17,7 @@ import {
   type RoleInput,
   type RsvpStatus,
   type MotionTune,
+  fingerprint,
 } from '@church/shared';
 import type { Db } from '../db/client';
 import { pendingRequests } from './publishRequests';
@@ -370,6 +371,7 @@ async function summarize(
         endsAt: e.endsAt,
         location: e.location,
         coverUrl: e.coverMediaId ? await signedMediaUrl(secret, e.coverMediaId) : null,
+        coverLoop: freshCoverLoop(e),
         features: features(e),
         priceCents: e.priceCents,
         status: e.status,
@@ -404,6 +406,32 @@ async function summarize(
       };
     }),
   );
+}
+
+/**
+ * What a recorded cover loop shows: the cover photo and its effects. Only a single photo
+ * (no slideshow, no poster template) is recorded; texts stay live over it.
+ */
+export function coverLoopKey(
+  e: Pick<EventRow, 'coverMediaId' | 'motion' | 'motionTune' | 'motionLayers'>,
+): string {
+  return fingerprint(JSON.stringify([e.coverMediaId, e.motion, e.motionTune, e.motionLayers]));
+}
+
+/** May the cover be recorded as a loop (a single photo with effects)? */
+export const loopableCover = (
+  e: Pick<EventRow, 'coverMediaId' | 'motion' | 'coverSlides' | 'posterTemplateId'>,
+) => !!e.coverMediaId && !!e.motion && e.motion !== 'off' && !e.coverSlides && !e.posterTemplateId;
+
+/** The recorded cover loop while it still shows the cover as it is. */
+function freshCoverLoop(e: EventRow): { mediaId: number } | null {
+  if (!e.coverLoop || !loopableCover(e)) return null;
+  try {
+    const v = JSON.parse(e.coverLoop) as { mediaId?: number; key?: string };
+    return v.mediaId && v.key === coverLoopKey(e) ? { mediaId: v.mediaId } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** An event counts as upcoming until it ends (or a day after the start without an end). */

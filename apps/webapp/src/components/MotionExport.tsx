@@ -1,7 +1,9 @@
-import { useState, type RefObject } from 'react';
-import type { EventSummary } from '@church/shared';
+import { useRef, useState, type RefObject } from 'react';
+import type { EventDetail, EventSummary } from '@church/shared';
+import { FullMotion } from '../lib/perf';
+import { CoverPicture } from './CoverSlideshow';
 import { useT } from '../lib/i18n';
-import { sendAnimationToChat } from '../lib/queries';
+import { sendAnimationToChat, useCoverLoop } from '../lib/queries';
 import { haptic } from '../lib/telegram';
 import { EventCover, useEventWhen } from './EventCard';
 import { useToast } from './Toast';
@@ -125,6 +127,94 @@ export function EventMotionPoster({
             {e.location && <div className="mt-0.5 text-[14px] opacity-90">📍 {e.location}</div>}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * «🎬 Video cover»: the cover photo with its effects recorded once as a loop that phones
+ * play instead of drawing the effects (event cards, pinned card, event screen). Only a
+ * single photo with effects; any later change of the photo or effects brings the live
+ * effects back until it is recorded again (the server keeps its fingerprint).
+ */
+export function CoverLoopSection({ e }: { e: EventDetail }) {
+  const t = useT();
+  const toast = useToast();
+  const save = useCoverLoop(e.id);
+  const node = useRef<HTMLDivElement>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  const moving = !!e.motion && e.motion !== 'off';
+  if (!e.canDesign || !e.coverUrl || e.poster || e.coverSlides || !moving) return null;
+
+  async function record() {
+    setProgress(0);
+    try {
+      await new Promise((r) => setTimeout(r, 500));
+      const { recordLoop } = await import('../lib/recorder');
+      if (!node.current) throw new Error('no_cover');
+      const rec = await recordLoop(node.current, { quality: 0.08, onProgress: setProgress });
+      if (!rec.mp4) {
+        toast(t.studio.bakeNoVideo, 'error');
+        return;
+      }
+      await save.mutateAsync(rec.mp4);
+      haptic.success();
+      toast(t.common.saved);
+    } catch (err) {
+      console.warn('cover loop failed', err);
+      haptic.error();
+      toast(t.motionExport.failed, 'error');
+    } finally {
+      setProgress(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl p-3 ring-1 ring-hairline">
+      <div className="text-[15px] font-semibold">{t.motionExport.coverTitle}</div>
+      <p className="text-[12px] leading-snug text-hint">{t.motionExport.coverHint}</p>
+      {e.coverLoop && (
+        <p className="text-[13px] font-semibold text-present">✓ {t.studio.bakeFresh}</p>
+      )}
+      {progress !== null ? (
+        <div className="flex flex-col gap-1.5 py-1">
+          <div className="h-2 overflow-hidden rounded-full bg-hairline">
+            <div
+              className="h-full rounded-full bg-[var(--brand)] transition-[width] duration-200"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          </div>
+          <div className="text-center text-[13px] text-hint">
+            {t.motionExport.recording(Math.round(progress * 100))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <Button small disabled={save.isPending} onClick={() => void record()}>
+            🎬 {e.coverLoop ? t.studio.bakeAgain : t.studio.bakeRecord}
+          </Button>
+          {e.coverLoop && (
+            <Button
+              small
+              variant="glass"
+              disabled={save.isPending}
+              onClick={() => void save.mutateAsync(null).catch(() => undefined)}
+            >
+              {t.studio.bakeRemove}
+            </Button>
+          )}
+        </div>
+      )}
+      {/* The cover (photo and effects, no texts), off screen and only while recording. */}
+      {progress !== null && (
+        <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0 }}>
+          <FullMotion.Provider value>
+            <div ref={node} className="relative aspect-[4/3] w-[400px] overflow-hidden bg-black">
+              <CoverPicture e={{ ...e, coverLoop: null }} />
+            </div>
+          </FullMotion.Provider>
+        </div>
       )}
     </div>
   );

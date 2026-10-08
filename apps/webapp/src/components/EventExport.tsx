@@ -13,7 +13,7 @@ import { IconCheck, IconSend } from './icons';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
 import { Button } from './ui';
-import { EventMotionPoster, MotionExport } from './MotionExport';
+import { CoverLoopSection, EventMotionPoster, MotionExport } from './MotionExport';
 import { FullMotion } from '../lib/perf';
 
 type Job = 'picture' | 'file' | 'pdf' | 'excel';
@@ -167,6 +167,7 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
           </div>
         )}
         <MotionExport node={motionNode} name={e.title} onRecording={setRecording} />
+        <CoverLoopSection e={e} />
         {btn('picture', t.events.exportPicture, 'primary')}
         {btn('file', t.events.exportPictureFile)}
         {btn('pdf', t.events.exportPdf)}

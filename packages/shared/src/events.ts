@@ -180,6 +180,11 @@ export interface EventSummary {
   endsAt: string | null;
   location: string | null;
   coverUrl: string | null;
+  /**
+   * The cover photo with its effects as a recorded looping video (plays instead of the
+   * live effects); null when there is none or the cover or effects changed since.
+   */
+  coverLoop: { mediaId: number } | null;
   features: EventFeatures;
   priceCents: number | null;
   status: 'scheduled' | 'cancelled';

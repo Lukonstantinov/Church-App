@@ -18,6 +18,7 @@ import {
   setRolesSchema,
   updateEventSchema,
   type PostDesign,
+  LOOP_MAX_BYTES,
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
@@ -49,14 +50,16 @@ import {
   eventTimes,
   listEvents,
   listPinned,
+  coverLoopKey,
   loadEventOr404,
+  loopableCover,
   setProgram,
   setRoles,
   setRsvp,
 } from '../lib/events';
 import { defaultReminderText, notifyDuties, sendEventReminder } from '../lib/eventReminder';
 import { startEventChatLink, unlinkEventChat } from '../lib/eventChats';
-import { assertGroupMedia, assertSpeakerPhotos } from '../lib/media';
+import { assertGroupMedia, assertSpeakerPhotos, readLoopUpload, storeMedia } from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi, botUsername } from '../lib/telegram';
 import { displayName } from '@church/shared';
@@ -382,6 +385,43 @@ eventRoutes.post('/:id/remind/request', async (c) => {
     ),
   );
   return c.json(res);
+});
+
+/**
+ * The cover photo with its effects recorded on the phone as a looping video (raw MP4):
+ * phones then play it instead of drawing the effects. Kept with the cover's fingerprint, so
+ * a later change of the photo or effects brings the live effects back. DELETE removes it.
+ */
+eventRoutes.post('/:id/cover-loop', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const event = await loadEventOr404(db, idParam(c));
+  const { canManage } = await eventAccess(db, user, event);
+  assertMayDesign(await designRights(db, user, event.groupId), canManage);
+  if (!loopableCover(event)) throw new HTTPException(409, { message: 'not_loopable' });
+  const bytes = await readLoopUpload(c.req, LOOP_MAX_BYTES);
+  const mediaId = await storeMedia(db, {
+    groupId: event.groupId,
+    kind: 'event',
+    bytes,
+    mime: 'video/mp4',
+    createdBy: user.id,
+  });
+  await db
+    .update(events)
+    .set({ coverLoop: JSON.stringify({ mediaId, key: coverLoopKey(event) }) })
+    .where(eq(events.id, event.id));
+  return c.json({ mediaId }, 201);
+});
+
+eventRoutes.delete('/:id/cover-loop', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const event = await loadEventOr404(db, idParam(c));
+  const { canManage } = await eventAccess(db, user, event);
+  assertMayDesign(await designRights(db, user, event.groupId), canManage);
+  await db.update(events).set({ coverLoop: null }).where(eq(events.id, event.id));
+  return c.json({ ok: true });
 });
 
 /** An event's look: designed cover, template and pictures. */

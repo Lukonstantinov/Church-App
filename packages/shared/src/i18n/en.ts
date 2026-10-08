@@ -1635,6 +1635,9 @@ export const en: Messages = {
     },
   },
   motionExport: {
+    coverTitle: '🎬 Video cover',
+    coverHint:
+      'The cover photo with its effects is recorded as one short video — phones play it instead of every effect (cards, the pinned event, the event screen). After changing the photo or effects, record it again.',
     sendMoving: '🎬 Send the poster moving',
     sendMovingHint:
       'The poster goes as a short video — it plays like a GIF in Telegram. Recording takes 10–30 seconds; without effects or on an older phone the still picture goes.',

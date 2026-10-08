@@ -661,4 +661,46 @@ describe('adding people and environment look', () => {
     expect(sent).toHaveLength(1);
     expect(String(sent[0]!.body.caption)).toContain('Смотрите!');
   });
+  it('an event cover with effects can be recorded as a loop, forgotten when the cover changes', async () => {
+    const g = await createEnv('Обложка');
+    const photo = (await (
+      await api(`/api/groups/${g.id}/media?kind=event`, {
+        method: 'POST',
+        user: ADMIN,
+        body: PNG,
+        headers: { 'content-type': 'image/png' },
+      })
+    ).json()) as { id: number };
+    const ev = await apiJson<{ id: number }>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'Концерт',
+        date: '2031-07-01',
+        startTime: '19:00',
+        coverMediaId: photo.id,
+        motion: 'embers',
+      },
+    });
+    const mp4 = Uint8Array.from([
+      0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 1, 2,
+    ]);
+    const rec = await api(`/api/events/${ev.id}/cover-loop`, {
+      method: 'POST',
+      user: ADMIN,
+      body: mp4,
+    });
+    expect(rec.status).toBe(201);
+    const { mediaId } = (await rec.json()) as { mediaId: number };
+    const seen = await apiJson<EventDetail>(`/api/events/${ev.id}`, { user: ADMIN });
+    expect(seen.coverLoop).toEqual({ mediaId });
+    // Other effects: the recording no longer shows the cover, so it isn't used.
+    await apiJson(`/api/events/${ev.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { motion: 'snow' },
+    });
+    const after = await apiJson<EventDetail>(`/api/events/${ev.id}`, { user: ADMIN });
+    expect(after.coverLoop).toBeNull();
+  });
 });

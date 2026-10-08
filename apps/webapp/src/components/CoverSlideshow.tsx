@@ -1,3 +1,4 @@
+import { LoopVideo } from './LoopVideo';
 import { useEffect, useState, type CSSProperties } from 'react';
 import type { EventSummary } from '@church/shared';
 import { CoverEffectLayers } from './CoverEffects';
@@ -30,13 +31,23 @@ export function CoverPicture({
   photos = coverPhotos(e),
   seconds = e.coverSlides?.seconds ?? 5,
 }: {
-  e: Partial<Pick<EventSummary, 'motion' | 'motionTune' | 'motionLayers' | 'coverSlides'>> &
+  e: Partial<
+    Pick<EventSummary, 'motion' | 'motionTune' | 'motionLayers' | 'coverSlides' | 'coverLoop'>
+  > &
     Pick<EventSummary, 'coverUrl'>;
   photos?: string[];
   seconds?: number;
 }) {
   const i = useSlide(photos.length, seconds);
   if (photos.length === 0) return <CoverEffectLayers e={e} />;
+  // The photo with its effects recorded as one video: it plays instead of the live effects.
+  if (e.coverLoop && photos.length === 1)
+    return (
+      <>
+        <img src={photos[0]} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <LoopVideo mediaId={e.coverLoop.mediaId} />
+      </>
+    );
   return (
     <>
       {photos.length === 1 ? (

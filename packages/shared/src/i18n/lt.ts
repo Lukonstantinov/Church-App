@@ -1670,6 +1670,9 @@ export const lt: Messages = {
     },
   },
   motionExport: {
+    coverTitle: '🎬 Vaizdo viršelis',
+    coverHint:
+      'Viršelio nuotrauka su efektais įrašoma vienu trumpu vaizdo įrašu — telefonai groja jį vietoj visų efektų (kortelės, prisegtas renginys, renginio ekranas). Pakeitę nuotrauką ar efektus įrašykite iš naujo.',
     sendMoving: '🎬 Siųsti judantį plakatą',
     sendMovingHint:
       'Plakatas bus išsiųstas trumpu vaizdo įrašu — Telegram groja kaip GIF. Įrašymas užtrunka 10–30 sekundžių; be efektų ar senesniame telefone išsiųs paprastą paveikslėlį.',

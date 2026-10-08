@@ -191,7 +191,11 @@ export function bakeKey(look: ModuleLook): string {
     pic(look.photo),
     pic(look.photo2),
   ]);
-  // FNV-1a: short and stable; only has to tell looks apart.
+  return fingerprint(text);
+}
+
+/** A short stable fingerprint of a text (FNV-1a): it only has to tell looks apart. */
+export function fingerprint(text: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);

@@ -1180,6 +1180,22 @@ export function useRequestRemindEvent() {
   });
 }
 
+/** The event's cover photo with its effects recorded as a loop (or removed with null). */
+export function useCoverLoop(eventId: number) {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: (video: Blob | null): Promise<unknown> =>
+      video
+        ? apiFetch<{ mediaId: number }>(`/events/${eventId}/cover-loop`, {
+            method: 'POST',
+            body: video,
+            headers: { 'content-type': 'video/mp4' },
+          })
+        : apiFetch<{ ok: true }>(`/events/${eventId}/cover-loop`, send('DELETE')),
+    onSuccess: invalidate,
+  });
+}
+
 export function useEvent(id: number, enabled = true) {
   return useQuery({
     queryKey: keys.event(id),

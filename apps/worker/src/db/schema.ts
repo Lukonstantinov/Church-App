@@ -631,6 +631,11 @@ export const events = sqliteTable(
     motionLayers: text('motion_layers'),
     /** Cover slideshow: JSON {mediaIds, seconds} — more photos after the cover, in turn. */
     coverSlides: text('cover_slides'),
+    /**
+     * The cover photo with its effects recorded as a looping video: JSON {mediaId, key}; used
+     * only while `key` still matches the cover and effects (lib/events.ts coverLoopKey).
+     */
+    coverLoop: text('cover_loop'),
     /** A poster template from Design → Posters for its cover (null = none). */
     posterTemplateId: integer('poster_template_id'),
     /** Goes up with every change of its look: a sheet opened before it can't overwrite it. */

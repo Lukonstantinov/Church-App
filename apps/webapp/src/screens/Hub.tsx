@@ -381,7 +381,7 @@ export function PinnedEventCard({
               {e.poster ? (
                 <LayeredPoster fill tpl={e.poster} texts={posterTexts(e)} coverUrl={e.coverUrl} />
               ) : partMotions.length ? (
-                <CoverPicture e={{ ...e, motion: null, motionLayers: [] }} />
+                <CoverPicture e={{ ...e, motion: null, motionLayers: [], coverLoop: null }} />
               ) : (
                 <CoverPicture e={e} />
               )}
