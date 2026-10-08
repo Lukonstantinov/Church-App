@@ -118,6 +118,7 @@ groupEventRoutes.post('/:id/events', async (c) => {
       templateId: input.templateId ?? null,
       motion: input.motion ?? null,
       motionTune: input.motionTune ? JSON.stringify(input.motionTune) : null,
+      motionLayers: input.motionLayers?.length ? JSON.stringify(input.motionLayers) : null,
       countdown: input.countdown ?? false,
       speakers: input.speakers.length ? JSON.stringify(input.speakers) : null,
       hasGallery: input.features.gallery,
@@ -330,7 +331,14 @@ eventRoutes.post('/:id/remind', async (c) => {
 });
 
 /** An event's look: designed cover, template and pictures. */
-const EVENT_LOOK = ['design', 'templateId', 'coverMediaId', 'motion', 'motionTune'] as const;
+const EVENT_LOOK = [
+  'design',
+  'templateId',
+  'coverMediaId',
+  'motion',
+  'motionTune',
+  'motionLayers',
+] as const;
 
 eventRoutes.patch('/:id', async (c) => {
   const db = c.get('db');
@@ -368,6 +376,8 @@ eventRoutes.patch('/:id', async (c) => {
   if (input.motion !== undefined) patch.motion = input.motion;
   if (input.motionTune !== undefined)
     patch.motionTune = input.motionTune ? JSON.stringify(input.motionTune) : null;
+  if (input.motionLayers !== undefined)
+    patch.motionLayers = input.motionLayers?.length ? JSON.stringify(input.motionLayers) : null;
   if (input.speakers !== undefined) {
     await assertSpeakerPhotos(db, event.groupId, input.speakers);
     patch.speakers = input.speakers.length ? JSON.stringify(input.speakers) : null;

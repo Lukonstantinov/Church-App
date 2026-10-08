@@ -7,7 +7,8 @@ import { useT } from '../lib/i18n';
 import { IconCheck, IconMapPin, IconUsers } from './icons';
 import { PosterMedia } from './Poster';
 import { useMoney } from './money';
-import { Badge, DateBadge, LivingLayer } from './ui';
+import { CoverEffectLayers } from './CoverEffects';
+import { Badge, DateBadge } from './ui';
 
 /** "пт, 2 окт · 18:00" or a date range for multi-day events. */
 export function useEventWhen() {
@@ -32,12 +33,11 @@ export function EventCover({
   compact,
 }: {
   e: Pick<EventSummary, 'coverUrl' | 'design' | 'look' | 'title'> &
-    Partial<Pick<EventSummary, 'speakers' | 'motion' | 'motionTune'>>;
+    Partial<Pick<EventSummary, 'speakers' | 'motion' | 'motionTune' | 'motionLayers'>>;
   className?: string;
   compact?: boolean;
 }) {
-  const motion = e.motion && e.motion !== 'off' ? e.motion : null;
-  const layer = motion && <LivingLayer kind={motion} tune={e.motionTune} image={e.coverUrl} />;
+  const layer = <CoverEffectLayers e={e} image={e.coverUrl} />;
   if (e.coverUrl)
     return (
       <div className={`relative w-full overflow-hidden ${className}`}>

@@ -1,12 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import {
-  parseAmount,
-  type EventDetail,
-  type EventFeatures,
-  type MeetingMotion,
-  type MotionTune,
-  type PostDesign,
-} from '@church/shared';
+import { parseAmount, type EventDetail, type EventFeatures, type PostDesign } from '@church/shared';
 import {
   CoverLookControls,
   TitleStyleControls,
@@ -18,7 +11,13 @@ import {
 import { BURN_COLORS, BURN_STYLES } from '../components/Burn';
 import { COUNTDOWN_COLORS, COUNTDOWN_SIZES, CountdownBadge } from '../components/Countdown';
 import { Pill } from '../components/LookControls';
-import { MotionPicker } from '../components/MotionPicker';
+import {
+  CoverEffectLayers,
+  CoverEffects,
+  effectsPayload,
+  initEffects,
+  type EffectsState,
+} from '../components/CoverEffects';
 import { PosterMedia } from '../components/Poster';
 import {
   SpeakersEditor,
@@ -46,7 +45,6 @@ import { useToast } from '../components/Toast';
 import {
   Button,
   ErrorState,
-  LivingLayer,
   Loading,
   Screen,
   Section,
@@ -163,15 +161,10 @@ function EventFormBody({
   );
   const [notify, setNotify] = useState(true);
   const [countdown, setCountdown] = useState(event?.countdown ?? false);
-  // The cover's animation; each one tried keeps its own settings while the form is open.
-  const [motion, setMotion] = useState<MeetingMotion | null>(event?.motion ?? null);
-  const [tunes, setTunes] = useState<Partial<Record<MeetingMotion, MotionTune>>>(() =>
-    event?.motion && event.motionTune ? { [event.motion]: event.motionTune } : {},
-  );
-  const coverMotion = motion && motion !== 'off' ? motion : null;
-  const coverLayer = coverMotion && (
-    <LivingLayer kind={coverMotion} tune={tunes[coverMotion]} image={cover?.url} />
-  );
+  // The cover's effects (several can combine), folded away until wanted.
+  const [effects, setEffects] = useState<EffectsState>(() => initEffects(event));
+  const [effectsOpen, setEffectsOpen] = useState(false);
+  const coverLayer = <CoverEffectLayers e={effectsPayload(effects)} image={cover?.url} />;
   const [speakers, setSpeakers] = useState<SpeakerDraft[]>(() => toDrafts(event?.speakers));
   // Without a cover photo the event shows a designed cover, like posts.
   const [look, setLook] = useState<CoverState>(() =>
@@ -260,8 +253,7 @@ function EventFormBody({
       ...coverPayload(look, coverLook.templateId),
       features,
       countdown,
-      motion: coverMotion,
-      motionTune: coverMotion ? (tunes[coverMotion] ?? null) : null,
+      ...effectsPayload(effects),
       speakers: toSpeakerInputs(speakers),
       priceCents: features.cost ? priceCents : null,
       chatUrl: chatUrl.trim() || null,
@@ -307,25 +299,34 @@ function EventFormBody({
         onChange={(e) => void pickCover(e.target.files?.[0])}
       />
       {cover ? (
-        <div className="relative overflow-hidden rounded-[var(--radius-card)] shadow-card">
-          <img src={cover.url} alt="" className="aspect-[16/9] w-full object-cover" />
-          {coverLayer}
-          <div className={`absolute bottom-2 right-2 flex gap-2 ${mayDesign ? '' : 'hidden'}`}>
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
-              className="flex h-10 items-center gap-1.5 rounded-full bg-black/55 px-3.5 text-[14px] font-semibold text-white backdrop-blur"
-            >
-              <IconCamera size={17} /> {t.events.changeCover}
-            </button>
-            <button
-              type="button"
-              aria-label="remove"
-              onClick={() => setCover(null)}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur"
-            >
-              <IconX size={18} />
-            </button>
+        // While the effects are open the cover stays in view, so every change shows at once.
+        <div
+          className={
+            effectsOpen
+              ? 'glass-strong sticky top-0 z-10 -mx-4 rounded-b-[26px] px-4 pb-3 pt-3'
+              : undefined
+          }
+        >
+          <div className="relative overflow-hidden rounded-[var(--radius-card)] shadow-card">
+            <img src={cover.url} alt="" className="aspect-[16/9] w-full object-cover" />
+            {coverLayer}
+            <div className={`absolute bottom-2 right-2 flex gap-2 ${mayDesign ? '' : 'hidden'}`}>
+              <button
+                type="button"
+                onClick={() => fileInput.current?.click()}
+                className="flex h-10 items-center gap-1.5 rounded-full bg-black/55 px-3.5 text-[14px] font-semibold text-white backdrop-blur"
+              >
+                <IconCamera size={17} /> {t.events.changeCover}
+              </button>
+              <button
+                type="button"
+                aria-label="remove"
+                onClick={() => setCover(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur"
+              >
+                <IconX size={18} />
+              </button>
+            </div>
           </div>
         </div>
       ) : look.design.banner ? (
@@ -411,16 +412,12 @@ function EventFormBody({
       )}
 
       {(cover || look.design.banner) && mayDesign && (
-        <Section title={t.events.coverMotion} footer={t.events.coverMotionHint}>
-          <div className="p-3">
-            <MotionPicker
-              value={motion ?? 'off'}
-              onChange={(m) => setMotion(m === 'off' ? null : m)}
-              tuneOf={(m) => tunes[m] ?? null}
-              onTune={(m, tune) => setTunes((all) => ({ ...all, [m]: tune ?? {} }))}
-            />
-          </div>
-        </Section>
+        <CoverEffects
+          state={effects}
+          onChange={setEffects}
+          open={effectsOpen}
+          onOpen={setEffectsOpen}
+        />
       )}
 
       <Section title={t.meetings.speakers}>

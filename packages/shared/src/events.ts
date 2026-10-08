@@ -25,6 +25,12 @@ export const chatUrlSchema = z
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM');
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
+/** More cover effects drawn over the first one (up to three), each with its settings. */
+export const motionLayersSchema = z
+  .array(z.object({ kind: z.enum(MEETING_MOTIONS), tune: motionTuneSchema.nullish() }))
+  .max(3);
+export type MotionLayer = { kind: MeetingMotion; tune?: MotionTune | null };
+
 const optionalText = (max: number) =>
   z
     .string()
@@ -72,6 +78,7 @@ export const createEventSchema = z.object({
   /** The cover's animation (null = none) and its settings. */
   motion: z.enum(MEETING_MOTIONS).nullish(),
   motionTune: motionTuneSchema.nullish(),
+  motionLayers: motionLayersSchema.nullish(),
   /** Show a "🔥 N days left" countdown. */
   countdown: z.boolean().default(false),
   /** Up to four speakers, shown on the poster. */
@@ -99,6 +106,7 @@ export const updateEventSchema = z.object({
   templateId: z.number().int().positive().nullable().optional(),
   motion: z.enum(MEETING_MOTIONS).nullable().optional(),
   motionTune: motionTuneSchema.nullable().optional(),
+  motionLayers: motionLayersSchema.nullable().optional(),
   countdown: z.boolean().optional(),
   speakers: speakersSchema.optional(),
   features: featuresSchema.partial().optional(),
@@ -163,6 +171,8 @@ export interface EventSummary {
   /** The cover's animation (null = none) and its settings. */
   motion: MeetingMotion | null;
   motionTune: MotionTune | null;
+  /** More effects drawn over it. */
+  motionLayers: MotionLayer[];
   countdown: boolean;
   /** Up to four speakers shown on the poster. */
   speakers: Speaker[];

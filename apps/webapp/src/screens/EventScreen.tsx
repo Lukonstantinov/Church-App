@@ -6,6 +6,7 @@ import { isLiveWindow } from '../lib/live';
 import { EventChat } from '../components/EventChat';
 import { EventExport } from '../components/EventExport';
 import { EventCover } from '../components/EventCard';
+import { CoverEffectLayers } from '../components/CoverEffects';
 import { EventReminderSheet } from '../components/EventReminderSheet';
 import { ProgramBlock } from '../components/EventProgram';
 import { PosterBackfill } from '../components/PosterBackfill';
@@ -128,6 +129,7 @@ function EventBody({ e }: { e: EventDetail }) {
       {e.coverUrl ? (
         <div className="relative -mx-4 -mt-4 overflow-hidden">
           <img src={e.coverUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+          <CoverEffectLayers e={e} image={e.coverUrl} />
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 p-5 text-white">{header}</div>
           <CountdownOnCover e={e} />

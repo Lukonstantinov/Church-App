@@ -92,8 +92,8 @@ time-changed and cancelled notices with "Will you come?" answers. Roll call (als
 past meeting), expenses against a budget, calendar with notes (last 12 months + all coming;
 past meetings are never auto-removed, only `DELETE /api/meetings/:id` after two confirmations). Meeting screen has a living animated hero.
 
-**Events** — cover photo or designed cover with its own animation (`events.motion`, `motion_tune`; the
-TV glitch tears the cover photo itself), speakers, countdown, burning outline,
+**Events** — cover photo or designed cover with up to 4 combined effects (`events.motion`, `motion_tune`,
+`motion_layers`; `components/CoverEffects.tsx`, folds away; the TV glitch tears the cover photo itself), speakers, countdown, burning outline,
 RSVP, duties (with bot notices), cost and payments, gallery, programme, in-app chat or a
 bot-managed Telegram chat, pin to the main page, picture/PDF export.
 

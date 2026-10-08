@@ -7,12 +7,17 @@ import type {
   GroupSummary,
   MeetingMotion,
   MeetingRow,
-  MotionTune,
   PatternConfig,
   PostDesign,
   PosterLook,
 } from '@church/shared';
 import { initCover } from '../components/CoverDesigner';
+import {
+  CoverEffects,
+  effectsPayload,
+  initEffects,
+  type EffectsState,
+} from '../components/CoverEffects';
 import { DesignStudio } from '../components/DesignStudio';
 import { GroupSwitcher } from '../components/GroupSwitcher';
 import { Group, LookControls, Pill } from '../components/LookControls';
@@ -578,21 +583,17 @@ function ApplySheet({
   const [ownTile, setOwnTile] = useState<MeetingMotion | null>(startTile);
   const [ownPoster, setOwnPoster] = useState<MeetingMotion | null>(startPoster);
   const [slide, setSlide] = useState(0);
-  // An event's cover animation and its settings (by animation while the sheet is open).
-  const startEventMotion = item.kind === 'event' ? item.e.motion : null;
-  const [eventMotion, setEventMotion] = useState<MeetingMotion | null>(startEventMotion);
-  const [eventTunes, setEventTunes] = useState<Partial<Record<MeetingMotion, MotionTune>>>(() =>
-    item.kind === 'event' && item.e.motion && item.e.motionTune
-      ? { [item.e.motion]: item.e.motionTune }
-      : {},
-  );
+  // An event's cover effects (several can combine) and whether the picker is open.
+  const [startEffects] = useState(() => initEffects(item.kind === 'event' ? item.e : null));
+  const [effects, setEffects] = useState<EffectsState>(startEffects);
+  const [effectsOpen, setEffectsOpen] = useState(true);
   const tpl = typeof choice === 'number' ? templates.data?.find((x) => x.id === choice) : null;
   const look: PosterLook =
     choice === 'own' ? (thing.look ?? groupLook(g)) : tpl ? templateLook(tpl) : groupLook(g);
   const motion: MeetingMotion =
     item.kind === 'meeting'
       ? (ownMotion ?? tpl?.motion ?? (choice === start ? item.m.motion : 'calm'))
-      : (eventMotion ?? 'off');
+      : (effects.effects[0] ?? 'off');
   // Without their own, the tile and poster follow the template (or what they had).
   const same = choice === start && item.kind === 'meeting';
   const tileMotion =
@@ -609,8 +610,7 @@ function ApplySheet({
       ownMotion === startMotion &&
       ownTile === startTile &&
       ownPoster === startPoster &&
-      eventMotion === startEventMotion &&
-      Object.keys(eventTunes).length === 0
+      effects === startEffects
     )
       return onClose();
     // A template or the ministry's look replaces the own look and own colour.
@@ -633,8 +633,7 @@ function ApplySheet({
       else
         await updateEvent.mutateAsync({
           ...(choice !== start ? { templateId, design } : {}),
-          motion: eventMotion,
-          motionTune: eventMotion ? (eventTunes[eventMotion] ?? null) : null,
+          ...effectsPayload(effects),
         });
       haptic.success();
       toast(t.common.saved);
@@ -659,14 +658,12 @@ function ApplySheet({
           onSlide={setSlide}
         />
         {item.kind === 'event' && (
-          <Group title={t.events.coverMotion}>
-            <MotionPicker
-              value={eventMotion ?? 'off'}
-              onChange={(m) => setEventMotion(m === 'off' ? null : m)}
-              tuneOf={(m) => eventTunes[m] ?? null}
-              onTune={(m, tune) => setEventTunes((all) => ({ ...all, [m]: tune ?? {} }))}
-            />
-          </Group>
+          <CoverEffects
+            state={effects}
+            onChange={setEffects}
+            open={effectsOpen}
+            onOpen={setEffectsOpen}
+          />
         )}
         {item.kind === 'meeting' && (
           <MotionTargets

@@ -1151,6 +1151,12 @@ export const en: Messages = {
     coverMotion: 'Cover animation',
     coverMotionHint:
       'Moves on the cover everywhere: the event screen, the tile and the list. “TV glitch” tears and shifts the picture itself. The picked animation’s settings open under it.',
+    noEffects: 'No effects',
+    effectsCount: (n: number, max: number) =>
+      n ? `Effects: ${n} of ${max} — they combine` : 'Tap to choose — several can combine',
+    changeEffects: 'Change',
+    hideEffects: 'Hide',
+    effectsDone: 'Done — hide effects',
     tabMeetings: 'Meetings',
     tabEvents: 'Events',
     title: 'Events',

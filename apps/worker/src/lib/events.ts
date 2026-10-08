@@ -4,6 +4,8 @@ import {
   zonedToUtc,
   readPostDesign,
   motionTuneSchema,
+  motionLayersSchema,
+  type MotionLayer,
   type EventDetail,
   type EventFinance,
   type EventProgramItem,
@@ -255,6 +257,17 @@ function readTune(raw: string | null): MotionTune | null {
   }
 }
 
+/** An event's extra cover effects, read defensively. */
+function readLayers(raw: string | null): MotionLayer[] {
+  if (!raw) return [];
+  try {
+    const parsed = motionLayersSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Summaries for a list of events, from the viewpoint of `userId`. */
 async function summarize(
   db: Db,
@@ -321,6 +334,7 @@ async function summarize(
         templateId: e.templateId,
         motion: readMotion(e.motion),
         motionTune: readTune(e.motionTune),
+        motionLayers: readLayers(e.motionLayers),
         countdown: e.countdown,
         speakers: await speakersOf(e.speakers, secret),
         createdAt: e.createdAt,

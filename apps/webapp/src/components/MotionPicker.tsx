@@ -24,6 +24,7 @@ export function MotionPicker({
   icon,
   tuneOf,
   onTune,
+  many,
 }: {
   value: MeetingMotion | null;
   onChange: (v: MeetingMotion | null) => void;
@@ -35,17 +36,30 @@ export function MotionPicker({
   /** The settings each animation has here (null = as designed). */
   tuneOf?: (m: MeetingMotion) => MotionTune | null;
   onTune?: (m: MeetingMotion, tune: MotionTune | null) => void;
+  /**
+   * Several at once, drawn over each other: tapping one adds or removes it ("off" clears
+   * all), and every picked one opens its settings under its group.
+   */
+  many?: { values: MeetingMotion[]; toggle: (m: MeetingMotion) => void };
 }) {
   const t = useT();
   const first: (MeetingMotion | null)[] = [...(allowInherit ? [null] : []), 'off'];
   const tile = (m: MeetingMotion | null) => {
-    const on = value === m;
+    const on = many
+      ? m === 'off'
+        ? many.values.length === 0
+        : !!m && many.values.includes(m)
+      : value === m;
     return (
       <button
         key={m ?? 'inherit'}
         type="button"
         onClick={() => {
           haptic.tap();
+          if (many) {
+            if (m) many.toggle(m);
+            return;
+          }
           // Tapping the chosen one again takes it off.
           onChange(on && m && m !== 'off' ? (allowInherit ? null : 'off') : m);
         }}
@@ -75,18 +89,21 @@ export function MotionPicker({
       {MOTION_GROUPS.map((g) => (
         <Group key={g.key} title={t.meetings.motionGroups[g.key]}>
           <div className="grid grid-cols-3 gap-2">{g.items.map(tile)}</div>
-          {/* The picked one's settings, opened right under its group. */}
-          {onTune && value && g.items.includes(value) && (
-            <div className="mt-3">
-              <TunePanel title={`${t.studio.knob.settings}: ${t.meetings.motions[value]}`}>
-                <MotionTuneControls
-                  kind={value}
-                  tune={tuneOf?.(value) ?? {}}
-                  onChange={(tune) => onTune(value, tune)}
-                />
-              </TunePanel>
-            </div>
-          )}
+          {/* The picked ones' settings, opened right under their group. */}
+          {onTune &&
+            (many ? many.values : value ? [value] : [])
+              .filter((m) => g.items.includes(m))
+              .map((m) => (
+                <div key={m} className="mt-3">
+                  <TunePanel title={`${t.studio.knob.settings}: ${t.meetings.motions[m]}`}>
+                    <MotionTuneControls
+                      kind={m}
+                      tune={tuneOf?.(m) ?? {}}
+                      onChange={(tune) => onTune(m, tune)}
+                    />
+                  </TunePanel>
+                </div>
+              ))}
         </Group>
       ))}
     </div>

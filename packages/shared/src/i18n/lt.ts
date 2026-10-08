@@ -1169,6 +1169,12 @@ export const lt: Messages = {
     coverMotion: 'Viršelio animacija',
     coverMotionHint:
       'Juda ant viršelio visur: renginio ekrane, plytelėje ir sąraše. „TV trikdžiai“ drasko ir stumdo patį paveikslėlį. Pasirinktos animacijos nustatymai atsiveria po ja.',
+    noEffects: 'Be efektų',
+    effectsCount: (n: number, max: number) =>
+      n ? `Efektų: ${n} iš ${max} — galima derinti` : 'Bakstelėkite ir pasirinkite — galima kelis',
+    changeEffects: 'Keisti',
+    hideEffects: 'Slėpti',
+    effectsDone: 'Baigta — slėpti efektus',
     tabMeetings: 'Susitikimai',
     tabEvents: 'Renginiai',
     title: 'Renginiai',

@@ -590,6 +590,8 @@ export const events = sqliteTable(
     /** The cover's animation (MeetingMotion; NULL = none) and its settings (MotionTune JSON). */
     motion: text('motion'),
     motionTune: text('motion_tune'),
+    /** More cover effects over the first: JSON [{kind, tune}] (up to three). */
+    motionLayers: text('motion_layers'),
     status: text('status', { enum: ['scheduled', 'cancelled'] })
       .notNull()
       .default('scheduled'),
