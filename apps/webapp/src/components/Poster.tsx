@@ -110,7 +110,8 @@ export function PosterMedia({
   // The speakers' photos: separate photos at a spot, or part of the background.
   const sLook = design?.speakerLook ?? null;
   const sStyle = sLook?.style ?? 'photo';
-  const sSpot = speakerSpot(sLook);
+  // A small tile has no room for a column or a spot: there they go along the bottom.
+  const sSpot = compact ? { inline: true, x: 'center', y: 'bottom' } : speakerSpot(sLook);
   const on = onBrandStyle(
     look?.textColor ?? 'auto',
     photos.length > 0 || !!look?.pattern || !!look?.backdropUrl,
