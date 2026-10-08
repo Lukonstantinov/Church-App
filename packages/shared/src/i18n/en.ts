@@ -1649,6 +1649,7 @@ export const en: Messages = {
     },
   },
   motionExport: {
+    devFeed: (how: string) => `For the developer: video made via ${how}`,
     textLabel: 'Text under the poster',
     toLabel: 'To',
     to: {

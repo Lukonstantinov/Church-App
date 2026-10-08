@@ -128,6 +128,9 @@ export function MotionExport({
       );
       haptic.success();
       toast(to === 'me' ? t.motionExport.sent : t.motionExport.sentTo(res.sent));
+      // For the developer: how this phone's video was made (pickFeed in lib/recorder.ts).
+      if (kind === 'video' && me.data?.user.isDeveloper)
+        toast(t.motionExport.devFeed(rec.feed ?? 'GIF'));
     } catch (err) {
       console.warn('recording failed', err);
       haptic.error();

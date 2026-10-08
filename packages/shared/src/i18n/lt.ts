@@ -1684,6 +1684,7 @@ export const lt: Messages = {
     },
   },
   motionExport: {
+    devFeed: (how: string) => `Kūrėjui: vaizdo įrašas sukurtas būdu ${how}`,
     textLabel: 'Tekstas po plakatu',
     toLabel: 'Kam',
     to: {

@@ -36,6 +36,8 @@ export interface Recording {
   /** Null when this phone can't make videos (then only the GIF). */
   mp4: Blob | null;
   gif: Blob | null;
+  /** How frames went to the video encoder here (pickFeed); null = no video. */
+  feed: string | null;
 }
 
 /** Whether the block has anything moving to record. */
@@ -269,6 +271,14 @@ async function drawEffects(
   }
 }
 
+/** The colours of our video frames: BT.709, limited range (see toI420). */
+const BT709: VideoColorSpaceInit = {
+  primaries: 'bt709',
+  transfer: 'bt709',
+  matrix: 'bt709',
+  fullRange: false,
+};
+
 /**
  * RGBA pixels as I420 video (BT.709, limited range): full-size brightness, then colour at
  * half size each way. See-through pixels count as over black.
@@ -303,6 +313,139 @@ function toI420(rgba: Uint8ClampedArray, w: number, h: number): Uint8Array {
     }
   }
   return out;
+}
+
+/** The same as I420, with the two colour planes woven into one (U, V, U, V…). */
+function toNV12(rgba: Uint8ClampedArray, w: number, h: number): Uint8Array {
+  const planar = toI420(rgba, w, h);
+  const out = new Uint8Array(planar.length);
+  const ySize = w * h;
+  const q = ySize / 4;
+  out.set(planar.subarray(0, ySize));
+  for (let i = 0; i < q; i++) {
+    out[ySize + i * 2] = planar[ySize + i]!;
+    out[ySize + i * 2 + 1] = planar[ySize + q + i]!;
+  }
+  return out;
+}
+
+/** Ways of handing a frame to the video encoder (see pickFeed). */
+type Feed = 'i420' | 'nv12' | 'rgba' | 'canvas';
+const FEEDS: Feed[] = ['i420', 'nv12', 'rgba', 'canvas'];
+
+/** One frame of `canvas` for the encoder, handed over the given way. */
+function frameOf(
+  feed: Feed,
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  timing: { timestamp: number; duration?: number },
+): VideoFrame {
+  if (feed === 'canvas') return new VideoFrame(canvas, timing);
+  const { data } = ctx.getImageData(0, 0, w, h);
+  const size = { codedWidth: w, codedHeight: h };
+  if (feed === 'rgba')
+    return new VideoFrame(data, {
+      ...timing,
+      ...size,
+      format: 'RGBA',
+      colorSpace: { primaries: 'bt709', transfer: 'iec61966-2-1', matrix: 'rgb', fullRange: true },
+    });
+  return feed === 'nv12'
+    ? new VideoFrame(toNV12(data, w, h), { ...timing, ...size, format: 'NV12', colorSpace: BT709 })
+    : new VideoFrame(toI420(data, w, h), { ...timing, ...size, format: 'I420', colorSpace: BT709 });
+}
+
+/** The colours the file says it has: the encoder's own, unless it reports none or "rgb". */
+function labelOf(meta: EncodedVideoChunkMetadata): VideoColorSpaceInit {
+  const cs = meta.decoderConfig?.colorSpace;
+  return cs?.matrix && cs.matrix !== 'rgb' && cs.primaries && cs.transfer ? cs : BT709;
+}
+
+/** The feed that came back right on this phone, per encoder setting (checked once). */
+const feedFor = new Map<string, Feed | null>();
+
+/**
+ * Finds a way of handing frames to this phone's encoder that comes back with the right
+ * colours: a test picture (red, green, blue, white) is encoded each way and decoded again
+ * on the phone. iPhones turned a red cover blue in the video while the GIF of the same
+ * frames was right. Null when no way works: then the recording makes a GIF instead.
+ */
+async function pickFeed(config: VideoEncoderConfig): Promise<Feed | null> {
+  const key = `${config.codec}|${config.width}x${config.height}`;
+  if (feedFor.has(key)) return feedFor.get(key)!;
+  if (typeof VideoDecoder === 'undefined') return 'i420';
+  const w = config.width;
+  const h = config.height;
+  const test = canvasOf(w, h);
+  const tc = test.getContext('2d', { willReadFrequently: true })!;
+  const colours: [number, number, number][] = [
+    [224, 24, 24],
+    [24, 192, 24],
+    [24, 24, 224],
+    [240, 240, 240],
+  ];
+  colours.forEach(([r, g, b], i) => {
+    tc.fillStyle = `rgb(${r},${g},${b})`;
+    tc.fillRect((i % 2) * (w / 2), Math.floor(i / 2) * (h / 2), w / 2, h / 2);
+  });
+  const check = canvasOf(w, h);
+  const cc = check.getContext('2d', { willReadFrequently: true })!;
+  let found: Feed | null = null;
+  for (const feed of FEEDS) {
+    try {
+      const chunks: EncodedVideoChunk[] = [];
+      let decoderConfig: VideoDecoderConfig | undefined;
+      const enc = new VideoEncoder({
+        output: (chunk, meta) => {
+          chunks.push(chunk);
+          if (meta?.decoderConfig) decoderConfig = meta.decoderConfig;
+        },
+        error: () => undefined,
+      });
+      enc.configure(config);
+      const vf = frameOf(feed, test, tc, w, h, { timestamp: 0 });
+      enc.encode(vf, { keyFrame: true });
+      vf.close();
+      await enc.flush();
+      enc.close();
+      if (!decoderConfig || chunks.length === 0) continue;
+      let back: VideoFrame | null = null;
+      const dec = new VideoDecoder({
+        output: (f) => {
+          back?.close();
+          back = f;
+        },
+        error: () => undefined,
+      });
+      dec.configure(decoderConfig);
+      dec.decode(chunks[0]!);
+      await dec.flush();
+      dec.close();
+      const decoded = back as VideoFrame | null;
+      if (!decoded) continue;
+      cc.clearRect(0, 0, w, h);
+      cc.drawImage(decoded, 0, 0, w, h);
+      decoded.close();
+      const right = colours.every(([r, g, b], i) => {
+        const x = Math.round((i % 2) * (w / 2) + w / 4);
+        const y = Math.round(Math.floor(i / 2) * (h / 2) + h / 4);
+        const [pr, pg, pb] = cc.getImageData(x, y, 1, 1).data;
+        return Math.abs(pr! - r) < 60 && Math.abs(pg! - g) < 60 && Math.abs(pb! - b) < 60;
+      });
+      if (right) {
+        found = feed;
+        break;
+      }
+    } catch {
+      // This way isn't supported here: the next one.
+    }
+  }
+  freeCanvas(test);
+  freeCanvas(check);
+  feedFor.set(key, found);
+  return found;
 }
 
 /** A 4×4 ordered (Bayer) pattern, -0.5…0.5. */
@@ -384,9 +527,11 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
 
     const config =
       opts.video === false ? null : await videoConfig(outW, outH, fps, opts.quality ?? 0.12);
+    // How frames go to the encoder here; none that comes back right = a GIF instead.
+    const feed = config ? await pickFeed(config) : null;
     let encoder: VideoEncoder | null = null;
     let muxer: Muxer<ArrayBufferTarget> | null = null;
-    if (config) {
+    if (config && feed) {
       const { Muxer, ArrayBufferTarget } = await import('mp4-muxer');
       muxer = new Muxer({
         target: new ArrayBufferTarget(),
@@ -395,7 +540,16 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
       });
       const m = muxer;
       encoder = new VideoEncoder({
-        output: (chunk, meta) => m.addVideoChunk(chunk, meta),
+        // The file says how to read its colours. An encoder fed screen pixels may report
+        // "rgb", which the muxer writes as "identity" (players would read the colour
+        // planes as red/green/blue): the file always says BT.709, the video standard.
+        output: (chunk, meta) =>
+          m.addVideoChunk(
+            chunk,
+            meta?.decoderConfig
+              ? { ...meta, decoderConfig: { ...meta.decoderConfig, colorSpace: labelOf(meta) } }
+              : meta,
+          ),
         error: () => undefined,
       });
       encoder.configure(config);
@@ -444,17 +598,10 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
         o.globalAlpha = 1;
       }
       if (encoder) {
-        // The frame's pixels, converted here into the video's own format (I420). Handing
-        // the canvas itself to iPhones' encoder swapped red and blue and striped the
-        // picture (a red cover came out blue); the GIF of the same frames was right.
-        const { data } = o.getImageData(0, 0, outW, outH);
-        const vf = new VideoFrame(toI420(data, outW, outH), {
-          format: 'I420',
-          codedWidth: outW,
-          codedHeight: outH,
+        // Handed over the way that came back right on this phone (pickFeed).
+        const vf = frameOf(feed!, out, o, outW, outH, {
           timestamp: Math.round((j * 1e6) / fps),
           duration: Math.round(1e6 / fps),
-          colorSpace: { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: false },
         });
         encoder.encode(vf, { keyFrame: j % (fps * 2) === 0 });
         vf.close();
@@ -490,7 +637,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
       gifBlob = new Blob([gif.bytes()], { type: 'image/gif' });
     }
     opts.onProgress?.(1);
-    return { mp4, gif: gifBlob };
+    return { mp4, gif: gifBlob, feed: encoder ? feed : null };
   } finally {
     used.forEach(freeCanvas);
     restoreTextures?.();

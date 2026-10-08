@@ -1666,6 +1666,7 @@ export const ru = {
     },
   },
   motionExport: {
+    devFeed: (how: string) => `Для разработчика: видео записано способом ${how}`,
     textLabel: 'Текст под постером',
     toLabel: 'Кому',
     to: {
