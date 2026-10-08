@@ -61,7 +61,7 @@ Deploy → Run workflow → production.
   weaker phones get `html[data-lite]` (fewer particles, no SVG filters, lighter blur).
   Per-phone graphics quality (More / Design → Graphics: auto / full / lite / still, `lib/perf.ts`,
   `html[data-quality]`): auto steps down when frames drop; still = no animation layers.
-  Running `LivingLayer`s are capped (`watchOffscreen(el, true)`); never animate
+  Running `LivingLayer`s are capped (`watchOffscreen(el, true)`; the biggest on screen run first); never animate
   `background-position` or `box-shadow` smoothly — fade a pseudo copy (`flow-fade`), slide a
   strip with transform, or use `steps()`.
   Long decorative animations are capped at 30 changes a second (`capAnimations` in `lib/perf.ts`);

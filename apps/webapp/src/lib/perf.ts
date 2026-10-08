@@ -88,15 +88,19 @@ let budget = 6;
 /** Layers in view, in the order they came into view. */
 const visible = new Set<Element>();
 const budgeted = new WeakSet<Element>();
+/** How big each layer is on screen (a big meeting panel matters more than a small button). */
+const areas = new WeakMap<Element, number>();
 
-/** Runs the first `budget` visible animation layers; the rest wait (data-off). */
+/**
+ * Runs the `budget` biggest visible animation layers; the rest wait (data-off). By size,
+ * not by arrival: the header and a row of small buttons came first and used up the whole
+ * budget, so the meeting panel and tiles below stood still.
+ */
 function rebalance() {
-  let n = 0;
-  for (const el of visible) {
-    if (!budgeted.has(el)) continue;
-    el.toggleAttribute('data-off', n >= budget);
-    n++;
-  }
+  const ranked = [...visible]
+    .filter((el) => budgeted.has(el))
+    .sort((a, b) => (areas.get(b) ?? 0) - (areas.get(a) ?? 0));
+  ranked.forEach((el, n) => el.toggleAttribute('data-off', n >= budget));
 }
 
 /**
@@ -110,6 +114,7 @@ export function watchOffscreen(el: Element, limited = false): () => void {
   io ??= new IntersectionObserver(
     (entries) => {
       for (const e of entries) {
+        areas.set(e.target, e.boundingClientRect.width * e.boundingClientRect.height);
         if (e.isIntersecting) visible.add(e.target);
         else {
           visible.delete(e.target);
