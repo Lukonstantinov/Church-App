@@ -19,6 +19,8 @@ import {
   type EffectsState,
 } from '../components/CoverEffects';
 import { CoverPicture } from '../components/CoverSlideshow';
+import { LayeredPoster, usePosterTexts } from '../components/LayeredPoster';
+import { PosterPicker } from '../components/PosterStudio';
 import { PosterMedia } from '../components/Poster';
 import {
   SpeakersEditor,
@@ -64,6 +66,7 @@ import {
   useCreateEvent,
   useEvent,
   useGroup,
+  usePosterTemplates,
   useSendAnnouncement,
   useSetRoles,
   useUpdateEvent,
@@ -174,6 +177,19 @@ function EventFormBody({
   );
   const [slideSeconds, setSlideSeconds] = useState(event?.coverSlides?.seconds ?? 5);
   const slideInput = useRef<HTMLInputElement>(null);
+  // A poster template (Design → Posters): the event's words fill in its texts.
+  const [posterTpl, setPosterTpl] = useState<number | null>(event?.posterTemplateId ?? null);
+  const posters = usePosterTemplates(mayDesign);
+  const chosenPoster = posters.data?.find((x) => x.id === posterTpl) ?? null;
+  const posterTexts = usePosterTexts();
+  const posterWords = posterTexts({
+    title: title.trim() || t.events.name,
+    // (An unfinished date shows today rather than breaking the form.)
+    startsAt: Number.isNaN(Date.parse(`${date}T${startTime || '18:00'}`))
+      ? new Date().toISOString()
+      : new Date(`${date}T${startTime || '18:00'}`).toISOString(),
+    location: location || null,
+  });
   const coverLayer = <CoverEffectLayers e={effectsPayload(effects)} image={cover?.url} />;
   const [speakers, setSpeakers] = useState<SpeakerDraft[]>(() => toDrafts(event?.speakers));
   // Without a cover photo the event shows a designed cover, like posts.
@@ -290,6 +306,7 @@ function EventFormBody({
       endDate: hasEnd ? endDate : null,
       endTime: hasEnd ? endTime : null,
       coverMediaId: cover?.id ?? null,
+      posterTemplateId: posterTpl,
       coverSlides:
         cover && slides.length
           ? { mediaIds: slides.map((x) => x.id), seconds: slideSeconds }
@@ -420,14 +437,23 @@ function EventFormBody({
       {/* The designed cover at full size, off screen: the picture the bot sends is taken from it. */}
       <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0, width: 720 }}>
         <div ref={posterNode}>
-          <PosterMedia
-            title={title.trim() || t.events.name}
-            photos={cover ? [cover] : []}
-            tint={null}
-            look={coverLook.look}
-            design={{ ...look.design, banner: true }}
-            speakers={toShown(speakers)}
-          />
+          {chosenPoster ? (
+            <LayeredPoster
+              tpl={chosenPoster}
+              texts={posterWords}
+              coverUrl={cover?.url}
+              className="h-[900px] w-[720px]"
+            />
+          ) : (
+            <PosterMedia
+              title={title.trim() || t.events.name}
+              photos={cover ? [cover] : []}
+              tint={null}
+              look={coverLook.look}
+              design={{ ...look.design, banner: true }}
+              speakers={toShown(speakers)}
+            />
+          )}
         </div>
       </div>
 
@@ -457,6 +483,27 @@ function EventFormBody({
               <TitleStyleControls design={look.design} set={setDesign} />
             </div>
           )}
+        </Section>
+      )}
+
+      {mayDesign && (
+        <Section title={t.posters.pick} footer={t.posters.pickHint}>
+          <div className="flex flex-col gap-3 p-3">
+            {chosenPoster && (
+              <LayeredPoster
+                tpl={chosenPoster}
+                texts={posterWords}
+                coverUrl={cover?.url}
+                className="mx-auto aspect-[4/5] w-[62%] rounded-2xl shadow-card"
+              />
+            )}
+            <PosterPicker
+              value={posterTpl}
+              onChange={setPosterTpl}
+              texts={posterWords}
+              coverUrl={cover?.url}
+            />
+          </div>
         </Section>
       )}
 

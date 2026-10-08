@@ -9,6 +9,7 @@ import { PosterMedia } from './Poster';
 import { useMoney } from './money';
 import { CoverEffectLayers } from './CoverEffects';
 import { CoverPicture } from './CoverSlideshow';
+import { LayeredPoster, usePosterTexts } from './LayeredPoster';
 import { Badge, DateBadge } from './ui';
 
 /** "пт, 2 окт · 18:00" or a date range for multi-day events. */
@@ -35,11 +36,40 @@ export function EventCover({
 }: {
   e: Pick<EventSummary, 'coverUrl' | 'design' | 'look' | 'title'> &
     Partial<
-      Pick<EventSummary, 'speakers' | 'motion' | 'motionTune' | 'motionLayers' | 'coverSlides'>
+      Pick<
+        EventSummary,
+        | 'speakers'
+        | 'motion'
+        | 'motionTune'
+        | 'motionLayers'
+        | 'coverSlides'
+        | 'poster'
+        | 'startsAt'
+        | 'endsAt'
+        | 'location'
+      >
     >;
   className?: string;
   compact?: boolean;
 }) {
+  const texts = usePosterTexts();
+  // A poster template (Design → Posters) takes the cover's place, the event's effects on top.
+  if (e.poster)
+    return (
+      <LayeredPoster
+        tpl={e.poster}
+        texts={texts({
+          title: e.title,
+          startsAt: e.startsAt ?? new Date().toISOString(),
+          endsAt: e.endsAt,
+          location: e.location,
+        })}
+        coverUrl={e.coverUrl}
+        className={`w-full ${className}`}
+      >
+        <CoverEffectLayers e={e} image={e.coverUrl} />
+      </LayeredPoster>
+    );
   const layer = <CoverEffectLayers e={e} image={e.coverUrl} />;
   if (e.coverUrl)
     return (
@@ -86,7 +116,7 @@ export function EventCard({
         onClick={onClick}
         className={`glass block w-full overflow-hidden rounded-[var(--radius-card)] text-left shadow-card transition active:scale-[0.99] ${cancelled ? 'opacity-60' : ''}`}
       >
-        {e.coverUrl || e.design?.banner ? (
+        {e.coverUrl || e.design?.banner || e.poster ? (
           <div className="relative">
             <EventCover e={e} />
             <CountdownOnCover e={e} />

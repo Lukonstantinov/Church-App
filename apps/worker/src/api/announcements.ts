@@ -417,7 +417,7 @@ commentRoutes.delete('/:id', async (c) => {
  */
 export const templateRoutes = new Hono<App>();
 
-async function canDesign(c: { get: (k: 'db' | 'user') => unknown }) {
+export async function canDesign(c: { get: (k: 'db' | 'user') => unknown }) {
   const db = c.get('db') as AuthVariables['db'];
   const user = c.get('user') as AuthVariables['user'];
   if (user.isAdmin) return true;

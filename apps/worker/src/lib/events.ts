@@ -36,6 +36,7 @@ import { accessIn, can, designRights } from './access';
 import { posterLook, lookSources } from './looks';
 import { signedMediaUrl } from './media';
 import { readMotion, speakersOf } from './meetings';
+import { posterTemplatesById } from './posterTemplates';
 import { toTransactionRows } from './treasury';
 
 const DAY = 86_400_000;
@@ -326,6 +327,11 @@ async function summarize(
     rows.map((r) => r.groupId),
     rows.map((r) => r.templateId),
   );
+  const posters = await posterTemplatesById(
+    db,
+    rows.map((r) => r.posterTemplateId),
+    secret,
+  );
   return Promise.all(
     rows.map(async (e) => {
       const design = readPostDesign(e.design);
@@ -357,6 +363,8 @@ async function summarize(
         motionTune: readTune(e.motionTune),
         motionLayers: readLayers(e.motionLayers),
         coverSlides: await readSlides(e.coverSlides, secret),
+        posterTemplateId: e.posterTemplateId,
+        poster: (e.posterTemplateId && posters.get(e.posterTemplateId)) || null,
         countdown: e.countdown,
         speakers: await speakersOf(e.speakers, secret),
         createdAt: e.createdAt,

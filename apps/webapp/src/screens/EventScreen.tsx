@@ -126,7 +126,18 @@ function EventBody({ e }: { e: EventDetail }) {
   return (
     <Screen>
       <PosterBackfill e={e} />
-      {e.coverUrl ? (
+      {e.poster ? (
+        // A poster template: the poster on top, the event's details below it.
+        <>
+          <div className="relative -mx-1 overflow-hidden rounded-[var(--radius-card)] shadow-card">
+            <EventCover e={e} className="aspect-[4/3]" />
+            <CountdownOnCover e={e} />
+          </div>
+          <BurnFrame e={e} radius="var(--radius-card)">
+            <HeroCard>{header}</HeroCard>
+          </BurnFrame>
+        </>
+      ) : e.coverUrl ? (
         <div className="relative -mx-4 -mt-4 overflow-hidden">
           <div className="relative aspect-[4/3] w-full">
             <CoverPicture e={e} />

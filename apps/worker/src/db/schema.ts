@@ -283,6 +283,8 @@ export const meetings = sqliteTable(
     /** Its home tile's / poster's own animations (null = the template's, else default). */
     tileMotion: text('tile_motion'),
     posterMotion: text('poster_motion'),
+    /** A poster template from Design → Posters (null = the usual poster). */
+    posterTemplateId: integer('poster_template_id'),
     rollTakenBy: integer('roll_taken_by'),
     rollTakenAt: text('roll_taken_at'),
     /** Who last said "Can't" to leading / the snacks (the job was freed; shown with a red ✗). */
@@ -420,6 +422,16 @@ export const livePins = sqliteTable(
   },
   (t) => [index('live_pins_ends').on(t.endsAt)],
 );
+
+/** Poster templates made in Design → Posters: a background and layers (JSON, see shared). */
+export const posterTemplates = sqliteTable('poster_templates', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  background: text('background').notNull(),
+  layers: text('layers').notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: createdAt(),
+});
 
 /** Errors the app hit on people's phones (a screen that crashed, an unhandled error), for the developer. */
 export const clientErrors = sqliteTable('client_errors', {
@@ -606,6 +618,8 @@ export const events = sqliteTable(
     motionLayers: text('motion_layers'),
     /** Cover slideshow: JSON {mediaIds, seconds} — more photos after the cover, in turn. */
     coverSlides: text('cover_slides'),
+    /** A poster template from Design → Posters for its cover (null = none). */
+    posterTemplateId: integer('poster_template_id'),
     status: text('status', { enum: ['scheduled', 'cancelled'] })
       .notNull()
       .default('scheduled'),

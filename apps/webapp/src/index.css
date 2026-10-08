@@ -3945,6 +3945,12 @@ html[data-motion='off'] .shine::before {
   animation: fx-glint 2.4s ease-in-out infinite;
 }
 
+/* ---------- Layered posters (Design → Posters) ---------- */
+/* The poster measures itself, so its layers can be placed and sized relative to it. */
+.layered-poster {
+  container-type: size;
+}
+
 /* ---------- Cover slideshow: each photo fades in and settles from a little larger ---------- */
 .cover-slide {
   opacity: 0;

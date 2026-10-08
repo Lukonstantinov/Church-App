@@ -132,6 +132,13 @@ strength, angle, colour + `MOTION_KNOBS` density/weight/sharp; shine `shineTune`
 `useModuleLook`/`skinClass`/`skinStyle`/`SkinLayer`. All animation settings live in Design
 (animations sorted by `MOTION_GROUPS`).
 
+Poster templates (Design → «Постеры», `components/PosterStudio.tsx`, `shared/posterTemplates.ts`,
+`/api/poster-templates`, table `poster_templates`): background + up to 12 layers (pictures keep
+transparency via `prepareCutout`, texts filled from the event/meeting, effect layers anywhere in
+the stack; place in % / container units, opacity, blend mode, layer styles); chosen per event or
+meeting (`poster_template_id`, rows carry `poster`) and drawn by `LayeredPoster` on covers, screens,
+tiles, the pinned card and the bot poster.
+
 **Posts & home** — posts with photos, blocks, types, looks, reactions, comments, resend;
 home tiles (drag to reorder, expand), several meetings of a day share one tile.
 

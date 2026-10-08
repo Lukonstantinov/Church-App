@@ -6,6 +6,7 @@ import {
   type GroupSummary,
   type MeetingHelper,
   type MeetingMotion,
+  type PosterTemplate,
   type MeetingRow,
   type PostDesign,
   type PosterLook,
@@ -15,6 +16,7 @@ import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { LivingLayer } from './ui';
+import { LayeredPoster, usePosterTexts } from './LayeredPoster';
 import { SpeakerStrip } from './Speakers';
 
 const TITLE_PX = { s: 32, m: 40, l: 50, xl: 60 } as const;
@@ -64,6 +66,8 @@ export const MeetingPoster = forwardRef<
         helpers: MeetingHelper[];
         /** The poster's animation (the sent picture keeps one still frame of it). */
         posterMotion: MeetingMotion | null;
+        /** A poster template (Design → Posters): drawn instead of the usual poster. */
+        poster: PosterTemplate | null;
       }>;
     g: GroupSummary;
     /** Stamped "cancelled" across. */
@@ -72,6 +76,7 @@ export const MeetingPoster = forwardRef<
 >(function MeetingPoster({ m, g, cancelled }, ref) {
   const t = useT();
   const f = useFmt();
+  const posterTexts = usePosterTexts();
   const look = m.look ?? groupLook(g);
   const design = m.design ?? null;
   const theme = resolveBrand(look.brandColor ?? 'blue');
@@ -83,6 +88,19 @@ export const MeetingPoster = forwardRef<
     design?.posterLayout === 'collage' ? speakers.filter((sp) => sp.photoUrl).slice(0, 4) : [];
   const place =
     design?.titlePos === 'top' ? 'mt-8' : design?.titlePos === 'center' ? 'my-auto' : 'mt-auto';
+  if (m.poster)
+    return (
+      <div ref={ref} className="relative h-[675px] w-[540px] overflow-hidden">
+        <LayeredPoster fill tpl={m.poster} texts={posterTexts({ ...m, topic: m.topic })} />
+        {cancelled && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+            <span className="-rotate-12 rounded-2xl border-[6px] border-[#ef4444] bg-white/90 px-8 py-3 text-[56px] font-black tracking-widest text-[#ef4444]">
+              {t.meetings.cancelledStamp}
+            </span>
+          </div>
+        )}
+      </div>
+    );
   return (
     <div
       ref={ref}

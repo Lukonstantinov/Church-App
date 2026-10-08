@@ -45,6 +45,7 @@ import {
   type Meeting,
 } from '../db/schema';
 import { lookSources, posterLook } from './looks';
+import { posterTemplatesById } from './posterTemplates';
 import { signedMediaUrl } from './media';
 
 const emptyCounts = (): Record<AttendanceStatus, number> => ({
@@ -329,6 +330,13 @@ export async function toMeetingRows(
       : [],
   );
   const peopleLooks = await Promise.all(list.map((m) => readPeopleLook(m.peopleLook, secret)));
+  const posters = secret
+    ? await posterTemplatesById(
+        db,
+        list.map((m) => m.posterTemplateId),
+        secret,
+      )
+    : new Map();
   const looks = await Promise.all(
     list.map(async (m) => {
       const brand = brandOf.get(m.groupId);
@@ -384,6 +392,8 @@ export async function toMeetingRows(
       (m.templateId ? templateMotions.get(m.templateId)?.poster : null) ??
       null,
     ownPosterMotion: readMotion(m.posterMotion),
+    posterTemplateId: m.posterTemplateId,
+    poster: (m.posterTemplateId && posters.get(m.posterTemplateId)) || null,
     snackDeclined: (!m.snackUserId && m.snackDeclinedBy && people.get(m.snackDeclinedBy)) || null,
     counts: counts.get(m.id) ?? emptyCounts(),
     design: readPostDesign(m.design),

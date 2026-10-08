@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { PosterLook } from './api';
 import { postDesignSchema, speakersSchema, type PostDesign, type Speaker } from './posts';
 import type { PersonRef, TransactionRow } from './finance';
+import type { PosterTemplate } from './posterTemplates';
 import { MEETING_MOTIONS, motionTuneSchema, type MeetingMotion, type MotionTune } from './motions';
 
 /** Optional sections of an event, switched on when creating or later when editing. */
@@ -87,6 +88,8 @@ export const createEventSchema = z.object({
   motionTune: motionTuneSchema.nullish(),
   motionLayers: motionLayersSchema.nullish(),
   coverSlides: coverSlidesSchema.nullish(),
+  /** A poster template (Design → Posters) for the cover. */
+  posterTemplateId: z.number().int().positive().nullish(),
   /** Show a "🔥 N days left" countdown. */
   countdown: z.boolean().default(false),
   /** Up to four speakers, shown on the poster. */
@@ -116,6 +119,7 @@ export const updateEventSchema = z.object({
   motionTune: motionTuneSchema.nullable().optional(),
   motionLayers: motionLayersSchema.nullable().optional(),
   coverSlides: coverSlidesSchema.nullable().optional(),
+  posterTemplateId: z.number().int().positive().nullable().optional(),
   countdown: z.boolean().optional(),
   speakers: speakersSchema.optional(),
   features: featuresSchema.partial().optional(),
@@ -184,6 +188,9 @@ export interface EventSummary {
   motionLayers: MotionLayer[];
   /** Cover slideshow: the extra photos (after the cover) and how long each one shows. */
   coverSlides: { mediaIds: number[]; urls: string[]; seconds: number } | null;
+  /** The poster template its cover uses, with its layers (null = none). */
+  posterTemplateId: number | null;
+  poster: PosterTemplate | null;
   countdown: boolean;
   /** Up to four speakers shown on the poster. */
   speakers: Speaker[];

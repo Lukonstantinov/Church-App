@@ -28,6 +28,7 @@ import {
   meetingPosterPayload,
 } from '../components/MeetingPosterDesigner';
 import { useMeetingTune } from '../components/ModuleSkin';
+import { LayeredPoster, usePosterTexts } from '../components/LayeredPoster';
 import { PersonPicker } from '../components/PersonPicker';
 import { Sheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
@@ -114,6 +115,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
   const toast = useToast();
   const { push } = useNav();
   const meetingTune = useMeetingTune(m.groupId);
+  const posterTexts = usePosterTexts();
   const update = useUpdateMeeting();
   // The assigned leader lands straight in the form while the place or topic is missing.
   const [editing, setEditing] = useState(
@@ -153,6 +155,13 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
 
   return (
     <Screen>
+      {m.poster && (
+        <LayeredPoster
+          tpl={m.poster}
+          texts={posterTexts(m)}
+          className="-mx-1 aspect-[4/3] rounded-[var(--radius-card)] shadow-card"
+        />
+      )}
       <SoonPulse startsAt={m.startsAt} cancelled={cancelled} motion={m.motion}>
         <HeroCard
           living={cancelled ? 'off' : m.motion}

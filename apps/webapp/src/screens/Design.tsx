@@ -10,6 +10,7 @@ import type {
   PatternConfig,
   PostDesign,
   PosterLook,
+  PosterTemplate,
 } from '@church/shared';
 import { initCover } from '../components/CoverDesigner';
 import {
@@ -19,6 +20,8 @@ import {
   type EffectsState,
 } from '../components/CoverEffects';
 import { DesignStudio } from '../components/DesignStudio';
+import { PosterPicker, PosterStudio } from '../components/PosterStudio';
+import { LayeredPoster, usePosterTexts } from '../components/LayeredPoster';
 import { GroupSwitcher } from '../components/GroupSwitcher';
 import { Group, LookControls, Pill } from '../components/LookControls';
 import { LookTop } from '../components/LookTop';
@@ -49,6 +52,7 @@ import {
   useGroup,
   useMe,
   useSaveTemplate,
+  usePosterTemplates,
   useTemplates,
   useUpdateChurch,
   useUpdateEvent,
@@ -119,6 +123,8 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
       </Section>
 
       <DesignStudio g={active} />
+
+      <PosterStudio g={active} />
 
       <QualityPicker />
 
@@ -252,10 +258,13 @@ export function DesignPreviews({
   g,
   title,
   design,
+  poster,
   slide,
   onSlide,
 }: {
   look: PosterLook;
+  /** A poster template (Design → Posters) shown in all three instead of the look. */
+  poster?: PosterTemplate | null;
   motion: MeetingMotion;
   /** The tile's own animation (null = as on the meeting screen). */
   tileMotion?: MeetingMotion | null;
@@ -284,6 +293,14 @@ export function DesignPreviews({
     return { startsAt: d.toISOString(), endsAt: new Date(d.getTime() + 7_200_000).toISOString() };
   });
   const name = title || t.design.sampleTitle;
+  const posterTexts = usePosterTexts();
+  const words = posterTexts({
+    title: name,
+    startsAt: when.startsAt,
+    endsAt: when.endsAt,
+    location: t.design.sampleLocation,
+    topic: t.design.sampleTopic,
+  });
   const labels = [t.design.previewApp, t.design.previewTile, t.design.previewPoster];
   const go = (i: number) => {
     const el = track.current;
@@ -316,27 +333,39 @@ export function DesignPreviews({
       >
         <Slide>
           <div className="w-full">
-            <HeroCard look={look} living={motion}>
-              <div className="mb-3 truncate text-[12px] font-bold uppercase tracking-wider opacity-80">
-                {g.name}
-              </div>
-              <div className="flex items-center gap-3.5">
-                <DateBadge {...f.dateBadge(when.startsAt)} onBrand />
-                <div className="min-w-0">
-                  <div className="truncate text-[20px] font-bold leading-tight">{name}</div>
-                  <div className="text-[14px] opacity-85">
-                    {f.relativeDay(when.startsAt)} · {f.timeRange(when.startsAt, when.endsAt)}
+            {poster ? (
+              <LayeredPoster
+                tpl={poster}
+                texts={words}
+                className="mx-auto aspect-[4/3] h-[200px] rounded-[var(--radius-card)] shadow-card"
+              />
+            ) : (
+              <HeroCard look={look} living={motion}>
+                <div className="mb-3 truncate text-[12px] font-bold uppercase tracking-wider opacity-80">
+                  {g.name}
+                </div>
+                <div className="flex items-center gap-3.5">
+                  <DateBadge {...f.dateBadge(when.startsAt)} onBrand />
+                  <div className="min-w-0">
+                    <div className="truncate text-[20px] font-bold leading-tight">{name}</div>
+                    <div className="text-[14px] opacity-85">
+                      {f.relativeDay(when.startsAt)} · {f.timeRange(when.startsAt, when.endsAt)}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="mt-3 text-[16px] font-semibold">«{t.design.sampleTopic}»</div>
-            </HeroCard>
+                <div className="mt-3 text-[16px] font-semibold">«{t.design.sampleTopic}»</div>
+              </HeroCard>
+            )}
           </div>
         </Slide>
         <Slide>
           <div className="glass w-[58%] overflow-hidden rounded-2xl shadow-card">
-            <LookTop look={look} className="tile-top isolate flex aspect-[16/10] flex-col p-2.5">
-              <LivingLayer kind={tileMotion ?? motion} behind />
+            <LookTop
+              look={look}
+              className="tile-top isolate flex aspect-[16/10] flex-col p-2.5"
+              under={poster ? <LayeredPoster fill tpl={poster} texts={words} /> : undefined}
+            >
+              {!poster && <LivingLayer kind={tileMotion ?? motion} behind />}
               <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
                 {t.meetings.details}
               </span>
@@ -369,6 +398,7 @@ export function DesignPreviews({
                   design: design ?? null,
                   speakers: [],
                   posterMotion: posterMotion ?? null,
+                  poster: poster ?? null,
                 }}
                 g={g}
               />
@@ -587,6 +617,11 @@ function ApplySheet({
   const [startEffects] = useState(() => initEffects(item.kind === 'event' ? item.e : null));
   const [effects, setEffects] = useState<EffectsState>(startEffects);
   const [effectsOpen, setEffectsOpen] = useState(true);
+  // A poster template (Design → Posters) for it.
+  const startPosterTpl = thing.posterTemplateId ?? null;
+  const [posterTpl, setPosterTpl] = useState<number | null>(startPosterTpl);
+  const posters = usePosterTemplates();
+  const chosenPoster = posters.data?.find((x) => x.id === posterTpl) ?? null;
   const tpl = typeof choice === 'number' ? templates.data?.find((x) => x.id === choice) : null;
   const look: PosterLook =
     choice === 'own' ? (thing.look ?? groupLook(g)) : tpl ? templateLook(tpl) : groupLook(g);
@@ -610,7 +645,8 @@ function ApplySheet({
       ownMotion === startMotion &&
       ownTile === startTile &&
       ownPoster === startPoster &&
-      effects === startEffects
+      effects === startEffects &&
+      posterTpl === startPosterTpl
     )
       return onClose();
     // A template or the ministry's look replaces the own look and own colour.
@@ -629,11 +665,13 @@ function ApplySheet({
           motion: ownMotion,
           tileMotion: ownTile,
           posterMotion: ownPoster,
+          posterTemplateId: posterTpl,
         });
       else
         await updateEvent.mutateAsync({
           ...(choice !== start ? { templateId, design } : {}),
           ...effectsPayload(effects),
+          posterTemplateId: posterTpl,
         });
       haptic.success();
       toast(t.common.saved);
@@ -654,9 +692,17 @@ function ApplySheet({
           g={g}
           title={thing.title}
           design={thing.design}
+          poster={chosenPoster}
           slide={slide}
           onSlide={setSlide}
         />
+        <Group title={t.posters.pick}>
+          <PosterPicker
+            value={posterTpl}
+            onChange={setPosterTpl}
+            coverUrl={item.kind === 'event' ? item.e.coverUrl : null}
+          />
+        </Group>
         {item.kind === 'event' && (
           <CoverEffects
             state={effects}

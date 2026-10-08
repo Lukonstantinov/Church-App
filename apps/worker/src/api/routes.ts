@@ -23,6 +23,7 @@ import {
 import { membershipRoutes, userRoutes } from './members';
 import { groupPositionRoutes, positionRoutes } from './positions';
 import { devRoutes } from './dev';
+import { posterTemplateRoutes } from './posterTemplates';
 import { documentRoutes, groupReportRoutes, photoRoutes } from './reports';
 import { notificationRoutes } from './notifications';
 import { groupLabelRoutes, labelRoutes } from './labels';
@@ -60,6 +61,7 @@ apiRoutes.route('/positions', positionRoutes);
 apiRoutes.route('/announcements', announcementRoutes);
 apiRoutes.route('/comments', commentRoutes);
 apiRoutes.route('/templates', templateRoutes);
+apiRoutes.route('/poster-templates', posterTemplateRoutes);
 apiRoutes.route('/dev', devRoutes);
 apiRoutes.route('/transactions', transactionRoutes);
 apiRoutes.route('/schedules', scheduleRoutes);

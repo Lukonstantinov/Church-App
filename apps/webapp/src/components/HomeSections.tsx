@@ -18,6 +18,7 @@ import { haptic } from '../lib/telegram';
 import { useTileDrag } from '../lib/useTileDrag';
 import { CountdownBadge, CountdownOnCover, hasCountdown } from './Countdown';
 import { EventCard, EventCover } from './EventCard';
+import { LayeredPoster, usePosterTexts } from './LayeredPoster';
 import { CalendarTile, GroupCalendar, calendarOnHome, setCalendarOnHome } from './GroupCalendar';
 import { UnreadBadges } from './FeedEntry';
 import {
@@ -171,6 +172,7 @@ export type MeetingTileData = Pick<
       | 'look'
       | 'motion'
       | 'tileMotion'
+      | 'poster'
     >
   >;
 
@@ -546,7 +548,7 @@ function PostTile({ post, onToggle }: { post: AnnouncementRow; onToggle: () => v
 
 function EventTile({ e, g, onToggle }: { e: EventSummary; g: GroupSummary; onToggle: () => void }) {
   const f = useFmt();
-  const cover = e.coverUrl || e.design?.banner;
+  const cover = e.coverUrl || e.design?.banner || e.poster;
   const live = useIsLive(e.startsAt, e.endsAt, e.status === 'cancelled');
   return (
     <BurnFrame e={e} radius={16} className="h-full">
@@ -591,6 +593,7 @@ function MeetingTile({
 }) {
   const t = useT();
   const f = useFmt();
+  const posterTexts = usePosterTexts();
   const live = useIsLive(m.startsAt, m.endsAt, m.status === 'cancelled');
   return (
     <SoonPulse
@@ -603,9 +606,12 @@ function MeetingTile({
         <LookTop
           look={meetingLook(m) ?? g}
           className="tile-top isolate flex aspect-[16/10] flex-col p-2.5"
+          under={
+            m.poster ? <LayeredPoster fill tpl={m.poster} texts={posterTexts(m)} /> : undefined
+          }
         >
-          {/* The meeting's living animation, as on its own screen. */}
-          <TileMotion motion={m.motion} tile={m.tileMotion} live={live} />
+          {/* The meeting's living animation, as on its own screen (a poster has its own). */}
+          {!m.poster && <TileMotion motion={m.motion} tile={m.tileMotion} live={live} />}
           <span className="flex min-w-0 items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider">
             {/* While live the badge takes the label's place, so nothing spills out. */}
             {live ? (

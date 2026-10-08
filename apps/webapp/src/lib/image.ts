@@ -110,3 +110,38 @@ export async function squareJpeg(src: File | string, side = 640): Promise<Blob> 
     if (typeof src !== 'string') URL.revokeObjectURL(url);
   }
 }
+
+/**
+ * Prepares a picture for a poster layer: like a photo, but its transparency is kept
+ * (letters or a cut-out on a see-through background). WebP where the browser can encode
+ * it, else PNG; shrunk until it fits the upload limit.
+ */
+export async function prepareCutout(file: File, maxSide = 1400): Promise<Blob> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('unreadable image'));
+      el.src = url;
+    });
+    let side = maxSide;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const w = img.naturalWidth || side;
+      const h = img.naturalHeight || side;
+      const scale = Math.min(side / w, side / h, 1) || 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(w * scale));
+      canvas.height = Math.max(1, Math.round(h * scale));
+      // No background fill: see-through stays see-through.
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      let blob = await canvasToBlob(canvas, 'image/webp', attempt < 2 ? 0.9 : 0.75);
+      if (!blob || blob.type !== 'image/webp') blob = await canvasToBlob(canvas, 'image/png');
+      if (blob && blob.size <= MEDIA_MAX_BYTES) return blob;
+      side = Math.round(side * 0.75);
+    }
+    throw new Error('too large');
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}

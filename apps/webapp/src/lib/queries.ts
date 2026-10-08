@@ -56,6 +56,8 @@ import type {
   MemberRow,
   UpdateMembershipInput,
   UpdateUserInput,
+  PosterTemplate,
+  PosterTemplateInput,
 } from '@church/shared';
 import type {
   CommentRow,
@@ -883,6 +885,34 @@ export function useDeleteTemplate() {
   return useMutation({
     mutationFn: (id: number) => apiFetch(`/templates/${id}`, send('DELETE')),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['templates'] }),
+  });
+}
+
+export function usePosterTemplates(enabled = true) {
+  return useQuery({
+    queryKey: ['posterTemplates'],
+    queryFn: () => apiFetch<PosterTemplate[]>('/poster-templates'),
+    enabled,
+  });
+}
+
+export function useSavePosterTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: PosterTemplateInput & { id?: number }) =>
+      id
+        ? apiFetch<PosterTemplate>(`/poster-templates/${id}`, send('PUT', input))
+        : apiFetch<PosterTemplate>('/poster-templates', send('POST', input)),
+    // Events and meetings wearing it show the change too.
+    onSuccess: () => void qc.invalidateQueries(),
+  });
+}
+
+export function useDeletePosterTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiFetch(`/poster-templates/${id}`, send('DELETE')),
+    onSuccess: () => void qc.invalidateQueries(),
   });
 }
 

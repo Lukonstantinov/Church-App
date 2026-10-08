@@ -15,6 +15,7 @@ import {
 } from './brand';
 import type { Permission } from './permissions';
 import { MEETING_MOTIONS, type MeetingMotion } from './motions';
+import type { PosterTemplate } from './posterTemplates';
 import { chatUrlSchema, type EventSummary } from './events';
 import {
   postBlocksSchema,
@@ -535,6 +536,9 @@ export interface MeetingRow {
   /** The poster's animation: its own, else its template's (null = none). */
   posterMotion: MeetingMotion | null;
   ownPosterMotion: MeetingMotion | null;
+  /** A poster template (Design → Posters) used for its hero, tile and poster (null = none). */
+  posterTemplateId: number | null;
+  poster: PosterTemplate | null;
   /** Set when the meeting is one of a repeating series. */
   seriesId: string | null;
   repeat: MeetingRepeat | null;
@@ -564,6 +568,7 @@ export const createMeetingSchema = z.object({
   speakers: speakersSchema.optional(),
   /** The poster's animation (null = the template's, else none). */
   posterMotion: z.enum(MEETING_MOTIONS).nullish(),
+  posterTemplateId: z.number().int().positive().nullish(),
   /** Make it a repeating meeting: the calendar is filled for all of them. */
   repeat: repeatSchema.nullish(),
 });
@@ -589,6 +594,7 @@ export const updateMeetingSchema = z.object({
   /** Its home tile's and its poster's own animations (null = the template's / default). */
   tileMotion: z.enum(MEETING_MOTIONS).nullable().optional(),
   posterMotion: z.enum(MEETING_MOTIONS).nullable().optional(),
+  posterTemplateId: z.number().int().positive().nullable().optional(),
   /** With a series: apply the change to this and all the later meetings of it. */
   applyToSeries: z.boolean().optional(),
   leaderUserId: z.number().int().positive().nullable().optional(),

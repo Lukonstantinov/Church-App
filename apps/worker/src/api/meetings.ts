@@ -313,6 +313,7 @@ groupMeetingRoutes.post('/:id/meetings', async (c) => {
         templateId: input.templateId ?? null,
         speakers: input.speakers?.length ? JSON.stringify(input.speakers) : null,
         posterMotion: input.posterMotion ?? null,
+        posterTemplateId: input.posterTemplateId ?? null,
         seriesId,
         repeatRule: input.repeat ? JSON.stringify(input.repeat) : null,
         // Already underway when it is made: nobody needs a "live" message for it.
@@ -445,6 +446,7 @@ const MEETING_LOOK = [
   'motion',
   'tileMotion',
   'posterMotion',
+  'posterTemplateId',
   'peopleLook',
 ] as const;
 
@@ -687,6 +689,7 @@ meetingRoutes.patch('/:id', async (c) => {
   if (input.motion !== undefined) patch.motion = input.motion;
   if (input.tileMotion !== undefined) patch.tileMotion = input.tileMotion;
   if (input.posterMotion !== undefined) patch.posterMotion = input.posterMotion;
+  if (input.posterTemplateId !== undefined) patch.posterTemplateId = input.posterTemplateId;
   if (input.peopleLook !== undefined) {
     if (input.peopleLook?.photoMediaId)
       await assertGroupMedia(db, meeting.groupId, input.peopleLook.photoMediaId);
@@ -747,6 +750,7 @@ meetingRoutes.patch('/:id', async (c) => {
         'location',
         'design',
         'templateId',
+        'posterTemplateId',
         'speakers',
         'kind',
       ] as const)

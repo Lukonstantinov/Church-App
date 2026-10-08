@@ -5,6 +5,7 @@ import {
   type AnnouncementRow,
   type CommentRow,
   type DesignTemplate,
+  type PosterTemplate,
   type EventDetail,
   type EventSummary,
   type GroupDetail,
@@ -365,6 +366,54 @@ describe('ministry feed', () => {
     await join(plain, g);
     expect((await api('/api/templates', { user: plain })).status).toBe(403);
     await apiJson(`/api/templates/${id}`, { method: 'DELETE', user: ADMIN });
+  });
+
+  it('poster templates: layers saved in order, used by an event, unknown pictures refused', async () => {
+    const g = await createEnv('Постеры');
+    const tpl = await apiJson<PosterTemplate>('/api/poster-templates', {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        name: 'Алтарь',
+        background: { type: 'color', colors: ['#e8402c'] },
+        layers: [
+          { type: 'effect', id: 'e1', kind: 'smoke', tune: { density: 1.4 } },
+          { type: 'text', id: 't1', source: 'title', size: 14, y: 40, upper: true },
+          { type: 'effect', id: 'e2', kind: 'glitch' },
+        ],
+      },
+    });
+    expect(tpl.layers.map((l) => l.id)).toEqual(['e1', 't1', 'e2']);
+    expect(tpl.mine).toBe(true);
+    const bad = await api('/api/poster-templates', {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        name: 'Нет картинки',
+        background: { type: 'color', colors: ['#000000'] },
+        layers: [{ type: 'image', id: 'i1', mediaId: 999999 }],
+      },
+    });
+    expect(bad.status).toBe(400);
+    const e = await apiJson<EventDetail>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'The Altar',
+        date: new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10),
+        startTime: '18:00',
+        posterTemplateId: tpl.id,
+      },
+    });
+    expect(e.poster).toMatchObject({ id: tpl.id, name: 'Алтарь' });
+    expect(e.poster!.layers).toHaveLength(3);
+    // Deleting the template takes it off the event.
+    await apiJson(`/api/poster-templates/${tpl.id}`, { method: 'DELETE', user: ADMIN });
+    const after = await apiJson<EventDetail>(`/api/events/${e.id}`, { user: ADMIN });
+    expect(after.poster).toBeNull();
+    const plain = fakeUser('Без прав постеры');
+    await join(plain, g);
+    expect((await api('/api/poster-templates', { user: plain })).status).toBe(403);
   });
 });
 

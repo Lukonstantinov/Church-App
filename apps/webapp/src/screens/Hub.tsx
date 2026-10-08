@@ -41,6 +41,7 @@ import {
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import { CoverPicture } from '../components/CoverSlideshow';
+import { LayeredPoster, usePosterTexts } from '../components/LayeredPoster';
 import { useAssignments, useGroups, useMyEvents, usePinnedEvents } from '../lib/queries';
 import { useEventWhen } from '../components/EventCard';
 import { useFmt } from '../lib/format';
@@ -357,6 +358,7 @@ export function PinnedEventCard({
   // The "Pinned events" part from the Design studio: its animations, when it has any, take
   // the place of the event's own cover effects here; its edge and shine are added.
   const part = useModuleLook('pinned');
+  const posterTexts = usePosterTexts();
   const partMotions = skinMotions(part);
   // The event's own look, else its ministry's (colour, pattern, photo).
   const look = e.look ?? groups.data?.find((g) => g.id === e.groupId) ?? null;
@@ -375,7 +377,10 @@ export function PinnedEventCard({
           // The cover fills the whole card (past its padding) and wears the event's effects.
           under={
             <>
-              {partMotions.length ? (
+              {/* A poster template (Design → Posters) takes the cover's place. */}
+              {e.poster ? (
+                <LayeredPoster fill tpl={e.poster} texts={posterTexts(e)} coverUrl={e.coverUrl} />
+              ) : partMotions.length ? (
                 <CoverPicture e={{ ...e, motion: null, motionLayers: [] }} />
               ) : (
                 <CoverPicture e={e} />
@@ -393,7 +398,7 @@ export function PinnedEventCard({
               {part.shine && part.shine !== 'none' && (
                 <span className={`shine shine-${part.shine}`} style={shineStyle(part.shineTune)} />
               )}
-              {e.coverUrl && (
+              {e.coverUrl && !e.poster && (
                 <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
               )}
             </>
@@ -403,7 +408,8 @@ export function PinnedEventCard({
             {hasCountdown(e) && <CountdownBadge startsAt={e.startsAt} design={e.design} />}
             <LiveNow startsAt={e.startsAt} endsAt={e.endsAt} cancelled={e.status === 'cancelled'} />
           </span>
-          <span className="relative flex flex-col">
+          {/* A poster already says what and when. */}
+          <span className={`relative flex flex-col ${e.poster ? 'invisible' : ''}`}>
             <span className="text-[12px] font-bold uppercase tracking-wider opacity-80">
               {e.groupName}
             </span>

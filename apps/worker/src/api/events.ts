@@ -121,6 +121,7 @@ groupEventRoutes.post('/:id/events', async (c) => {
       motionTune: input.motionTune ? JSON.stringify(input.motionTune) : null,
       motionLayers: input.motionLayers?.length ? JSON.stringify(input.motionLayers) : null,
       coverSlides: input.coverSlides?.mediaIds.length ? JSON.stringify(input.coverSlides) : null,
+      posterTemplateId: input.posterTemplateId ?? null,
       countdown: input.countdown ?? false,
       speakers: input.speakers.length ? JSON.stringify(input.speakers) : null,
       hasGallery: input.features.gallery,
@@ -341,6 +342,7 @@ const EVENT_LOOK = [
   'motionTune',
   'motionLayers',
   'coverSlides',
+  'posterTemplateId',
 ] as const;
 
 eventRoutes.patch('/:id', async (c) => {
@@ -379,6 +381,7 @@ eventRoutes.patch('/:id', async (c) => {
   if (input.motion !== undefined) patch.motion = input.motion;
   if (input.motionTune !== undefined)
     patch.motionTune = input.motionTune ? JSON.stringify(input.motionTune) : null;
+  if (input.posterTemplateId !== undefined) patch.posterTemplateId = input.posterTemplateId;
   if (input.coverSlides !== undefined) {
     for (const id of input.coverSlides?.mediaIds ?? [])
       await assertGroupMedia(db, event.groupId, id);
