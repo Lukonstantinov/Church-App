@@ -89,6 +89,22 @@ const fontKey = z.string().refine(isFontKey, 'font');
  * split) under a cover banner; it can change the colour, drop the ministry photo, or
  * have a look of its own.
  */
+/**
+ * The speakers' photos on a poster: how see-through, where (with the text, at the top, at
+ * the bottom, or a column on the right), the edge around them, their shape and size.
+ */
+export const SPEAKER_PLACES = ['inline', 'top', 'bottom', 'right'] as const;
+export const SPEAKER_EDGES = ['white', 'none', 'brand', 'gold', 'glow', 'shadow'] as const;
+export const SPEAKER_SHAPES = ['circle', 'rounded', 'square'] as const;
+export const speakerLookSchema = z.object({
+  opacity: z.number().min(0.2).max(1).optional(),
+  place: z.enum(SPEAKER_PLACES).optional(),
+  edge: z.enum(SPEAKER_EDGES).optional(),
+  shape: z.enum(SPEAKER_SHAPES).optional(),
+  size: z.enum(['s', 'm', 'l']).optional(),
+});
+export type SpeakerLook = z.infer<typeof speakerLookSchema>;
+
 export const postDesignSchema = z.object({
   /** Show the cover banner (default yes). */
   banner: z.boolean().default(true),
@@ -128,6 +144,8 @@ export const postDesignSchema = z.object({
   burnDays: z.number().int().min(1).max(14).optional(),
   /** Poster layout: the usual one, or a collage of the speakers' photos. */
   posterLayout: z.enum(['classic', 'collage']).optional(),
+  /** How the speakers' photos look on the poster. */
+  speakerLook: speakerLookSchema.nullish(),
 });
 export type PostDesign = z.infer<typeof postDesignSchema>;
 export type PostDesignInput = z.input<typeof postDesignSchema>;

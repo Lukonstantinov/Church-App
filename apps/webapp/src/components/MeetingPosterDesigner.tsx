@@ -11,7 +11,14 @@ import {
   type CoverState,
 } from './CoverDesigner';
 import { MeetingPoster, PosterPhotoWarning } from './MeetingPoster';
-import { SpeakersEditor, toDrafts, toShown, toSpeakerInputs, type SpeakerDraft } from './Speakers';
+import {
+  SpeakerLookControls,
+  SpeakersEditor,
+  toDrafts,
+  toShown,
+  toSpeakerInputs,
+  type SpeakerDraft,
+} from './Speakers';
 import { Section } from './ui';
 
 /** Everything that makes up a meeting's poster: its look and its speakers. */
@@ -139,6 +146,14 @@ export function MeetingPosterDesigner({
           value={state.speakers}
           onChange={(speakers) => onChange({ ...state, speakers })}
         />
+      </Section>
+      <Section title={t.meetings.speakerLook}>
+        <div className="p-4">
+          <SpeakerLookControls
+            value={state.cover.design.speakerLook}
+            onChange={(speakerLook) => setDesign({ speakerLook })}
+          />
+        </div>
       </Section>
     </>
   );

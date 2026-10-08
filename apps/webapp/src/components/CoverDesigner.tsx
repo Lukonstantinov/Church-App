@@ -51,6 +51,7 @@ export function initCover(
       burnColor: d?.burnColor ?? null,
       burnDays: d?.burnDays ?? 3,
       posterLayout: d?.posterLayout ?? 'classic',
+      speakerLook: d?.speakerLook ?? null,
     },
     own: {
       pattern: d?.custom?.pattern ?? null,

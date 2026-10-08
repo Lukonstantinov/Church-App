@@ -406,6 +406,23 @@ export const lt: Messages = {
     speakerRole: 'Kas / apie ką (nebūtina)',
     speakerPhoto: 'Nuotrauka',
     speakerFromPeople: 'Iš narių',
+    speakerLook: 'Kalbėtojų nuotraukos plakate',
+    speakerPlace: 'Kur',
+    speakerPlaces: { inline: 'Su tekstu', top: 'Viršuje', bottom: 'Apačioje', right: 'Dešinėje' },
+    speakerEdge: 'Kraštas',
+    speakerEdges: {
+      white: 'Baltas',
+      none: 'Be krašto',
+      brand: 'Spalva',
+      gold: 'Auksas',
+      glow: 'Švytėjimas',
+      shadow: 'Šešėlis',
+    },
+    speakerShape: 'Forma',
+    speakerShapes: { circle: 'Apskritimas', rounded: 'Suapvalinta', square: 'Kvadratas' },
+    speakerSize: 'Dydis',
+    speakerSizes: { s: 'Maži', m: 'Vidutiniai', l: 'Dideli' },
+    speakerOpacity: 'Nuotraukų neskaidrumas',
     speakerNoPhoto:
       'Nėra nuotraukos — plakate bus inicialai. Paspauskite apskritimą, kad pridėtumėte.',
     speakerNoProfilePhoto:

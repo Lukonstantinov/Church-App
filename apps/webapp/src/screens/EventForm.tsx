@@ -23,6 +23,7 @@ import { LayeredPoster, usePosterTexts } from '../components/LayeredPoster';
 import { PosterPicker } from '../components/PosterStudio';
 import { PosterMedia } from '../components/Poster';
 import {
+  SpeakerLookControls,
   SpeakersEditor,
   toDrafts,
   toShown,
@@ -573,6 +574,16 @@ function EventFormBody({
       <Section title={t.meetings.speakers}>
         <SpeakersEditor groupId={groupId} value={speakers} onChange={setSpeakers} />
       </Section>
+      {speakers.some((sp) => sp.name.trim()) && mayDesign && (
+        <Section title={t.meetings.speakerLook}>
+          <div className="p-4">
+            <SpeakerLookControls
+              value={look.design.speakerLook}
+              onChange={(speakerLook) => setDesign({ speakerLook })}
+            />
+          </div>
+        </Section>
+      )}
 
       <Section>
         <TextField

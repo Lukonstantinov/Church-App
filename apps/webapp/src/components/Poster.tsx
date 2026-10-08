@@ -215,9 +215,22 @@ export function PosterMedia({
       )}
       {speakers.length > 0 && (
         <div
-          className={`pointer-events-none absolute inset-x-0 bottom-0 text-white ${compact ? 'p-1.5' : 'px-4 pb-4'}`}
+          className={`pointer-events-none absolute text-white ${
+            design?.speakerLook?.place === 'top'
+              ? `inset-x-0 top-0 ${compact ? 'p-1.5' : 'px-4 pt-10'}`
+              : design?.speakerLook?.place === 'right'
+                ? `inset-y-0 right-0 flex items-center ${compact ? 'p-1.5' : 'pr-3'}`
+                : `inset-x-0 bottom-0 ${compact ? 'p-1.5' : 'px-4 pb-4'}`
+          }`}
         >
-          <SpeakerStrip speakers={speakers} size={compact ? 'sm' : 'md'} onColor />
+          <SpeakerStrip
+            speakers={speakers}
+            size={compact ? 'sm' : 'md'}
+            onColor
+            look={compact ? { ...design?.speakerLook, size: undefined } : design?.speakerLook}
+            brand={theme.light}
+            vertical={design?.speakerLook?.place === 'right'}
+          />
         </div>
       )}
     </div>

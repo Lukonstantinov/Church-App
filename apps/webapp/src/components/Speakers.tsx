@@ -1,9 +1,20 @@
-import { useRef, useState } from 'react';
-import { MAX_SPEAKERS, displayName, type Speaker, type SpeakerInput } from '@church/shared';
+import { useRef, useState, type ReactNode } from 'react';
+import {
+  MAX_SPEAKERS,
+  SPEAKER_EDGES,
+  SPEAKER_PLACES,
+  SPEAKER_SHAPES,
+  displayName,
+  type Speaker,
+  type SpeakerInput,
+  type SpeakerLook,
+} from '@church/shared';
 import { preparePhoto } from '../lib/image';
 import { useT } from '../lib/i18n';
 import { useMembers, useUploadMedia } from '../lib/queries';
 import { IconCamera, IconPlus, IconX } from './icons';
+import { Pill } from './LookControls';
+import { Knob } from './MotionTune';
 import { PersonPicker } from './PersonPicker';
 import { useToast } from './Toast';
 
@@ -67,42 +78,85 @@ const SIZES = {
   lg: { photo: 96, name: 'text-[22px]', role: 'text-[17px]', gap: 'gap-5' },
 } as const;
 
+/** The edge around a speaker's photo, as a shadow (it follows any shape). */
+function edgeShadow(edge: SpeakerLook['edge'], brand: string): string | undefined {
+  switch (edge ?? 'white') {
+    case 'none':
+      return undefined;
+    case 'brand':
+      return `0 0 0 3px ${brand}`;
+    case 'gold':
+      return '0 0 0 3px #e9c46a, 0 0 0 5px rgba(120, 80, 0, 0.45)';
+    case 'glow':
+      return '0 0 0 2px #fff, 0 0 18px 5px rgba(255, 255, 255, 0.75)';
+    case 'shadow':
+      return '0 8px 22px rgba(0, 0, 0, 0.5)';
+    default:
+      return '0 0 0 2px rgba(255, 255, 255, 0.8), 0 4px 14px rgba(0, 0, 0, 0.25)';
+  }
+}
+
+const RADIUS = { circle: '9999px', rounded: '24%', square: '8%' } as const;
+const LOOK_SIZE = { s: 'sm', m: 'md', l: 'lg' } as const;
+
 /**
- * Up to four speakers in a row: round photo (or initials), name and what they speak
- * about. `onColor` = white text, for use on a coloured or photo background.
+ * Up to four speakers in a row (or a column): photo (or initials), name and what they
+ * speak about. `onColor` = white text, for use on a coloured or photo background. `look`
+ * (from the poster's design) sets how see-through the photos are, their edge, shape, size.
  */
 export function SpeakerStrip({
   speakers,
   size = 'md',
   onColor,
   className = '',
+  look,
+  brand = '#ffffff',
+  vertical,
 }: {
   speakers: Speaker[];
   size?: keyof typeof SIZES;
   onColor?: boolean;
   className?: string;
+  look?: SpeakerLook | null;
+  /** The poster's colour, for the "colour" edge. */
+  brand?: string;
+  /** One under another (a column at the side of the poster). */
+  vertical?: boolean;
 }) {
   if (speakers.length === 0) return null;
-  const s = SIZES[size];
+  const wanted = look?.size ? LOOK_SIZE[look.size] : size;
+  // A column at the side has less room: never larger than medium, small for three or more.
+  const s =
+    SIZES[
+      vertical && speakers.length > 2
+        ? 'sm'
+        : vertical && wanted === 'lg' && speakers.length > 1
+          ? 'md'
+          : wanted
+    ];
+  const photo = {
+    width: s.photo,
+    height: s.photo,
+    borderRadius: RADIUS[look?.shape ?? 'circle'],
+    boxShadow: edgeShadow(look?.edge, brand),
+    opacity: look?.opacity ?? 1,
+  };
   return (
-    <div className={`flex flex-wrap items-start justify-center ${s.gap} ${className}`}>
+    <div
+      className={`flex ${vertical ? 'flex-col items-center' : 'flex-wrap items-start justify-center'} ${s.gap} ${className}`}
+    >
       {speakers.slice(0, MAX_SPEAKERS).map((sp, i) => (
         <div
           key={`${sp.name}${i}`}
           className="flex min-w-0 flex-col items-center text-center"
-          style={{ width: s.photo + (size === 'lg' ? 52 : 28) }}
+          style={{ width: s.photo + (s === SIZES.lg ? 52 : 28) }}
         >
           {sp.photoUrl ? (
-            <img
-              src={sp.photoUrl}
-              alt=""
-              className="rounded-full object-cover shadow-card ring-2 ring-white/80"
-              style={{ width: s.photo, height: s.photo }}
-            />
+            <img src={sp.photoUrl} alt="" className="object-cover" style={photo} />
           ) : (
             <span
-              className="flex items-center justify-center rounded-full bg-white/25 font-bold ring-2 ring-white/60"
-              style={{ width: s.photo, height: s.photo, fontSize: s.photo / 2.8 }}
+              className="flex items-center justify-center bg-white/25 font-bold"
+              style={{ ...photo, fontSize: s.photo / 2.8 }}
             >
               {initials(sp.name)}
             </span>
@@ -121,6 +175,82 @@ export function SpeakerStrip({
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** The poster settings for the speakers' photos: place, edge, shape, size, see-through. */
+export function SpeakerLookControls({
+  value,
+  onChange,
+}: {
+  value: SpeakerLook | null | undefined;
+  onChange: (v: SpeakerLook) => void;
+}) {
+  const t = useT();
+  const v = value ?? {};
+  const set = (p: Partial<SpeakerLook>) => onChange({ ...v, ...p });
+  const row = (children: ReactNode, title: string) => (
+    <div>
+      <div className="mb-1.5 text-[13px] text-hint">{title}</div>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-3">
+      {row(
+        SPEAKER_PLACES.map((p) => (
+          <Pill
+            key={p}
+            on={(v.place ?? 'inline') === p}
+            onClick={() => set({ place: p })}
+            label={t.meetings.speakerPlaces[p]}
+          />
+        )),
+        t.meetings.speakerPlace,
+      )}
+      {row(
+        SPEAKER_EDGES.map((e) => (
+          <Pill
+            key={e}
+            on={(v.edge ?? 'white') === e}
+            onClick={() => set({ edge: e })}
+            label={t.meetings.speakerEdges[e]}
+          />
+        )),
+        t.meetings.speakerEdge,
+      )}
+      {row(
+        SPEAKER_SHAPES.map((sh) => (
+          <Pill
+            key={sh}
+            on={(v.shape ?? 'circle') === sh}
+            onClick={() => set({ shape: sh })}
+            label={t.meetings.speakerShapes[sh]}
+          />
+        )),
+        t.meetings.speakerShape,
+      )}
+      {row(
+        (['s', 'm', 'l'] as const).map((z) => (
+          <Pill
+            key={z}
+            on={(v.size ?? 'm') === z}
+            onClick={() => set({ size: z })}
+            label={t.meetings.speakerSizes[z]}
+          />
+        )),
+        t.meetings.speakerSize,
+      )}
+      <Knob
+        label={t.meetings.speakerOpacity}
+        value={v.opacity ?? 1}
+        min={0.2}
+        max={1}
+        step={0.05}
+        show={(x) => `${Math.round(x * 100)}%`}
+        onChange={(opacity) => set({ opacity })}
+      />
     </div>
   );
 }

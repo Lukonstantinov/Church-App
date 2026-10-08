@@ -129,6 +129,20 @@ export const MeetingPoster = forwardRef<
     design?.posterLayout === 'collage' ? speakers.filter((sp) => sp.photoUrl).slice(0, 4) : [];
   const place =
     design?.titlePos === 'top' ? 'mt-8' : design?.titlePos === 'center' ? 'my-auto' : 'mt-auto';
+  // The speakers' photos: where and how they look (Design → poster → speaker photos).
+  const speakerLook = design?.speakerLook ?? null;
+  const spot = speakers.length ? (speakerLook?.place ?? 'inline') : null;
+  const strip = (className?: string, vertical?: boolean) => (
+    <SpeakerStrip
+      speakers={collage.length ? speakers.map((sp) => ({ ...sp, photoUrl: null })) : speakers}
+      size="md"
+      onColor
+      look={speakerLook}
+      brand={theme.light}
+      vertical={vertical}
+      className={className}
+    />
+  );
   if (m.poster)
     return (
       <div ref={ref} className="relative h-[675px] w-[540px] overflow-hidden">
@@ -192,6 +206,10 @@ export const MeetingPoster = forwardRef<
         )}
         <span className="text-[20px] font-bold uppercase tracking-wider">{g.name}</span>
       </div>
+      {spot === 'top' && strip('relative mt-6')}
+      {spot === 'right' && (
+        <div className="absolute right-8 top-1/2 -translate-y-1/2">{strip(undefined, true)}</div>
+      )}
       <div
         className={`relative flex flex-col gap-4 ${place} ${center ? 'items-center text-center' : ''}`}
       >
@@ -217,13 +235,7 @@ export const MeetingPoster = forwardRef<
           </div>
         </div>
         {m.topic && <div className="text-[28px] font-bold leading-tight">«{m.topic}»</div>}
-        {speakers.length > 0 && (
-          <SpeakerStrip
-            speakers={collage.length ? speakers.map((sp) => ({ ...sp, photoUrl: null })) : speakers}
-            size="md"
-            onColor
-          />
-        )}
+        {spot === 'inline' && strip()}
         <div
           className={`flex flex-wrap gap-2 text-[19px] font-semibold ${center ? 'justify-center' : ''}`}
         >
@@ -239,6 +251,7 @@ export const MeetingPoster = forwardRef<
             <span className="rounded-full bg-white/22 px-4 py-1.5">📍 {m.location}</span>
           )}
         </div>
+        {spot === 'bottom' && strip()}
       </div>
       {cancelled && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/35">

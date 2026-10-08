@@ -79,7 +79,8 @@ look (colour, pattern, logo, photo), background, default place, Telegram chat; a
 **People** — invite link/QR via the bot, join approval, offline members with claim codes,
 positions with rights, labels, contacts, profile photos (`users.photo_media_id`, set on the person
 screen via `PUT /api/users/:id/photo`; used on meeting cards and as speakers' photos on posters —
-speakers can be picked from people, `speaker.userId`; missing photos give a warning).
+speakers can be picked from people, `speaker.userId`; missing photos give a warning; their look on
+posters — place, edge, shape, size, opacity — is `design.speakerLook`).
 
 **Meetings** — one-off, repeating series (weekly / biweekly / monthly, all dates created
 at once: `meetings.series_id`, `repeat_rule`; edits can apply to the rest of the series),
