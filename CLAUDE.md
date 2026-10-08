@@ -59,6 +59,7 @@ Deploy → Run workflow → production.
   transform/opacity, not box-shadow or custom properties; animated layers live in
   `.living-clip` (contain: strict, paused off screen via `watchOffscreen`, `lib/perf.ts`);
   weaker phones get `html[data-lite]` (fewer particles, no SVG filters, lighter blur).
+  SVG noise textures (smoke, frost, grain…) go through `useTexture` (`lib/texture.ts`): drawn once as a PNG.
   Per-phone graphics quality (More / Design → Graphics: auto / full / lite / still, `lib/perf.ts`,
   `html[data-quality]`): auto steps down when frames drop; still = no animation layers.
   Running `LivingLayer`s are capped (`watchOffscreen(el, true)`; the biggest on screen run first); never animate
@@ -186,5 +187,7 @@ money records (`DELETE …/treasury`, ministry name typed back).
 set from church settings via `setMyProfilePhoto`, `PUT /api/church/bot-photo`), dynamic `/manifest.webmanifest` + `/apple-touch-icon.png` from the church
 logo. Phone notifications = bot messages (Telegram push).
 
-**Developer** — Telemetry screen (with app errors reported by `CrashGuard` → `client_errors`) and the Instructions screen (`screens/Guide.tsx`,
+**Developer** — Telemetry screen (with app errors reported by `CrashGuard` → `client_errors`; a second guard
+wraps the whole app, index.html shows a Reload note if the script never starts, and a start that crashed makes
+the next one run Still once — safe start in `lib/perf.ts`) and the Instructions screen (`screens/Guide.tsx`,
 content in `lib/guide.ts`): update the guide whenever a feature is added or changed.

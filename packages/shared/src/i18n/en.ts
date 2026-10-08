@@ -13,6 +13,9 @@ export const en: Messages = {
     crashHint: 'The error has been sent to the developer. Go back or reload the app.',
     crashBack: 'Back',
     crashReload: 'Reload',
+    appCrashTitle: 'The app didn’t open',
+    appCrashHint:
+      'The error was sent to the developer. Tap Reload; if that doesn’t help, close the app and open it again.',
     loading: 'Loading…',
     retry: 'Try again',
     save: 'Save',
@@ -140,6 +143,8 @@ export const en: Messages = {
     still: 'Still',
     hint: 'For weaker phones. “Light” draws fewer particles and stops flowing colours, edges and shine. “Still” keeps the designs but nothing moves. “Auto” switches by itself when the phone can’t keep up.',
     lowered: 'The phone was struggling — animations are lighter now. Change: More → Graphics',
+    safeStart:
+      'The app closed unexpectedly last time, so it opened without animations now. Next time it starts as usual.',
   },
   appBg: {
     title: 'App background',

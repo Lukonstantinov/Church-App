@@ -20,6 +20,11 @@ export function isInsideTelegram(): boolean {
   return initDataRaw() !== '';
 }
 
+/** The language of the person's Telegram ("ru", "en"…), before the app knows theirs. */
+export function telegramLanguage(): string {
+  return webApp()?.initDataUnsafe?.user?.language_code ?? navigator.language.slice(0, 2);
+}
+
 /** Parameter from t.me/<bot>?startapp=<param>, e.g. "roll_12". */
 export function startParam(): string | null {
   return webApp()?.initDataUnsafe?.start_param ?? null;

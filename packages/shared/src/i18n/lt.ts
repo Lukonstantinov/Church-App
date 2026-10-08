@@ -15,6 +15,9 @@ export const lt: Messages = {
     crashHint: 'Klaida jau išsiųsta kūrėjui. Grįžkite atgal arba perkraukite programą.',
     crashBack: 'Atgal',
     crashReload: 'Perkrauti',
+    appCrashTitle: 'Programėlė neatsidarė',
+    appCrashHint:
+      'Klaida jau išsiųsta kūrėjui. Paspauskite „Perkrauti“; jei nepadeda – uždarykite programėlę ir atidarykite iš naujo.',
     loading: 'Įkeliama…',
     retry: 'Bandyti dar kartą',
     save: 'Išsaugoti',
@@ -143,6 +146,8 @@ export const lt: Messages = {
     still: 'Be judesio',
     hint: 'Silpnesniems telefonams. „Lengva“ – mažiau dalelių, nejuda spalvos, rėmeliai ir blizgesys. „Be judesio“ – dizainas lieka, bet niekas nejuda. „Auto“ persijungia pats, kai telefonas nespėja.',
     lowered: 'Telefonas nespėjo – animacijos lengvesnės. Pakeisti: Daugiau → Grafika',
+    safeStart:
+      'Praėjusį kartą programėlė netikėtai užsidarė, todėl dabar atidaryta be animacijų. Kitą kartą viskas bus kaip įprasta.',
   },
   appBg: {
     title: 'Programos fonas',

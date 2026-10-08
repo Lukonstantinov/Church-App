@@ -49,8 +49,32 @@ export function getAutoQuality(): Quality {
   return isQuality(v) ? v : weakPhone ? 'lite' : 'full';
 }
 
+/**
+ * A start that never settled: the app closed itself (an iPhone runs out of memory on a
+ * heavy page and shows an empty screen, again on every try). This start then runs still,
+ * just this once, and says so; the person's own setting stays as it was.
+ */
+const BOOT_KEY = 'church.booting';
+let safeStart = false;
+
+/** This start runs still because the last one crashed. */
+export const isSafeStart = () => safeStart;
+
+function watchBoot() {
+  safeStart = storage.get(BOOT_KEY) !== null;
+  storage.set(BOOT_KEY, String(Date.now()));
+  // Settled: shown for a few seconds, or hidden / closed normally (a crash does neither).
+  const settled = () => storage.remove(BOOT_KEY);
+  setTimeout(settled, 8000);
+  window.addEventListener('pagehide', settled);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') settled();
+  });
+}
+
 /** The quality in effect. */
 export function getQuality(): Quality {
+  if (safeStart) return 'still';
   const c = getQualityChoice();
   return c === 'auto' ? getAutoQuality() : c;
 }
@@ -69,6 +93,7 @@ export function applyQuality(): void {
 
 export function setQualityChoice(c: QualityChoice): void {
   storage.set(KEY, c);
+  safeStart = false;
   // Choosing "auto" again gives the phone a fresh chance.
   if (c === 'auto') storage.remove(AUTO_KEY);
   applyQuality();
@@ -292,6 +317,7 @@ function watchAnimations() {
 
 /** Called once at start-up. */
 export function startPerformanceWatch(): void {
+  watchBoot();
   applyQuality();
   watchScrolling();
   watchFrames();

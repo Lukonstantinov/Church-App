@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import type { MeetingMotion } from '@church/shared';
+import { useTexture } from '../lib/texture';
 
 /**
  * Photo effects in the spirit of Photoshop's: smoke and clouds, ice creeping over the
@@ -78,6 +79,21 @@ const crinkle = (sharp: number) =>
     360,
   );
 
+/** Canvas weave under the oil painting. */
+const CANVAS = svg(
+  `<filter id='o'><feTurbulence type='fractalNoise' baseFrequency='0.04 0.32' numOctaves='3' seed='8'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(#o)'/>`,
+  200,
+  200,
+);
+
+/** Grunge: dark blotches and wear. */
+const grunge = (weight: number) =>
+  svg(
+    `<filter id='g'><feTurbulence type='fractalNoise' baseFrequency='${(0.03 / weight).toFixed(3)} ${(0.09 / weight).toFixed(3)}' numOctaves='4' seed='11'/><feColorMatrix values='0 0 0 0 0.12  0 0 0 0 0.1  0 0 0 0 0.08  0 0 0 -2.4 1.25'/></filter><rect width='100%' height='100%' filter='url(#g)'/>`,
+    360,
+    360,
+  );
+
 /** Cracked glass: lines from a point of impact with a few rings, light over a dark edge. */
 const cracks = (weight: number, color?: string | null) => {
   const lines = [
@@ -125,10 +141,25 @@ export function PhotoEffect({
 }) {
   const id = `fx${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const photo = image ? { backgroundImage: `url("${image}")` } : undefined;
+  // The noise texture this effect uses, drawn once as a picture (lib/texture.ts).
+  const tex = useTexture(
+    kind === 'smoke'
+      ? cloud(sharp ?? 0.3, color)
+      : kind === 'frost'
+        ? frost(color)
+        : kind === 'film'
+          ? GRAIN
+          : kind === 'oil'
+            ? CANVAS
+            : kind === 'foil'
+              ? crinkle(sharp ?? 0.4)
+              : kind === 'grunge'
+                ? grunge(weight)
+                : null,
+  );
   switch (kind) {
     case 'smoke': {
       const n = Math.min(6, Math.max(2, Math.round(4 * density)));
-      const tex = cloud(sharp ?? 0.3, color);
       return (
         <span className="fx fx-smoke">
           {Array.from({ length: n }, (_, i) => (
@@ -151,7 +182,7 @@ export function PhotoEffect({
       const mask = `radial-gradient(ellipse at center, transparent ${clear}%, #000 ${clear + 34}%)`;
       return (
         <span className="fx fx-frost" style={{ WebkitMaskImage: mask, maskImage: mask }}>
-          <i className="ice" style={{ backgroundImage: frost(color) }} />
+          <i className="ice" style={{ backgroundImage: tex }} />
           <i className="glint" />
         </span>
       );
@@ -190,7 +221,7 @@ export function PhotoEffect({
           <i className="fade" />
           <i
             className="grain"
-            style={{ backgroundImage: GRAIN, ...(weight !== 1 ? { scale: weight } : {}) }}
+            style={{ backgroundImage: tex, ...(weight !== 1 ? { scale: weight } : {}) }}
           />
           <i className="scratch s0" />
           <i className="scratch s1" />
@@ -223,16 +254,7 @@ export function PhotoEffect({
             </filter>
           </svg>
           {image && <i className="paint" style={{ ...photo, filter: `url(#${id})` }} />}
-          <i
-            className="canvas"
-            style={{
-              backgroundImage: svg(
-                `<filter id='o'><feTurbulence type='fractalNoise' baseFrequency='0.04 0.32' numOctaves='3' seed='8'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(#o)'/>`,
-                200,
-                200,
-              ),
-            }}
-          />
+          <i className="canvas" style={{ backgroundImage: tex }} />
           <i className="sheen" />
         </span>
       );
@@ -248,7 +270,7 @@ export function PhotoEffect({
       return (
         <span className="fx fx-foil">
           <i className="iris" />
-          <i className="crinkle" style={{ backgroundImage: crinkle(sharp ?? 0.4) }} />
+          <i className="crinkle" style={{ backgroundImage: tex }} />
           <i className="puff" />
         </span>
       );
@@ -307,18 +329,7 @@ export function PhotoEffect({
         </span>
       );
     case 'grunge':
-      return (
-        <span
-          className="fx fx-grunge"
-          style={{
-            backgroundImage: svg(
-              `<filter id='g'><feTurbulence type='fractalNoise' baseFrequency='${(0.03 / weight).toFixed(3)} ${(0.09 / weight).toFixed(3)}' numOctaves='4' seed='11'/><feColorMatrix values='0 0 0 0 0.12  0 0 0 0 0.1  0 0 0 0 0.08  0 0 0 -2.4 1.25'/></filter><rect width='100%' height='100%' filter='url(#g)'/>`,
-              360,
-              360,
-            ),
-          }}
-        />
-      );
+      return <span className="fx fx-grunge" style={{ backgroundImage: tex }} />;
     case 'tiltshift':
       // Lens blur: sharp across the middle, softly out of focus above and below.
       return (

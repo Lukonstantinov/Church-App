@@ -17,6 +17,52 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // If the app's script can't start at all (cut-off download, a phone too old for it),
+      // say so after a while instead of leaving only the background; the app replaces this
+      // as soon as it runs. Plain text here: the app's translations aren't loaded yet.
+      (function () {
+        var first = '';
+        addEventListener('error', function (e) {
+          if (!first) first = String((e && e.message) || '');
+        });
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          if (!root || root.firstChild) return;
+          var lang = (navigator.language || 'ru').slice(0, 2);
+          var t = {
+            ru: ['Приложение не открылось', 'Закройте его и откройте снова.', 'Перезагрузить'],
+            en: ['The app didn’t open', 'Close it and open it again.', 'Reload'],
+            lt: ['Programėlė neatsidarė', 'Uždarykite ir atidarykite iš naujo.', 'Perkrauti'],
+          }[lang === 'en' || lang === 'lt' ? lang : 'ru'];
+          var box = document.createElement('div');
+          box.style.cssText =
+            'min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;font:15px -apple-system,system-ui,sans-serif;color:var(--tg-theme-text-color,#fff)';
+          var h = document.createElement('div');
+          h.style.cssText = 'font-size:18px;font-weight:700';
+          h.textContent = t[0];
+          var p = document.createElement('div');
+          p.style.opacity = '0.7';
+          p.textContent = t[1];
+          box.append(h, p);
+          if (first) {
+            var c = document.createElement('code');
+            c.style.cssText = 'font-size:11px;opacity:0.6;word-break:break-word';
+            c.textContent = first;
+            box.append(c);
+          }
+          var b = document.createElement('button');
+          b.style.cssText =
+            'margin-top:8px;padding:12px 22px;border:0;border-radius:14px;font:600 15px -apple-system,system-ui,sans-serif;color:#fff;background:var(--tg-theme-button-color,#3b82f6)';
+          b.textContent = t[2];
+          b.onclick = function () {
+            location.reload();
+          };
+          box.append(b);
+          root.append(box);
+        }, 12000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -4,7 +4,7 @@ import { ToastProvider, useToast } from './components/Toast';
 import { CrashGuard } from './components/CrashGuard';
 import { Button, CenterMessage, ErrorState, Loading } from './components/ui';
 import { I18nProvider, useT } from './lib/i18n';
-import { QUALITY_LOWERED } from './lib/perf';
+import { QUALITY_LOWERED, isSafeStart } from './lib/perf';
 import { NavProvider, useNav, type Route } from './lib/nav';
 import { applyBrand } from './lib/theme';
 import { useGroups, useMe } from './lib/queries';
@@ -13,7 +13,7 @@ import { Hub } from './screens/Hub';
 import { AppBackdrop } from './components/AppBackdrop';
 import { AddPerson } from './screens/AddPerson';
 import { PositionEditor, Positions } from './screens/Positions';
-import { isInsideTelegram } from './lib/telegram';
+import { isInsideTelegram, telegramLanguage } from './lib/telegram';
 import { AddOffline } from './screens/AddOffline';
 import { Feed, PostScreen } from './screens/Feed';
 import { PostEditor } from './screens/PostEditor';
@@ -204,18 +204,45 @@ function Gate() {
 export function App() {
   if (!isInsideTelegram())
     return <CenterMessage>{messages('ru').common.openInTelegram}</CenterMessage>;
+  // Anything that breaks outside a screen (the background, the frame) shows a note with
+  // "Reload" too, instead of leaving only the empty background.
   return (
-    <ToastProvider>
-      <Gate />
-    </ToastProvider>
+    <CrashGuard resetKey="app" place="app" fallback={(error) => <AppCrashed error={error} />}>
+      <ToastProvider>
+        <Gate />
+      </ToastProvider>
+    </CrashGuard>
+  );
+}
+
+/** The whole app broke: what happened and a way out, in the phone's language. */
+function AppCrashed({ error }: { error: Error }) {
+  const t = messages(telegramLanguage()).common;
+  return (
+    <CenterMessage>
+      <div className="flex max-w-sm flex-col items-center gap-3 px-6 text-center">
+        <span className="text-[44px]">🛠</span>
+        <div className="text-[18px] font-bold">{t.appCrashTitle}</div>
+        <div className="text-[14px] text-hint">{t.appCrashHint}</div>
+        <code className="max-w-full break-words rounded-xl bg-hairline px-3 py-2 text-[11px] text-hint">
+          {error.message}
+        </code>
+        <Button onClick={() => window.location.reload()}>{t.crashReload}</Button>
+      </div>
+    </CenterMessage>
   );
 }
 
 /** Says once when "auto" made the animations lighter because the phone couldn't keep up. */
+let toldSafeStart = false;
 function QualityNotice() {
   const toast = useToast();
   const t = useT();
   useEffect(() => {
+    if (isSafeStart() && !toldSafeStart) {
+      toldSafeStart = true;
+      toast(t.quality.safeStart);
+    }
     const said = () => toast(t.quality.lowered);
     window.addEventListener(QUALITY_LOWERED, said);
     return () => window.removeEventListener(QUALITY_LOWERED, said);
