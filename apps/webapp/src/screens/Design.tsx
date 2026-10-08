@@ -21,6 +21,8 @@ import {
   initEffects,
   type EffectsState,
 } from '../components/CoverEffects';
+import { Fold } from '../components/Fold';
+import { FreePoster } from '../components/FreePoster';
 import { DesignStudio } from '../components/DesignStudio';
 import { PosterPicker, PosterStudio } from '../components/PosterStudio';
 import { LayeredPoster, usePosterTexts } from '../components/LayeredPoster';
@@ -124,19 +126,6 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
     <Screen tabs>
       <GroupSwitcher groups={groups} active={active} subtitle={t.design.subtitle} />
 
-      <Section footer={t.design.lockHint}>
-        {isAdmin ? (
-          <Toggle
-            label={`🔒 ${t.design.lockToggle}`}
-            checked={locked}
-            disabled={updateChurch.isPending}
-            onChange={(v) => updateChurch.mutate({ designLock: v })}
-          />
-        ) : (
-          <Row title={locked ? `🔒 ${t.design.lockOn}` : `🔓 ${t.design.lockOff}`} />
-        )}
-      </Section>
-
       {/* This phone shows no animations: say so, or designs look broken while testing. */}
       {(motionPref === 'off' || quality === 'still') && (
         <p className="rounded-2xl bg-[#f59e0b]/15 px-4 py-3 text-[13px] leading-snug text-[#b45309]">
@@ -144,134 +133,181 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
         </p>
       )}
 
-      <DesignStudio g={active} />
+      <Fold
+        id="design.free"
+        icon="🎬"
+        title={t.freePoster.title}
+        hint={t.freePoster.hint}
+        defaultOpen
+      >
+        <FreePoster g={active} />
+      </Fold>
 
-      <PosterStudio g={active} />
+      <Fold id="design.studio" icon="🖼" title={t.studio.title} hint={t.studio.hint}>
+        <DesignStudio g={active} />
+      </Fold>
 
-      <QualityPicker />
+      <Fold id="design.posters" icon="🪧" title={t.posters.title} hint={t.posters.hint}>
+        <PosterStudio g={active} />
+      </Fold>
 
-      <section>
-        <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-          {t.design.templates}
-        </h2>
-        <p className="mb-2.5 px-3 text-[13px] text-hint">{t.design.templatesHint}</p>
-        <div className="motion-still grid grid-cols-2 gap-3">
-          {(templates.data ?? []).map((tpl) => (
-            <button
-              key={tpl.id}
-              type="button"
-              onClick={() => setEditing(tpl)}
-              className="glass overflow-hidden rounded-2xl text-left shadow-card active:scale-[0.98]"
-            >
-              <LookTop look={templateLook(tpl)} className="relative aspect-[16/10] p-2.5">
-                <LivingLayer kind={tpl.motion ?? 'calm'} />
-                {group.data?.meetingTemplateId === tpl.id && (
-                  <span className="relative self-start rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-black">
-                    ★ {t.design.defaultBadge}
+      <Fold
+        id="design.templates"
+        icon="🎨"
+        title={t.design.templates}
+        hint={t.design.templatesHint}
+      >
+        <section>
+          <div className="motion-still grid grid-cols-2 gap-3">
+            {(templates.data ?? []).map((tpl) => (
+              <button
+                key={tpl.id}
+                type="button"
+                onClick={() => setEditing(tpl)}
+                className="glass overflow-hidden rounded-2xl text-left shadow-card active:scale-[0.98]"
+              >
+                <LookTop look={templateLook(tpl)} className="relative aspect-[16/10] p-2.5">
+                  <LivingLayer kind={tpl.motion ?? 'calm'} />
+                  {group.data?.meetingTemplateId === tpl.id && (
+                    <span className="relative self-start rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-black">
+                      ★ {t.design.defaultBadge}
+                    </span>
+                  )}
+                  <span className="relative mt-auto text-[12px] font-bold uppercase tracking-wider opacity-85">
+                    {tpl.motion ? t.meetings.motions[tpl.motion] : t.design.motionInherit}
                   </span>
-                )}
-                <span className="relative mt-auto text-[12px] font-bold uppercase tracking-wider opacity-85">
-                  {tpl.motion ? t.meetings.motions[tpl.motion] : t.design.motionInherit}
-                </span>
-              </LookTop>
-              <span className="block truncate p-2.5 text-[14px] font-semibold">{tpl.name}</span>
+                </LookTop>
+                <span className="block truncate p-2.5 text-[14px] font-semibold">{tpl.name}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setEditing('new')}
+              className="glass flex min-h-[130px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-hint/30 text-hint active:scale-[0.98]"
+            >
+              <span className="brand-gradient flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-cta">
+                <IconPlus size={22} />
+              </span>
+              <span className="text-[14px] font-semibold">{t.design.newTemplate}</span>
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setEditing('new')}
-            className="glass flex min-h-[130px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-hint/30 text-hint active:scale-[0.98]"
-          >
-            <span className="brand-gradient flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-cta">
-              <IconPlus size={22} />
-            </span>
-            <span className="text-[14px] font-semibold">{t.design.newTemplate}</span>
-          </button>
-        </div>
-        {(templates.data?.length ?? 0) > 0 &&
-          (
-            [
-              ['meetingTemplateId', t.design.defaultForMeetings, t.design.defaultForMeetingsHint],
-              ['eventTemplateId', t.design.defaultForEvents, t.design.defaultForEventsHint],
-            ] as const
-          ).map(([key, title, hint]) => (
-            <div key={key} className="mt-3">
-              <div className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-                {title}
+          </div>
+          {(templates.data?.length ?? 0) > 0 &&
+            (
+              [
+                ['meetingTemplateId', t.design.defaultForMeetings, t.design.defaultForMeetingsHint],
+                ['eventTemplateId', t.design.defaultForEvents, t.design.defaultForEventsHint],
+              ] as const
+            ).map(([key, title, hint]) => (
+              <div key={key} className="mt-3">
+                <div className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+                  {title}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5 px-1">
+                  {[null, ...(templates.data ?? []).map((x) => x.id)].map((id) => (
+                    <Pill
+                      key={id ?? 'own'}
+                      on={(group.data?.[key] ?? null) === id}
+                      onClick={() =>
+                        saveStudio.mutate(
+                          { [key]: id },
+                          { onError: () => toast(t.common.saveFailed, 'error') },
+                        )
+                      }
+                      label={id === null ? t.design.ministryLook : (tplName(id) ?? '')}
+                    />
+                  ))}
+                </div>
+                <p className="mt-1.5 px-3 text-[12px] text-hint">{hint}</p>
               </div>
-              <div className="mt-2 flex flex-wrap gap-1.5 px-1">
-                {[null, ...(templates.data ?? []).map((x) => x.id)].map((id) => (
-                  <Pill
-                    key={id ?? 'own'}
-                    on={(group.data?.[key] ?? null) === id}
-                    onClick={() =>
-                      saveStudio.mutate(
-                        { [key]: id },
-                        { onError: () => toast(t.common.saveFailed, 'error') },
-                      )
-                    }
-                    label={id === null ? t.design.ministryLook : (tplName(id) ?? '')}
-                  />
-                ))}
-              </div>
-              <p className="mt-1.5 px-3 text-[12px] text-hint">{hint}</p>
-            </div>
+            ))}
+        </section>
+      </Fold>
+
+      <Fold
+        id="design.speakers"
+        icon="🎤"
+        title={t.design.speakerSection}
+        hint={t.design.speakerSectionHint}
+      >
+        <MinistrySpeakerLook g={active} />
+      </Fold>
+
+      <Fold id="design.items" icon="📅" title={t.design.itemsTitle} hint={t.design.itemsHint}>
+        <Section title={t.design.meetings}>
+          {meetings.length === 0 && <Row title={t.design.nothing} />}
+          {meetings.map((m) => (
+            <Row
+              key={m.id}
+              before={<Thumb look={m.look ?? groupLook(active)} motion={m.motion} />}
+              title={m.title}
+              subtitle={`${f.relativeDay(m.startsAt)} · ${f.time(m.startsAt)} · ${
+                tplName(m.templateId) ??
+                (m.design?.custom ? t.design.ownLook : t.design.ministryLook)
+              }`}
+              onClick={() => setDesigning(m.id)}
+            />
           ))}
-      </section>
+        </Section>
 
-      <MinistrySpeakerLook g={active} />
+        <Section title={t.design.events}>
+          {events.length === 0 && <Row title={t.design.nothing} />}
+          {events.map((e) => (
+            <Row
+              key={e.id}
+              before={<Thumb look={e.look ?? groupLook(active)} photo={e.coverUrl} />}
+              title={e.title}
+              subtitle={`${f.weekdayDayMonth(e.startsAt)} · ${
+                tplName(e.templateId) ??
+                (e.design?.custom ? t.design.ownLook : t.design.ministryLook)
+              }`}
+              onClick={() => setApplying({ kind: 'event', e })}
+            />
+          ))}
+        </Section>
 
-      <Section title={t.design.meetings}>
-        {meetings.length === 0 && <Row title={t.design.nothing} />}
-        {meetings.map((m) => (
-          <Row
-            key={m.id}
-            before={<Thumb look={m.look ?? groupLook(active)} motion={m.motion} />}
-            title={m.title}
-            subtitle={`${f.relativeDay(m.startsAt)} · ${f.time(m.startsAt)} · ${
-              tplName(m.templateId) ?? (m.design?.custom ? t.design.ownLook : t.design.ministryLook)
-            }`}
-            onClick={() => setDesigning(m.id)}
-          />
-        ))}
-      </Section>
+        <Section title={t.design.posts}>
+          {posts.length === 0 && <Row title={t.design.nothing} />}
+          {posts.map((p) => (
+            <Row
+              key={p.id}
+              before={<Thumb look={p.look ?? groupLook(active)} photo={p.photos[0]?.url} />}
+              title={p.title || p.text.slice(0, 60) || '—'}
+              subtitle={f.weekdayDayMonth(p.createdAt)}
+              onClick={
+                p.canDesign
+                  ? () => push({ name: 'editPost', groupId: active.id, postId: p.id })
+                  : undefined
+              }
+            />
+          ))}
+        </Section>
+      </Fold>
 
-      <Section title={t.design.events}>
-        {events.length === 0 && <Row title={t.design.nothing} />}
-        {events.map((e) => (
-          <Row
-            key={e.id}
-            before={<Thumb look={e.look ?? groupLook(active)} photo={e.coverUrl} />}
-            title={e.title}
-            subtitle={`${f.weekdayDayMonth(e.startsAt)} · ${
-              tplName(e.templateId) ?? (e.design?.custom ? t.design.ownLook : t.design.ministryLook)
-            }`}
-            onClick={() => setApplying({ kind: 'event', e })}
-          />
-        ))}
-      </Section>
+      <Fold
+        id="design.settings"
+        icon="⚙️"
+        title={t.design.settingsTitle}
+        hint={t.design.settingsHint}
+      >
+        <Section footer={t.design.lockHint}>
+          {isAdmin ? (
+            <Toggle
+              label={`🔒 ${t.design.lockToggle}`}
+              checked={locked}
+              disabled={updateChurch.isPending}
+              onChange={(v) => updateChurch.mutate({ designLock: v })}
+            />
+          ) : (
+            <Row title={locked ? `🔒 ${t.design.lockOn}` : `🔓 ${t.design.lockOff}`} />
+          )}
+        </Section>
 
-      <Section title={t.design.posts}>
-        {posts.length === 0 && <Row title={t.design.nothing} />}
-        {posts.map((p) => (
-          <Row
-            key={p.id}
-            before={<Thumb look={p.look ?? groupLook(active)} photo={p.photos[0]?.url} />}
-            title={p.title || p.text.slice(0, 60) || '—'}
-            subtitle={f.weekdayDayMonth(p.createdAt)}
-            onClick={
-              p.canDesign
-                ? () => push({ name: 'editPost', groupId: active.id, postId: p.id })
-                : undefined
-            }
-          />
-        ))}
-      </Section>
-
-      {/* If something looks stuck or slow, start the app over (keeps the open tab). */}
-      <Section footer={t.common.reloadHint}>
-        <Row title={`↻ ${t.common.reload}`} onClick={() => window.location.reload()} />
-      </Section>
+        <QualityPicker />
+        {/* If something looks stuck or slow, start the app over (keeps the open tab). */}
+        <Section footer={t.common.reloadHint}>
+          <Row title={`↻ ${t.common.reload}`} onClick={() => window.location.reload()} />
+        </Section>
+      </Fold>
 
       {editing && (
         <TemplateSheet
@@ -867,7 +903,7 @@ function MinistrySpeakerLook({ g }: { g: GroupSummary }) {
   const [draft, setDraft] = useState<SpeakerLook | null | undefined>(undefined);
   const value = draft === undefined ? (group.data?.speakerLook ?? null) : draft;
   return (
-    <Section title={`🎤 ${t.design.speakerSection}`} footer={t.design.speakerSectionHint}>
+    <Section>
       <div className="flex flex-col gap-4 p-4">
         <SpeakerLookPreview look={value} g={g} />
         <SpeakerLookControls

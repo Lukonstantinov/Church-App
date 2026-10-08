@@ -157,10 +157,6 @@ export function PosterStudio({ g }: { g: GroupSummary }) {
   const [editing, setEditing] = useState<PosterTemplate | 'new' | null>(null);
   return (
     <section>
-      <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-        {t.posters.title}
-      </h2>
-      <p className="mb-2.5 px-3 text-[13px] text-hint">{t.posters.hint}</p>
       <div className="motion-still grid grid-cols-3 gap-2.5">
         {(list.data ?? []).map((tpl) => (
           <button

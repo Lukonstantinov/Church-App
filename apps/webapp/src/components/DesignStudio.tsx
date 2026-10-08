@@ -95,10 +95,6 @@ export function DesignStudio({ g }: { g: GroupSummary }) {
 
   return (
     <section className="flex flex-col gap-2.5">
-      <h2 className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-        {t.studio.title}
-      </h2>
-      <p className="px-3 text-[13px] text-hint">{t.studio.hint}</p>
       <div className="flex gap-2 px-1">
         <Pill
           on={scope === 'ministry'}

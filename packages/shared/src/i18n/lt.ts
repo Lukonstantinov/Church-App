@@ -1045,6 +1045,11 @@ export const lt: Messages = {
     tapHere: 'Palieskite',
   },
   design: {
+    itemsTitle: 'Artimiausi susitikimai, renginiai ir įrašai',
+    itemsHint: 'Paspauskite, kad pakeistumėte to susitikimo, renginio ar įrašo išvaizdą.',
+    settingsTitle: 'Dizaino nustatymai',
+    settingsHint:
+      'Kas gali keisti išvaizdą, grafika šiame telefone, programėlės paleidimas iš naujo.',
     title: 'Dizainas',
     subtitle: 'Šablonai ir susitikimų, renginių bei įrašų išvaizda',
     lockedHint: 'Išvaizdą keičia dizaineris',
@@ -1697,6 +1702,24 @@ export const lt: Messages = {
     font: 'Šriftas',
     size: { s: 'Mažas', m: 'Vidutinis', l: 'Didelis' },
     place: { top: 'Viršuje', middle: 'Centre', bottom: 'Apačioje' },
+  },
+  freePoster: {
+    title: 'Animuotas plakatas',
+    hint: 'GIF ar vaizdo įrašas iš nuotraukos, plakato šablono ar tarnystės spalvų — be renginio. Efektai, savas tekstas arba be jo; ateina į pokalbį su botu — persiųskite kur norite.',
+    picture: 'Paveikslas',
+    colours: 'Tarnystės spalvos',
+    photo: 'Nuotrauka',
+    choosePhoto: 'Pasirinkti nuotrauką',
+    otherPhoto: 'Kita nuotrauka',
+    template: 'Plakato šablonas',
+    shape: 'Forma',
+    shapes: {
+      '4:3': 'Pokalbiui 4:3',
+      '1:1': 'Kvadratas',
+      '4:5': 'Įrašas 4:5',
+      '9:16': 'Istorija 9:16',
+    },
+    fileName: 'Plakatas',
   },
   motionExport: {
     noMotionDesigner: 'Plakatas dar nejuda — pridėkite efektų ir čia atsiras animuotas plakatas.',

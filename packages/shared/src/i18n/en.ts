@@ -1020,6 +1020,10 @@ export const en: Messages = {
     tapHere: 'Tap',
   },
   design: {
+    itemsTitle: 'Upcoming meetings, events and posts',
+    itemsHint: 'Tap one to change the look of that meeting, event or post.',
+    settingsTitle: 'Design settings',
+    settingsHint: 'Who may change looks, graphics on this phone, restarting the app.',
     title: 'Design',
     subtitle: 'Templates and the look of meetings, events and posts',
     lockedHint: 'The look is changed by the designer',
@@ -1658,6 +1662,19 @@ export const en: Messages = {
     font: 'Font',
     size: { s: 'Small', m: 'Medium', l: 'Large' },
     place: { top: 'Top', middle: 'Middle', bottom: 'Bottom' },
+  },
+  freePoster: {
+    title: 'Animated poster',
+    hint: 'A GIF or video from a photo, a poster template or the ministry’s colours — no event needed. Effects, own text or none; it comes to your chat with the bot — forward it anywhere.',
+    picture: 'Picture',
+    colours: 'Ministry colours',
+    photo: 'Photo',
+    choosePhoto: 'Choose a photo',
+    otherPhoto: 'Another photo',
+    template: 'Poster template',
+    shape: 'Shape',
+    shapes: { '4:3': 'Chat 4:3', '1:1': 'Square', '4:5': 'Post 4:5', '9:16': 'Story 9:16' },
+    fileName: 'Poster',
   },
   motionExport: {
     noMotionDesigner:

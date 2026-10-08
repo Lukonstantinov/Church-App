@@ -144,7 +144,8 @@ disco / sparkle / hearts …, listed in `shared/motions.ts`; `LivingLayer` + `.l
 own: `tile_motion` / `poster_motion` on meetings and design templates);
 a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).
 
-**Design** — the `design` right ("designer") gives a Design tab (`screens/Design.tsx`): church-wide
+**Design** — the `design` right ("designer") gives a Design tab (`screens/Design.tsx`, folding sections `Fold.tsx`;
+an animated poster maker without an event, `FreePoster.tsx`): church-wide
 templates (`design_templates`, with `motion` = the meeting animation; PUT to change) with live
 previews (meeting hero, home tile, poster) and restyling of upcoming meetings/events and posts.
 Design precedence, one rule everywhere: own → template → ministry default → app default. Defaults live in
