@@ -2665,6 +2665,427 @@ html[data-motion='off'] .shine::before {
   }
 }
 
+/* ---------- Retro and digital: TV glitch, old TV, static, digital rain ---------- */
+/* Glitch: everything jumps in fixed steps and holds (steps(1)), like a broken signal. */
+.living-glitch {
+  position: absolute;
+  inset: 0;
+}
+.living-glitch i {
+  position: absolute;
+  inset: 0;
+  animation-timing-function: steps(1, end);
+  animation-iteration-count: infinite;
+}
+/* A torn strip: the picture itself (or a band of light) shifted sideways for a moment. */
+.gl-band {
+  /* Without a picture: a torn strip of signal, split into red and cyan at its edges. */
+  background: linear-gradient(
+    90deg,
+    rgba(255, 23, 68, 0.75),
+    rgba(255, 255, 255, 0.9) 18%,
+    color-mix(in srgb, var(--live-a) 80%, #fff) 45%,
+    rgba(0, 229, 255, 0.8) 72%,
+    transparent 92%
+  );
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation-name: gl-jump-a;
+  animation-duration: 2.7s;
+}
+.living-glitch.has-image .gl-band {
+  background-size: cover;
+  background-position: center;
+  mix-blend-mode: normal;
+}
+.gl-band.b1 {
+  animation-name: gl-jump-b;
+  animation-duration: 3.3s;
+}
+.gl-band.b2 {
+  animation-duration: 2.1s;
+  animation-delay: -0.9s;
+}
+.gl-band.b3 {
+  animation-name: gl-jump-b;
+  animation-duration: 3.9s;
+  animation-delay: -1.4s;
+}
+.gl-band.b4 {
+  animation-duration: 2.5s;
+  animation-delay: -1.7s;
+}
+.gl-band.b5 {
+  animation-name: gl-jump-b;
+  animation-duration: 4.4s;
+  animation-delay: -2.2s;
+}
+.gl-band.b6 {
+  animation-duration: 3.1s;
+  animation-delay: -0.4s;
+}
+.gl-band.b7 {
+  animation-name: gl-jump-b;
+  animation-duration: 2.9s;
+  animation-delay: -2.6s;
+}
+@keyframes gl-jump-a {
+  0%,
+  62% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  64% {
+    transform: translateX(8px);
+    opacity: 0.9;
+  }
+  67% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  78% {
+    transform: translateX(-14px);
+    opacity: 1;
+  }
+  82% {
+    transform: translateX(11px);
+    opacity: 1;
+  }
+  86% {
+    transform: translateX(-5px);
+    opacity: 0.85;
+  }
+  90% {
+    transform: translateX(19px);
+    opacity: 1;
+  }
+  94%,
+  100% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+}
+@keyframes gl-jump-b {
+  0%,
+  38% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  40% {
+    transform: translateX(16px);
+    opacity: 1;
+  }
+  44% {
+    transform: translateX(-9px);
+    opacity: 1;
+  }
+  47% {
+    transform: translateX(24px);
+    opacity: 0.9;
+  }
+  50%,
+  100% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+}
+/* The colour channels coming apart: a red and a cyan copy of the picture jump aside. */
+.gl-rgb {
+  background-size: cover;
+  background-position: center;
+  isolation: isolate;
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation-name: gl-rgb;
+  animation-duration: 3.4s;
+}
+.gl-rgb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #ff1744;
+  mix-blend-mode: multiply;
+}
+.gl-rgb.cyan {
+  animation-name: gl-rgb-b;
+}
+.gl-rgb.cyan::after {
+  background: #00e5ff;
+}
+@keyframes gl-rgb {
+  0%,
+  70% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  72% {
+    transform: translate(-6px, 0);
+    opacity: 0.75;
+  }
+  76% {
+    transform: translate(4px, 1px);
+    opacity: 0.6;
+  }
+  80% {
+    transform: translate(-3px, 0);
+    opacity: 0.75;
+  }
+  84%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+}
+@keyframes gl-rgb-b {
+  0%,
+  70% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  72% {
+    transform: translate(6px, -1px);
+    opacity: 0.75;
+  }
+  76% {
+    transform: translate(-4px, 0);
+    opacity: 0.6;
+  }
+  80% {
+    transform: translate(3px, 1px);
+    opacity: 0.75;
+  }
+  84%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+}
+/* Scanlines with a flicker, and a bright tear rolling down. */
+.gl-scan {
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
+  animation-name: tv-flicker;
+  animation-duration: 4s;
+}
+@keyframes tv-flicker {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  37% {
+    opacity: 0.25;
+  }
+  38% {
+    opacity: 0.6;
+  }
+  71% {
+    opacity: 0.3;
+  }
+  72% {
+    opacity: 0.55;
+  }
+}
+.living-glitch .gl-tear {
+  inset: auto 0 auto 0;
+  top: -8%;
+  height: 6%;
+  background: linear-gradient(transparent, rgba(255, 255, 255, 0.22), transparent);
+  animation: tv-roll 3.6s linear infinite;
+}
+@keyframes tv-roll {
+  to {
+    transform: translateY(125cqh);
+  }
+}
+/* Old TV: fine scanlines (spacing = density), a soft bar rolling down, dark corners. */
+.living-scan {
+  position: absolute;
+  inset: calc(((100% + 40px) / var(--k-gap, 1) - 100%) / -2);
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, calc(0.3 * var(--k-strength, 1))) 0 1px,
+    transparent 1px 3px
+  );
+  scale: var(--k-gap, 1);
+  animation: tv-flicker 5s steps(1, end) infinite;
+}
+.living-roll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -30%;
+  height: 30%;
+  background: linear-gradient(transparent, rgba(255, 255, 255, 0.12) 50%, transparent);
+  animation: tv-roll-slow 6s linear infinite;
+}
+@keyframes tv-roll-slow {
+  to {
+    transform: translateY(170cqh);
+  }
+}
+.living-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.5) 100%);
+}
+/* Static: TV snow, the noise jumping a few times a second (weight = grain size). */
+.living-static {
+  position: absolute;
+  inset: -40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px;
+  opacity: 0.45;
+  mix-blend-mode: overlay;
+  animation: tv-static 0.45s steps(1, end) infinite;
+}
+@keyframes tv-static {
+  0% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-22px, 14px);
+  }
+  40% {
+    transform: translate(18px, -10px);
+  }
+  60% {
+    transform: translate(-12px, -20px);
+  }
+  80% {
+    transform: translate(24px, 8px);
+  }
+}
+/* Digital rain: columns of glowing signs falling, fading out at the tail. */
+.living-code {
+  position: absolute;
+  left: var(--x);
+  top: -70%;
+  font:
+    700 var(--s) / 1.05 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+  font-style: normal;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 1px;
+  color: var(--p-color, #4ade80);
+  text-shadow: 0 0 6px currentColor;
+  -webkit-mask-image: linear-gradient(transparent, #000 80%);
+  mask-image: linear-gradient(transparent, #000 80%);
+  animation: living-code var(--d) linear var(--t) infinite;
+}
+@keyframes living-code {
+  to {
+    transform: translateY(180cqh);
+  }
+}
+
+/* ---------- Stage and party: spotlights, disco, sparkles, hearts ---------- */
+/* Spotlights: cones of light sweeping from below, like a concert (density = how many,
+   weight = how wide). */
+.living-beam {
+  position: absolute;
+  bottom: -6%;
+  width: 36%;
+  height: 150%;
+  margin-left: -18%;
+  transform-origin: 50% 100%;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--live-a) 60%, #fff),
+    color-mix(in srgb, var(--live-a) 40%, transparent) 45%,
+    transparent 85%
+  );
+  clip-path: polygon(45% 100%, 55% 100%, 100% 0, 0 0);
+  mix-blend-mode: screen;
+  opacity: 0.6;
+  animation: living-beam 6s ease-in-out infinite alternate;
+}
+.living-beam:nth-child(even) {
+  animation-direction: alternate-reverse;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--live-c) 60%, #fff),
+    color-mix(in srgb, var(--live-c) 40%, transparent) 45%,
+    transparent 85%
+  );
+}
+@keyframes living-beam {
+  from {
+    transform: rotate(-28deg);
+  }
+  to {
+    transform: rotate(28deg);
+  }
+}
+.living-haze {
+  position: absolute;
+  inset: 60% -10% -20%;
+  background: radial-gradient(
+    ellipse at 50% 100%,
+    color-mix(in srgb, var(--live-a) 45%, transparent),
+    transparent 70%
+  );
+  animation: living-blink 3s ease-in-out infinite;
+}
+/* Disco: mirror-ball dots turning across the block (density = spacing, weight = dot size). */
+.living-disco {
+  position: absolute;
+  left: 50%;
+  top: -80%;
+  width: 260%;
+  aspect-ratio: 1;
+  margin-left: -130%;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, calc(0.9 * var(--k-strength, 1))) 0 calc(1.4px * var(--k-weight, 1)),
+    transparent calc(2.4px * var(--k-weight, 1))
+  );
+  background-size: 22px 22px;
+  scale: var(--k-gap, 1);
+  -webkit-mask-image: radial-gradient(circle, #000 25%, transparent 68%);
+  mask-image: radial-gradient(circle, #000 25%, transparent 68%);
+  animation: living-spin 34s linear infinite;
+}
+.living-disco.two {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--live-a) 85%, #fff) 0 calc(2px * var(--k-weight, 1)),
+    transparent calc(3.2px * var(--k-weight, 1))
+  );
+  background-size: 37px 37px;
+  background-position: 11px 7px;
+  animation-duration: 24s;
+  animation-direction: reverse;
+}
+/* Hearts rising (the icon float, drawn as a heart in the chosen colour). */
+.living-heart {
+  color: var(--p-color, #f43f5e);
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+}
+/* Sparkles: four-pointed stars flashing up and turning here and there. */
+.living-spark {
+  position: absolute;
+  font-size: var(--s);
+  font-style: normal;
+  line-height: 1;
+  color: var(--p-color, #fff);
+  text-shadow: 0 0 8px currentColor;
+  opacity: 0;
+  animation: living-spark 2s ease-in-out infinite;
+}
+@keyframes living-spark {
+  0%,
+  100% {
+    transform: scale(0.2) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1) rotate(90deg);
+    opacity: 1;
+  }
+}
+
 /* ---------- Performance ---------- */
 @keyframes edge-slide {
   to {

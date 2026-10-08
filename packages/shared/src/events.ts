@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { PosterLook } from './api';
 import { postDesignSchema, speakersSchema, type PostDesign, type Speaker } from './posts';
 import type { PersonRef, TransactionRow } from './finance';
+import { MEETING_MOTIONS, motionTuneSchema, type MeetingMotion, type MotionTune } from './motions';
 
 /** Optional sections of an event, switched on when creating or later when editing. */
 export interface EventFeatures {
@@ -68,6 +69,9 @@ export const createEventSchema = z.object({
   /** Cover design when there is no cover photo (same choices as posts). */
   design: postDesignSchema.nullish(),
   templateId: z.number().int().positive().nullish(),
+  /** The cover's animation (null = none) and its settings. */
+  motion: z.enum(MEETING_MOTIONS).nullish(),
+  motionTune: motionTuneSchema.nullish(),
   /** Show a "🔥 N days left" countdown. */
   countdown: z.boolean().default(false),
   /** Up to four speakers, shown on the poster. */
@@ -93,6 +97,8 @@ export const updateEventSchema = z.object({
   posterMediaId: z.number().int().positive().nullable().optional(),
   design: postDesignSchema.nullable().optional(),
   templateId: z.number().int().positive().nullable().optional(),
+  motion: z.enum(MEETING_MOTIONS).nullable().optional(),
+  motionTune: motionTuneSchema.nullable().optional(),
   countdown: z.boolean().optional(),
   speakers: speakersSchema.optional(),
   features: featuresSchema.partial().optional(),
@@ -154,6 +160,9 @@ export interface EventSummary {
   brandColor: string | null;
   design: PostDesign | null;
   templateId: number | null;
+  /** The cover's animation (null = none) and its settings. */
+  motion: MeetingMotion | null;
+  motionTune: MotionTune | null;
   countdown: boolean;
   /** Up to four speakers shown on the poster. */
   speakers: Speaker[];

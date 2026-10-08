@@ -7,6 +7,7 @@ import type {
   GroupSummary,
   MeetingMotion,
   MeetingRow,
+  MotionTune,
   PatternConfig,
   PostDesign,
   PosterLook,
@@ -577,13 +578,21 @@ function ApplySheet({
   const [ownTile, setOwnTile] = useState<MeetingMotion | null>(startTile);
   const [ownPoster, setOwnPoster] = useState<MeetingMotion | null>(startPoster);
   const [slide, setSlide] = useState(0);
+  // An event's cover animation and its settings (by animation while the sheet is open).
+  const startEventMotion = item.kind === 'event' ? item.e.motion : null;
+  const [eventMotion, setEventMotion] = useState<MeetingMotion | null>(startEventMotion);
+  const [eventTunes, setEventTunes] = useState<Partial<Record<MeetingMotion, MotionTune>>>(() =>
+    item.kind === 'event' && item.e.motion && item.e.motionTune
+      ? { [item.e.motion]: item.e.motionTune }
+      : {},
+  );
   const tpl = typeof choice === 'number' ? templates.data?.find((x) => x.id === choice) : null;
   const look: PosterLook =
     choice === 'own' ? (thing.look ?? groupLook(g)) : tpl ? templateLook(tpl) : groupLook(g);
   const motion: MeetingMotion =
     item.kind === 'meeting'
       ? (ownMotion ?? tpl?.motion ?? (choice === start ? item.m.motion : 'calm'))
-      : (tpl?.motion ?? 'calm');
+      : (eventMotion ?? 'off');
   // Without their own, the tile and poster follow the template (or what they had).
   const same = choice === start && item.kind === 'meeting';
   const tileMotion =
@@ -599,7 +608,9 @@ function ApplySheet({
       choice === start &&
       ownMotion === startMotion &&
       ownTile === startTile &&
-      ownPoster === startPoster
+      ownPoster === startPoster &&
+      eventMotion === startEventMotion &&
+      Object.keys(eventTunes).length === 0
     )
       return onClose();
     // A template or the ministry's look replaces the own look and own colour.
@@ -619,7 +630,12 @@ function ApplySheet({
           tileMotion: ownTile,
           posterMotion: ownPoster,
         });
-      else await updateEvent.mutateAsync({ templateId, design });
+      else
+        await updateEvent.mutateAsync({
+          ...(choice !== start ? { templateId, design } : {}),
+          motion: eventMotion,
+          motionTune: eventMotion ? (eventTunes[eventMotion] ?? null) : null,
+        });
       haptic.success();
       toast(t.common.saved);
       onClose();
@@ -642,6 +658,16 @@ function ApplySheet({
           slide={slide}
           onSlide={setSlide}
         />
+        {item.kind === 'event' && (
+          <Group title={t.events.coverMotion}>
+            <MotionPicker
+              value={eventMotion ?? 'off'}
+              onChange={(m) => setEventMotion(m === 'off' ? null : m)}
+              tuneOf={(m) => eventTunes[m] ?? null}
+              onTune={(m, tune) => setEventTunes((all) => ({ ...all, [m]: tune ?? {} }))}
+            />
+          </Group>
+        )}
         {item.kind === 'meeting' && (
           <MotionTargets
             slide={slide}

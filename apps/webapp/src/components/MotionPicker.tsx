@@ -54,7 +54,7 @@ export function MotionPicker({
         }`}
       >
         <span className="brand-gradient relative block aspect-[4/3] w-full overflow-hidden rounded-xl">
-          {m && <LivingLayer kind={m} icon={icon} tune={tuneOf?.(m)} />}
+          {m && <LivingLayer kind={m} icon={icon} tune={tuneOf?.(m)} preview />}
           {!m && (
             <span className="absolute inset-0 flex items-center justify-center text-[20px] text-white">
               ⛪

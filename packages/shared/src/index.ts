@@ -1,4 +1,5 @@
 export * from './api';
+export * from './motions';
 export * from './attendance';
 export * from './time';
 export * from './i18n/index';

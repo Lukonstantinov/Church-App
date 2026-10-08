@@ -92,7 +92,8 @@ time-changed and cancelled notices with "Will you come?" answers. Roll call (als
 past meeting), expenses against a budget, calendar with notes (last 12 months + all coming;
 past meetings are never auto-removed, only `DELETE /api/meetings/:id` after two confirmations). Meeting screen has a living animated hero.
 
-**Events** — cover photo or designed cover, speakers, countdown, burning outline,
+**Events** — cover photo or designed cover with its own animation (`events.motion`, `motion_tune`; the
+TV glitch tears the cover photo itself), speakers, countdown, burning outline,
 RSVP, duties (with bot notices), cost and payments, gallery, programme, in-app chat or a
 bot-managed Telegram chat, pin to the main page, picture/PDF export.
 
@@ -105,7 +106,8 @@ button on the card from `GroupSummary.soon`; red-tinted tiles inside). Automatic
 off by default; checked every 5 min) plus manual reminders. Meeting reminders
 (`groups.meeting_reminders`: minutes list, null = [120, 60], [] = off; claimed per time in
 `job_runs` as `meeting_remind`) with who serves; meeting animation (`MEETING_MOTIONS`: off / calm / lively / stars / waves / bokeh / rays /
-aurora / silk / mesh / embers / bubbles / snow / lines / grid / grain; `LivingLayer` + `.living-*` CSS)
+aurora / silk / mesh / embers / bubbles / snow / lines / grid / grain / glitch / crt / static / matrix / spotlight /
+disco / sparkle / hearts …, listed in `shared/motions.ts`; `LivingLayer` + `.living-*` CSS)
 (`groups.meeting_motion`, per meeting `meetings.motion`; the home tile and the poster can have their
 own: `tile_motion` / `poster_motion` on meetings and design templates);
 a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).

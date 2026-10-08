@@ -1,5 +1,12 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { parseAmount, type EventDetail, type EventFeatures, type PostDesign } from '@church/shared';
+import {
+  parseAmount,
+  type EventDetail,
+  type EventFeatures,
+  type MeetingMotion,
+  type MotionTune,
+  type PostDesign,
+} from '@church/shared';
 import {
   CoverLookControls,
   TitleStyleControls,
@@ -11,6 +18,7 @@ import {
 import { BURN_COLORS, BURN_STYLES } from '../components/Burn';
 import { COUNTDOWN_COLORS, COUNTDOWN_SIZES, CountdownBadge } from '../components/Countdown';
 import { Pill } from '../components/LookControls';
+import { MotionPicker } from '../components/MotionPicker';
 import { PosterMedia } from '../components/Poster';
 import {
   SpeakersEditor,
@@ -38,6 +46,7 @@ import { useToast } from '../components/Toast';
 import {
   Button,
   ErrorState,
+  LivingLayer,
   Loading,
   Screen,
   Section,
@@ -154,6 +163,15 @@ function EventFormBody({
   );
   const [notify, setNotify] = useState(true);
   const [countdown, setCountdown] = useState(event?.countdown ?? false);
+  // The cover's animation; each one tried keeps its own settings while the form is open.
+  const [motion, setMotion] = useState<MeetingMotion | null>(event?.motion ?? null);
+  const [tunes, setTunes] = useState<Partial<Record<MeetingMotion, MotionTune>>>(() =>
+    event?.motion && event.motionTune ? { [event.motion]: event.motionTune } : {},
+  );
+  const coverMotion = motion && motion !== 'off' ? motion : null;
+  const coverLayer = coverMotion && (
+    <LivingLayer kind={coverMotion} tune={tunes[coverMotion]} image={cover?.url} />
+  );
   const [speakers, setSpeakers] = useState<SpeakerDraft[]>(() => toDrafts(event?.speakers));
   // Without a cover photo the event shows a designed cover, like posts.
   const [look, setLook] = useState<CoverState>(() =>
@@ -242,6 +260,8 @@ function EventFormBody({
       ...coverPayload(look, coverLook.templateId),
       features,
       countdown,
+      motion: coverMotion,
+      motionTune: coverMotion ? (tunes[coverMotion] ?? null) : null,
       speakers: toSpeakerInputs(speakers),
       priceCents: features.cost ? priceCents : null,
       chatUrl: chatUrl.trim() || null,
@@ -289,6 +309,7 @@ function EventFormBody({
       {cover ? (
         <div className="relative overflow-hidden rounded-[var(--radius-card)] shadow-card">
           <img src={cover.url} alt="" className="aspect-[16/9] w-full object-cover" />
+          {coverLayer}
           <div className={`absolute bottom-2 right-2 flex gap-2 ${mayDesign ? '' : 'hidden'}`}>
             <button
               type="button"
@@ -318,6 +339,7 @@ function EventFormBody({
               design={look.design}
               speakers={toShown(speakers)}
             />
+            {coverLayer}
             <button
               type="button"
               onClick={() => fileInput.current?.click()}
@@ -385,6 +407,19 @@ function EventFormBody({
               <TitleStyleControls design={look.design} set={setDesign} />
             </div>
           )}
+        </Section>
+      )}
+
+      {(cover || look.design.banner) && mayDesign && (
+        <Section title={t.events.coverMotion} footer={t.events.coverMotionHint}>
+          <div className="p-3">
+            <MotionPicker
+              value={motion ?? 'off'}
+              onChange={(m) => setMotion(m === 'off' ? null : m)}
+              tuneOf={(m) => tunes[m] ?? null}
+              onTune={(m, tune) => setTunes((all) => ({ ...all, [m]: tune ?? {} }))}
+            />
+          </div>
         </Section>
       )}
 

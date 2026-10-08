@@ -409,6 +409,8 @@ export function LivingLayer({
   behind,
   tune,
   icon,
+  image,
+  preview,
 }: {
   kind: MeetingMotion;
   live?: boolean;
@@ -417,13 +419,20 @@ export function LivingLayer({
   tune?: MotionTune | null;
   /** What the icon animations show (default: the ministry's or church's logo). */
   icon?: MotionIcon | null;
+  /** The picture under it (an event's cover): the TV glitch tears and shifts it. */
+  image?: string | null;
+  /** A small preview in a picker: on full quality it isn't held back by the running cap. */
+  preview?: boolean;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const clip = useRef<HTMLSpanElement>(null);
   const { env } = useEnv();
   const quality = useQuality();
   // Off screen it stands still, and only a few layers run at once (no work for the phone).
-  useEffect(() => (clip.current ? watchOffscreen(clip.current, true) : undefined), [kind, quality]);
+  useEffect(
+    () => (clip.current ? watchOffscreen(clip.current, !preview || quality !== 'full') : undefined),
+    [kind, quality, preview],
+  );
   const speed = tune?.speed ?? 1;
   // Speed for every kind at once: the browser's own playback rate of its animations.
   useEffect(() => {
@@ -445,12 +454,13 @@ export function LivingLayer({
   const strength = tune?.strength ?? 1;
   const sharp = tune?.sharp ?? null;
   const spots = (base: readonly Particle[] = PARTICLES) => few(particleSpots(base, density));
+  const beams = [...Array(Math.min(6, Math.max(1, Math.round(3 * density)))).keys()];
   const size = tune?.size ?? 1;
   const angle = tune?.angle ?? 0;
   // Turned or shrunk, the layer grows so it still covers the card.
   const grow = angle % 180 !== 0 || size < 1 ? '-40%' : angle ? '-10%' : undefined;
   const c = tune?.color;
-  const lined = kind === 'lines' || kind === 'grid';
+  const lined = kind === 'lines' || kind === 'grid' || kind === 'crt' || kind === 'disco';
   const style = {
     ...(grow ? { inset: grow } : {}),
     // Lines and grid get brighter or fainter lines; the rest fade as a whole.
@@ -597,6 +607,91 @@ export function LivingLayer({
           </>
         )}
         {kind === 'flames' && <Flames sharp={sharp ?? 0.7} weight={weight} density={density} />}
+        {kind === 'glitch' && <Glitch image={image} density={density} weight={weight} />}
+        {kind === 'crt' && (
+          <>
+            <i className="living-scan" />
+            <i className="living-roll" />
+            <i className="living-vignette" />
+          </>
+        )}
+        {kind === 'static' && (
+          <i className="living-static" style={weight !== 1 ? { scale: weight } : undefined} />
+        )}
+        {kind === 'matrix' &&
+          spots().map((p, i) => (
+            <i
+              key={i}
+              className="living-code"
+              style={
+                {
+                  '--x': `${p.x}%`,
+                  '--s': `${(8 + p.s) * weight}px`,
+                  '--d': `${p.d * 0.6}s`,
+                  '--t': `${-p.t * 0.6}s`,
+                } as CSSProperties
+              }
+            >
+              {CODE[i % CODE.length]}
+            </i>
+          ))}
+        {kind === 'spotlight' &&
+          beams.map((i) => (
+            <i
+              key={i}
+              className="living-beam"
+              style={
+                {
+                  left: `${((i + 0.5) / beams.length) * 100}%`,
+                  scale: `${weight} 1`,
+                  animationDuration: `${5 + (i % 3) * 1.3}s`,
+                  animationDelay: `${-i * 1.7}s`,
+                } as CSSProperties
+              }
+            />
+          ))}
+        {kind === 'spotlight' && <i className="living-haze" />}
+        {kind === 'disco' && (
+          <>
+            <i className="living-disco" />
+            <i className="living-disco two" />
+          </>
+        )}
+        {kind === 'hearts' &&
+          spots().map((p, i) => (
+            <i
+              key={i}
+              className="living-icon living-heart"
+              style={
+                {
+                  '--x': `${p.x}%`,
+                  '--s': `${(10 + p.s * 2.5) * weight}px`,
+                  '--d': `${p.d * 1.2}s`,
+                  '--t': `${-p.t * 1.2}s`,
+                } as CSSProperties
+              }
+            >
+              ♥
+            </i>
+          ))}
+        {kind === 'sparkle' &&
+          spots().map((p, i) => (
+            <i
+              key={i}
+              className="living-spark"
+              style={
+                {
+                  left: `${p.x}%`,
+                  top: `${(p.t * 23 + p.x) % 92}%`,
+                  '--s': `${(8 + p.s * 2.2) * weight}px`,
+                  animationDuration: `${1.6 + (p.d % 4) * 0.5}s`,
+                  animationDelay: `${-p.t * 0.4}s`,
+                } as CSSProperties
+              }
+            >
+              ✦
+            </i>
+          ))}
         {(kind === 'leaves' || kind === 'snowfall' || kind === 'petals') &&
           spots().map((p, i) => (
             <i
@@ -650,6 +745,64 @@ const SEASON_ITEMS = {
 } as const;
 
 type Particle = (typeof PARTICLES)[number];
+
+/** Columns of the digital rain: a fixed jumble of digits and katakana each. */
+const CODE = ['1ｱ0ｶ7ﾀ3ﾅ9ｻ', 'ﾊ8ﾏ2ﾔ5ﾗ0ﾜ1', '0ｲ4ｷ1ﾁ6ﾆ3ｼ', 'ﾋ7ﾐ0ﾕ9ﾘ2ｦ5', '3ｳ8ｸ5ﾂ0ﾇ7ｽ', 'ﾌ1ﾑ6ﾖ4ﾙ8ﾝ0'];
+
+/** Where the torn strips of a TV glitch sit (top and height, % of the block). */
+const GLITCH_BANDS = [
+  [12, 6],
+  [34, 3],
+  [51, 9],
+  [70, 4],
+  [86, 7],
+  [22, 5],
+  [61, 3],
+  [44, 5],
+] as const;
+
+/**
+ * TV glitch: strips of the picture (or of light, without one) tear sideways now and then,
+ * a red and a cyan copy jump apart, scanlines and a flicker on top. Everything jumps in
+ * fixed steps (transform / opacity only). `density` = how many strips, `weight` = how thick.
+ */
+function Glitch({
+  image,
+  density,
+  weight,
+}: {
+  image?: string | null;
+  density: number;
+  weight: number;
+}) {
+  const n = Math.min(GLITCH_BANDS.length, Math.max(2, Math.round(5 * density)));
+  const fill = image ? { backgroundImage: `url("${image}")` } : undefined;
+  return (
+    <span className={`living-glitch ${image ? 'has-image' : ''}`}>
+      {image && (
+        <>
+          <i className="gl-rgb red" style={fill} />
+          <i className="gl-rgb cyan" style={fill} />
+        </>
+      )}
+      {GLITCH_BANDS.slice(0, n).map(([top, h], i) => {
+        const height = Math.min(30, h * weight);
+        return (
+          <i
+            key={i}
+            className={`gl-band b${i}`}
+            style={{
+              ...fill,
+              clipPath: `inset(${top}% 0 ${Math.max(0, 100 - top - height)}% 0)`,
+            }}
+          />
+        );
+      })}
+      <i className="gl-scan" />
+      <i className="gl-tear" />
+    </span>
+  );
+}
 
 /**
  * As many particles as asked for (density 1 = the 12 fixed spots): more are spread between

@@ -7,7 +7,7 @@ import { useT } from '../lib/i18n';
 import { IconCheck, IconMapPin, IconUsers } from './icons';
 import { PosterMedia } from './Poster';
 import { useMoney } from './money';
-import { Badge, DateBadge } from './ui';
+import { Badge, DateBadge, LivingLayer } from './ui';
 
 /** "пт, 2 окт · 18:00" or a date range for multi-day events. */
 export function useEventWhen() {
@@ -23,7 +23,8 @@ export function useEventWhen() {
 
 /**
  * An event's cover: its photo, or (when the event has a cover design) the designed
- * banner with the title, like a post. Nothing when neither is set.
+ * banner with the title, like a post — with the event's own animation over it (a TV
+ * glitch tears the photo itself). Nothing when neither is set.
  */
 export function EventCover({
   e,
@@ -31,25 +32,33 @@ export function EventCover({
   compact,
 }: {
   e: Pick<EventSummary, 'coverUrl' | 'design' | 'look' | 'title'> &
-    Partial<Pick<EventSummary, 'speakers'>>;
+    Partial<Pick<EventSummary, 'speakers' | 'motion' | 'motionTune'>>;
   className?: string;
   compact?: boolean;
 }) {
+  const motion = e.motion && e.motion !== 'off' ? e.motion : null;
+  const layer = motion && <LivingLayer kind={motion} tune={e.motionTune} image={e.coverUrl} />;
   if (e.coverUrl)
     return (
-      <img src={e.coverUrl} alt="" className={`w-full object-cover ${className}`} loading="lazy" />
+      <div className={`relative w-full overflow-hidden ${className}`}>
+        <img src={e.coverUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+        {layer}
+      </div>
     );
   if (!e.design?.banner) return null;
   return (
-    <PosterMedia
-      title={e.title}
-      photos={[]}
-      tint={null}
-      look={e.look}
-      design={e.design}
-      compact={compact}
-      speakers={e.speakers}
-    />
+    <div className="relative overflow-hidden">
+      <PosterMedia
+        title={e.title}
+        photos={[]}
+        tint={null}
+        look={e.look}
+        design={e.design}
+        compact={compact}
+        speakers={e.speakers}
+      />
+      {layer}
+    </div>
   );
 }
 

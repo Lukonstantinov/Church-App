@@ -14,6 +14,7 @@ import {
   type PatternConfig,
 } from './brand';
 import type { Permission } from './permissions';
+import { MEETING_MOTIONS, type MeetingMotion } from './motions';
 import { chatUrlSchema, type EventSummary } from './events';
 import {
   postBlocksSchema,
@@ -195,68 +196,6 @@ export type CreateGroupInput = z.input<typeof createGroupSchema>;
 /** Reminder times before a meeting to choose from (minutes), and the usual ones. */
 export const REMINDER_MINUTES = [15, 30, 60, 120, 180, 1440] as const;
 export const DEFAULT_MEETING_REMINDERS = [120, 60];
-
-/**
- * How a meeting's background moves: not at all, gentle or full colour drift, twinkling
- * stars, waves, floating circles of light (bokeh) or turning rays of light.
- */
-export const MEETING_MOTIONS = [
-  'off',
-  'calm',
-  'lively',
-  'stars',
-  'waves',
-  'bokeh',
-  'rays',
-  'aurora',
-  'silk',
-  'mesh',
-  'embers',
-  'bubbles',
-  'snow',
-  'lines',
-  'grid',
-  'grain',
-  'fireflies',
-  'confetti',
-  'warp',
-  'goo',
-  'ripples',
-  'iconfloat',
-  'iconrain',
-  'iconorbit',
-  'leaves',
-  'snowfall',
-  'petals',
-  'flames',
-] as const;
-export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
-
-/** The animations sorted by type, for the pickers. */
-export const MOTION_GROUPS: {
-  key: 'light' | 'particles' | 'liquid' | 'texture' | 'icons' | 'seasons';
-  items: MeetingMotion[];
-}[] = [
-  { key: 'light', items: ['calm', 'lively', 'mesh', 'aurora', 'silk', 'rays'] },
-  {
-    key: 'particles',
-    items: [
-      'flames',
-      'embers',
-      'stars',
-      'bokeh',
-      'fireflies',
-      'bubbles',
-      'snow',
-      'confetti',
-      'warp',
-    ],
-  },
-  { key: 'liquid', items: ['waves', 'goo', 'ripples'] },
-  { key: 'texture', items: ['lines', 'grid', 'grain'] },
-  { key: 'icons', items: ['iconfloat', 'iconrain', 'iconorbit'] },
-  { key: 'seasons', items: ['leaves', 'snowfall', 'petals'] },
-];
 
 export const updateGroupSchema = z.object({
   brandColor: z.string().refine(isBrandValue, 'theme').nullable().optional(),

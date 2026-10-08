@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import {
   zonedToUtc,
   readPostDesign,
+  motionTuneSchema,
   type EventDetail,
   type EventFinance,
   type EventProgramItem,
@@ -11,6 +12,7 @@ import {
   type PersonRef,
   type RoleInput,
   type RsvpStatus,
+  type MotionTune,
 } from '@church/shared';
 import type { Db } from '../db/client';
 import {
@@ -30,7 +32,7 @@ import {
 import { accessIn, can, designRights } from './access';
 import { posterLook, lookSources } from './looks';
 import { signedMediaUrl } from './media';
-import { speakersOf } from './meetings';
+import { readMotion, speakersOf } from './meetings';
 import { toTransactionRows } from './treasury';
 
 const DAY = 86_400_000;
@@ -242,6 +244,17 @@ const features = (e: EventRow) => ({
   cost: e.hasCost,
 });
 
+/** An event's saved animation settings, read defensively (bad JSON = as designed). */
+function readTune(raw: string | null): MotionTune | null {
+  if (!raw) return null;
+  try {
+    const parsed = motionTuneSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Summaries for a list of events, from the viewpoint of `userId`. */
 async function summarize(
   db: Db,
@@ -306,6 +319,8 @@ async function summarize(
           .map((r) => ({ name: r.name, description: r.description })),
         design,
         templateId: e.templateId,
+        motion: readMotion(e.motion),
+        motionTune: readTune(e.motionTune),
         countdown: e.countdown,
         speakers: await speakersOf(e.speakers, secret),
         createdAt: e.createdAt,

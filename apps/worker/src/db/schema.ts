@@ -587,6 +587,9 @@ export const events = sqliteTable(
     tgChatTitle: text('tg_chat_title'),
     chatLinkCode: text('chat_link_code'),
     templateId: integer('template_id'),
+    /** The cover's animation (MeetingMotion; NULL = none) and its settings (MotionTune JSON). */
+    motion: text('motion'),
+    motionTune: text('motion_tune'),
     status: text('status', { enum: ['scheduled', 'cancelled'] })
       .notNull()
       .default('scheduled'),

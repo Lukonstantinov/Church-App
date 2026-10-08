@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MEETING_MOTIONS } from './api';
+import { MEETING_MOTIONS, motionTuneSchema, type MotionTune } from './motions';
 import { ENTER_ANIMATIONS } from './brand';
 import { appBackgroundSchema } from './background';
 import { isFontKey } from './posts';
@@ -81,59 +81,6 @@ export const modulePhotoSchema = z.object({
   split: z.enum(['full', 'left', 'right', 'top', 'bottom']).nullish(),
 });
 export type ModulePhoto = z.output<typeof modulePhotoSchema>;
-
-/**
- * Fine-tuning of one animation: speed, size, direction, colour and strength for all, plus
- * what only some animations have (see MOTION_KNOBS): how many / how far apart, how thick
- * or big, and how sharp the edges are.
- */
-export const motionTuneSchema = z.object({
-  /** 1 = as designed; 0.25 (slow) … 3 (fast). */
-  speed: z.number().min(0.25).max(3).nullish(),
-  /** 1 = as designed; 0.5 (smaller) … 2 (bigger). */
-  size: z.number().min(0.5).max(2).nullish(),
-  /** Turns the whole animation (e.g. 90 = rising becomes sideways; lines change slant). */
-  angle: z.number().int().min(0).max(359).nullish(),
-  /** One colour the animation is drawn in, instead of the ministry's. */
-  color: hex.nullish(),
-  /** How strongly it shows: 0.2 (faint) … 1 (as designed) … 2 (lines and grid only: brighter). */
-  strength: z.number().min(0.2).max(2).nullish(),
-  /** Particles: how many; lines: the distance between them; grid: the squares' size; flames: how many tongues. */
-  density: z.number().min(0.3).max(2.5).nullish(),
-  /** Lines and grid: how thick; particles: how big each one is; flames: how high. */
-  weight: z.number().min(0.3).max(3).nullish(),
-  /** Flames: 0 soft … 1 crisp, sharp tongues; glows (aurora, silk, mesh…): 0 dreamy … 1 clear. */
-  sharp: z.number().min(0).max(1).nullish(),
-});
-export type MotionTune = z.output<typeof motionTuneSchema>;
-
-/** What an animation can be tuned in besides speed, size, direction, colour and strength. */
-export type MotionKnob = 'density' | 'weight' | 'sharp';
-const PARTICLE_KNOBS: MotionKnob[] = ['density', 'weight'];
-const GLOW_KNOBS: MotionKnob[] = ['sharp'];
-export const MOTION_KNOBS: Partial<Record<(typeof MEETING_MOTIONS)[number], MotionKnob[]>> = {
-  calm: GLOW_KNOBS,
-  lively: GLOW_KNOBS,
-  mesh: GLOW_KNOBS,
-  aurora: GLOW_KNOBS,
-  silk: GLOW_KNOBS,
-  bokeh: ['sharp', 'weight'],
-  flames: ['sharp', 'weight', 'density'],
-  embers: PARTICLE_KNOBS,
-  fireflies: PARTICLE_KNOBS,
-  bubbles: PARTICLE_KNOBS,
-  snow: PARTICLE_KNOBS,
-  confetti: PARTICLE_KNOBS,
-  warp: ['density'],
-  lines: ['density', 'weight'],
-  grid: ['density', 'weight'],
-  iconfloat: PARTICLE_KNOBS,
-  iconrain: PARTICLE_KNOBS,
-  iconorbit: ['weight'],
-  leaves: PARTICLE_KNOBS,
-  snowfall: PARTICLE_KNOBS,
-  petals: PARTICLE_KNOBS,
-};
 
 /** The light passing over a part: how strong, how fast, and at what slant. */
 export const shineTuneSchema = z.object({
