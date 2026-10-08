@@ -102,6 +102,27 @@ export const motionIconSchema = z.object({
 });
 export type MotionIcon = z.output<typeof motionIconSchema>;
 
+/**
+ * A part's look recorded once as a short looping video (surface, picture, animations and
+ * shine together): phones play one video instead of drawing every animation live. `key`
+ * is the look it was recorded from (`bakeKey`); after any change it no longer matches and
+ * the live animations are back until it is recorded again.
+ */
+export const bakedLoopSchema = z.object({
+  mediaId: z.number().int().positive(),
+  key: z.string().max(40),
+  /** Size it was recorded at (css px of the sample block). */
+  w: z.number().int().min(16).max(2000),
+  h: z.number().int().min(16).max(2000),
+});
+export type BakedLoop = z.output<typeof bakedLoopSchema>;
+
+/** Parts with one block on a screen (several playing videos at once would be heavy). */
+export const BAKE_PARTS = ['header', 'calendar', 'posts', 'tabbar', 'list'] as const;
+
+/** Where a recorded loop plays from (public: decorative videos only). */
+export const loopUrl = (mediaId: number) => `/media/v/${mediaId}`;
+
 export const moduleLookSchema = z.object({
   /** A living animation inside the part's blocks; null/absent = none. */
   motion: z.enum(MEETING_MOTIONS).nullish(),
@@ -141,8 +162,47 @@ export const moduleLookSchema = z.object({
   textScale: z.number().min(0.7).max(1.3).nullish(),
   /** A font for the part's text (a key of FONTS). */
   font: z.string().max(40).refine(isFontKey, 'font').nullish(),
+  /** Recorded as a looping video (see `bakedLoopSchema`). */
+  baked: bakedLoopSchema.nullish(),
 });
 export type ModuleLook = z.output<typeof moduleLookSchema>;
+
+/**
+ * A fingerprint of what a recorded loop shows: the surface, its colours, the picture(s),
+ * the animations with their settings and the shine. Texts, fonts, edges and corners stay
+ * live, so they aren't part of it.
+ */
+export function bakeKey(look: ModuleLook): string {
+  const pic = (p: ModuleLook['photo']) =>
+    p ? [p.mediaId, p.opacity, p.focusX, p.focusY, p.zoom, p.fit, p.split] : null;
+  const text = JSON.stringify([
+    look.surface ?? null,
+    look.colors ?? null,
+    look.angle ?? null,
+    look.flow ?? null,
+    look.motion ?? null,
+    look.layers ?? null,
+    look.tune ?? null,
+    look.tunes ?? null,
+    look.icon?.emoji ?? null,
+    look.icon?.mediaId ?? null,
+    look.shine ?? null,
+    look.shineTune ?? null,
+    pic(look.photo),
+    pic(look.photo2),
+  ]);
+  // FNV-1a: short and stable; only has to tell looks apart.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+/** The part's recorded loop, when it still shows the look as it is now. */
+export const freshLoop = (look: ModuleLook): BakedLoop | null =>
+  look.baked && look.baked.key === bakeKey(look) ? look.baked : null;
 
 /** The tuning one of a part's animations uses: its own, else the part's shared one. */
 export const tuneFor = (

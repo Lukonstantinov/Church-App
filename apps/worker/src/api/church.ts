@@ -2,8 +2,11 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { eq } from 'drizzle-orm';
 import {
+  BAKE_PARTS,
   LOGO_MAX_BYTES,
+  LOOP_MAX_BYTES,
   MEDIA_MAX_BYTES,
+  loopUrl,
   updateChurchSchema,
   churchStudioSchema,
   updateMeSchema,
@@ -16,8 +19,11 @@ import { audit } from '../lib/audit';
 import { getChurch, isValidTimezone } from '../lib/church';
 import { fileStream } from '../lib/files';
 import {
+  assertLoop,
   fromBase64,
   readImageUpload,
+  readLoopUpload,
+  storeMedia,
   toBase64,
   verifyFileSignature,
   verifyMediaSignature,
@@ -47,6 +53,20 @@ function requireAdmin(c: { get: (k: 'user') => AuthVariables['user'] }) {
 
 churchRoutes.get('/', async (c) => c.json(await getChurch(c.get('db'))));
 
+/** A main-page part recorded as a looping video (Design studio); church admins only. */
+churchRoutes.post('/loops', async (c) => {
+  requireAdmin(c);
+  const bytes = await readLoopUpload(c.req, LOOP_MAX_BYTES);
+  const id = await storeMedia(c.get('db'), {
+    groupId: null,
+    kind: 'event',
+    bytes,
+    mime: 'video/mp4',
+    createdBy: c.get('user').id,
+  });
+  return c.json({ id, url: loopUrl(id) }, 201);
+});
+
 /** The Design studio saves the main page (its parts and background); church admins only. */
 churchRoutes.put('/studio', async (c) => {
   requireAdmin(c);
@@ -59,6 +79,11 @@ churchRoutes.put('/studio', async (c) => {
       // No uploaded pictures on the main page (they belong to a ministry).
       delete part.photo;
       delete part.photo2;
+    }
+  for (const [key, part] of Object.entries(input.screenLook ?? {}))
+    if (part?.baked) {
+      if (!(BAKE_PARTS as readonly string[]).includes(key)) part.baked = null;
+      else await assertLoop(db, null, part.baked.mediaId);
     }
   const patch: Partial<typeof churchSettings.$inferInsert> = {};
   if (input.screenLook !== undefined) patch.screenLook = input.screenLook;
@@ -177,6 +202,40 @@ mediaRoutes.get('/m/:id', async (c) => {
     'Content-Type': row.mime,
     'Cache-Control': 'private, max-age=86400, immutable',
     'X-Content-Type-Options': 'nosniff',
+  });
+});
+
+/**
+ * GET /media/v/:id — a recorded looping video (a part's animation). Public like the logos:
+ * only decorative videos are served here. iPhones play a video only from a server that
+ * answers byte ranges, so ranges are honoured.
+ */
+mediaRoutes.get('/v/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isSafeInteger(id) || id <= 0) return c.body(null, 404);
+  const row = await getDb(c.env.DB).query.media.findFirst({
+    columns: { data: true, mime: true },
+    where: eq(media.id, id),
+  });
+  if (!row || row.mime !== 'video/mp4') return c.body(null, 404);
+  const bytes = fromBase64(row.data);
+  const headers = {
+    'Content-Type': 'video/mp4',
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'X-Content-Type-Options': 'nosniff',
+  };
+  const range = /^bytes=(\d*)-(\d*)$/.exec(c.req.header('range') ?? '');
+  if (!range) return c.body(bytes, 200, headers);
+  const size = bytes.length;
+  let start = range[1] ? Number(range[1]) : size - Number(range[2]);
+  let end = range[1] && range[2] ? Number(range[2]) : size - 1;
+  start = Math.max(0, start);
+  end = Math.min(size - 1, end);
+  if (start > end) return c.body(null, 416, { 'Content-Range': `bytes */${size}` });
+  return c.body(bytes.slice(start, end + 1), 206, {
+    ...headers,
+    'Content-Range': `bytes ${start}-${end}/${size}`,
   });
 });
 

@@ -590,4 +590,50 @@ describe('adding people and environment look', () => {
     await drain();
     expect(texts(member.id).some((x) => x.includes('Едем в лагерь'))).toBe(true);
   });
+  it('a part can be recorded as a looping video that plays from a public link', async () => {
+    const g = await createEnv('Видео');
+    const other = await createEnv('Чужое');
+    const mp4 = Uint8Array.from([
+      0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 1, 2,
+    ]);
+    const upload = (groupId: number, body: Uint8Array) =>
+      api(`/api/groups/${groupId}/loops`, { method: 'POST', user: ADMIN, body });
+    expect((await upload(g.id, Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8]))).status).toBe(415);
+    const mine = (await (await upload(g.id, mp4)).json()) as { id: number; url: string };
+    const theirs = (await (await upload(other.id, mp4)).json()) as { id: number };
+    expect(mine.url).toBe(`/media/v/${mine.id}`);
+
+    // iPhones play videos only with byte ranges.
+    const whole = await api(mine.url);
+    expect(whole.status).toBe(200);
+    expect(whole.headers.get('accept-ranges')).toBe('bytes');
+    const part = await api(mine.url, { headers: { Range: 'bytes=4-7' } });
+    expect(part.status).toBe(206);
+    expect(part.headers.get('content-range')).toBe(`bytes 4-7/${mp4.length}`);
+    expect([...new Uint8Array(await part.arrayBuffer())]).toEqual([0x66, 0x74, 0x79, 0x70]);
+
+    const baked = (mediaId: number) => ({ mediaId, key: 'abc', w: 370, h: 96 });
+    const put = (json: unknown) =>
+      api(`/api/groups/${g.id}/studio`, { method: 'PUT', user: ADMIN, json });
+    // Another ministry's video is refused.
+    expect(
+      (await put({ screenLook: { header: { motion: 'snow', baked: baked(theirs.id) } } })).status,
+    ).toBe(400);
+    expect(
+      (
+        await put({
+          screenLook: {
+            header: { motion: 'snow', baked: baked(mine.id) },
+            // A part with several blocks a screen keeps live animations.
+            actions: { motion: 'snow', baked: baked(mine.id) },
+          },
+        })
+      ).status,
+    ).toBe(200);
+    const saved = (await apiJson<GroupSummary[]>('/api/groups', { user: ADMIN })).find(
+      (x) => x.id === g.id,
+    )!;
+    expect(saved.screenLook.header?.baked).toEqual(baked(mine.id));
+    expect(saved.screenLook.actions?.baked ?? null).toBeNull();
+  });
 });

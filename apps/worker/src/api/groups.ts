@@ -27,6 +27,9 @@ import {
   readScreenLook,
   ministryStudioSchema,
   type ScreenLook,
+  BAKE_PARTS,
+  LOOP_MAX_BYTES,
+  loopUrl,
 } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
@@ -51,7 +54,13 @@ import { randomCode } from '../lib/codes';
 import { churchDefaultLocale } from '../lib/church';
 import { assignMissingColors, freeMinistryColor, groupLogoUrl } from '../lib/groups';
 import { markFeedRead, unreadCounts } from '../lib/feed';
-import { assertGroupMedia, signedMediaUrl } from '../lib/media';
+import {
+  assertGroupMedia,
+  assertLoop,
+  readLoopUpload,
+  signedMediaUrl,
+  storeMedia,
+} from '../lib/media';
 import { createDefaultPositions, defaultPositionId, permsOf, roleFor } from '../lib/positions';
 import { botApi, botUsername, inviteLink } from '../lib/telegram';
 import { toLabelRef } from './labels';
@@ -377,6 +386,25 @@ groupRoutes.patch('/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+/** A part's look recorded as a looping video (Design studio), stored for this ministry. */
+groupRoutes.post('/:id/loops', async (c) => {
+  const db = c.get('db');
+  const user = c.get('user');
+  const group = await loadGroupOr404(db, idParam(c));
+  const perms = (await accessIn(db, user, group.id)).perms;
+  if (!perms.has('design') && !perms.has('settings'))
+    throw new HTTPException(403, { message: 'forbidden' });
+  const bytes = await readLoopUpload(c.req, LOOP_MAX_BYTES);
+  const id = await storeMedia(db, {
+    groupId: group.id,
+    kind: 'event',
+    bytes,
+    mime: 'video/mp4',
+    createdBy: user.id,
+  });
+  return c.json({ id, url: loopUrl(id) }, 201);
+});
+
 /**
  * The Design studio saves a ministry page: how its parts look and move, the entrance
  * animation, the meetings' animation and the background. Designers or ministry settings.
@@ -390,7 +418,12 @@ groupRoutes.put('/:id/studio', async (c) => {
     throw new HTTPException(403, { message: 'forbidden' });
   const input = await parseBody(c, ministryStudioSchema);
   // Uploaded icon pictures must be this ministry's; their links are made when reading.
-  for (const part of Object.values(input.screenLook ?? {})) {
+  for (const [key, part] of Object.entries(input.screenLook ?? {})) {
+    // A recorded loop: this ministry's video, and only for parts with one block a screen.
+    if (part?.baked) {
+      if (!(BAKE_PARTS as readonly string[]).includes(key)) part.baked = null;
+      else await assertLoop(db, group.id, part.baked.mediaId);
+    }
     if (part?.icon?.mediaId) await assertGroupMedia(db, group.id, part.icon.mediaId);
     if (part?.icon) part.icon.url = null;
     for (const pic of [part?.photo, part?.photo2]) {

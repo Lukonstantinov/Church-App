@@ -23,6 +23,8 @@ export interface RecordOptions {
   width?: number;
   /** Also make a GIF (smaller, fewer frames and colours). */
   gif?: boolean;
+  /** Video quality: bits per pixel per frame (0.12 for posters; less for backgrounds). */
+  quality?: number;
   onProgress?: (done: number) => void;
 }
 
@@ -33,13 +35,16 @@ export interface Recording {
 }
 
 /** Whether the block has anything moving to record. */
-export const hasEffects = (node: HTMLElement) => node.querySelector('.living-clip') !== null;
+/** What moves: animation layers and the light passing over a part. */
+const EFFECTS = '.living-clip, .shine';
+
+export const hasEffects = (node: HTMLElement) => node.querySelector(EFFECTS) !== null;
 
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
 
-/** Elements to keep visible in one pass (the rest hidden); returns how to undo it. */
-function onlyShow(node: HTMLElement, hidden: HTMLElement[]): () => void {
+/** Hides elements for one pass; returns how to show them again. */
+function hideFor(hidden: HTMLElement[]): () => void {
   const before = hidden.map((e) => e.style.visibility);
   hidden.forEach((e) => (e.style.visibility = 'hidden'));
   return () => hidden.forEach((e, i) => (e.style.visibility = before[i]!));
@@ -53,7 +58,7 @@ const tops = (els: HTMLElement[]) => els.filter((e) => !els.some((o) => o !== e 
  * it), the effects, and what comes after (above). Elements holding an effect are neither.
  */
 function layers(node: HTMLElement) {
-  const effects = tops([...node.querySelectorAll<HTMLElement>('.living-clip')]);
+  const effects = tops([...node.querySelectorAll<HTMLElement>(EFFECTS)]);
   const first = effects[0];
   const all = [...node.querySelectorAll<HTMLElement>('*')];
   const holds = (e: HTMLElement) => effects.some((x) => e.contains(x));
@@ -82,7 +87,7 @@ function canvasOf(w: number, h: number) {
  */
 async function stillParts(node: HTMLElement, k: number, outW: number, outH: number) {
   const { toCanvas } = await import('html-to-image');
-  const { effects, before, after } = layers(node);
+  const { effects, after } = layers(node);
   const unders = [...node.querySelectorAll<HTMLElement>('[data-shot="under"]')];
   const topShots = [...node.querySelectorAll<HTMLElement>('[data-shot="top"]')];
   const W = node.offsetWidth;
@@ -99,7 +104,7 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
 
   const below = canvasOf(outW, outH);
   const b = below.getContext('2d')!;
-  let undo = onlyShow(node, [...effects, ...after, ...unders]);
+  let undo = hideFor([...effects, ...after, ...unders]);
   try {
     b.drawImage(await draw(), 0, 0, outW, outH);
   } finally {
@@ -112,15 +117,18 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
 
   const above = canvasOf(outW, outH);
   const a = above.getContext('2d')!;
-  // Only what comes after the effects; the block's own background was drawn below.
-  const bg = node.style.background;
-  node.style.background = 'none';
-  undo = onlyShow(node, [...before, ...effects, ...topShots]);
+  // Only what comes after the effects: the block itself is hidden (its background and
+  // the surfaces some blocks paint in ::before/::after were drawn below), those shown.
+  const keep = after.filter((e) => !topShots.some((x) => x === e));
+  const was = [node, ...keep].map((e) => e.style.visibility);
+  node.style.visibility = 'hidden';
+  keep.forEach((e) => (e.style.visibility = 'visible'));
+  undo = hideFor(topShots);
   try {
-    a.drawImage(await draw(), 0, 0, outW, outH);
+    if (keep.length) a.drawImage(await draw(), 0, 0, outW, outH);
   } finally {
     undo();
-    node.style.background = bg;
+    [node, ...keep].forEach((e, i) => (e.style.visibility = was[i]!));
   }
   a.save();
   a.scale(k, k);
@@ -192,14 +200,14 @@ async function drawEffects(
 }
 
 /** The best H.264 setting this phone can encode at this size, or null. */
-async function videoConfig(width: number, height: number, fps: number) {
+async function videoConfig(width: number, height: number, fps: number, bpp: number) {
   if (typeof VideoEncoder === 'undefined') return null;
   for (const codec of ['avc1.640028', 'avc1.4d0028', 'avc1.42e028', 'avc1.42e01f']) {
     const config: VideoEncoderConfig = {
       codec,
       width,
       height,
-      bitrate: Math.round(width * height * fps * 0.12),
+      bitrate: Math.round(width * height * fps * bpp),
       framerate: fps,
       avc: { format: 'avc' },
     };
@@ -238,7 +246,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     const total = Math.round(seconds * fps);
     const fade = Math.round(fps * 0.75);
 
-    const config = await videoConfig(outW, outH, fps);
+    const config = await videoConfig(outW, outH, fps, opts.quality ?? 0.12);
     let encoder: VideoEncoder | null = null;
     let muxer: Muxer<ArrayBufferTarget> | null = null;
     if (config) {

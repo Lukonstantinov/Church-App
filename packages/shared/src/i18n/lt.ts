@@ -880,6 +880,16 @@ export const lt: Messages = {
     noneYet: 'Plakatų dar nėra — sukurkite Dizainas → Plakatai.',
   },
   studio: {
+    bakeTitle: '🎬 Vaizdo animacija',
+    bakeHint:
+      'Įrašo šios dalies paviršių, paveikslėlį ir visas animacijas į vieną trumpą vaizdo įrašą (apie 6 sekundes). Telefonai groja vieną įrašą vietoj visų efektų — daug lengviau. Tekstai ir mygtukai lieka gyvi. Užtrunka 10–30 sekundžių.',
+    bakeFresh: 'Įjungta — telefonai groja įrašą',
+    bakeStale: 'Išvaizda pasikeitė po įrašymo — įrašykite iš naujo (kol kas veikia gyvi efektai)',
+    bakeNothing: 'Čia nėra animacijų — įrašo nereikia',
+    bakeRecord: 'Įrašyti ir išsaugoti',
+    bakeAgain: 'Įrašyti iš naujo',
+    bakeRemove: 'Pašalinti įrašą',
+    bakeNoVideo: 'Šis telefonas negali įrašyti vaizdo — pabandykite iš kito',
     themeUndo: 'Atšaukti temą — grąžinti kaip buvo',
     themeUndone: 'Grąžinta kaip buvo',
     playMotion: 'Rodyti animacijas',

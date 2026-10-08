@@ -869,6 +869,16 @@ export const en: Messages = {
     noneYet: 'No posters yet — make one in Design → Posters.',
   },
   studio: {
+    bakeTitle: '🎬 Video animation',
+    bakeHint:
+      'Records this part’s surface, picture and all its animations as one short video (about 6 seconds). Phones play one video instead of every effect — much lighter. Texts and buttons stay live. Takes 10–30 seconds.',
+    bakeFresh: 'On — phones play the video',
+    bakeStale: 'The look changed after recording — record again (live effects meanwhile)',
+    bakeNothing: 'No animations here — no video needed',
+    bakeRecord: 'Record and save',
+    bakeAgain: 'Record again',
+    bakeRemove: 'Remove the video',
+    bakeNoVideo: 'This phone can’t record videos — try from another one',
     themeUndo: 'Undo the theme — back as it was',
     themeUndone: 'Back as it was',
     playMotion: 'Play animations',

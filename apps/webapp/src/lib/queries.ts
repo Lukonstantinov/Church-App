@@ -1115,6 +1115,14 @@ export function useTreasurySettings(groupId: number) {
 }
 
 /** Uploads an already-resized image; returns its id for attaching. */
+/** Stores a part's recorded loop (Design studio): a ministry's, or the church's with null. */
+export const uploadLoop = (groupId: number | null, video: Blob) =>
+  apiFetch<{ id: number; url: string }>(groupId ? `/groups/${groupId}/loops` : '/church/loops', {
+    method: 'POST',
+    body: video,
+    headers: { 'content-type': 'video/mp4' },
+  });
+
 export function useUploadMedia(groupId: number, kind: 'receipt' | 'event' = 'receipt') {
   return useMutation({
     mutationFn: (file: Blob) =>

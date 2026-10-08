@@ -1,7 +1,10 @@
 import { createContext, useContext, useEffect, useRef, type CSSProperties } from 'react';
-import { watchOffscreen } from '../lib/perf';
+import { useQuality, watchOffscreen } from '../lib/perf';
+import { getMotion } from '../lib/motion';
 import {
   fontFamily,
+  freshLoop,
+  loopUrl,
   tuneFor,
   type MeetingMotion,
   type ModuleLook,
@@ -77,6 +80,15 @@ export function SkinLayer({ look }: { look: ModuleLook }) {
     const block = marker.current?.parentElement;
     return block ? watchOffscreen(block) : undefined;
   }, []);
+  // Recorded as a loop: one video instead of the picture, animations and shine.
+  const loop = freshLoop(look);
+  if (loop)
+    return (
+      <>
+        <span ref={marker} hidden />
+        <LoopVideo mediaId={loop.mediaId} />
+      </>
+    );
   return (
     <>
       <span ref={marker} hidden />
@@ -106,6 +118,56 @@ export function SkinLayer({ look }: { look: ModuleLook }) {
         icon={look.icon}
       />
     </>
+  );
+}
+
+/**
+ * A part's recorded loop: muted, looping, inline. It plays only while on screen and while
+ * no sheet covers the page; on "still" phones and with motion off it shows its first frame.
+ */
+function LoopVideo({ mediaId }: { mediaId: number }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const quality = useQuality();
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const still = () => quality === 'still' || getMotion() === 'off' || reduced;
+    let seen = true;
+    const update = () => {
+      if (seen && !still() && !document.documentElement.dataset.sheet)
+        void v.play().catch(() => undefined);
+      else v.pause();
+    };
+    const io = new IntersectionObserver(([e]) => {
+      seen = !!e?.isIntersecting;
+      update();
+    });
+    io.observe(v);
+    const mo = new MutationObserver(update);
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-sheet', 'data-motion'],
+    });
+    update();
+    return () => {
+      io.disconnect();
+      mo.disconnect();
+    };
+  }, [quality]);
+  return (
+    <span aria-hidden="true" className="part-clip">
+      <video
+        ref={ref}
+        src={loopUrl(mediaId)}
+        muted
+        loop
+        playsInline
+        preload="auto"
+        disablePictureInPicture
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+    </span>
   );
 }
 
@@ -150,6 +212,8 @@ export function PartPhoto({ photo }: { photo: ModulePhoto }) {
   return (
     <span
       aria-hidden="true"
+      // A recorded loop draws this picture itself (lib/recorder.ts, as for posters).
+      data-shot="under"
       className="pointer-events-none absolute overflow-hidden"
       style={{ ...area, WebkitMaskImage: area.maskImage, zIndex: -1, opacity: photo.opacity }}
     >

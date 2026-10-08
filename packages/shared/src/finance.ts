@@ -31,6 +31,8 @@ export const INCOME_CATEGORIES = ['collection', 'sale', 'sponsor', 'church', 'ot
 
 /** Receipts and photos are resized in the browser; the server accepts at most this many bytes. */
 export const MEDIA_MAX_BYTES = 600_000;
+/** A recorded looping video (a part's animation), stored like pictures. */
+export const LOOP_MAX_BYTES = 1_200_000;
 
 const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'YYYY-MM');
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');

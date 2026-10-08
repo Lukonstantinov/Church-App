@@ -1,6 +1,10 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  BAKE_PARTS,
+  bakeKey,
+  freshLoop,
+  type BakedLoop,
   ENTER_ANIMATIONS,
   MOTION_GROUPS,
   MODULE_EDGES,
@@ -32,8 +36,10 @@ import {
   useSaveChurchStudio,
   useSaveMinistryStudio,
   useUploadMedia,
+  uploadLoop,
 } from '../lib/queries';
 import { preparePhoto } from '../lib/image';
+import { FullMotion } from '../lib/perf';
 import { confirmDialog, haptic } from '../lib/telegram';
 import { EnvCard, PinnedEventCard } from '../screens/Hub';
 import { FontPicker } from './FontPicker';
@@ -51,6 +57,7 @@ import {
   SkinLayer,
   shineStyle,
   skinClass,
+  skinMotions,
   skinStyle,
   useModuleLook,
 } from './ModuleSkin';
@@ -873,6 +880,17 @@ function ModuleSheet({
           </div>
         </Group>
 
+        {(BAKE_PARTS as readonly string[]).includes(spot) && (
+          <BakeSection
+            draft={draft}
+            groupId={scope === 'church' ? null : g.id}
+            spot={spot}
+            disabled={pending}
+            onBaked={(baked) => void save({ ...draft, baked })}
+            onRemove={() => void save({ ...draft, baked: null })}
+          />
+        )}
+
         <Button disabled={pending} onClick={() => void save(draft)}>
           {pending ? t.common.saving : t.common.save}
         </Button>
@@ -881,6 +899,125 @@ function ModuleSheet({
         </Button>
       </div>
     </Sheet>
+  );
+}
+
+/** The size a part's loop is recorded at (a phone's block of that part, in css px). */
+const BAKE_SIZE: Record<string, [number, number]> = {
+  header: [370, 96],
+  calendar: [180, 200],
+  posts: [370, 240],
+  tabbar: [370, 68],
+  list: [370, 140],
+};
+
+/**
+ * «🎬 Video animation»: the part's surface, picture, animations and shine recorded once as
+ * a short loop (lib/recorder.ts) that phones play instead of drawing every effect live.
+ * Saved with the look's fingerprint; any later change brings the live effects back until
+ * it is recorded again.
+ */
+function BakeSection({
+  draft,
+  groupId,
+  spot,
+  disabled,
+  onBaked,
+  onRemove,
+}: {
+  draft: ModuleLook;
+  groupId: number | null;
+  spot: ScreenModule;
+  disabled: boolean;
+  onBaked: (baked: BakedLoop) => void;
+  onRemove: () => void;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const sample = useRef<HTMLDivElement>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [w, h] = BAKE_SIZE[spot] ?? [370, 120];
+  const moving =
+    skinMotions(draft).length > 0 ||
+    (draft.shine && draft.shine !== 'none') ||
+    draft.surface === 'fire';
+  const fresh = freshLoop(draft);
+  const stale = !!draft.baked && !fresh;
+
+  async function record() {
+    setProgress(0);
+    try {
+      // The sample is laid out with its effects fully on before recording starts.
+      await new Promise((r) => setTimeout(r, 500));
+      const { recordLoop } = await import('../lib/recorder');
+      if (!sample.current) throw new Error('no_sample');
+      const rec = await recordLoop(sample.current, {
+        width: Math.min(740, w * 2),
+        quality: 0.07,
+        onProgress: setProgress,
+      });
+      if (!rec.mp4) {
+        toast(t.studio.bakeNoVideo, 'error');
+        return;
+      }
+      const up = await uploadLoop(groupId, rec.mp4);
+      onBaked({ mediaId: up.id, key: bakeKey(draft), w, h });
+    } catch (err) {
+      console.warn('loop recording failed', err);
+      haptic.error();
+      toast(t.motionExport.failed, 'error');
+    } finally {
+      setProgress(null);
+    }
+  }
+
+  return (
+    <Group title={t.studio.bakeTitle}>
+      <div className="flex flex-col gap-2.5">
+        <p className="text-[13px] leading-snug text-hint">{t.studio.bakeHint}</p>
+        {fresh && <p className="text-[13px] font-semibold text-present">✓ {t.studio.bakeFresh}</p>}
+        {stale && <p className="text-[13px] font-semibold text-late">⚠ {t.studio.bakeStale}</p>}
+        {!moving && !draft.baked && <p className="text-[13px] text-hint">{t.studio.bakeNothing}</p>}
+        {progress !== null ? (
+          <div className="flex flex-col gap-1.5 py-1">
+            <div className="h-2 overflow-hidden rounded-full bg-hairline">
+              <div
+                className="h-full rounded-full bg-[var(--brand)] transition-[width] duration-200"
+                style={{ width: `${Math.round(progress * 100)}%` }}
+              />
+            </div>
+            <div className="text-center text-[13px] text-hint">
+              {t.motionExport.recording(Math.round(progress * 100))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={disabled || !moving} onClick={() => void record()}>
+              🎬 {fresh ? t.studio.bakeAgain : t.studio.bakeRecord}
+            </Button>
+            {draft.baked && (
+              <Button variant="glass" disabled={disabled} onClick={onRemove}>
+                {t.studio.bakeRemove}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      {/* The sample block, off screen and only while recording. */}
+      {progress !== null && (
+        <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0 }}>
+          <FullMotion.Provider value>
+            <div
+              ref={sample}
+              className={`relative overflow-hidden ${skinClass({ ...draft, edge: null, baked: null })}`}
+              style={{ ...skinStyle(draft), width: w, height: h, borderRadius: 0 }}
+            >
+              <SkinLayer look={{ ...draft, baked: null }} />
+            </div>
+          </FullMotion.Provider>
+        </div>
+      )}
+    </Group>
   );
 }
 

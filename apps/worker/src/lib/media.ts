@@ -104,10 +104,11 @@ export async function verifyMediaSignature(
 export async function storeMedia(
   db: Db,
   input: {
-    groupId: number;
+    /** Null for the church's own (its main page's recorded loops). */
+    groupId: number | null;
     kind: 'receipt' | 'event';
     bytes: Uint8Array;
-    mime: ImageMime;
+    mime: ImageMime | 'video/mp4';
     createdBy: number;
   },
 ): Promise<number> {
@@ -132,6 +133,31 @@ export async function assertGroupMedia(db: Db, groupId: number, mediaId: number)
     where: and(eq(media.id, mediaId), eq(media.groupId, groupId)),
   });
   if (!row) throw new HTTPException(400, { message: 'invalid_media' });
+}
+
+/** Reads a recorded loop (an MP4: "ftyp" at byte 4), enforcing the size cap. */
+export async function readLoopUpload(
+  req: { header: (n: string) => string | undefined; arrayBuffer: () => Promise<ArrayBuffer> },
+  maxBytes: number,
+): Promise<Uint8Array> {
+  const declared = Number(req.header('content-length') ?? 0);
+  if (declared > maxBytes) throw new HTTPException(413, { message: 'too_large' });
+  const bytes = new Uint8Array(await req.arrayBuffer());
+  if (bytes.length === 0) throw new HTTPException(400, { message: 'empty' });
+  if (bytes.length > maxBytes) throw new HTTPException(413, { message: 'too_large' });
+  const mp4 = bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
+  if (!mp4) throw new HTTPException(415, { message: 'unsupported_video' });
+  return bytes;
+}
+
+/** A recorded loop exists and belongs to this ministry (or, with null, to the church). */
+export async function assertLoop(db: Db, groupId: number | null, mediaId: number): Promise<void> {
+  const row = await db.query.media.findFirst({
+    columns: { id: true, groupId: true, mime: true },
+    where: eq(media.id, mediaId),
+  });
+  if (!row || row.mime !== 'video/mp4' || row.groupId !== groupId)
+    throw new HTTPException(400, { message: 'invalid_media' });
 }
 
 /** Signed URL for a post attachment (separate namespace from images). */
