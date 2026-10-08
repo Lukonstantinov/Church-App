@@ -169,7 +169,7 @@ export function SpeakerStrip({
           style={{ width: s.photo + (side ? 0 : s.photo >= 96 ? 52 : 28) }}
         >
           {sp.photoUrl ? (
-            <img src={sp.photoUrl} alt="" className="object-cover" style={photo} />
+            <img src={sp.photoUrl} alt="" data-shot="top" className="object-cover" style={photo} />
           ) : (
             <span
               className="flex items-center justify-center bg-white/25 font-bold"
@@ -210,6 +210,7 @@ export function SpeakerBackdrop({ url, look }: { url: string; look: SpeakerLook 
         src={url}
         alt=""
         aria-hidden="true"
+        data-shot="under"
         className="pointer-events-none absolute inset-0 h-full w-full object-cover"
         style={{ opacity: look.opacity ?? 0.6, objectPosition: at }}
       />
@@ -229,8 +230,9 @@ export function SpeakerBackdrop({ url, look }: { url: string; look: SpeakerLook 
       className={`pointer-events-none absolute inset-y-0 h-full w-auto max-w-[62%] object-cover ${
         x === 'left' ? 'left-0' : x === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2'
       }`}
-      // For the bot's poster picture the fade and crop are baked into the photo (lib/poster.ts):
-      // iPhones leave a masked photo out of the drawing.
+      // The bot's poster picture draws this photo itself, with the same crop and fade
+      // (lib/poster.ts): iPhones leave big and masked photos out of the drawing.
+      data-shot="under"
       data-fade={x}
       data-pos={y}
       style={{

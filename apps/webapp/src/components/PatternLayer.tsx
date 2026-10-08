@@ -98,6 +98,8 @@ export function BackdropLayer({
   return (
     <span
       aria-hidden="true"
+      // The bot's poster picture draws this photo itself (lib/poster.ts).
+      data-shot="under"
       className="pointer-events-none absolute overflow-hidden"
       style={{
         left: `${box.left}%`,

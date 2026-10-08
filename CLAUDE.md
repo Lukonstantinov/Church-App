@@ -108,7 +108,8 @@ RSVP, duties (with bot notices), burning outline colour any / rainbow / two-colo
 bot-managed Telegram chat, pin to the main page, picture/PDF export.
 
 Bot pictures of events: the cover photo when there is one, else the phone-drawn poster
-(`eventPictureId`); `capturePoster` refuses blank/black drawings and leaves moving effects out.
+(`eventPictureId`); `capturePoster` refuses blank/black drawings and leaves moving effects out;
+it draws photos itself (iPhones drop them): mark poster photos `data-shot="under"` / `"top"`.
 
 **Live & reminders** — LIVE badge (pulsing, outline kept) while an event/meeting is on;
 "🔴 LIVE now" bot message at the start (`lib/liveNotice.ts`, `live_notified_at`, skipped if

@@ -135,6 +135,7 @@ export function PosterMedia({
         src={p.url}
         alt=""
         loading="lazy"
+        data-shot={i === shown.length - 1 && extra > 0 ? undefined : 'under'}
         className="absolute inset-0 h-full w-full object-cover"
       />
       {i === shown.length - 1 && extra > 0 && (

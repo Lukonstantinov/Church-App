@@ -249,6 +249,7 @@ export const MeetingPoster = forwardRef<
               key={i}
               src={sp.photoUrl!}
               alt=""
+              data-shot="under"
               className={`h-full w-full object-cover ${collage.length === 3 && i === 0 ? 'row-span-2' : ''}`}
             />
           ))}
@@ -279,6 +280,7 @@ export const MeetingPoster = forwardRef<
           <img
             src={look.logoUrl}
             alt=""
+            data-shot="top"
             className="h-14 w-14 rounded-2xl bg-white object-contain p-1"
           />
         )}
