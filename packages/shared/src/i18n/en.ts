@@ -266,6 +266,7 @@ export const en: Messages = {
     cameOf: (a: number, b: number) => `${a} of ${b} came`,
   },
   meetings: {
+    pictureTitle: 'Picture with the message',
     askRsvp: 'Ask "Will you come?"',
     askRsvpHint: 'The message gets "I\'ll come" / "Can\'t" buttons. The answers come to you.',
     rsvpTitle: 'Who is coming',
@@ -1256,6 +1257,8 @@ export const en: Messages = {
     exemptNote: 'You are exempt from dues',
   },
   events: {
+    pictureTitle: 'Picture with the reminder',
+    picture: { none: 'No picture', still: 'Poster', moving: '🎬 Animated poster' },
     dutyLeader: 'Duty leader',
     exportTitle: 'Poster and lists',
     exportPicture: 'Picture to chat',
@@ -1648,8 +1651,16 @@ export const en: Messages = {
       design: 'Designer: posters, templates and the look of meetings, events and posts',
     },
   },
+  posterText: {
+    title: 'Text on the poster',
+    mode: { design: 'The design’s text', custom: 'Own text', none: 'No text — just the picture' },
+    hint: 'First line big, the rest smaller',
+    font: 'Font',
+    size: { s: 'Small', m: 'Medium', l: 'Large' },
+    place: { top: 'Top', middle: 'Middle', bottom: 'Bottom' },
+  },
   motionExport: {
-    textLabel: 'Text under the poster',
+    textLabel: 'Message text — under the poster in the chat',
     toLabel: 'To',
     to: {
       me: 'Me',

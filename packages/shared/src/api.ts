@@ -762,6 +762,11 @@ export const remindEventSchema = z.object({
   roster: z.boolean().optional(),
   /** Send it with the event's poster (default: yes, when it has one). */
   poster: z.boolean().optional(),
+  /**
+   * A moving poster recorded for this reminder (a short video stored for the ministry):
+   * sent instead of the still poster.
+   */
+  posterMediaId: z.number().int().positive().nullish(),
 });
 export type RemindEventInput = z.input<typeof remindEventSchema>;
 

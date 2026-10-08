@@ -268,6 +268,7 @@ export const lt: Messages = {
     cameOf: (a: number, b: number) => `atėjo ${a} iš ${b}`,
   },
   meetings: {
+    pictureTitle: 'Paveikslas prie žinutės',
     askRsvp: 'Paklausti „Ar ateisite?“',
     askRsvpHint: 'Žinutėje bus mygtukai „Ateisiu“ / „Negalėsiu“. Atsakymai ateis jums.',
     rsvpTitle: 'Kas ateis',
@@ -1282,6 +1283,8 @@ export const lt: Messages = {
     exemptNote: 'Jūs atleisti nuo nario mokesčio',
   },
   events: {
+    pictureTitle: 'Paveikslas prie priminimo',
+    picture: { none: 'Be paveikslo', still: 'Plakatas', moving: '🎬 Animuotas plakatas' },
     dutyLeader: 'Tarnystės vadovas',
     exportTitle: 'Plakatas ir sąrašai',
     exportPicture: 'Paveikslėlis į pokalbį',
@@ -1683,8 +1686,20 @@ export const lt: Messages = {
       design: 'Dizaineris: plakatai, šablonai ir susitikimų, renginių bei įrašų išvaizda',
     },
   },
+  posterText: {
+    title: 'Tekstas ant plakato',
+    mode: {
+      design: 'Dizaino tekstas',
+      custom: 'Savas tekstas',
+      none: 'Be teksto — tik paveikslas',
+    },
+    hint: 'Pirma eilutė — didelė, kitos — mažesnės',
+    font: 'Šriftas',
+    size: { s: 'Mažas', m: 'Vidutinis', l: 'Didelis' },
+    place: { top: 'Viršuje', middle: 'Centre', bottom: 'Apačioje' },
+  },
   motionExport: {
-    textLabel: 'Tekstas po plakatu',
+    textLabel: 'Žinutės tekstas — po plakatu pokalbyje',
     toLabel: 'Kam',
     to: {
       me: 'Man',

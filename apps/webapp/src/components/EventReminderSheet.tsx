@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { displayName } from '@church/shared';
 import { useT } from '../lib/i18n';
 import {
@@ -9,7 +9,15 @@ import {
   useRequestRemindEvent,
   useTestRemindEvent,
 } from '../lib/queries';
+import { recordPosterVideo } from '../lib/movingPoster';
 import { haptic } from '../lib/telegram';
+import {
+  EventMotionPoster,
+  LivePreview,
+  eventPosterModes,
+  useEventPosterText,
+} from './MotionExport';
+import { PosterTextControls, posterText, type PosterTextValue } from './PosterText';
 import {
   AudienceChoice,
   audienceEmpty,
@@ -52,8 +60,22 @@ export function EventReminderSheet({
   const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
   const [done, setDone] = useState<number | null>(null);
   const [withRoster, setWithRoster] = useState(false);
-  const [withPoster, setWithPoster] = useState(true);
   const picture = detail.data?.botPictureUrl ?? null;
+  // The picture with the message: none, the poster, or the poster moving (recorded now).
+  const moves = !!detail.data?.motion && detail.data.motion !== 'off';
+  const [pic, setPic] = useState<'none' | 'still' | 'moving' | null>(null);
+  const shown = pic ?? (picture ? 'still' : 'none');
+  const movingNode = useRef<HTMLDivElement>(null);
+  const modes = detail.data ? eventPosterModes(detail.data) : (['custom', 'none'] as const);
+  const [style, setStyle] = useState<PosterTextValue | null>(null);
+  const [ownWords, setOwnWords] = useState<string | null>(null);
+  const posterWords = useEventPosterText();
+  const preset = detail.data ? posterWords(detail.data) : '';
+  const words: PosterTextValue = {
+    ...(style ?? posterText('', modes[0])),
+    text: ownWords ?? preset,
+  };
+  const [recording, setRecording] = useState<number | null>(null);
 
   const serving = [
     ...new Set((detail.data?.roles ?? []).flatMap((r) => r.assignees.map((a) => a.id))),
@@ -89,14 +111,28 @@ export function EventReminderSheet({
 
   /** Sends it to everyone, only to oneself (a test), or for approval. */
   async function run(mode: 'send' | 'test' | 'request') {
-    const input = {
-      id: eventId,
-      text: text.trim() || undefined,
-      userIds: audienceIds(audience, presets),
-      roster: withRoster,
-      poster: withPoster && !!picture,
-    };
     try {
+      // The moving poster is recorded now and stored for the ministry; a phone that can't
+      // make videos sends the still poster.
+      let posterMediaId: number | null = null;
+      if (shown === 'moving' && movingNode.current) {
+        setRecording(0);
+        try {
+          await new Promise((r) => setTimeout(r, 300));
+          posterMediaId = await recordPosterVideo(movingNode.current, groupId, setRecording);
+          if (!posterMediaId) toast(t.motionExport.noVideo);
+        } finally {
+          setRecording(null);
+        }
+      }
+      const input = {
+        id: eventId,
+        text: text.trim() || undefined,
+        userIds: audienceIds(audience, presets),
+        roster: withRoster,
+        poster: shown !== 'none' && (!!posterMediaId || !!picture),
+        posterMediaId,
+      };
       if (mode === 'test') {
         const res = await test.mutateAsync(input);
         if (res.sent === 0) throw new Error('unreachable');
@@ -150,22 +186,51 @@ export function EventReminderSheet({
             {t.meetings.signatureHint} <i>{t.bot.sentBy(displayName(me.data.user))}</i>
           </p>
         )}
-        {/* The poster goes with the message (as the picture, the text under it). */}
+        {/* The picture goes with the message (the text under it): none, the poster, or
+            the poster moving — previewed live, with its own words on it or none. */}
         {detail.data && (
-          <div className="overflow-hidden rounded-xl bg-hairline/60">
-            {picture ? (
+          <div className="flex flex-col gap-2 rounded-xl bg-hairline/60 p-3">
+            <div className="text-[13px] font-semibold">{t.events.pictureTitle}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {(['none', 'still', 'moving'] as const)
+                .filter((k) => (k === 'still' ? !!picture : k === 'moving' ? moves : true))
+                .map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => {
+                      haptic.tap();
+                      setPic(k);
+                    }}
+                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold ${
+                      shown === k ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                    }`}
+                  >
+                    {t.events.picture[k]}
+                  </button>
+                ))}
+            </div>
+            {shown === 'still' && picture && (
+              <img src={picture} alt="" className="max-h-56 w-full rounded-lg object-cover" />
+            )}
+            {shown === 'moving' && (
               <>
-                <Toggle label={t.events.withPoster} checked={withPoster} onChange={setWithPoster} />
-                {withPoster && (
-                  <img
-                    src={picture}
-                    alt=""
-                    className="mx-4 mb-3 mt-1 max-h-40 w-[calc(100%-2rem)] rounded-lg object-cover"
-                  />
-                )}
+                <LivePreview node={movingNode}>
+                  <EventMotionPoster e={detail.data} text={words} />
+                </LivePreview>
+                <PosterTextControls
+                  value={words}
+                  preset={preset}
+                  modes={[...modes]}
+                  onChange={(v) => {
+                    setStyle(v);
+                    if (v.text !== words.text) setOwnWords(v.text);
+                  }}
+                />
               </>
-            ) : (
-              <p className="px-4 py-3 text-[13px] leading-snug text-hint">{t.events.noPoster}</p>
+            )}
+            {!picture && !moves && (
+              <p className="text-[13px] leading-snug text-hint">{t.events.noPoster}</p>
             )}
           </div>
         )}
@@ -188,6 +253,18 @@ export function EventReminderSheet({
           <div className="flex items-center justify-center gap-1.5 py-2 text-[15px] font-semibold text-present">
             <IconCheck size={18} />{' '}
             {done !== null ? t.events.remindSent(done) : t.publish.requested(requested ?? 0)}
+          </div>
+        ) : recording !== null ? (
+          <div className="flex flex-col gap-1.5 py-1">
+            <div className="h-2 overflow-hidden rounded-full bg-hairline">
+              <div
+                className="h-full rounded-full bg-[var(--brand)] transition-[width] duration-200"
+                style={{ width: `${Math.round(recording * 100)}%` }}
+              />
+            </div>
+            <div className="text-center text-[13px] text-hint">
+              {t.motionExport.recording(Math.round(recording * 100))}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2">

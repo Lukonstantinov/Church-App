@@ -393,14 +393,16 @@ groupRoutes.patch('/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-/** A part's look recorded as a looping video (Design studio), stored for this ministry. */
+/** A looping video stored for this ministry: a studio part's look, or a moving poster. */
 groupRoutes.post('/:id/loops', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
   const group = await loadGroupOr404(db, idParam(c));
   const perms = (await accessIn(db, user, group.id)).perms;
-  if (!perms.has('design') && !perms.has('settings'))
-    throw new HTTPException(403, { message: 'forbidden' });
+  // Designers and settings (studio parts), and those who send announcements or reminders
+  // with a moving poster recorded for them.
+  const may = ['design', 'settings', 'announce', 'meetings.manage', 'events.manage'] as const;
+  if (!may.some((p) => perms.has(p))) throw new HTTPException(403, { message: 'forbidden' });
   const bytes = await readLoopUpload(c.req, LOOP_MAX_BYTES);
   const id = await storeMedia(db, {
     groupId: group.id,

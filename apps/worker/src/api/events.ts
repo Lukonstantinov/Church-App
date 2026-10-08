@@ -331,6 +331,7 @@ eventRoutes.post('/:id/remind', async (c) => {
   const { db, user, event } = await remindable(c, idParam(c), 'publish');
   if (event.status === 'cancelled') throw new HTTPException(409, { message: 'cancelled' });
   const input = await parseBody(c, remindEventSchema);
+  if (input.posterMediaId) await assertGroupMedia(db, event.groupId, input.posterMediaId);
   const { total: sent, bot } = await publishEvent(db, {
     event,
     input,
@@ -351,12 +352,14 @@ eventRoutes.post('/:id/remind', async (c) => {
 eventRoutes.post('/:id/remind/test', async (c) => {
   const { db, user, event } = await remindable(c, idParam(c), 'prepare');
   const input = await parseBody(c, remindEventSchema);
+  if (input.posterMediaId) await assertGroupMedia(db, event.groupId, input.posterMediaId);
   const { bot } = await sendEventReminder(db, {
     event,
     group: { id: event.groupId },
     text: input.text,
     roster: input.roster,
     poster: input.poster,
+    posterMediaId: input.posterMediaId,
     senderName: displayName(user),
     envAppUrl: c.env.APP_URL,
     fallbackUrl: appUrlFor(c.env, c.req.url),
@@ -371,6 +374,7 @@ eventRoutes.post('/:id/remind/request', async (c) => {
   const { db, user, event } = await remindable(c, idParam(c), 'prepare');
   if (event.status === 'cancelled') throw new HTTPException(409, { message: 'cancelled' });
   const input = await parseBody(c, remindEventSchema);
+  if (input.posterMediaId) await assertGroupMedia(db, event.groupId, input.posterMediaId);
   const res = await requestPublish(db, {
     kind: 'event',
     item: event,

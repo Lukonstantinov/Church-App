@@ -119,7 +119,9 @@ it draws photos itself (iPhones drop them): mark poster photos `data-shot="under
 Moving posters: `lib/recorder.ts` records a poster's effects as a seamless MP4 loop (WebCodecs + mp4-muxer;
 GIF via gifenc) — «🎬 Анимированный постер» in the announce sheet / event export, sent by the bot
 (`POST /api/me/animation`, editable caption; publishers can send it on to chosen people / the ministry / the church /
-those serving — `?to=`, `lib/posterSend.ts`, same file_id via the outbox); effects are `.living-clip` layers stepped through time (`seekParticles`).
+those serving — `?to=`, `lib/posterSend.ts`, same file_id via the outbox); a live preview with text on it
+(design's own / own words with font, size, place / none — `PosterText.tsx`, `LivePreview`), also for reminders and
+announcements (picture: none / poster / animated, `posterMediaId`, `lib/movingPoster.ts`); effects are `.living-clip` layers stepped through time (`seekParticles`).
 Studio parts with one block a screen (`BAKE_PARTS`) can be recorded as a looping video (`baked` on the
 part's look, `bakeKey`/`freshLoop`; `/api/groups/:id/loops`, `/api/church/loops`; public `/media/v/:id`
 with byte ranges): SkinLayer plays it instead of the live layers.

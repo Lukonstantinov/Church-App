@@ -271,6 +271,7 @@ export const ru = {
     cameOf: (a: number, b: number) => `пришли ${a} из ${b}`,
   },
   meetings: {
+    pictureTitle: 'Картинка к сообщению',
     askRsvp: 'Спросить «Придёте?»',
     askRsvpHint: 'В сообщении будут кнопки «Буду» / «Не смогу». Ответы придут вам.',
     rsvpTitle: 'Кто придёт',
@@ -1267,6 +1268,8 @@ export const ru = {
     exemptNote: 'Вы освобождены от взносов',
   },
   events: {
+    pictureTitle: 'Картинка к напоминанию',
+    picture: { none: 'Без картинки', still: 'Постер', moving: '🎬 Анимированный постер' },
     dutyLeader: 'Лидер служения',
     exportTitle: 'Афиша и списки',
     exportPicture: 'Картинка в чат',
@@ -1665,8 +1668,20 @@ export const ru = {
       design: 'Дизайнер: постеры, шаблоны и оформление встреч, событий и постов',
     },
   },
+  posterText: {
+    title: 'Текст на постере',
+    mode: {
+      design: 'Текст оформления',
+      custom: 'Свой текст',
+      none: 'Без текста — только картинка',
+    },
+    hint: 'Первая строка — крупно, остальные — мельче',
+    font: 'Шрифт',
+    size: { s: 'Мелкий', m: 'Средний', l: 'Крупный' },
+    place: { top: 'Сверху', middle: 'По центру', bottom: 'Снизу' },
+  },
   motionExport: {
-    textLabel: 'Текст под постером',
+    textLabel: 'Текст сообщения — под постером в чате',
     toLabel: 'Кому',
     to: {
       me: 'Мне',

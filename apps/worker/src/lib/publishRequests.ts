@@ -115,6 +115,7 @@ export async function publishEvent(
     userIds: input.userIds,
     roster: input.roster,
     poster: input.poster,
+    posterMediaId: input.posterMediaId,
     senderName: displayName(sender),
     envAppUrl: args.envAppUrl,
     fallbackUrl: args.fallbackUrl,
@@ -154,7 +155,10 @@ export async function requestPublish(
       ? ((input as AnnounceMeetingInput).posterMediaId ?? null)
       : (input as RemindEventInput).poster === false
         ? null
-        : (eventMovingId(item as Event) ?? eventPictureId(item as Event) ?? null);
+        : ((input as RemindEventInput).posterMediaId ??
+          eventMovingId(item as Event) ??
+          eventPictureId(item as Event) ??
+          null);
   await db
     .update(publishRequests)
     .set({ status: 'withdrawn' })

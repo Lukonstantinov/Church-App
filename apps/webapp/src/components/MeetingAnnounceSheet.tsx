@@ -12,7 +12,6 @@ import {
   useAnnounceMeeting,
   useMe,
   useMembers,
-  uploadLoop,
   useRequestAnnounceMeeting,
   useTestAnnounceMeeting,
   useUploadMedia,
@@ -27,11 +26,19 @@ import {
 } from './AudienceChoice';
 import { IconCheck, IconSend } from './icons';
 import { MeetingPoster, PosterPhotoWarning } from './MeetingPoster';
-import { MotionExport } from './MotionExport';
-import { FullMotion } from '../lib/perf';
+import { LivePreview, MotionExport } from './MotionExport';
+import { recordPosterVideo } from '../lib/movingPoster';
+import { useFmt } from '../lib/format';
+import {
+  PosterTextControls,
+  PosterTextLayer,
+  posterText,
+  type PosterTextMode,
+  type PosterTextValue,
+} from './PosterText';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
-import { Button, Switch, Toggle } from './ui';
+import { Button, Switch } from './ui';
 
 /**
  * Tell the ministry about a meeting: the message (who leads, the topic, when and where)
@@ -58,6 +65,7 @@ export function MeetingAnnounceSheet({
   canPublish?: boolean;
 }) {
   const t = useT();
+  const f = useFmt();
   const toast = useToast();
   const me = useMe();
   const members = useMembers(meeting.groupId);
@@ -68,17 +76,33 @@ export function MeetingAnnounceSheet({
   const poster = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
-  const [withPoster, setWithPoster] = useState(notice !== 'cancelled');
+  // The picture with the message: none, the poster, or the poster moving (recorded now).
+  const [pic, setPic] = useState<'none' | 'still' | 'moving'>(
+    notice === 'cancelled' ? 'none' : 'still',
+  );
+  const withPoster = pic !== 'none';
+  const animated = pic === 'moving';
+  // The words on the poster: its own design, own words (prepared), or none.
+  const modes: PosterTextMode[] = meeting.poster
+    ? ['design', 'custom']
+    : ['design', 'custom', 'none'];
+  const [style, setStyle] = useState<PosterTextValue>(() => posterText('', 'design'));
+  const [ownWords, setOwnWords] = useState<string | null>(null);
+  const preset = [
+    meeting.title,
+    `${f.weekdayDayMonth(meeting.startsAt)} · ${f.timeRange(meeting.startsAt, meeting.endsAt)}`,
+    meeting.topic ? `«${meeting.topic}»` : null,
+    meeting.location ? `📍 ${meeting.location}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const words: PosterTextValue = { ...style, text: ownWords ?? preset };
   // A leaders' meeting (or one for chosen people) asks who will come by default.
   const [ask, setAsk] = useState(notice !== 'cancelled' && meeting.audience !== null);
   const [audience, setAudience] = useState<Audience>({ kind: 'all', chosen: [] });
   const [busy, setBusy] = useState<'poster' | 'send' | 'test' | null>(null);
   const [done, setDone] = useState<number | null>(null);
   const [requested, setRequested] = useState<number | null>(null);
-  // Recording the moving poster: its effects run in full whatever the phone's setting.
-  const [recording, setRecording] = useState(false);
-  // Send the poster moving (with its effects) instead of a still picture.
-  const [animated, setAnimated] = useState(false);
   const [recordProgress, setRecordProgress] = useState<number | null>(null);
 
   const leaders = (members.data ?? [])
@@ -117,21 +141,13 @@ export function MeetingAnnounceSheet({
     // The moving poster: recorded as a loop (it plays like a GIF in Telegram). A phone that
     // can't make videos, or a poster without effects, sends the still picture.
     if (animated) {
-      setRecording(true);
+      setRecordProgress(0);
       try {
-        await new Promise((r) => setTimeout(r, 400));
-        const { hasEffects, recordLoop } = await import('../lib/recorder');
-        if (hasEffects(poster.current)) {
-          const rec = await recordLoop(poster.current, {
-            quality: 0.09,
-            onProgress: setRecordProgress,
-          });
-          if (rec.mp4) return (await uploadLoop(meeting.groupId, rec.mp4)).id;
-        }
+        const id = await recordPosterVideo(poster.current, meeting.groupId, setRecordProgress);
+        if (id) return id;
       } catch (err) {
         console.warn('moving poster failed', err);
       } finally {
-        setRecording(false);
         setRecordProgress(null);
       }
     }
@@ -227,54 +243,69 @@ export function MeetingAnnounceSheet({
           </p>
         )}
         {group && (
-          <div className="overflow-hidden rounded-2xl ring-1 ring-hairline">
-            <div className="px-1">
-              <Toggle label={t.events.withPoster} checked={withPoster} onChange={setWithPoster} />
+          <div className="flex flex-col gap-2 rounded-2xl p-3 ring-1 ring-hairline">
+            <div className="text-[13px] font-semibold">{t.meetings.pictureTitle}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {(['none', 'still', 'moving'] as const)
+                .filter((k) => k !== 'moving' || notice !== 'cancelled')
+                .map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => {
+                      haptic.tap();
+                      setPic(k);
+                    }}
+                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold ${
+                      pic === k ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                    }`}
+                  >
+                    {t.events.picture[k]}
+                  </button>
+                ))}
             </div>
             {withPoster && (
-              <div className="flex justify-center bg-hairline/50 py-3">
-                {/* Shown at half size; captured at full size. */}
-                <div className="h-[338px] w-[270px] overflow-hidden rounded-xl shadow-card">
-                  <div className="origin-top-left scale-50">
-                    <FullMotion.Provider value={recording}>
-                      <MeetingPoster
-                        ref={poster}
-                        m={meeting}
-                        g={group}
-                        cancelled={notice === 'cancelled'}
-                      />
-                    </FullMotion.Provider>
-                  </div>
-                </div>
-              </div>
-            )}
-            {withPoster && <PosterPhotoWarning m={meeting} />}
-            {withPoster && notice !== 'cancelled' && (
-              <div className="px-1">
-                <Toggle
-                  label={t.motionExport.sendMoving}
-                  checked={animated}
-                  onChange={setAnimated}
+              <>
+                {/* The poster live (moving as it will be recorded); the still picture is
+                    taken from it too. */}
+                <LivePreview node={poster} width={540}>
+                  <MeetingPoster
+                    m={meeting}
+                    g={group}
+                    cancelled={notice === 'cancelled'}
+                    bare={words.mode !== 'design'}
+                  >
+                    <PosterTextLayer value={words} scale={1.35} />
+                  </MeetingPoster>
+                </LivePreview>
+                <PosterPhotoWarning m={meeting} />
+                <PosterTextControls
+                  value={words}
+                  preset={preset}
+                  modes={modes}
+                  onChange={(v) => {
+                    setStyle(v);
+                    if (v.text !== words.text) setOwnWords(v.text);
+                  }}
                 />
-                <p className="-mt-1 px-4 pb-2 text-[12px] leading-snug text-hint">
-                  {t.motionExport.sendMovingHint}
-                </p>
-              </div>
+                {animated && (
+                  <p className="text-[12px] leading-snug text-hint">
+                    {t.motionExport.sendMovingHint}
+                  </p>
+                )}
+              </>
             )}
             {withPoster && notice !== 'cancelled' && (
-              <div className="px-3 pb-3">
-                <MotionExport
-                  node={poster}
-                  name={meeting.title}
-                  caption={text.trim() || meeting.title}
-                  onRecording={setRecording}
-                  share={
-                    canPublish
-                      ? { kind: 'meeting', id: meeting.id, groupId: meeting.groupId }
-                      : undefined
-                  }
-                />
-              </div>
+              <MotionExport
+                node={poster}
+                name={meeting.title}
+                caption={text.trim() || meeting.title}
+                share={
+                  canPublish
+                    ? { kind: 'meeting', id: meeting.id, groupId: meeting.groupId }
+                    : undefined
+                }
+              />
             )}
           </div>
         )}

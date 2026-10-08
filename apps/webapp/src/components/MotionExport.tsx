@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { displayName, type PosterAudience } from '@church/shared';
 import type { EventDetail, EventSummary } from '@church/shared';
 import { FullMotion } from '../lib/perf';
@@ -6,7 +6,15 @@ import { CoverPicture } from './CoverSlideshow';
 import { useT } from '../lib/i18n';
 import { sendAnimationToChat, useContacts, useCoverLoop, useMe } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
-import { EventCover, EventHeroText, useEventWhen } from './EventCard';
+import { EventCover, useEventWhen } from './EventCard';
+import {
+  PosterTextControls,
+  PosterTextLayer,
+  posterText,
+  type PosterTextMode,
+  type PosterTextValue,
+} from './PosterText';
+import { fontFamily } from '@church/shared';
 import { useToast } from './Toast';
 import { Button, TextArea } from './ui';
 
@@ -36,13 +44,27 @@ const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
  * phone's graphics setting.
  */
 export function MotionExport({
-  node,
+  node: outer,
+  preview,
   name,
   caption,
   onRecording,
   share,
 }: {
-  node: RefObject<HTMLElement | null>;
+  /** The poster to record, drawn by the caller (no preview here). */
+  node?: RefObject<HTMLElement | null>;
+  /**
+   * Or the poster drawn here: a live preview (moving, as it will be recorded) with the
+   * words on it to switch off, change, and set in another font, size and place.
+   */
+  preview?: {
+    preset: string;
+    render: (text: PosterTextValue) => ReactNode;
+    /** The text choices (default: own words or none). */
+    modes?: PosterTextMode[];
+    /** Laid out this wide (default 400). */
+    width?: number;
+  };
   name: string;
   caption?: string;
   onRecording?: (on: boolean) => void;
@@ -55,6 +77,14 @@ export function MotionExport({
   const t = useT();
   const toast = useToast();
   const me = useMe();
+  const own = useRef<HTMLDivElement>(null);
+  const node = outer ?? own;
+  // The words on the poster: prepared from the event until the person changes them.
+  const [style, setStyle] = useState<PosterTextValue>(() =>
+    posterText('', preview?.modes?.[0] ?? 'custom'),
+  );
+  const [ownWords, setOwnWords] = useState<string | null>(null);
+  const words: PosterTextValue = { ...style, text: ownWords ?? preview?.preset ?? '' };
   // The text under the poster: prepared from the event/meeting, editable; follows the
   // prepared text until the person changes it.
   const [ownText, setOwnText] = useState<string | null>(null);
@@ -144,6 +174,24 @@ export function MotionExport({
     <div className="flex flex-col gap-2 rounded-2xl p-3 ring-1 ring-hairline">
       <div className="text-[15px] font-semibold">{t.motionExport.title}</div>
       <p className="text-[12px] leading-snug text-hint">{t.motionExport.hint}</p>
+      {preview && (
+        <>
+          <LivePreview node={own} width={preview.width}>
+            {preview.render(words)}
+          </LivePreview>
+          {!busy && (
+            <PosterTextControls
+              value={words}
+              preset={preview.preset}
+              modes={preview.modes}
+              onChange={(v) => {
+                setStyle(v);
+                if (v.text !== words.text) setOwnWords(v.text);
+              }}
+            />
+          )}
+        </>
+      )}
       {busy ? (
         <div className="flex flex-col gap-1.5 py-1">
           <div className="h-2 overflow-hidden rounded-full bg-hairline">
@@ -241,48 +289,100 @@ export function MotionExport({
   );
 }
 
+/** Width the moving posters are laid out at (recorded sharper, previewed smaller). */
+const POSTER_W = 400;
+
 /**
- * An event's cover as a poster to record (laid out at phone size, recorded sharper), always
- * with what, when and where: the poster template, the designed cover or
- * the cover photo with its effects (a photo gets the title, date and place over it).
+ * The poster live, as it will be recorded: laid out at its full width and shrunk to fit,
+ * with its effects running in full. The recording is made from this very copy.
  */
-export function EventMotionPoster({
-  e,
-  ref,
+export function LivePreview({
+  node,
+  children,
+  width = POSTER_W,
 }: {
-  e: EventSummary;
-  ref: RefObject<HTMLDivElement | null>;
+  node: RefObject<HTMLDivElement | null>;
+  children: ReactNode;
+  /** Laid out this wide, shown smaller to fit. */
+  width?: number;
 }) {
-  const when = useEventWhen();
-  const photo = !!e.coverUrl && !e.poster;
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const outerEl = box.current;
+    const inner = node.current;
+    if (!outerEl || !inner) return;
+    const measure = () => setSize({ w: outerEl.clientWidth, h: inner.offsetHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(outerEl);
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [node]);
+  const k = size.w ? Math.min(1, size.w / width) : 1;
   return (
-    <div ref={ref} className="relative w-[400px] overflow-hidden bg-black text-white">
-      {/* The shape, shade and name block of the event screen's cover, so the poster shows
-          the photo framed exactly as in the app. */}
+    <div
+      ref={box}
+      className="w-full overflow-hidden rounded-xl bg-black"
+      style={{ height: size.h ? size.h * k : undefined }}
+    >
+      <div style={{ width, transform: `scale(${k})`, transformOrigin: 'top left' }}>
+        <FullMotion.Provider value>
+          <div
+            ref={node}
+            className="relative overflow-hidden bg-black text-white"
+            style={{ width }}
+          >
+            {children}
+          </div>
+        </FullMotion.Provider>
+      </div>
+    </div>
+  );
+}
+
+/** What / when / where of an event, as the words prepared for its moving poster. */
+export function useEventPosterText() {
+  const when = useEventWhen();
+  return (e: EventSummary) =>
+    [e.title, when(e), e.location ? `📍 ${e.location}` : null].filter(Boolean).join('\n');
+}
+
+/** The text choices of an event's poster: a designed cover shows its own title. */
+export const eventPosterModes = (e: EventSummary): PosterTextMode[] =>
+  e.coverUrl && !e.poster ? ['custom', 'none'] : ['design', 'custom'];
+
+/**
+ * An event's cover as a moving poster: the photo framed as on the event screen with the
+ * words over it — or a designed cover / poster template (which shows its own title) with
+ * the words in a band under it. Without words, just the picture and its effects.
+ */
+export function EventMotionPoster({ e, text }: { e: EventSummary; text: PosterTextValue }) {
+  const photo = !!e.coverUrl && !e.poster;
+  const [head, ...rest] = text.text.trim().split('\n');
+  return (
+    <>
       <EventCover
         e={{ ...e, coverLoop: null }}
         className={photo || e.poster ? 'aspect-[4/3]' : undefined}
       />
-      {photo && (
-        <>
-          <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 p-5">
-            <EventHeroText e={e} />
-          </div>
-        </>
-      )}
-      {/* A designed cover or poster template shows its own title: the date and place go
-          in a band under it, so the shared poster still says when and where. */}
-      {!photo && (
-        <div className="flex flex-col gap-0.5 bg-[#111] px-5 py-3.5">
-          <div className="text-[11px] font-bold uppercase tracking-wider opacity-70">
-            {e.groupName}
-          </div>
-          <div className="text-[16px] font-semibold">{when(e)}</div>
-          {e.location && <div className="text-[14px] opacity-85">📍 {e.location}</div>}
+      {photo && <PosterTextLayer value={text} />}
+      {!photo && text.mode === 'custom' && text.text.trim() && (
+        <div
+          className="flex flex-col gap-0.5 bg-[#111] px-5 py-3.5"
+          style={{ fontFamily: fontFamily(text.font) }}
+        >
+          <div className="text-[16px] font-semibold">{head}</div>
+          {rest
+            .filter((l) => l.trim())
+            .map((l, i) => (
+              <div key={i} className="text-[14px] opacity-85">
+                {l}
+              </div>
+            ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 

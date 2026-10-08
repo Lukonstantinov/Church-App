@@ -184,6 +184,8 @@ export async function sendEventReminder(
     roster?: boolean;
     /** With the event's picture (default yes). */
     poster?: boolean;
+    /** A moving poster recorded for this reminder, instead of the event's picture. */
+    posterMediaId?: number | null;
     /** "It's live now" instead of a reminder. */
     live?: boolean;
     /** With `live`: pin the message until this time, then remove it. */
@@ -201,7 +203,9 @@ export async function sendEventReminder(
   const roster = await eventRoster(db, args.event.id);
   // The moving cover when one is recorded (it plays like a GIF), else the still picture.
   const picture =
-    args.poster === false ? null : (eventMovingId(args.event) ?? eventPictureId(args.event));
+    args.poster === false
+      ? null
+      : (args.posterMediaId ?? eventMovingId(args.event) ?? eventPictureId(args.event));
   let bot = 0;
   for (const r of list) {
     const locale = localeOf({ locale: r.locale }, fallback);

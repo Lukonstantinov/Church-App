@@ -96,4 +96,41 @@ describe('moving poster to others', () => {
     expect((await send(`to=group&kind=event&id=${eventId}`, b)).status).toBe(403);
     expect((await send('to=me', b)).status).toBe(200);
   });
+
+  it('a reminder can carry a moving poster recorded for it', async () => {
+    const g = await createEnv('Напоминания');
+    const a = fakeUser('Вера');
+    await join(a, g);
+    const { id: eventId } = await apiJson<{ id: number }>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'Вечер', date: '2030-07-01', startTime: '19:00' },
+    });
+    const mp4 = Uint8Array.from([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 1]);
+    const { id: posterMediaId } = (await (
+      await api(`/api/groups/${g.id}/loops`, { method: 'POST', user: ADMIN, body: mp4 })
+    ).json()) as { id: number };
+    calls.length = 0;
+    await apiJson(`/api/events/${eventId}/remind`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { text: 'Ждём вас!', posterMediaId },
+    });
+    await drainOutbox(getDb(env.DB), botApi(env), { limit: 50 });
+    // Played as an animation in the chat, with the reminder under it.
+    const anim = callsTo(calls, 'sendAnimation').find((c) => c.body.chat_id === a.id);
+    expect(anim).toBeTruthy();
+    expect(String(anim!.body.caption)).toContain('Ждём вас!');
+    // Another ministry's video can't be used.
+    const other = await createEnv('Чужие');
+    const { id: theirs } = (await (
+      await api(`/api/groups/${other.id}/loops`, { method: 'POST', user: ADMIN, body: mp4 })
+    ).json()) as { id: number };
+    const res = await api(`/api/events/${eventId}/remind`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { text: 'x', posterMediaId: theirs },
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
 });

@@ -4,7 +4,13 @@ import { useEnv } from '../lib/env';
 import { eventRosterXlsx, posterPdf } from '../lib/eventFiles';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
-import { sendDocumentToChat, sendPictureToChat, useGroup, useMe } from '../lib/queries';
+import {
+  fetchReminderText,
+  sendDocumentToChat,
+  sendPictureToChat,
+  useGroup,
+  useMe,
+} from '../lib/queries';
 import { haptic } from '../lib/telegram';
 import { useEventWhen } from './EventCard';
 import { EventSheet, SHEET_WIDTH, availableParts, type SheetPart } from './EventSheet';
@@ -13,8 +19,14 @@ import { IconCheck, IconSend } from './icons';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
 import { Button } from './ui';
-import { CoverLoopSection, EventMotionPoster, MotionExport } from './MotionExport';
-import { FullMotion } from '../lib/perf';
+import { useQuery } from '@tanstack/react-query';
+import {
+  CoverLoopSection,
+  EventMotionPoster,
+  MotionExport,
+  eventPosterModes,
+  useEventPosterText,
+} from './MotionExport';
 
 type Job = 'picture' | 'file' | 'pdf' | 'excel';
 
@@ -32,8 +44,12 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
   const group = useGroup(e.groupId);
   const when = useEventWhen();
   const node = useRef<HTMLDivElement>(null);
-  const motionNode = useRef<HTMLDivElement>(null);
-  const [recording, setRecording] = useState(false);
+  const posterWords = useEventPosterText();
+  const reminderText = useQuery({
+    queryKey: ['events', e.id, 'reminder-text'],
+    queryFn: () => fetchReminderText(e.id),
+    enabled: e.canPrepare || e.canPublish,
+  });
   const [busy, setBusy] = useState<Job | null>(null);
   // What the picture shows under the poster: everything except the money, to start with.
   const available = availableParts(e);
@@ -157,22 +173,16 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
             </div>
           </div>
         )}
-        {/* The cover at full size, off screen and only while recording: the moving poster
-            is recorded from it. */}
-        {recording && (
-          <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0 }}>
-            <FullMotion.Provider value>
-              <EventMotionPoster e={e} ref={motionNode} />
-            </FullMotion.Provider>
-          </div>
-        )}
+        {/* The moving poster, previewed live: words on it optional and editable; the
+            message under it is the reminder's text for those who may send reminders. */}
         <MotionExport
-          node={motionNode}
+          preview={{
+            preset: posterWords(e),
+            modes: eventPosterModes(e),
+            render: (text) => <EventMotionPoster e={e} text={text} />,
+          }}
           name={e.title}
-          caption={[e.title, when(e), e.location ? `📍 ${e.location}` : null]
-            .filter(Boolean)
-            .join('\n')}
-          onRecording={setRecording}
+          caption={reminderText.data?.text ?? posterWords(e)}
           share={e.canPublish ? { kind: 'event', id: e.id, groupId: e.groupId } : undefined}
         />
         <CoverLoopSection e={e} />
