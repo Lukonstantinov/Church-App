@@ -2114,8 +2114,7 @@ export const en: Messages = {
     title: '🧪 Open as another role',
     menu: 'Open as another role',
     entry: 'See the app as a member, designer, leader…',
-    hint: 'The app opens as the test person “🧪 Tester” with the chosen position — the same rights and screens. The bot stays yours. Go back with the button at the top or the /testas command.',
-    personName: '🧪 Tester',
+    hint: 'The app opens exactly as a person with the chosen position sees it: your name and photo, but only their rights and screens. The bot stays yours. Go back with the button at the top or the /testas command.',
     admin: 'Church admin',
     adminHint: 'Everything, without the developer screens',
     member: 'Member without a position',
@@ -2129,7 +2128,7 @@ export const en: Messages = {
     now: 'Now',
     church: 'Whole church',
     botIntro:
-      '🧪 <b>Open the app as another role</b>\n\nPick a ministry and a position — the app opens as the test person “🧪 Tester” with those rights. The bot stays yours.',
+      '🧪 <b>Open the app as another role</b>\n\nPick a ministry and a position — the app opens exactly as a person with those rights sees it (with your name and photo). The bot stays yours.',
     botCurrent: (label: string) => `Now: <b>${label}</b>`,
     botChooseGroup: (group: string) => `🧪 <b>${group}</b>\nOpen the app as…`,
     botStarted: (label: string) =>

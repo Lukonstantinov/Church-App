@@ -190,7 +190,7 @@ logo. Phone notifications = bot messages (Telegram push).
 **Developer** — Telemetry screen (with app errors reported by `CrashGuard` → `client_errors`; a second guard
 wraps the whole app, index.html shows a Reload note if the script never starts, and a start that crashed makes
 the next one run Still once — safe start in `lib/perf.ts`), «🧪 open as another role» (`/testas` in the bot or the
-main page: the app works as the developer's test person `users.test_of` with a chosen position / pending / newcomer /
+main page: the app works as the developer's test person `users.test_of` (same name and photo) with a chosen position / pending / newcomer /
 admin, swapped in the auth middleware — `lib/testing.ts`, `realUser` stays the developer; amber bar to change or leave)
 and the Instructions screen (`screens/Guide.tsx`,
 content in `lib/guide.ts`): update the guide whenever a feature is added or changed.

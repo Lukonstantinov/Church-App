@@ -78,8 +78,8 @@ export const users = sqliteTable('users', {
   /** Their photo (a ministry picture), shown on meeting cards instead of initials. */
   photoMediaId: integer('photo_media_id'),
   /**
-   * A developer's test person ("🧪 Тестер"): the developer's user id. The developer opens
-   * the app as this person to try other roles (lib/testing.ts).
+   * A developer's test person (same name and photo as the developer): the developer's
+   * user id. The developer opens the app as this person to try other roles (lib/testing.ts).
    */
   testOf: integer('test_of'),
   /** On a developer: the test person the app opens as right now (NULL = themselves). */

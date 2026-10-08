@@ -2156,8 +2156,7 @@ export const lt: Messages = {
     title: '🧪 Atidaryti kaip kitą vaidmenį',
     menu: 'Atidaryti kaip kitą vaidmenį',
     entry: 'Pažiūrėti programėlę nario, dizainerio, vadovo akimis…',
-    hint: 'Programėlė atsidarys kaip bandomasis žmogus „🧪 Testuotojas“ su pasirinkta pareiga — tos pačios teisės ir ekranai. Botas lieka jūsų. Grįžti — mygtuku viršuje arba komanda /testas.',
-    personName: '🧪 Testuotojas',
+    hint: 'Programėlė atsidarys taip, kaip ją mato žmogus su pasirinkta pareiga: jūsų vardas ir nuotrauka, bet tik jo teisės ir ekranai. Botas lieka jūsų. Grįžti — mygtuku viršuje arba komanda /testas.',
     admin: 'Bažnyčios administratorius',
     adminHint: 'Viskas, bet be kūrėjo ekranų',
     member: 'Narys be pareigos',
@@ -2171,7 +2170,7 @@ export const lt: Messages = {
     now: 'Dabar',
     church: 'Visa bažnyčia',
     botIntro:
-      '🧪 <b>Atidaryti programėlę kaip kitą vaidmenį</b>\n\nPasirinkite tarnystę ir pareigą — programėlė atsidarys kaip bandomasis žmogus „🧪 Testuotojas“ su tomis teisėmis. Botas lieka jūsų.',
+      '🧪 <b>Atidaryti programėlę kaip kitą vaidmenį</b>\n\nPasirinkite tarnystę ir pareigą — programėlė atsidarys taip, kaip ją mato žmogus su tomis teisėmis (su jūsų vardu ir nuotrauka). Botas lieka jūsų.',
     botCurrent: (label: string) => `Dabar: <b>${label}</b>`,
     botChooseGroup: (group: string) => `🧪 <b>${group}</b>\nKuo atidaryti programėlę?`,
     botStarted: (label: string) =>

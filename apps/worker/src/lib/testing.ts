@@ -6,9 +6,10 @@ import { groups, memberships, positions, users, type User } from '../db/schema';
 import { churchDefaultLocale, localeOf } from './church';
 
 /**
- * Trying the app as someone else. A developer (ADMIN_TELEGRAM_IDS) has one test person,
- * "🧪 Тестер", a real member with a real membership, so every screen and every right
- * check works exactly as for that kind of person. While `testAs` is set on the developer,
+ * Trying the app as someone else. A developer (ADMIN_TELEGRAM_IDS) has one test person
+ * with the developer's own name, username and photo — a real member with a real
+ * membership, so every screen and every right check (and the greeting) is exactly what
+ * that kind of person sees; only the amber bar says it is a test. While `testAs` is set on the developer,
  * the app (not the bot) works as the test person; messages "to me" still reach the
  * developer's chat because the test person borrows their Telegram id for the request.
  */
@@ -52,15 +53,14 @@ export async function testOptions(db: Db, dev: User): Promise<TestAsOptions> {
   };
 }
 
-/** The developer's test person, made on first use. */
+/** The developer's test person, made on first use; looks like the developer. */
 async function personaOf(db: Db, dev: User): Promise<User> {
   const found = await db.query.users.findFirst({ where: eq(users.testOf, dev.id) });
   if (found) return found;
-  const t = messages(localeOf(dev, await churchDefaultLocale(db)));
   const [row] = await db
     .insert(users)
     .values({
-      firstName: t.testAs.personName,
+      firstName: dev.firstName,
       locale: dev.locale,
       testOf: dev.id,
       // No privacy question for a test person; no Telegram account of its own.
@@ -117,7 +117,16 @@ export async function startTesting(db: Db, dev: User, input: TestAsInput): Promi
   }
   await db
     .update(users)
-    .set({ isAdmin: input.kind === 'admin', locale: dev.locale })
+    .set({
+      isAdmin: input.kind === 'admin',
+      // As the developer looks now (name, photo, language), so nothing gives the test away.
+      firstName: dev.firstName,
+      lastName: dev.lastName,
+      username: dev.username,
+      photoMediaId: dev.photoMediaId,
+      languageCode: dev.languageCode,
+      locale: dev.locale,
+    })
     .where(eq(users.id, persona.id));
   await db.update(users).set({ testAs: persona.id }).where(eq(users.id, dev.id));
   return currentLabel(db, { ...dev, testAs: persona.id });
