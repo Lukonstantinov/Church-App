@@ -269,6 +269,42 @@ async function drawEffects(
   }
 }
 
+/**
+ * RGBA pixels as I420 video (BT.709, limited range): full-size brightness, then colour at
+ * half size each way. See-through pixels count as over black.
+ */
+function toI420(rgba: Uint8ClampedArray, w: number, h: number): Uint8Array {
+  const out = new Uint8Array((w * h * 3) / 2);
+  const uOff = w * h;
+  const vOff = uOff + (w * h) / 4;
+  for (let y = 0; y < h; y += 2) {
+    for (let x = 0; x < w; x += 2) {
+      let ur = 0;
+      let ug = 0;
+      let ub = 0;
+      for (let dy = 0; dy < 2; dy++)
+        for (let dx = 0; dx < 2; dx++) {
+          const p = (y + dy) * w + (x + dx);
+          const a = rgba[p * 4 + 3]! / 255;
+          const r = rgba[p * 4]! * a;
+          const g = rgba[p * 4 + 1]! * a;
+          const b = rgba[p * 4 + 2]! * a;
+          out[p] = 16 + 0.1826 * r + 0.6142 * g + 0.062 * b;
+          ur += r;
+          ug += g;
+          ub += b;
+        }
+      ur /= 4;
+      ug /= 4;
+      ub /= 4;
+      const c = (y / 2) * (w / 2) + x / 2;
+      out[uOff + c] = 128 - 0.1006 * ur - 0.3386 * ug + 0.4392 * ub;
+      out[vOff + c] = 128 + 0.4392 * ur - 0.3989 * ug - 0.0403 * ub;
+    }
+  }
+  return out;
+}
+
 /** A 4×4 ordered (Bayer) pattern, -0.5…0.5. */
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(
   (v) => (v + 0.5) / 16 - 0.5,
@@ -379,7 +415,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     const frame = canvasOf(outW, outH);
     const f = frame.getContext('2d')!;
     const out = canvasOf(outW, outH);
-    const o = out.getContext('2d')!;
+    const o = out.getContext('2d', { willReadFrequently: true })!;
     used.push(frame, out);
     // The first moments, kept to fade the loop's end into.
     const start: HTMLCanvasElement[] = [];
@@ -408,9 +444,17 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
         o.globalAlpha = 1;
       }
       if (encoder) {
-        const vf = new VideoFrame(out, {
+        // The frame's pixels, converted here into the video's own format (I420). Handing
+        // the canvas itself to iPhones' encoder swapped red and blue and striped the
+        // picture (a red cover came out blue); the GIF of the same frames was right.
+        const { data } = o.getImageData(0, 0, outW, outH);
+        const vf = new VideoFrame(toI420(data, outW, outH), {
+          format: 'I420',
+          codedWidth: outW,
+          codedHeight: outH,
           timestamp: Math.round((j * 1e6) / fps),
           duration: Math.round(1e6 / fps),
+          colorSpace: { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: false },
         });
         encoder.encode(vf, { keyFrame: j % (fps * 2) === 0 });
         vf.close();
