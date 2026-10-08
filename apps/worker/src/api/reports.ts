@@ -227,3 +227,42 @@ photoRoutes.post('/', async (c) => {
   }
   return c.json({ ok: true });
 });
+
+/** A recorded poster loop may be a few megabytes. */
+const ANIMATION_MAX_BYTES = 20_000_000;
+
+/**
+ * A moving poster recorded on the phone (lib/recorder.ts) to the person's own chat: an MP4
+ * plays like a GIF in Telegram (easy to forward or save for WhatsApp); a GIF goes as a file
+ * so it stays a real GIF.
+ */
+export const animationRoutes = new Hono<App>();
+
+animationRoutes.post('/', async (c) => {
+  const user = c.get('user');
+  if (!user.telegramId) throw new HTTPException(400, { message: 'no_telegram' });
+  const declared = Number(c.req.header('content-length') ?? 0);
+  if (declared > ANIMATION_MAX_BYTES) throw new HTTPException(413, { message: 'too_large' });
+  const bytes = new Uint8Array(await c.req.arrayBuffer());
+  if (bytes.length === 0) throw new HTTPException(400, { message: 'empty' });
+  if (bytes.length > ANIMATION_MAX_BYTES) throw new HTTPException(413, { message: 'too_large' });
+  // An MP4 has "ftyp" at byte 4; a GIF starts with "GIF8".
+  const mp4 = bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
+  const gif = bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38;
+  if (!mp4 && !gif) throw new HTTPException(415, { message: 'unsupported_file' });
+  const raw = (c.req.query('name') ?? 'poster').replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 60);
+  const file = new InputFile(bytes, `${raw || 'poster'}.${mp4 ? 'mp4' : 'gif'}`);
+  const caption = (c.req.query('caption') ?? '').slice(0, 200) || undefined;
+  try {
+    if (mp4) await botApi(c.env).sendAnimation(user.telegramId, file, { caption });
+    else
+      await botApi(c.env).sendDocument(user.telegramId, file, {
+        caption,
+        disable_content_type_detection: true,
+      });
+  } catch (err) {
+    if (isUnreachableError(err)) throw new HTTPException(409, { message: 'bot_blocked' });
+    throw err;
+  }
+  return c.json({ ok: true });
+});

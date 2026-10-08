@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { MeetingMotion, MotionIcon, MotionTune } from '@church/shared';
 import { useEnv } from '../lib/env';
 import { getMotion } from '../lib/motion';
-import { getQuality, useQuality, watchOffscreen } from '../lib/perf';
+import { getQuality, useEffectQuality, watchOffscreen } from '../lib/perf';
 import { PARTICLES, SEASON_ITEMS, particleSpots, type Particle } from './particleData';
 
 /**
@@ -316,6 +316,8 @@ class Engine {
   height = 0;
   ratio = 1;
   last = -1;
+  /** Being recorded: drawn only when the recorder asks (seekParticles), not by the clock. */
+  held = false;
   private ctx: CanvasRenderingContext2D | null;
 
   constructor(
@@ -640,6 +642,7 @@ function tick(now: number) {
   const still = standing();
   if (!document.hidden && !(lite && html.dataset.scrolling)) {
     for (const e of engines) {
+      if (e.held) continue;
       // Off screen or over the running limit (watchOffscreen marks it): nothing to draw.
       if (e.clip.hasAttribute('data-off') && e.last >= 0) continue;
       // A copy kept still (the Design tab's page copy until "play") gets one frame too.
@@ -657,6 +660,20 @@ function tick(now: number) {
     }
   }
   frame = requestAnimationFrame(tick);
+}
+
+/** Recording: the canvases inside `root` stop following the clock (or follow it again). */
+export function holdParticles(root: Element, hold: boolean) {
+  for (const e of engines) if (root.contains(e.clip)) e.held = hold;
+}
+
+/** Recording: draws the canvases inside `root` as they are `seconds` into their animation. */
+export function seekParticles(root: Element, seconds: number) {
+  for (const e of engines)
+    if (root.contains(e.clip)) {
+      if (!e.width) e.resize();
+      e.draw(seconds);
+    }
 }
 
 function start(e: Engine) {
@@ -692,7 +709,7 @@ export function ParticleCanvas({
   const clip = useRef<HTMLSpanElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const engine = useRef<Engine | null>(null);
-  const quality = useQuality();
+  const quality = useEffectQuality();
   const { env } = useEnv();
   const iconUrl = icon?.url ?? (icon?.emoji ? null : (env?.logoUrl ?? null));
   const iconEmoji = icon?.emoji ?? '✨';

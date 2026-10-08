@@ -210,7 +210,7 @@ function EventBody({ e }: { e: EventDetail }) {
               <IconBell size={16} /> {t.events.remindTitleShort}
             </Button>
           )}
-          {e.canManage && (
+          {(e.canManage || e.canPrepare) && (
             <Button small variant="glass" onClick={() => setExporting(true)}>
               <IconImage size={16} /> {t.events.exportTitle}
             </Button>

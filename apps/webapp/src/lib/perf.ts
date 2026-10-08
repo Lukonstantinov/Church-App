@@ -1,4 +1,11 @@
-import { useEffect, useState, useSyncExternalStore, type RefObject } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from 'react';
 import { storage } from './storage';
 
 /**
@@ -73,6 +80,19 @@ export const useQuality = () =>
     listeners.add(cb);
     return () => listeners.delete(cb);
   }, getQuality);
+
+/**
+ * A copy drawn to be recorded as a moving picture (lib/recorder.ts): its animation layers
+ * are drawn in full whatever this phone's graphics setting is.
+ */
+export const FullMotion = createContext(false);
+
+/** The quality the animation layers use here: full inside a recorded copy. */
+export function useEffectQuality(): Quality {
+  const forced = useContext(FullMotion);
+  const q = useQuality();
+  return forced ? 'full' : q;
+}
 
 export const useQualityChoice = () =>
   useSyncExternalStore((cb) => {

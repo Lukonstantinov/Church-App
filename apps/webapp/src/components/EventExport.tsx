@@ -13,6 +13,8 @@ import { IconCheck, IconSend } from './icons';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
 import { Button } from './ui';
+import { EventMotionPoster, MotionExport } from './MotionExport';
+import { FullMotion } from '../lib/perf';
 
 type Job = 'picture' | 'file' | 'pdf' | 'excel';
 
@@ -30,6 +32,8 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
   const group = useGroup(e.groupId);
   const when = useEventWhen();
   const node = useRef<HTMLDivElement>(null);
+  const motionNode = useRef<HTMLDivElement>(null);
+  const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState<Job | null>(null);
   // What the picture shows under the poster: everything except the money, to start with.
   const available = availableParts(e);
@@ -153,6 +157,16 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
             </div>
           </div>
         )}
+        {/* The cover at full size, off screen and only while recording: the moving poster
+            is recorded from it. */}
+        {recording && (
+          <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0 }}>
+            <FullMotion.Provider value>
+              <EventMotionPoster e={e} ref={motionNode} />
+            </FullMotion.Provider>
+          </div>
+        )}
+        <MotionExport node={motionNode} name={e.title} onRecording={setRecording} />
         {btn('picture', t.events.exportPicture, 'primary')}
         {btn('file', t.events.exportPictureFile)}
         {btn('pdf', t.events.exportPdf)}

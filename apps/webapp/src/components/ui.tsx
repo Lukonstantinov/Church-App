@@ -7,7 +7,7 @@ import {
   type PosterLook,
 } from '@church/shared';
 import { useEnv } from '../lib/env';
-import { useQuality, watchOffscreen } from '../lib/perf';
+import { useEffectQuality, watchOffscreen } from '../lib/perf';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { PHOTO_EFFECTS, PhotoEffect } from './PhotoEffects';
@@ -423,7 +423,7 @@ export function LivingLayers({
   image?: string | null;
   preview?: boolean;
 }) {
-  const quality = useQuality();
+  const quality = useEffectQuality();
   if (quality === 'still') return null;
   const shown = layers.filter((l) => l.kind !== 'off');
   const particles = shown.filter((l) => PARTICLE_KINDS.has(l.kind));
@@ -473,7 +473,7 @@ export function LivingLayer({
   const ref = useRef<HTMLSpanElement>(null);
   const clip = useRef<HTMLSpanElement>(null);
   const { env } = useEnv();
-  const quality = useQuality();
+  const quality = useEffectQuality();
   // Off screen it stands still, and only a few layers run at once (no work for the phone).
   useEffect(
     () => (clip.current ? watchOffscreen(clip.current, !preview || quality !== 'full') : undefined),

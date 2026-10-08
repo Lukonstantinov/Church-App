@@ -26,6 +26,8 @@ import {
 } from './AudienceChoice';
 import { IconCheck, IconSend } from './icons';
 import { MeetingPoster, PosterPhotoWarning } from './MeetingPoster';
+import { MotionExport } from './MotionExport';
+import { FullMotion } from '../lib/perf';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
 import { Button, Switch, Toggle } from './ui';
@@ -72,6 +74,8 @@ export function MeetingAnnounceSheet({
   const [busy, setBusy] = useState<'poster' | 'send' | 'test' | null>(null);
   const [done, setDone] = useState<number | null>(null);
   const [requested, setRequested] = useState<number | null>(null);
+  // Recording the moving poster: its effects run in full whatever the phone's setting.
+  const [recording, setRecording] = useState(false);
 
   const leaders = (members.data ?? [])
     .filter((m) => m.status === 'active' && m.role === 'leader')
@@ -207,17 +211,24 @@ export function MeetingAnnounceSheet({
                 {/* Shown at half size; captured at full size. */}
                 <div className="h-[338px] w-[270px] overflow-hidden rounded-xl shadow-card">
                   <div className="origin-top-left scale-50">
-                    <MeetingPoster
-                      ref={poster}
-                      m={meeting}
-                      g={group}
-                      cancelled={notice === 'cancelled'}
-                    />
+                    <FullMotion.Provider value={recording}>
+                      <MeetingPoster
+                        ref={poster}
+                        m={meeting}
+                        g={group}
+                        cancelled={notice === 'cancelled'}
+                      />
+                    </FullMotion.Provider>
                   </div>
                 </div>
               </div>
             )}
             {withPoster && <PosterPhotoWarning m={meeting} />}
+            {withPoster && notice !== 'cancelled' && (
+              <div className="px-3 pb-3">
+                <MotionExport node={poster} name={meeting.title} onRecording={setRecording} />
+              </div>
+            )}
           </div>
         )}
         {notice !== 'cancelled' && (

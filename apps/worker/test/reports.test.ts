@@ -164,6 +164,22 @@ describe('sending a picture to the chat', () => {
   });
 });
 
+describe('sending a recorded moving poster to the chat', () => {
+  it('sends an MP4 as an animation and a GIF as a file; refuses anything else', async () => {
+    const calls = mockTelegram();
+    const mp4 = Uint8Array.from([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]);
+    const gif = Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0, 0, 0, 0]);
+    const send = (body: Uint8Array) =>
+      api('/api/me/animation?name=Постер', { method: 'POST', user: ADMIN, body });
+    expect((await send(mp4)).status).toBe(200);
+    expect(callsTo(calls, 'sendAnimation')).toHaveLength(1);
+    expect((await send(gif)).status).toBe(200);
+    expect(callsTo(calls, 'sendDocument')).toHaveLength(1);
+    expect((await send(Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8]))).status).toBe(415);
+    expect((await send(new Uint8Array())).status).toBe(400);
+  });
+});
+
 describe('statistics', () => {
   it('totals, per person, per meeting and per event for a period; leaders only', async () => {
     const g = await createGroup('Статистика');

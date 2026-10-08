@@ -114,6 +114,9 @@ bot-managed Telegram chat, pin to the main page, picture/PDF export.
 Bot pictures of events: the cover photo when there is one, else the phone-drawn poster
 (`eventPictureId`); `capturePoster` refuses blank/black drawings and leaves moving effects out;
 it draws photos itself (iPhones drop them): mark poster photos `data-shot="under"` / `"top"`.
+Moving posters: `lib/recorder.ts` records a poster's effects as a seamless MP4 loop (WebCodecs + mp4-muxer;
+GIF via gifenc) — «🎬 Анимированный постер» in the announce sheet / event export, sent by the bot
+(`POST /api/me/animation`); effects are `.living-clip` layers stepped through time (`seekParticles`).
 
 **Live & reminders** — LIVE badge (pulsing, outline kept) while an event/meeting is on;
 "🔴 LIVE now" bot message at the start (`lib/liveNotice.ts`, `live_notified_at`, skipped if

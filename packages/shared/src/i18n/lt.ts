@@ -1659,6 +1659,18 @@ export const lt: Messages = {
       design: 'Dizaineris: plakatai, šablonai ir susitikimų, renginių bei įrašų išvaizda',
     },
   },
+  motionExport: {
+    title: '🎬 Animuotas plakatas',
+    hint: 'Plakatas su efektais — trumpu vaizdo įrašu (Telegram ir WhatsApp groja kaip GIF) arba GIF failu. Botas atsiųs jį jums, toliau galite persiųsti kur norite.',
+    video: 'Atsiųsti man vaizdo įrašą',
+    gif: 'GIF failu',
+    recording: (p: number) => `Įrašoma animacija… ${p}%`,
+    sending: 'Siunčiama…',
+    sent: 'Paruošta — žiūrėkite pokalbį su botu',
+    noEffects: 'Plakate nėra efektų — pridėkite juos „🎨 Išvaizda“',
+    noVideo: 'Šis telefonas negali kurti vaizdo įrašų — siunčiamas GIF',
+    failed: 'Nepavyko įrašyti animacijos',
+  },
   publish: {
     testSend: '🧪 Atsiųsti man',
     testSent: 'Išsiųsta jums į Telegram — pažiūrėkite, kaip atrodo',

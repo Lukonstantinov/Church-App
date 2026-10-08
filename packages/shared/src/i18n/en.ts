@@ -1624,6 +1624,18 @@ export const en: Messages = {
       design: 'Designer: posters, templates and the look of meetings, events and posts',
     },
   },
+  motionExport: {
+    title: '🎬 Animated poster',
+    hint: 'The poster with its effects as a short video (plays like a GIF in Telegram and WhatsApp) or as a GIF file. The bot sends it to you — forward it anywhere.',
+    video: 'Send me the video',
+    gif: 'As a GIF file',
+    recording: (p: number) => `Recording the animation… ${p}%`,
+    sending: 'Sending…',
+    sent: 'Done — see your chat with the bot',
+    noEffects: 'The poster has no effects — add them in “🎨 Look”',
+    noVideo: 'This phone can’t make videos — sending a GIF',
+    failed: 'Couldn’t record the animation',
+  },
   publish: {
     testSend: '🧪 Send to me',
     testSent: 'Sent to you in Telegram — see how it looks',

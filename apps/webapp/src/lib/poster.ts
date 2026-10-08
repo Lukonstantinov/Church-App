@@ -1,7 +1,7 @@
 import { MEDIA_MAX_BYTES } from '@church/shared';
 
 /** Waits until every picture in the poster has loaded and decoded (or failed). */
-async function picturesReady(node: HTMLElement): Promise<void> {
+export async function picturesReady(node: HTMLElement): Promise<void> {
   const imgs = [...node.querySelectorAll('img')];
   await Promise.all(
     imgs.map((img) =>
@@ -100,7 +100,7 @@ async function looksBlank(dataUrl: string): Promise<boolean> {
 // ---------- Photos drawn by us (iPhones leave them out of the library's drawing) ----------
 
 /** Where an element sits in the poster, in poster pixels (the poster may be shown scaled). */
-function boxIn(node: HTMLElement, el: Element) {
+export function boxIn(node: HTMLElement, el: Element) {
   const n = node.getBoundingClientRect();
   const k = n.width / (node.offsetWidth || n.width || 1) || 1;
   const r = el.getBoundingClientRect();
@@ -187,7 +187,7 @@ function applyMask(ctx: CanvasRenderingContext2D, mask: string, w: number, h: nu
  * see-through, rounded) or a photo frame (a picture with colour layers over it and a fading
  * mask, like the ministry photo).
  */
-function drawShot(ctx: CanvasRenderingContext2D, node: HTMLElement, el: HTMLElement) {
+export function drawShot(ctx: CanvasRenderingContext2D, node: HTMLElement, el: HTMLElement) {
   const box = boxIn(node, el);
   if (box.w <= 0 || box.h <= 0) return;
   const css = getComputedStyle(el);
