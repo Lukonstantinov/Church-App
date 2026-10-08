@@ -2,23 +2,25 @@ import { and, eq, lte } from 'drizzle-orm';
 import { GrammyError, type Api } from 'grammy';
 import type { Db } from '../db/client';
 import { livePins, outbox, users } from '../db/schema';
-import { mediaFile } from './media';
+import { mediaUpload } from './media';
 import { isUnreachableError } from './telegram';
 
 const MAX_ATTEMPTS = 5;
 
 /**
- * A photo queued as `photo_media_id` (a stored picture) is uploaded by the bot when sent;
- * without the picture it goes as text.
+ * A photo queued as `photo_media_id` (a stored picture) is uploaded by the bot when sent —
+ * a recorded moving poster (an MP4) as an animation, which plays like a GIF; without the
+ * picture it goes as text.
  */
 async function resolvePhoto(db: Db, method: string, payload: Record<string, unknown>) {
   if (method !== 'sendPhoto' || typeof payload.photo_media_id !== 'number')
     return { method, payload };
   const { photo_media_id: id, caption, ...rest } = payload;
-  const file = await mediaFile(db, id as number);
-  return file
-    ? { method, payload: { ...rest, caption, photo: file } }
-    : { method: 'sendMessage', payload: { ...rest, text: caption ?? '' } };
+  const up = await mediaUpload(db, id as number);
+  if (!up) return { method: 'sendMessage', payload: { ...rest, text: caption ?? '' } };
+  return up.video
+    ? { method: 'sendAnimation', payload: { ...rest, caption, animation: up.file } }
+    : { method, payload: { ...rest, caption, photo: up.file } };
 }
 
 export interface OutboxMessage {
@@ -82,9 +84,9 @@ export async function drainOutbox(
         sentMessage = await call.call(api.raw, payload);
       } catch (err) {
         // Telegram couldn't use the picture (bad file, unreachable link): the text still goes.
-        if (!(method === 'sendPhoto' && err instanceof GrammyError && err.error_code === 400))
-          throw err;
-        const { photo: _photo, caption, ...rest } = payload;
+        const media = method === 'sendPhoto' || method === 'sendAnimation';
+        if (!(media && err instanceof GrammyError && err.error_code === 400)) throw err;
+        const { photo: _photo, animation: _animation, caption, ...rest } = payload;
         sentMessage = await raw.sendMessage!.call(api.raw, { ...rest, text: caption ?? '' });
       }
       const messageId = (sentMessage as { message_id?: number } | undefined)?.message_id;

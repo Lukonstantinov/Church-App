@@ -83,8 +83,10 @@ export function MotionExport({
         </div>
       ) : (
         <div className="flex gap-2">
-          <Button onClick={() => void run('video')}>{t.motionExport.video}</Button>
-          <Button variant="secondary" onClick={() => void run('gif')}>
+          <Button small onClick={() => void run('video')}>
+            {t.motionExport.video}
+          </Button>
+          <Button small variant="secondary" onClick={() => void run('gif')}>
             {t.motionExport.gif}
           </Button>
         </div>

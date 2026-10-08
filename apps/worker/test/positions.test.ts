@@ -636,4 +636,29 @@ describe('adding people and environment look', () => {
     expect(saved.screenLook.header?.baked).toEqual(baked(mine.id));
     expect(saved.screenLook.actions?.baked ?? null).toBeNull();
   });
+  it('an announcement with a moving poster goes out as an animation', async () => {
+    const g = await createEnv('Анимация');
+    const reader = fakeUser('Зритель');
+    await join(reader, g);
+    const mp4 = Uint8Array.from([
+      0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 1, 2,
+    ]);
+    const loop = (await (
+      await api(`/api/groups/${g.id}/loops`, { method: 'POST', user: ADMIN, body: mp4 })
+    ).json()) as { id: number };
+    const m = await apiJson<{ id: number }>(`/api/groups/${g.id}/meetings`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { date: '2031-06-01', startTime: '18:00', durationMin: 60, title: 'Кино' },
+    });
+    await apiJson(`/api/meetings/${m.id}/announce`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { notice: 'announce', text: 'Смотрите!', posterMediaId: loop.id },
+    });
+    await drainOutbox(getDb(env.DB), botApi(env), { limit: 100 });
+    const sent = callsTo(calls, 'sendAnimation', reader.id);
+    expect(sent).toHaveLength(1);
+    expect(String(sent[0]!.body.caption)).toContain('Смотрите!');
+  });
 });

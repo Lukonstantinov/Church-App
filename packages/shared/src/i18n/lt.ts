@@ -1670,9 +1670,12 @@ export const lt: Messages = {
     },
   },
   motionExport: {
+    sendMoving: '🎬 Siųsti judantį plakatą',
+    sendMovingHint:
+      'Plakatas bus išsiųstas trumpu vaizdo įrašu — Telegram groja kaip GIF. Įrašymas užtrunka 10–30 sekundžių; be efektų ar senesniame telefone išsiųs paprastą paveikslėlį.',
     title: '🎬 Animuotas plakatas',
     hint: 'Plakatas su efektais — trumpu vaizdo įrašu (Telegram ir WhatsApp groja kaip GIF) arba GIF failu. Botas atsiųs jį jums, toliau galite persiųsti kur norite.',
-    video: 'Atsiųsti man vaizdo įrašą',
+    video: '🎬 Įrašas man',
     gif: 'GIF failu',
     recording: (p: number) => `Įrašoma animacija… ${p}%`,
     sending: 'Siunčiama…',

@@ -12,6 +12,7 @@ import {
   useAnnounceMeeting,
   useMe,
   useMembers,
+  uploadLoop,
   useRequestAnnounceMeeting,
   useTestAnnounceMeeting,
   useUploadMedia,
@@ -76,6 +77,9 @@ export function MeetingAnnounceSheet({
   const [requested, setRequested] = useState<number | null>(null);
   // Recording the moving poster: its effects run in full whatever the phone's setting.
   const [recording, setRecording] = useState(false);
+  // Send the poster moving (with its effects) instead of a still picture.
+  const [animated, setAnimated] = useState(false);
+  const [recordProgress, setRecordProgress] = useState<number | null>(null);
 
   const leaders = (members.data ?? [])
     .filter((m) => m.status === 'active' && m.role === 'leader')
@@ -110,6 +114,27 @@ export function MeetingAnnounceSheet({
   async function posterId(): Promise<number | null> {
     if (!withPoster || !poster.current) return null;
     setBusy('poster');
+    // The moving poster: recorded as a loop (it plays like a GIF in Telegram). A phone that
+    // can't make videos, or a poster without effects, sends the still picture.
+    if (animated) {
+      setRecording(true);
+      try {
+        await new Promise((r) => setTimeout(r, 400));
+        const { hasEffects, recordLoop } = await import('../lib/recorder');
+        if (hasEffects(poster.current)) {
+          const rec = await recordLoop(poster.current, {
+            quality: 0.09,
+            onProgress: setRecordProgress,
+          });
+          if (rec.mp4) return (await uploadLoop(meeting.groupId, rec.mp4)).id;
+        }
+      } catch (err) {
+        console.warn('moving poster failed', err);
+      } finally {
+        setRecording(false);
+        setRecordProgress(null);
+      }
+    }
     const blob = await capturePoster(poster.current, true);
     if (!blob) return null;
     return (await upload.mutateAsync(blob)).id;
@@ -225,6 +250,18 @@ export function MeetingAnnounceSheet({
             )}
             {withPoster && <PosterPhotoWarning m={meeting} />}
             {withPoster && notice !== 'cancelled' && (
+              <div className="px-1">
+                <Toggle
+                  label={t.motionExport.sendMoving}
+                  checked={animated}
+                  onChange={setAnimated}
+                />
+                <p className="-mt-1 px-4 pb-2 text-[12px] leading-snug text-hint">
+                  {t.motionExport.sendMovingHint}
+                </p>
+              </div>
+            )}
+            {withPoster && notice !== 'cancelled' && (
               <div className="px-3 pb-3">
                 <MotionExport node={poster} name={meeting.title} onRecording={setRecording} />
               </div>
@@ -267,7 +304,11 @@ export function MeetingAnnounceSheet({
               disabled={loading || busy !== null || !text.trim()}
               onClick={() => void run('test')}
             >
-              {busy === 'test' ? t.meetings.preparing : t.publish.testSend}
+              {busy === 'test' || (busy === 'poster' && recordProgress !== null)
+                ? recordProgress !== null
+                  ? t.motionExport.recording(Math.round(recordProgress * 100))
+                  : t.meetings.preparing
+                : t.publish.testSend}
             </Button>
             <Button
               disabled={
@@ -276,13 +317,15 @@ export function MeetingAnnounceSheet({
               onClick={() => void run(canPublish ? 'send' : 'request')}
             >
               <IconSend size={16} />{' '}
-              {busy === 'poster'
-                ? t.meetings.preparing
-                : busy === 'send'
-                  ? t.common.saving
-                  : canPublish
-                    ? t.events.remindSend
-                    : t.publish.request}
+              {recordProgress !== null
+                ? t.motionExport.recording(Math.round(recordProgress * 100))
+                : busy === 'poster'
+                  ? t.meetings.preparing
+                  : busy === 'send'
+                    ? t.common.saving
+                    : canPublish
+                      ? t.events.remindSend
+                      : t.publish.request}
             </Button>
           </div>
         )}

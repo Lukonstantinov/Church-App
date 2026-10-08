@@ -185,6 +185,7 @@ const EXT: Record<string, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
+  'video/mp4': 'mp4',
 };
 
 /**
@@ -192,12 +193,27 @@ const EXT: Record<string, string> = {
  * link, which fails for some formats). Null when it's gone.
  */
 export async function mediaFile(db: Db, id: number): Promise<InputFile | null> {
+  return (await mediaUpload(db, id))?.file ?? null;
+}
+
+/** A stored picture or recorded loop (a moving poster) ready to upload, and which it is. */
+export async function mediaUpload(
+  db: Db,
+  id: number,
+): Promise<{ file: InputFile; video: boolean } | null> {
   const row = await db.query.media.findFirst({
     columns: { data: true, mime: true },
     where: eq(media.id, id),
   });
   if (!row) return null;
-  return new InputFile(fromBase64(row.data), `picture.${EXT[row.mime] ?? 'jpg'}`);
+  const video = row.mime === 'video/mp4';
+  return {
+    file: new InputFile(
+      fromBase64(row.data),
+      `${video ? 'poster' : 'picture'}.${EXT[row.mime] ?? 'jpg'}`,
+    ),
+    video,
+  };
 }
 
 /** Every speaker photo must be one of the ministry's own pictures. */
