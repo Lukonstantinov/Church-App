@@ -14,9 +14,12 @@ import { haptic } from '../lib/telegram';
 import {
   EventMotionPoster,
   LivePreview,
+  NoMotionPrompt,
+  eventMoves,
   eventPosterModes,
   useEventPosterText,
 } from './MotionExport';
+import { useNav } from '../lib/nav';
 import { PosterTextControls, posterText, type PosterTextValue } from './PosterText';
 import {
   AudienceChoice,
@@ -62,7 +65,8 @@ export function EventReminderSheet({
   const [withRoster, setWithRoster] = useState(false);
   const picture = detail.data?.botPictureUrl ?? null;
   // The picture with the message: none, the poster, or the poster moving (recorded now).
-  const moves = !!detail.data?.motion && detail.data.motion !== 'off';
+  const moves = !!detail.data && eventMoves(detail.data);
+  const { push } = useNav();
   const [pic, setPic] = useState<'none' | 'still' | 'moving' | null>(null);
   const shown = pic ?? (picture ? 'still' : 'none');
   const movingNode = useRef<HTMLDivElement>(null);
@@ -229,8 +233,17 @@ export function EventReminderSheet({
                 />
               </>
             )}
-            {!picture && !moves && (
-              <p className="text-[13px] leading-snug text-hint">{t.events.noPoster}</p>
+            {!moves && (
+              <NoMotionPrompt
+                onDesign={
+                  detail.data.canDesign
+                    ? () => {
+                        onClose();
+                        push({ name: 'eventForm', groupId, eventId });
+                      }
+                    : undefined
+                }
+              />
             )}
           </div>
         )}

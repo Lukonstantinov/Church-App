@@ -348,6 +348,30 @@ export function useEventPosterText() {
     [e.title, when(e), e.location ? `📍 ${e.location}` : null].filter(Boolean).join('\n');
 }
 
+/**
+ * The poster doesn't move yet: designers get a way to add its animation (the event's
+ * cover effects, the meeting's design), others are told a designer can.
+ */
+export function NoMotionPrompt({ onDesign }: { onDesign?: () => void }) {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-2 rounded-xl bg-hairline/60 p-3">
+      <p className="text-[13px] leading-snug text-hint">
+        {onDesign ? t.motionExport.noMotionDesigner : t.motionExport.noMotionAsk}
+      </p>
+      {onDesign && (
+        <Button small variant="secondary" onClick={onDesign}>
+          🎨 {t.motionExport.addMotion}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** Whether an event's cover moves (has effects). */
+export const eventMoves = (e: Pick<EventSummary, 'motion' | 'motionLayers'>) =>
+  (!!e.motion && e.motion !== 'off') || (e.motionLayers?.length ?? 0) > 0;
+
 /** The text choices of an event's poster: a designed cover shows its own title. */
 export const eventPosterModes = (e: EventSummary): PosterTextMode[] =>
   e.coverUrl && !e.poster ? ['custom', 'none'] : ['design', 'custom'];

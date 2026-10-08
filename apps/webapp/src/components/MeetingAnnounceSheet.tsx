@@ -26,7 +26,7 @@ import {
 } from './AudienceChoice';
 import { IconCheck, IconSend } from './icons';
 import { MeetingPoster, PosterPhotoWarning } from './MeetingPoster';
-import { LivePreview, MotionExport } from './MotionExport';
+import { LivePreview, MotionExport, NoMotionPrompt } from './MotionExport';
 import { recordPosterVideo } from '../lib/movingPoster';
 import { useFmt } from '../lib/format';
 import {
@@ -53,6 +53,7 @@ export function MeetingAnnounceSheet({
   notice = 'announce',
   previousStartsAt,
   canPublish = true,
+  onDesign,
 }: {
   meeting: MeetingRow;
   group: GroupSummary | undefined;
@@ -63,6 +64,8 @@ export function MeetingAnnounceSheet({
   previousStartsAt?: string | null;
   /** May send it to everyone (else: test and send for approval). */
   canPublish?: boolean;
+  /** Opens the meeting's design (shown when its poster doesn't move yet; designers). */
+  onDesign?: () => void;
 }) {
   const t = useT();
   const f = useFmt();
@@ -81,6 +84,8 @@ export function MeetingAnnounceSheet({
     notice === 'cancelled' ? 'none' : 'still',
   );
   const withPoster = pic !== 'none';
+  // Whether the poster moves (its own animation, or a poster template's effect layers).
+  const moves = (!!meeting.posterMotion && meeting.posterMotion !== 'off') || !!meeting.poster;
   const animated = pic === 'moving';
   // The words on the poster: its own design, own words (prepared), or none.
   const modes: PosterTextMode[] = meeting.poster
@@ -247,7 +252,7 @@ export function MeetingAnnounceSheet({
             <div className="text-[13px] font-semibold">{t.meetings.pictureTitle}</div>
             <div className="flex flex-wrap gap-1.5">
               {(['none', 'still', 'moving'] as const)
-                .filter((k) => k !== 'moving' || notice !== 'cancelled')
+                .filter((k) => k !== 'moving' || (notice !== 'cancelled' && moves))
                 .map((k) => (
                   <button
                     key={k}
@@ -295,7 +300,10 @@ export function MeetingAnnounceSheet({
                 )}
               </>
             )}
-            {withPoster && notice !== 'cancelled' && (
+            {withPoster && notice !== 'cancelled' && !moves && (
+              <NoMotionPrompt onDesign={onDesign} />
+            )}
+            {withPoster && notice !== 'cancelled' && moves && (
               <MotionExport
                 node={poster}
                 name={meeting.title}

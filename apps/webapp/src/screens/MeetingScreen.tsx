@@ -439,6 +439,14 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           notice={sheet.notice}
           previousStartsAt={sheet.previous}
           canPublish={m.canPublish}
+          onDesign={
+            m.canDesign
+              ? () => {
+                  setSheet(null);
+                  setPosterOpen(true);
+                }
+              : undefined
+          }
           onClose={() => setSheet(null)}
         />
       )}

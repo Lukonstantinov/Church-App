@@ -1699,6 +1699,9 @@ export const lt: Messages = {
     place: { top: 'Viršuje', middle: 'Centre', bottom: 'Apačioje' },
   },
   motionExport: {
+    noMotionDesigner: 'Plakatas dar nejuda — pridėkite efektų ir čia atsiras animuotas plakatas.',
+    noMotionAsk: 'Plakatas dar nejuda. Animaciją gali pridėti dizaineris.',
+    addMotion: 'Pridėti animaciją',
     textLabel: 'Žinutės tekstas — po plakatu pokalbyje',
     toLabel: 'Kam',
     to: {

@@ -24,9 +24,12 @@ import {
   CoverLoopSection,
   EventMotionPoster,
   MotionExport,
+  NoMotionPrompt,
+  eventMoves,
   eventPosterModes,
   useEventPosterText,
 } from './MotionExport';
+import { useNav } from '../lib/nav';
 
 type Job = 'picture' | 'file' | 'pdf' | 'excel';
 
@@ -40,6 +43,7 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
   const f = useFmt();
   const toast = useToast();
   const me = useMe();
+  const { push } = useNav();
   const { env } = useEnv();
   const group = useGroup(e.groupId);
   const when = useEventWhen();
@@ -175,16 +179,29 @@ export function EventExport({ e, onClose }: { e: EventDetail; onClose: () => voi
         )}
         {/* The moving poster, previewed live: words on it optional and editable; the
             message under it is the reminder's text for those who may send reminders. */}
-        <MotionExport
-          preview={{
-            preset: posterWords(e),
-            modes: eventPosterModes(e),
-            render: (text) => <EventMotionPoster e={e} text={text} />,
-          }}
-          name={e.title}
-          caption={reminderText.data?.text ?? posterWords(e)}
-          share={e.canPublish ? { kind: 'event', id: e.id, groupId: e.groupId } : undefined}
-        />
+        {!eventMoves(e) ? (
+          <NoMotionPrompt
+            onDesign={
+              e.canDesign
+                ? () => {
+                    onClose();
+                    push({ name: 'eventForm', groupId: e.groupId, eventId: e.id });
+                  }
+                : undefined
+            }
+          />
+        ) : (
+          <MotionExport
+            preview={{
+              preset: posterWords(e),
+              modes: eventPosterModes(e),
+              render: (text) => <EventMotionPoster e={e} text={text} />,
+            }}
+            name={e.title}
+            caption={reminderText.data?.text ?? posterWords(e)}
+            share={e.canPublish ? { kind: 'event', id: e.id, groupId: e.groupId } : undefined}
+          />
+        )}
         <CoverLoopSection e={e} />
         {btn('picture', t.events.exportPicture, 'primary')}
         {btn('file', t.events.exportPictureFile)}

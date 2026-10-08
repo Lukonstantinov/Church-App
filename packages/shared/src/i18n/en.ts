@@ -1660,6 +1660,10 @@ export const en: Messages = {
     place: { top: 'Top', middle: 'Middle', bottom: 'Bottom' },
   },
   motionExport: {
+    noMotionDesigner:
+      'The poster doesn’t move yet — add effects and the animated poster appears here.',
+    noMotionAsk: 'The poster doesn’t move yet. A designer can add an animation.',
+    addMotion: 'Add an animation',
     textLabel: 'Message text — under the poster in the chat',
     toLabel: 'To',
     to: {
