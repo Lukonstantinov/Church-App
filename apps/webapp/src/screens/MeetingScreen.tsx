@@ -14,6 +14,7 @@ import { GroupTheme } from '../components/GroupTheme';
 import { LiveNow, SoonPulse, SoonTimer } from '../components/Live';
 import { SpeakerStrip } from '../components/Speakers';
 import { CardSpeaker } from '../components/MeetingPoster';
+import { MeetingDesignSheet } from '../components/MeetingDesignSheet';
 import { AudiencePicker } from '../components/AudiencePicker';
 import { IconCalendar, IconClock, IconMapPin, IconPlus, IconSend } from '../components/icons';
 import { Pill } from '../components/LookControls';
@@ -22,16 +23,9 @@ import { NotifySheet } from '../components/NotifySheet';
 import { MeetingAnnounceSheet } from '../components/MeetingAnnounceSheet';
 import { MeetingPeople } from '../components/MeetingPeople';
 import { TeamChips, meetingLook } from '../components/TeamChips';
-import { useCoverLook } from '../components/CoverDesigner';
-import {
-  MeetingPosterDesigner,
-  initMeetingPoster,
-  meetingPosterPayload,
-} from '../components/MeetingPosterDesigner';
 import { useMeetingTune } from '../components/ModuleSkin';
 import { LayeredPoster, usePosterTexts } from '../components/LayeredPoster';
 import { PersonPicker } from '../components/PersonPicker';
-import { Sheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import {
   Button,
@@ -222,12 +216,12 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
               onClick={() => setPosterOpen(true)}
               className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/22 px-3.5 py-1.5 text-[13px] font-semibold backdrop-blur active:scale-95"
             >
-              🎨 {t.meetings.editPoster}
+              🎨 {t.design.sheetTitle}
             </button>
           )}
         </HeroCard>
       </SoonPulse>
-      {posterOpen && <PosterSheet m={m} onClose={() => setPosterOpen(false)} />}
+      {posterOpen && <MeetingDesignSheet meetingId={m.id} onClose={() => setPosterOpen(false)} />}
 
       {m.myRole && !m.myAcceptedAt && !cancelled && <AnswerCard meetingId={m.id} role={m.myRole} />}
 
@@ -537,10 +531,8 @@ function EditForm({
   const [notes, setNotes] = useState(m.notes ?? '');
   const [audience, setAudience] = useState<number[] | null>(m.audience);
   const [budget, setBudget] = useState(((m.budgetCents ?? m.defaultBudgetCents) / 100).toFixed(2));
-  const group = useGroup(m.groupId);
+  // The look is changed in one place — «🎨 Оформление» — not in this form.
   const [designing, setDesigning] = useState(false);
-  const [poster, setPoster] = useState(() => initMeetingPoster(m));
-  const { templateId } = useCoverLook(poster.cover, group.data);
   const [toSeries, setToSeries] = useState(false);
 
   function submit() {
@@ -561,7 +553,6 @@ function EditForm({
         input.budgetCents = cents;
       if (JSON.stringify(audience) !== JSON.stringify(m.audience))
         input.audience = audience?.length ? audience : null;
-      if (designing) Object.assign(input, meetingPosterPayload(poster, templateId));
       if (m.seriesId && toSeries) input.applyToSeries = true;
     }
     onSave(input);
@@ -656,24 +647,12 @@ function EditForm({
         <div className="mb-1 text-[13px] text-hint">{t.meetings.notes}</div>
         <TextArea value={notes} onChange={setNotes} maxLength={500} rows={3} />
       </div>
-      {m.canManage && (
-        <Toggle label={t.meetings.posterTitle} checked={designing} onChange={setDesigning} />
+      {m.canDesign && (
+        <Button variant="glass" onClick={() => setDesigning(true)}>
+          🎨 {t.design.sheetTitle}
+        </Button>
       )}
-      {m.canManage && designing && (
-        <MeetingPosterDesigner
-          g={group.data}
-          groupId={m.groupId}
-          meeting={{
-            ...m,
-            title: title || m.title,
-            topic: topic || null,
-            location: location || null,
-            kind,
-          }}
-          state={poster}
-          onChange={setPoster}
-        />
-      )}
+      {designing && <MeetingDesignSheet meetingId={m.id} onClose={() => setDesigning(false)} />}
       {m.canManage && m.seriesId && (
         <Toggle label={t.meetings.applyToSeries} checked={toSeries} onChange={setToSeries} />
       )}
@@ -750,49 +729,5 @@ function RsvpCard({ m }: { m: MeetingDetail }) {
           ))}
       </div>
     </Section>
-  );
-}
-
-/** The meeting's poster, designed and saved on its own (look, layout, fonts, speakers). */
-function PosterSheet({ m, onClose }: { m: MeetingDetail; onClose: () => void }) {
-  const t = useT();
-  const toast = useToast();
-  const group = useGroup(m.groupId);
-  const update = useUpdateMeeting();
-  const [poster, setPoster] = useState(() => initMeetingPoster(m));
-  const { templateId } = useCoverLook(poster.cover, group.data);
-  const [toSeries, setToSeries] = useState(false);
-  async function save() {
-    try {
-      await update.mutateAsync({
-        id: m.id,
-        ...meetingPosterPayload(poster, templateId),
-        ...(toSeries ? { applyToSeries: true } : {}),
-      });
-      haptic.success();
-      toast(t.common.saved);
-      onClose();
-    } catch {
-      toast(t.common.saveFailed, 'error');
-    }
-  }
-  return (
-    <Sheet open onClose={onClose} title={`🎨 ${t.meetings.editPoster}`}>
-      <div className="flex flex-col gap-4 px-4 pb-4">
-        <MeetingPosterDesigner
-          g={group.data}
-          groupId={m.groupId}
-          meeting={m}
-          state={poster}
-          onChange={setPoster}
-        />
-        {m.seriesId && (
-          <Toggle label={t.meetings.applyToSeries} checked={toSeries} onChange={setToSeries} />
-        )}
-        <Button disabled={update.isPending} onClick={() => void save()}>
-          {t.common.save}
-        </Button>
-      </div>
-    </Sheet>
   );
 }

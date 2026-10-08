@@ -462,6 +462,7 @@ export async function toMeetingRows(
     counts: counts.get(m.id) ?? emptyCounts(),
     design: readPostDesign(m.design),
     templateId: tplOf[i] ?? null,
+    ownTemplateId: m.templateId,
     look: looks[i]!,
     speakers: speakers[i]!,
     seriesId: m.seriesId,

@@ -553,6 +553,8 @@ export interface MeetingRow {
   /** The poster's animation: its own, else its template's (null = none). */
   posterMotion: MeetingMotion | null;
   ownPosterMotion: MeetingMotion | null;
+  /** Its own choice of template (null = follows the ministry's default, if any). */
+  ownTemplateId: number | null;
   /** Settings per animation: its own over its template's. */
   motionTunes: MotionTunes;
   ownMotionTunes: MotionTunes;

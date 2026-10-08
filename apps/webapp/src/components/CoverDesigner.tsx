@@ -63,11 +63,22 @@ export function initCover(
 }
 
 /** The look a cover shows now (for the live preview), and the one before its colour. */
-export function useCoverLook(state: CoverState, g: GroupSummary | undefined) {
+export function useCoverLook(
+  state: CoverState,
+  g: GroupSummary | undefined,
+  /** Meetings: the ministry's default template, worn while "no own choice" is picked. */
+  followTemplateId?: number | null,
+) {
   const templates = useTemplates();
   const { source, own, design } = state;
+  const followed =
+    source.kind === 'ministry' && followTemplateId
+      ? templates.data?.find((x) => x.id === followTemplateId)
+      : undefined;
   const tpl =
-    source.kind === 'template' ? templates.data?.find((x) => x.id === source.id) : undefined;
+    source.kind === 'template'
+      ? templates.data?.find((x) => x.id === source.id)
+      : (followed ?? undefined);
   const base: PosterLook | null = tpl
     ? {
         brandColor: tpl.brandColor,
@@ -101,7 +112,14 @@ export function useCoverLook(state: CoverState, g: GroupSummary | undefined) {
     brandColor: design.brandColor ?? base.brandColor,
     ...(design.noBackdrop ? { backdrop: null, backdropUrl: null } : {}),
   };
-  return { look, base, templateId: tpl?.id ?? null, templates: templates.data ?? [] };
+  // Following the default is stored as no template of its own.
+  return {
+    look,
+    base,
+    templateId: followed ? null : (tpl?.id ?? null),
+    followed: followed ?? null,
+    templates: templates.data ?? [],
+  };
 }
 
 /** What the API stores: the design (with an own look when chosen) and the template. */
@@ -131,14 +149,18 @@ export function CoverLookControls({
   onChange,
   g,
   groupId,
+  followTemplateId,
 }: {
   state: CoverState;
   onChange: (s: CoverState) => void;
   g: GroupSummary | undefined;
   groupId: number;
+  /** Meetings: the ministry's default template ("as for all meetings"). */
+  followTemplateId?: number | null;
 }) {
   const t = useT();
-  const { base, templates } = useCoverLook(state, g);
+  const { base, templates } = useCoverLook(state, g, followTemplateId);
+  const defaultTpl = followTemplateId ? templates.find((x) => x.id === followTemplateId) : null;
   const { source, design } = state;
   const setSource = (s: CoverSource) => onChange({ ...state, source: s });
   const set = (patch: Partial<PostDesign>) =>
@@ -150,21 +172,23 @@ export function CoverLookControls({
           <Pill
             on={source.kind === 'ministry'}
             onClick={() => setSource({ kind: 'ministry' })}
-            label={t.feed.ministryLook}
+            label={defaultTpl ? t.design.followDefault(defaultTpl.name) : t.feed.ministryLook}
           />
           <Pill
             on={source.kind === 'own'}
             onClick={() => setSource({ kind: 'own' })}
             label={t.feed.ownLook}
           />
-          {templates.map((x) => (
-            <Pill
-              key={x.id}
-              on={source.kind === 'template' && source.id === x.id}
-              onClick={() => setSource({ kind: 'template', id: x.id })}
-              label={x.name}
-            />
-          ))}
+          {templates
+            .filter((x) => x.id !== defaultTpl?.id)
+            .map((x) => (
+              <Pill
+                key={x.id}
+                on={source.kind === 'template' && source.id === x.id}
+                onClick={() => setSource({ kind: 'template', id: x.id })}
+                label={x.name}
+              />
+            ))}
         </div>
       </Group>
       <Group title={t.feed.postColor}>

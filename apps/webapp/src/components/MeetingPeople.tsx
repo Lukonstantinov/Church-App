@@ -713,6 +713,34 @@ function AddServiceFlow({
   );
 }
 
+/** The people block's look sheet with its saving (used from the 🎨 design sheet too). */
+export function PeopleLookEditor({ m, onClose }: { m: MeetingDetail; onClose: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  const update = useUpdateMeeting();
+  const upload = useUploadMedia(m.groupId, 'event');
+  return (
+    <PeopleLookSheet
+      m={m}
+      onClose={onClose}
+      onSave={async (peopleLook, toSeries) => {
+        try {
+          await update.mutateAsync({
+            id: m.id,
+            peopleLook,
+            ...(toSeries ? { applyToSeries: true } : {}),
+          });
+          haptic.success();
+          onClose();
+        } catch {
+          toast(t.common.saveFailed, 'error');
+        }
+      }}
+      upload={async (f) => (await upload.mutateAsync(await preparePhoto(f))).id}
+    />
+  );
+}
+
 /** Style and colour of the people cards and chips, role icons, and the panel's background. */
 function PeopleLookSheet({
   m,

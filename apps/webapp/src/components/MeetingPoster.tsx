@@ -171,7 +171,9 @@ export const MeetingPoster = forwardRef<
   const place =
     design?.titlePos === 'top' ? 'mt-8' : design?.titlePos === 'center' ? 'my-auto' : 'mt-auto';
   // The speakers' photos: how they look (this poster's own setting, else its template's).
-  const speakerLook = design?.speakerLook ?? m.speakerLook ?? null;
+  // Its own changes over what it follows, field by field.
+  const speakerLook =
+    design?.speakerLook || m.speakerLook ? { ...m.speakerLook, ...design?.speakerLook } : null;
   const style = speakerLook?.style ?? 'photo';
   const spot = speakerSpot(speakerLook);
   const backdropPhoto = style !== 'photo' && !collage.length ? leadPhoto(speakers) : null;

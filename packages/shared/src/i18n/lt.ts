@@ -1046,6 +1046,23 @@ export const lt: Messages = {
     followDefault: (name: string) => `Kaip visiems susitikimams («${name}»)`,
     phoneStill:
       'Šiame telefone animacijos išjungtos (Daugiau → Animacijos arba Grafika «Be judesio») — čia jos nejuda, kiti jas mato.',
+    sheetTitle: 'Išvaizda',
+    srcTitle: 'Iš kur išvaizda',
+    srcHint:
+      'Sava — pakeista tik šiam susitikimui. «Grąžinti» — vėl kaip visiems susitikimams (šablonas ar tarnystė); šablono pakeitimai vėl pasieks.',
+    srcLook: 'Išvaizda (spalvos, raštas, nuotrauka)',
+    srcMotions: 'Animacijos',
+    srcSpeakers: 'Kalbėtojų nuotraukos',
+    srcLayered: 'Plakatas iš sluoksnių',
+    srcPeople: 'Žmonių kortelės (stilius, ženkliukai)',
+    srcOpen: 'Atidaryti',
+    srcTemplate: (name: string) => `Savas pasirinkimas: šablonas «${name}»`,
+    srcDefault: (name: string) => `Kaip visiems susitikimams — «${name}»`,
+    srcMinistry: 'Kaip tarnystės',
+    srcOwn: 'Sava šiam susitikimui',
+    srcOwnChanges: 'Savi pakeitimai virš bendrų',
+    srcInherited: 'Kaip visiems susitikimams',
+    srcReset: 'Grąžinti',
     defaultForMeetings: 'Visų susitikimų išvaizda',
     defaultForMeetingsHint:
       'Susitikimai be savo išvaizdos (ir nauji pagal tvarkaraštį) naudoja šį šabloną. Atskirą susitikimą galima pakeisti žemiau — «Susitikimai».',

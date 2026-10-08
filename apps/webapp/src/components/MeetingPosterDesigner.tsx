@@ -19,6 +19,8 @@ import {
   type CoverState,
 } from './CoverDesigner';
 import { MeetingPoster, PosterPhotoWarning } from './MeetingPoster';
+import { PosterPicker } from './PosterStudio';
+import { usePosterTemplates } from '../lib/queries';
 import {
   SpeakerLookControls,
   SpeakersEditor,
@@ -45,6 +47,8 @@ export interface MeetingPosterState {
   inheritedTunes: MotionTunes;
   /** The speaker-photo look it follows without its own (its template's). */
   inheritedSpeakerLook: SpeakerLook | null;
+  /** A poster made of layers (Design → Posters) instead of the generated one. */
+  posterTemplateId: number | null;
 }
 
 export const initMeetingPoster = (
@@ -61,6 +65,8 @@ export const initMeetingPoster = (
     | 'motionTunes'
     | 'ownMotionTunes'
     | 'speakerLook'
+    | 'ownTemplateId'
+    | 'posterTemplateId'
   >,
 ): MeetingPosterState => {
   const own = m?.ownMotionTunes ?? {};
@@ -69,7 +75,8 @@ export const initMeetingPoster = (
     Object.entries(m?.motionTunes ?? {}).filter(([k]) => !(k in own)),
   ) as MotionTunes;
   return {
-    cover: initCover(m?.design, m?.templateId, m?.look, true),
+    // Its own choice only: following the ministry's default shows as "as for all meetings".
+    cover: initCover(m?.design, m?.ownTemplateId ?? null, m?.look, true),
     speakers: toDrafts(m?.speakers),
     posterMotion: m?.ownPosterMotion ?? null,
     inheritedMotion: m?.ownPosterMotion ? null : (m?.posterMotion ?? null),
@@ -78,6 +85,7 @@ export const initMeetingPoster = (
     motionTunes: own,
     inheritedTunes: inherited,
     inheritedSpeakerLook: m?.speakerLook ?? null,
+    posterTemplateId: m?.posterTemplateId ?? null,
   };
 };
 
@@ -93,6 +101,7 @@ export function meetingPosterPayload(
   motion: MeetingMotion | null;
   tileMotion: MeetingMotion | null;
   motionTunes: MotionTunes;
+  posterTemplateId: number | null;
 } {
   return {
     ...coverPayload(state.cover, templateId),
@@ -101,6 +110,7 @@ export function meetingPosterPayload(
     motion: state.motion,
     tileMotion: state.tileMotion,
     motionTunes: state.motionTunes,
+    posterTemplateId: state.posterTemplateId,
   };
 }
 
@@ -115,7 +125,13 @@ export function MeetingPosterDesigner({
   meeting,
   state,
   onChange,
+  followTemplateId,
+  onPeopleLook,
 }: {
+  /** The ministry's default template for meetings ("as for all meetings"). */
+  followTemplateId?: number | null;
+  /** Opens the people block's look (cards, chips, icons), when the meeting exists. */
+  onPeopleLook?: () => void;
   g: GroupSummary | undefined;
   groupId: number;
   /** What the poster shows (title, time, place…). */
@@ -127,7 +143,70 @@ export function MeetingPosterDesigner({
   onChange: (s: MeetingPosterState) => void;
 }) {
   const t = useT();
-  const { look } = useCoverLook(state.cover, g);
+  const { look, followed, templates } = useCoverLook(state.cover, g, followTemplateId);
+  const posters = usePosterTemplates();
+  const chosenPoster = posters.data?.find((x) => x.id === state.posterTemplateId) ?? null;
+  const ownTpl =
+    state.cover.source.kind === 'template'
+      ? templates.find((x) => x.id === (state.cover.source as { id: number }).id)
+      : null;
+  // Where each part of the look comes from, with a way back to the default.
+  const sources: { label: string; from: string; own: boolean; reset: () => void }[] = [
+    {
+      label: t.design.srcLook,
+      from: ownTpl
+        ? t.design.srcTemplate(ownTpl.name)
+        : state.cover.source.kind === 'own'
+          ? t.design.srcOwn
+          : followed
+            ? t.design.srcDefault(followed.name)
+            : t.design.srcMinistry,
+      own: state.cover.source.kind !== 'ministry' || !!state.cover.design.brandColor,
+      reset: () =>
+        onChange({
+          ...state,
+          cover: {
+            ...state.cover,
+            source: { kind: 'ministry' },
+            design: { ...state.cover.design, brandColor: null },
+          },
+        }),
+    },
+    {
+      label: t.design.srcMotions,
+      from:
+        state.motion ||
+        state.tileMotion ||
+        state.posterMotion ||
+        Object.keys(state.motionTunes).length
+          ? t.design.srcOwn
+          : t.design.srcInherited,
+      own: !!(
+        state.motion ||
+        state.tileMotion ||
+        state.posterMotion ||
+        Object.keys(state.motionTunes).length
+      ),
+      reset: () =>
+        onChange({ ...state, motion: null, tileMotion: null, posterMotion: null, motionTunes: {} }),
+    },
+    {
+      label: t.design.srcSpeakers,
+      from: state.cover.design.speakerLook ? t.design.srcOwnChanges : t.design.srcInherited,
+      own: !!state.cover.design.speakerLook,
+      reset: () =>
+        onChange({
+          ...state,
+          cover: { ...state.cover, design: { ...state.cover.design, speakerLook: null } },
+        }),
+    },
+    {
+      label: t.design.srcLayered,
+      from: chosenPoster ? chosenPoster.name : t.posters.pickNone,
+      own: !!chosenPoster,
+      reset: () => onChange({ ...state, posterTemplateId: null }),
+    },
+  ];
   const [motionSlide, setMotionSlide] = useState(2);
   const setDesign = (patch: Partial<MeetingPosterState['cover']['design']>) =>
     onChange({ ...state, cover: { ...state.cover, design: { ...state.cover.design, ...patch } } });
@@ -147,6 +226,7 @@ export function MeetingPosterDesigner({
                   posterMotion: state.posterMotion ?? state.inheritedMotion,
                   motionTunes: { ...state.inheritedTunes, ...state.motionTunes },
                   speakerLook: { ...state.inheritedSpeakerLook, ...state.cover.design.speakerLook },
+                  poster: chosenPoster,
                 }}
                 g={g}
               />
@@ -155,6 +235,48 @@ export function MeetingPosterDesigner({
           <PosterPhotoWarning m={{ ...meeting, speakers: toShown(state.speakers) }} />
         </div>
       )}
+      <Section title={t.design.srcTitle} footer={t.design.srcHint}>
+        {sources.map((x) => (
+          <div
+            key={x.label}
+            className="flex min-h-[52px] items-center gap-3 border-b border-hairline px-4 py-2 last:border-b-0"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-[15px]">{x.label}</div>
+              <div className={`truncate text-[13px] ${x.own ? 'text-accent' : 'text-hint'}`}>
+                {x.from}
+              </div>
+            </div>
+            {x.own && (
+              <button
+                type="button"
+                onClick={x.reset}
+                className="shrink-0 rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold active:scale-95"
+              >
+                ↺ {t.design.srcReset}
+              </button>
+            )}
+          </div>
+        ))}
+        {onPeopleLook && (
+          <button
+            type="button"
+            onClick={onPeopleLook}
+            className="flex min-h-[52px] w-full items-center gap-3 px-4 py-2 text-left active:bg-hairline"
+          >
+            <span className="min-w-0 flex-1 text-[15px]">{t.design.srcPeople}</span>
+            <span className="text-[13px] text-link">{t.design.srcOpen} ›</span>
+          </button>
+        )}
+      </Section>
+      <Section title={t.posters.pick} footer={t.posters.pickHint}>
+        <div className="p-4">
+          <PosterPicker
+            value={state.posterTemplateId}
+            onChange={(posterTemplateId) => onChange({ ...state, posterTemplateId })}
+          />
+        </div>
+      </Section>
       <Section title={t.meetings.posterTitle} footer={t.meetings.posterHint}>
         <div className="flex flex-col gap-5 p-4">
           <CoverLookControls
@@ -162,6 +284,7 @@ export function MeetingPosterDesigner({
             onChange={(cover) => onChange({ ...state, cover })}
             g={g}
             groupId={groupId}
+            followTemplateId={followTemplateId}
           />
           <div>
             <div className="mb-2 text-[13px] text-hint">{t.meetings.posterLayout}</div>

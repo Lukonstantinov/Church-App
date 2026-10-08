@@ -1021,6 +1021,23 @@ export const en: Messages = {
     followDefault: (name: string) => `As for all meetings («${name}»)`,
     phoneStill:
       'Animations are off on this phone (More → Animations, or Graphics «Still») — they don’t move here; everyone else sees them.',
+    sheetTitle: 'Design',
+    srcTitle: 'Where the look comes from',
+    srcHint:
+      'Own = changed for this meeting only. «Reset» makes it follow all meetings again (template or ministry), so template changes reach it again.',
+    srcLook: 'Look (colours, pattern, photo)',
+    srcMotions: 'Animations',
+    srcSpeakers: 'Speaker photos',
+    srcLayered: 'Layered poster',
+    srcPeople: 'People cards (style, icons)',
+    srcOpen: 'Open',
+    srcTemplate: (name: string) => `Own choice: template «${name}»`,
+    srcDefault: (name: string) => `As for all meetings — «${name}»`,
+    srcMinistry: 'As the ministry',
+    srcOwn: 'Own for this meeting',
+    srcOwnChanges: 'Own changes over the shared ones',
+    srcInherited: 'As for all meetings',
+    srcReset: 'Reset',
     defaultForMeetings: 'Look of all meetings',
     defaultForMeetingsHint:
       'Meetings without a look of their own (and new scheduled ones) wear this template. A single meeting can be changed below — «Meetings».',

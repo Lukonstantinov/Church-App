@@ -40,7 +40,7 @@ export function NewMeeting({ groupId, date: initialDate }: { groupId: number; da
   const [count, setCount] = useState(DEFAULT_COUNT.weekly);
   const [designing, setDesigning] = useState(false);
   const [poster, setPoster] = useState(() => initMeetingPoster());
-  const { templateId } = useCoverLook(poster.cover, group.data);
+  const { templateId } = useCoverLook(poster.cover, group.data, group.data?.meetingTemplateId);
   const countOk = count >= 2 && count <= 52;
   // Only for the poster preview (the server works in the church's time zone).
   const parsed = new Date(`${date}T${form.startTime}`);
@@ -120,6 +120,7 @@ export function NewMeeting({ groupId, date: initialDate }: { groupId: number; da
       </Section>
       {designing && group.data && (
         <MeetingPosterDesigner
+          followTemplateId={group.data?.meetingTemplateId}
           g={group.data}
           groupId={groupId}
           meeting={{

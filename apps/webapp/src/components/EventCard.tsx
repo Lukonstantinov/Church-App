@@ -87,7 +87,7 @@ export function EventCover({
         tint={null}
         look={e.look}
         // Its own speaker-photo setting, else its template's.
-        design={{ ...e.design, speakerLook: e.design.speakerLook ?? e.speakerLook ?? null }}
+        design={{ ...e.design, speakerLook: e.speakerLook ?? e.design.speakerLook ?? null }}
         compact={compact}
         speakers={e.speakers}
       />

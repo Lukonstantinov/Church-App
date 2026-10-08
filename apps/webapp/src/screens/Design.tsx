@@ -29,6 +29,7 @@ import { Group, LookControls, Pill } from '../components/LookControls';
 import { LookTop } from '../components/LookTop';
 import { MeetingPoster, groupLook } from '../components/MeetingPoster';
 import { MotionTargets } from '../components/MotionTargets';
+import { MeetingDesignSheet } from '../components/MeetingDesignSheet';
 import { SpeakerLookControls } from '../components/Speakers';
 import { SpeakerLookPreview } from '../components/SpeakerLookPreview';
 import { QualityPicker } from '../components/QualityPicker';
@@ -95,6 +96,8 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
   const saveStudio = useSaveMinistryStudio(active.id);
   const toast = useToast();
   const [editing, setEditing] = useState<DesignTemplate | 'new' | null>(null);
+  // A meeting's «🎨 Оформление» (the same sheet as on the meeting itself).
+  const [designing, setDesigning] = useState<number | null>(null);
   const [applying, setApplying] = useState<
     { kind: 'meeting'; m: MeetingRow } | { kind: 'event'; e: EventSummary } | null
   >(null);
@@ -222,7 +225,7 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
             subtitle={`${f.relativeDay(m.startsAt)} · ${f.time(m.startsAt)} · ${
               tplName(m.templateId) ?? (m.design?.custom ? t.design.ownLook : t.design.ministryLook)
             }`}
-            onClick={() => setApplying({ kind: 'meeting', m })}
+            onClick={() => setDesigning(m.id)}
           />
         ))}
       </Section>
@@ -273,6 +276,9 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
         />
       )}
       {applying && <ApplySheet item={applying} g={active} onClose={() => setApplying(null)} />}
+      {designing !== null && (
+        <MeetingDesignSheet meetingId={designing} onClose={() => setDesigning(null)} />
+      )}
     </Screen>
   );
 }
