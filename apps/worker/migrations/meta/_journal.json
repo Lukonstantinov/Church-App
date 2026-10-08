@@ -344,6 +344,13 @@
       "when": 1791453445224,
       "tag": "0048_speaker_look_tunes",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "6",
+      "when": 1791455241304,
+      "tag": "0049_group_speaker_look",
+      "breakpoints": true
     }
   ]
 }

@@ -455,6 +455,14 @@ describe('looks from the Design tab and profile photos', () => {
     });
     // Its own animation wins over the template's.
     expect(list.find((m) => m.id === own.id)).toMatchObject({ motion: 'snow' });
+    // The ministry's speaker-photo look reaches meetings whose template has none.
+    await apiJson(`/api/groups/${g.id}/studio`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: { speakerLook: { style: 'side', x: 'right' } },
+    });
+    const withLook = await apiJson<MeetingRow[]>(`/api/groups/${g.id}/meetings`, { user: ADMIN });
+    expect(withLook.find((m) => m.id === plain.id)!.speakerLook).toMatchObject({ style: 'side' });
     // Deleting the template takes the default away.
     await apiJson(`/api/templates/${tplId}`, { method: 'DELETE', user: ADMIN });
     expect(
@@ -518,6 +526,37 @@ describe('looks from the Design tab and profile photos', () => {
       },
     });
     expect(bad.status).toBe(400);
+  });
+});
+
+describe('event picture for the bot', () => {
+  it('a cover photo goes as it is; the drawn poster only without one or with a poster template', async () => {
+    const g = await createEnv('Картинка бота');
+    const cover = await upload(g.id);
+    const drawn = await upload(g.id);
+    const e = await apiJson<EventDetail>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        title: 'С обложкой',
+        date: new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10),
+        startTime: '18:00',
+        coverMediaId: cover,
+        posterMediaId: drawn,
+      },
+    });
+    expect(e.botPictureUrl).toContain(`/${cover}?`);
+    const tpl = await apiJson<PosterTemplate>('/api/poster-templates', {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Слои', background: { type: 'color', colors: ['#000000'] }, layers: [] },
+    });
+    const withTpl = await apiJson<EventDetail>(`/api/events/${e.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { posterTemplateId: tpl.id },
+    });
+    expect(withTpl.botPictureUrl).toContain(`/${drawn}?`);
   });
 });
 

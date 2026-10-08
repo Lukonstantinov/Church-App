@@ -198,6 +198,8 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
         )}
       </section>
 
+      <MinistrySpeakerLook g={active} />
+
       <Section title={t.design.meetings}>
         {meetings.length === 0 && <Row title={t.design.nothing} />}
         {meetings.map((m) => (
@@ -790,5 +792,31 @@ function ApplySheet({
         </Button>
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * How speakers' photos show on all of the ministry's meetings (posters, tiles, panel,
+ * screen). A template or a single meeting can set its own; this is what the rest follow.
+ */
+function MinistrySpeakerLook({ g }: { g: GroupSummary }) {
+  const t = useT();
+  const toast = useToast();
+  const group = useGroup(g.id);
+  const save = useSaveMinistryStudio(g.id);
+  const [draft, setDraft] = useState<SpeakerLook | null | undefined>(undefined);
+  const value = draft === undefined ? (group.data?.speakerLook ?? null) : draft;
+  return (
+    <Section title={`🎤 ${t.design.speakerSection}`} footer={t.design.speakerSectionHint}>
+      <div className="p-4">
+        <SpeakerLookControls
+          value={value}
+          onChange={(v) => {
+            setDraft(v);
+            save.mutate({ speakerLook: v }, { onError: () => toast(t.common.saveFailed, 'error') });
+          }}
+        />
+      </div>
+    </Section>
   );
 }

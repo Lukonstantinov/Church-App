@@ -111,7 +111,9 @@ export function PosterMedia({
   const sLook = design?.speakerLook ?? null;
   const sStyle = sLook?.style ?? 'photo';
   // A small tile has no room for a column or a spot: there they go along the bottom.
-  const sSpot = compact ? { inline: true, x: 'center', y: 'bottom' } : speakerSpot(sLook);
+  const sSpot: ReturnType<typeof speakerSpot> = compact
+    ? { inline: true, x: 'center', y: 'bottom' }
+    : speakerSpot(sLook);
   const on = onBrandStyle(
     look?.textColor ?? 'auto',
     photos.length > 0 || !!look?.pattern || !!look?.backdropUrl,
@@ -260,6 +262,7 @@ export function PosterMedia({
               look={compact ? { ...sLook, size: undefined } : sLook}
               brand={theme.light}
               vertical={!sSpot.inline && sSpot.x !== 'center'}
+              side={sSpot.inline || sSpot.x === 'center' ? undefined : sSpot.x}
             />
           </div>
         ))}

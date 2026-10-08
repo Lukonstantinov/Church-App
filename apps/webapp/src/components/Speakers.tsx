@@ -120,6 +120,7 @@ export function SpeakerStrip({
   look,
   brand = '#ffffff',
   vertical,
+  side,
 }: {
   speakers: Speaker[];
   size?: Size;
@@ -130,6 +131,8 @@ export function SpeakerStrip({
   brand?: string;
   /** One under another (a column at the side of the poster). */
   vertical?: boolean;
+  /** For a column: the poster edge it hugs, so the photos line up with the text's margin. */
+  side?: 'left' | 'right';
 }) {
   if (speakers.length === 0) return null;
   const wanted: Size = look?.size ? LOOK_SIZE[look.size] : size;
@@ -152,13 +155,18 @@ export function SpeakerStrip({
   };
   return (
     <div
-      className={`flex ${vertical ? 'flex-col items-center' : 'flex-wrap items-start justify-center'} ${s.gap} ${className}`}
+      className={`flex ${
+        vertical
+          ? `flex-col ${side === 'right' ? 'items-end' : side === 'left' ? 'items-start' : 'items-center'}`
+          : 'flex-wrap items-start justify-center'
+      } ${s.gap} ${className}`}
     >
       {speakers.slice(0, MAX_SPEAKERS).map((sp, i) => (
         <div
           key={`${sp.name}${i}`}
           className="flex min-w-0 flex-col items-center text-center"
-          style={{ width: s.photo + (s.photo >= 96 ? 52 : 28) }}
+          // In a side column the photo itself touches the margin line (no room around it).
+          style={{ width: s.photo + (side ? 0 : s.photo >= 96 ? 52 : 28) }}
         >
           {sp.photoUrl ? (
             <img src={sp.photoUrl} alt="" className="object-cover" style={photo} />

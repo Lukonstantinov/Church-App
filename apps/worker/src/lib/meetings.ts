@@ -312,12 +312,14 @@ export async function toMeetingRows(
           id: groups.id,
           motion: groups.meetingMotion,
           template: groups.meetingTemplateId,
+          speakerLook: groups.speakerLook,
         })
         .from(groups)
         .where(inArray(groups.id, groupIds))
     : [];
   const motions = new Map(groupRows.map((g) => [g.id, readMotion(g.motion)]));
   const defaults = new Map(groupRows.map((g) => [g.id, g.template]));
+  const groupSpeakerLooks = new Map(groupRows.map((g) => [g.id, readSpeakerLook(g.speakerLook)]));
   const tplOf = list.map(
     (m) => m.templateId ?? (m.design ? null : defaults.get(m.groupId)) ?? null,
   );
@@ -430,6 +432,7 @@ export async function toMeetingRows(
     speakerLook:
       readPostDesign(m.design)?.speakerLook ??
       (tplOf[i] ? templateMotions.get(tplOf[i]!)?.speakerLook : null) ??
+      groupSpeakerLooks.get(m.groupId) ??
       null,
     posterTemplateId: m.posterTemplateId,
     poster: (m.posterTemplateId && posters.get(m.posterTemplateId)) || null,

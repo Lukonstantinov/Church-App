@@ -8,6 +8,7 @@ import {
   MINISTRY_PALETTE,
   readBackdrop,
   readPattern,
+  readSpeakerLook,
   type EnterAnimation,
   addExistingMemberSchema,
   addOfflineMemberSchema,
@@ -333,6 +334,7 @@ groupRoutes.get('/:id', async (c) => {
     meetingReminders: readReminders(group.meetingReminders),
     meetingMotion: readMotion(group.meetingMotion) ?? 'calm',
     meetingTemplateId: group.meetingTemplateId,
+    speakerLook: readSpeakerLook(group.speakerLook),
     meetingServices: readServices(group.meetingServices),
     managedChat: group.tgChatId
       ? { title: group.tgChatTitle, pending: group.chatLinkCode !== null }
@@ -401,6 +403,8 @@ groupRoutes.put('/:id/studio', async (c) => {
   if (input.animation !== undefined) patch.animation = input.animation;
   if (input.meetingMotion !== undefined) patch.meetingMotion = input.meetingMotion;
   if (input.pageBackground !== undefined) patch.pageBackground = input.pageBackground;
+  if (input.speakerLook !== undefined)
+    patch.speakerLook = input.speakerLook ? JSON.stringify(input.speakerLook) : null;
   if (input.meetingTemplateId !== undefined) {
     if (
       input.meetingTemplateId !== null &&

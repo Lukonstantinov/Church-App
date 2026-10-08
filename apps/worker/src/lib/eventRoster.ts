@@ -85,8 +85,13 @@ export function rosterMessage(event: Pick<Event, 'title'>, roster: Roster, local
 }
 
 /**
- * The event's picture for the bot: the poster (a JPEG the app makes from the cover), else
- * the cover photo.
+ * The event's picture for the bot. With a cover photo, that photo itself — the poster the
+ * phone draws from it could come out black on iPhones. The drawn poster (a JPEG the app
+ * makes) only when there is no photo (a designed cover) or a poster template is chosen.
  */
-export const eventPictureId = (event: Pick<Event, 'coverMediaId' | 'posterMediaId'>) =>
-  event.posterMediaId ?? event.coverMediaId ?? null;
+export const eventPictureId = (
+  event: Pick<Event, 'coverMediaId' | 'posterMediaId'> & Partial<Pick<Event, 'posterTemplateId'>>,
+) =>
+  event.posterTemplateId
+    ? (event.posterMediaId ?? event.coverMediaId ?? null)
+    : (event.coverMediaId ?? event.posterMediaId ?? null);

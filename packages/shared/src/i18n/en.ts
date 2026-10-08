@@ -1013,6 +1013,9 @@ export const en: Messages = {
       'Colour, pattern, photo and animation. Meetings and events using a template change with it.',
     speakerLookHint:
       'How speakers’ photos sit on the posters and cards of every meeting with this template. A meeting can change it.',
+    speakerSection: 'Speaker photos on meetings',
+    speakerSectionHint:
+      'For all the ministry’s meetings: the poster, the home tile, the «Next meeting» panel and the meeting screen. The photo comes from the speaker’s profile (People → person → 📷). A template or a single meeting («Poster») can set its own. Saved at once.',
     defaultForMeetings: 'Look of all meetings',
     defaultForMeetingsHint:
       'Meetings without a look of their own (and new scheduled ones) wear this template. A single meeting can be changed below — «Meetings».',

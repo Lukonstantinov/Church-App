@@ -81,7 +81,8 @@ positions with rights, labels, contacts, profile photos (`users.photo_media_id`,
 screen via `PUT /api/users/:id/photo`; used on meeting cards and as speakers' photos on posters —
 speakers can be picked from people, `speaker.userId`; missing photos give a warning; their look on
 posters and meeting cards — style photo/side/background, nine spots, edge, shape, size, opacity, on
-cards — is `design.speakerLook`, defaulting to the template's `speaker_look`; `CardSpeaker` on tiles,
+cards — is `design.speakerLook`, defaulting to the template's `speaker_look`, then the ministry's
+(`groups.speaker_look`, Design → «Фото спикеров на встречах»); `CardSpeaker` on tiles,
 panel and hero). Animation settings per meeting/template: `motion_tunes` (`MotionTargets`).
 
 **Meetings** — one-off, repeating series (weekly / biweekly / monthly, all dates created
@@ -105,6 +106,9 @@ past meetings are never auto-removed, only `DELETE /api/meetings/:id` after two 
 slideshow (`cover_slides`: up to 9 more photos in turn, each settling from a slight zoom; `CoverSlideshow.tsx`), speakers, countdown, burning outline,
 RSVP, duties (with bot notices), burning outline colour any / rainbow / two-colour gradient (`design.burnColor`), cost and payments, gallery, programme, in-app chat or a
 bot-managed Telegram chat, pin to the main page, picture/PDF export.
+
+Bot pictures of events: the cover photo when there is one, else the phone-drawn poster
+(`eventPictureId`); `capturePoster` refuses blank/black drawings and leaves moving effects out.
 
 **Live & reminders** — LIVE badge (pulsing, outline kept) while an event/meeting is on;
 "🔴 LIVE now" bot message at the start (`lib/liveNotice.ts`, `live_notified_at`, skipped if

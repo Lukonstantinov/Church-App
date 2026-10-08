@@ -37,6 +37,7 @@ import { accessIn, can, designRights } from './access';
 import { posterLook, lookSources } from './looks';
 import { signedMediaUrl } from './media';
 import { readMotion, speakersOf } from './meetings';
+import { eventPictureId } from './eventRoster';
 import { posterTemplatesById } from './posterTemplates';
 import { toTransactionRows } from './treasury';
 
@@ -538,10 +539,9 @@ export async function eventDetail(
       : null,
     coverMediaId: event.coverMediaId,
     posterMediaId: event.posterMediaId,
-    botPictureUrl:
-      (event.posterMediaId ?? event.coverMediaId)
-        ? await signedMediaUrl(secret, (event.posterMediaId ?? event.coverMediaId)!)
-        : null,
+    botPictureUrl: eventPictureId(event)
+      ? await signedMediaUrl(secret, eventPictureId(event)!)
+      : null,
     photos: await Promise.all(
       photos.map(async (p) => ({ id: p.id, url: await signedMediaUrl(secret, p.mediaId) })),
     ),

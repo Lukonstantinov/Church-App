@@ -175,7 +175,7 @@ export const MeetingPoster = forwardRef<
   const style = speakerLook?.style ?? 'photo';
   const spot = speakerSpot(speakerLook);
   const backdropPhoto = style !== 'photo' && !collage.length ? leadPhoto(speakers) : null;
-  const strip = (className?: string, vertical?: boolean) => (
+  const strip = (className?: string, vertical?: boolean, side?: 'left' | 'right') => (
     <SpeakerStrip
       speakers={collage.length ? speakers.map((sp) => ({ ...sp, photoUrl: null })) : speakers}
       size="md"
@@ -183,6 +183,7 @@ export const MeetingPoster = forwardRef<
       look={speakerLook}
       brand={theme.light}
       vertical={vertical}
+      side={side}
       className={className}
     />
   );
@@ -196,9 +197,19 @@ export const MeetingPoster = forwardRef<
             : spot.x === 'right'
               ? 'right-10'
               : 'inset-x-10 justify-center'
-        } ${spot.y === 'top' ? 'top-28' : spot.y === 'bottom' ? 'bottom-10' : 'top-1/2 -translate-y-1/2'}`}
+        } ${
+          spot.y === 'top'
+            ? // On the right it lines up with the logo row; elsewhere it sits just under it.
+              spot.x === 'right' && !center
+              ? 'top-10'
+              : 'top-28'
+            : spot.y === 'bottom'
+              ? // Its bottom edge on the same line as the title block's last line.
+                'bottom-10'
+              : 'top-1/2 -translate-y-1/2'
+        }`}
       >
-        {strip(undefined, spot.x !== 'center')}
+        {strip(undefined, spot.x !== 'center', spot.x === 'center' ? undefined : spot.x)}
       </div>
     ) : null;
   if (m.poster)

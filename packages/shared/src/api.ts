@@ -182,6 +182,8 @@ export interface GroupDetail extends GroupSummary {
   meetingMotion: MeetingMotion;
   /** The design template meetings without a look of their own wear (null = the ministry's). */
   meetingTemplateId: number | null;
+  /** How speakers' photos show on its meetings (null = as designed). */
+  speakerLook: SpeakerLook | null;
   /** Services saved for meetings (name, icon, speaker). */
   meetingServices: MeetingService[];
   /** Chat managed by the bot (members-only): its title; null when not linked. */

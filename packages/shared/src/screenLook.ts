@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { speakerLookSchema } from './posts';
 import { MEETING_MOTIONS, motionTuneSchema, type MotionTune } from './motions';
 import { ENTER_ANIMATIONS } from './brand';
 import { appBackgroundSchema } from './background';
@@ -170,6 +171,8 @@ export const ministryStudioSchema = z.object({
   pageBackground: appBackgroundSchema.nullable().optional(),
   /** The design template meetings without a look of their own wear (null = the ministry's). */
   meetingTemplateId: z.number().int().positive().nullable().optional(),
+  /** How speakers' photos show on its meetings (a template or a meeting can differ). */
+  speakerLook: speakerLookSchema.nullable().optional(),
 });
 export type MinistryStudioInput = z.input<typeof ministryStudioSchema>;
 

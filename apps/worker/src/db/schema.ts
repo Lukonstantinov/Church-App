@@ -125,6 +125,8 @@ export const groups = sqliteTable('groups', {
    * (Design tab): looks come from the templates, single meetings can still be changed.
    */
   meetingTemplateId: integer('meeting_template_id'),
+  /** How speakers' photos show on its meetings' posters and cards (SpeakerLook JSON). */
+  speakerLook: text('speaker_look'),
   /** Services people do at meetings, saved for reuse: JSON [{name, icon, speaker}]. */
   meetingServices: text('meeting_services'),
   /** Photo behind the ministry card (BackdropConfig JSON), NULL = colours only. */
