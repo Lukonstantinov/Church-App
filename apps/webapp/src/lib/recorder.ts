@@ -158,41 +158,54 @@ interface Effect {
 }
 
 /**
- * Generated textures (smoke, frost, grain, TV static, grunge, crack…) are small SVG pictures
- * with noise filters; the drawing library turns them black. Each is drawn once into an
- * ordinary picture at the size it shows, and that is used while recording. Returns how to
- * put the originals back.
+ * Pictures inside the effect layers, made safe for the drawing library before recording:
+ * - generated textures (smoke, frost, grain, static, grunge, crack…: SVG noise, also as the
+ *   blob pictures lib/texture.ts makes of them) — it turns those black;
+ * - the cover photo that some effects draw themselves (TV glitch, RGB split, duotone,
+ *   tilt-shift, oil…) — iPhones leave a big photo out of its drawing, so those effects
+ *   covered the real photo with grey.
+ * Each becomes an ordinary picture embedded in the page: textures at their own size,
+ * photos no bigger than they show in the recording. Returns how to put the originals back.
  */
-async function rasterizeTextures(roots: HTMLElement[]): Promise<() => void> {
+async function preparePictures(roots: HTMLElement[], k: number): Promise<() => void> {
   const undo: (() => void)[] = [];
   const done = new Map<string, string>();
   const els = roots.flatMap((r) => [r, ...r.querySelectorAll<HTMLElement>('*')]);
   for (const el of els) {
     const css = getComputedStyle(el);
-    if (!css.backgroundImage.includes('data:image/svg+xml')) continue;
+    if (!css.backgroundImage.includes('url(')) continue;
     let replaced = css.backgroundImage;
-    // Computed values quote their links; the SVG itself holds brackets (url(#filter)).
-    for (const m of css.backgroundImage.matchAll(/url\("(data:image\/svg\+xml[^"]*)"\)/g)) {
+    // Computed values quote their links; an SVG itself holds brackets (url(#filter)).
+    for (const m of css.backgroundImage.matchAll(/url\("([^"]+)"\)/g)) {
       const url = m[1]!;
-      let png = done.get(url);
-      if (!png) {
+      // Already an embedded bitmap: nothing to do.
+      if (/^data:image\/(png|jpe?g|gif|webp)/i.test(url)) continue;
+      const texture = url.startsWith('data:image/svg+xml') || url.startsWith('blob:');
+      // A photo is drawn for this element's size at the recording's scale.
+      const longest = Math.max(el.offsetWidth, el.offsetHeight) * k;
+      const key = texture ? url : `${url}|${Math.round(longest)}`;
+      let pic = done.get(key);
+      if (!pic) {
         try {
-          // At the picture's own size, so it lays out exactly as the SVG did (and stays small).
           const img = new Image();
           img.src = url;
           await img.decode();
+          const w = img.naturalWidth || 300;
+          const h = img.naturalHeight || 150;
+          const scale = texture ? 1 : Math.min(1, Math.max(320, longest * 1.15) / Math.max(w, h));
           const c = document.createElement('canvas');
-          c.width = img.naturalWidth || 300;
-          c.height = img.naturalHeight || 150;
+          c.width = Math.max(1, Math.round(w * scale));
+          c.height = Math.max(1, Math.round(h * scale));
           c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-          png = c.toDataURL('image/png');
+          // Textures keep their see-through parts; photos go as a small JPEG.
+          pic = texture ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.9);
           freeCanvas(c);
-          done.set(url, png);
+          done.set(key, pic);
         } catch {
           continue;
         }
       }
-      replaced = replaced.replace(m[0], `url("${png}")`);
+      replaced = replaced.replace(m[0], `url("${pic}")`);
     }
     if (replaced === css.backgroundImage) continue;
     const before = el.style.backgroundImage;
@@ -324,7 +337,12 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     const { below, above, effects } = await stillParts(node, k, outW, outH);
     used.push(below, above);
     const list = prepareEffects(node, effects);
-    restoreTextures = await rasterizeTextures(effects);
+    const scratch = canvasOf(outW, outH);
+    used.push(scratch);
+    restoreTextures = await preparePictures(effects, k);
+    // iPhones may leave pictures out of the library's very first drawing of a layer: one
+    // drawing of each, thrown away, before the frames that count.
+    await drawEffects(scratch.getContext('2d')!, node, list, 0, k);
     const total = Math.round(seconds * fps);
     const fade = Math.round(fps * 0.75);
 
