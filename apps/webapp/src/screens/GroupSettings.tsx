@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { BackgroundEditor } from '../components/BackgroundEditor';
 import { REMINDER_MINUTES, type GroupDetail } from '@church/shared';
 import { IconImage, IconTelegram, IconTrash } from '../components/icons';
 import { PatternDesigner } from '../components/PatternDesigner';
@@ -8,6 +7,7 @@ import { ThemePicker } from '../components/ThemePicker';
 import { useToast } from '../components/Toast';
 import {
   ActionRow,
+  Row,
   Button,
   ErrorState,
   Loading,
@@ -45,7 +45,7 @@ function Form({ g }: { g: GroupDetail }) {
   const t = useT();
   const toast = useToast();
   const me = useMe();
-  const { back } = useNav();
+  const { back, setTab } = useNav();
   const update = useUpdateGroup(g.id);
   const upload = useUploadMedia(g.id, 'event');
   const linkChat = useLinkChat(g.id);
@@ -165,13 +165,13 @@ function Form({ g }: { g: GroupDetail }) {
         <ThemePicker value={g.brandColor} onChange={(v) => v && void patchNow({ brandColor: v })} />
       </Section>
 
-      <Section title={t.appBg.title}>
-        <BackgroundEditor
-          value={g.pageBackground}
-          look={g}
-          saving={update.isPending}
-          onSave={async (pageBackground) => {
-            await update.mutateAsync({ pageBackground });
+      {/* The page background and every other look live in one place: the Design tab. */}
+      <Section footer={t.env.lookInDesignHint}>
+        <Row
+          title={`🎨 ${t.env.lookInDesign}`}
+          onClick={() => {
+            back();
+            setTab('design');
           }}
         />
       </Section>

@@ -251,15 +251,21 @@ export function SpeakerLookControls({
   value,
   onChange,
   cards = true,
+  base,
 }: {
+  /** Its own settings (only what was changed here). */
   value: SpeakerLook | null | undefined;
   onChange: (v: SpeakerLook) => void;
   /** Offer "also on the meeting's tile and panel" (meetings and templates). */
   cards?: boolean;
+  /** What it follows (template / ministry): shown, but not copied into its own settings. */
+  base?: SpeakerLook | null;
 }) {
   const t = useT();
-  const v = value ?? {};
-  const set = (p: Partial<SpeakerLook>) => onChange({ ...v, ...p });
+  const own = value ?? {};
+  const v = { ...base, ...own };
+  // Only the touched fields become its own, so later changes of the default still reach it.
+  const set = (p: Partial<SpeakerLook>) => onChange({ ...own, ...p });
   const style = v.style ?? 'photo';
   const spot = speakerSpot(v);
   const row = (children: ReactNode, title: string) => (

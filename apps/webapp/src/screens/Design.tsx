@@ -47,6 +47,8 @@ import {
   Toggle,
 } from '../components/ui';
 import { useFmt } from '../lib/format';
+import { useMotion } from '../lib/motion';
+import { useQuality } from '../lib/perf';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import {
@@ -99,6 +101,8 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
   // Fixed when the screen opens: the lists show what is still ahead.
   const [now] = useState(() => Date.now());
   const locked = me.data?.church.designLock ?? false;
+  const motionPref = useMotion();
+  const quality = useQuality();
   const isAdmin = me.data?.user.isAdmin ?? false;
 
   const meetings = (calendar.data?.meetings ?? [])
@@ -129,6 +133,13 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
           <Row title={locked ? `🔒 ${t.design.lockOn}` : `🔓 ${t.design.lockOff}`} />
         )}
       </Section>
+
+      {/* This phone shows no animations: say so, or designs look broken while testing. */}
+      {(motionPref === 'off' || quality === 'still') && (
+        <p className="rounded-2xl bg-[#f59e0b]/15 px-4 py-3 text-[13px] leading-snug text-[#b45309]">
+          ⚠️ {t.design.phoneStill}
+        </p>
+      )}
 
       <DesignStudio g={active} />
 
@@ -579,9 +590,17 @@ function TemplateSheet({
         <Group title={t.meetings.speakerLook}>
           <p className="mb-3 text-[13px] text-hint">{t.design.speakerLookHint}</p>
           <div className="mb-4">
-            <SpeakerLookPreview look={speakerLook} g={g} colors={preview} />
+            <SpeakerLookPreview
+              look={{ ...group.data?.speakerLook, ...speakerLook }}
+              g={g}
+              colors={preview}
+            />
           </div>
-          <SpeakerLookControls value={speakerLook} onChange={setSpeakerLook} />
+          <SpeakerLookControls
+            value={speakerLook}
+            base={group.data?.speakerLook}
+            onChange={setSpeakerLook}
+          />
         </Group>
         <Button disabled={save.isPending} onClick={() => void submit()}>
           {save.isPending ? t.common.saving : t.common.save}
@@ -626,7 +645,16 @@ function ApplySheet({
   const updateMeeting = useUpdateMeeting();
   const updateEvent = useUpdateEvent(item.kind === 'event' ? item.e.id : 0);
   const thing = item.kind === 'meeting' ? item.m : item.e;
-  const start: Choice = thing.templateId ?? (thing.design?.custom ? 'own' : 'ministry');
+  const groupDetail = useGroup(g.id);
+  const defaultTpl =
+    templates.data?.find((x) => x.id === groupDetail.data?.meetingTemplateId) ?? null;
+  // A meeting wearing the default template counts as "no own choice".
+  const start: Choice =
+    thing.templateId && !(item.kind === 'meeting' && thing.templateId === defaultTpl?.id)
+      ? thing.templateId
+      : thing.design?.custom
+        ? 'own'
+        : 'ministry';
   const [choice, setChoice] = useState<Choice>(start);
   // This meeting's own animation (null = its template's or the ministry's).
   const startMotion = item.kind === 'meeting' ? item.m.ownMotion : null;
@@ -649,7 +677,13 @@ function ApplySheet({
   const [posterTpl, setPosterTpl] = useState<number | null>(startPosterTpl);
   const posters = usePosterTemplates();
   const chosenPoster = posters.data?.find((x) => x.id === posterTpl) ?? null;
-  const tpl = typeof choice === 'number' ? templates.data?.find((x) => x.id === choice) : null;
+  // Following the default shows the default template's look and animations.
+  const tpl =
+    typeof choice === 'number'
+      ? templates.data?.find((x) => x.id === choice)
+      : choice === 'ministry' && item.kind === 'meeting'
+        ? defaultTpl
+        : null;
   const look: PosterLook =
     choice === 'own' ? (thing.look ?? groupLook(g)) : tpl ? templateLook(tpl) : groupLook(g);
   const motion: MeetingMotion =
@@ -759,7 +793,12 @@ function ApplySheet({
             <Pill
               on={choice === 'ministry'}
               onClick={() => setChoice('ministry')}
-              label={t.design.ministryLook}
+              // With a default template for meetings, "no own choice" means following it.
+              label={
+                item.kind === 'meeting' && defaultTpl
+                  ? t.design.followDefault(defaultTpl.name)
+                  : t.design.ministryLook
+              }
             />
             {start === 'own' && (
               <Pill

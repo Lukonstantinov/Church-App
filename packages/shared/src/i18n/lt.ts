@@ -1043,6 +1043,9 @@ export const lt: Messages = {
     speakerSection: 'Kalbėtojų nuotraukos susitikimuose',
     speakerSectionHint:
       'Visiems tarnystės susitikimams: plakatas, plytelė, skydelis «Artimiausias susitikimas» ir susitikimo ekranas. Nuotrauka imama iš kalbėtojo profilio (Žmonės → žmogus → 📷). Šablonas arba pats susitikimas («Plakatas») gali turėti savo. Išsaugoma iš karto.',
+    followDefault: (name: string) => `Kaip visiems susitikimams («${name}»)`,
+    phoneStill:
+      'Šiame telefone animacijos išjungtos (Daugiau → Animacijos arba Grafika «Be judesio») — čia jos nejuda, kiti jas mato.',
     defaultForMeetings: 'Visų susitikimų išvaizda',
     defaultForMeetingsHint:
       'Susitikimai be savo išvaizdos (ir nauji pagal tvarkaraštį) naudoja šį šabloną. Atskirą susitikimą galima pakeisti žemiau — «Susitikimai».',
@@ -1632,6 +1635,8 @@ export const lt: Messages = {
     },
   },
   env: {
+    lookInDesign: 'Ekrano fonas, animacijos ir šablonai — «Dizainas»',
+    lookInDesignHint: 'Visa išvaizda nustatoma vienoje vietoje — skirtuke «Dizainas».',
     look: 'Išvaizda',
     layout: 'Išdėstymas',
     layouts: {

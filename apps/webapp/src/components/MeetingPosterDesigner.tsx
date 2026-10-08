@@ -77,7 +77,7 @@ export const initMeetingPoster = (
     tileMotion: m?.ownTileMotion ?? null,
     motionTunes: own,
     inheritedTunes: inherited,
-    inheritedSpeakerLook: m?.design?.speakerLook ? null : (m?.speakerLook ?? null),
+    inheritedSpeakerLook: m?.speakerLook ?? null,
   };
 };
 
@@ -146,7 +146,7 @@ export function MeetingPosterDesigner({
                   speakers: toShown(state.speakers),
                   posterMotion: state.posterMotion ?? state.inheritedMotion,
                   motionTunes: { ...state.inheritedTunes, ...state.motionTunes },
-                  speakerLook: state.inheritedSpeakerLook,
+                  speakerLook: { ...state.inheritedSpeakerLook, ...state.cover.design.speakerLook },
                 }}
                 g={g}
               />
@@ -189,8 +189,9 @@ export function MeetingPosterDesigner({
       <Section title={t.meetings.speakerLook}>
         <div className="p-4">
           <SpeakerLookControls
-            // Without its own, it starts from what the template gives.
-            value={state.cover.design.speakerLook ?? state.inheritedSpeakerLook}
+            // Shows what it follows; only what is changed here becomes its own.
+            value={state.cover.design.speakerLook}
+            base={state.inheritedSpeakerLook}
             onChange={(speakerLook) => setDesign({ speakerLook })}
           />
         </div>

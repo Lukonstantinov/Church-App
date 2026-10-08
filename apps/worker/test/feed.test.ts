@@ -463,6 +463,33 @@ describe('looks from the Design tab and profile photos', () => {
     });
     const withLook = await apiJson<MeetingRow[]>(`/api/groups/${g.id}/meetings`, { user: ADMIN });
     expect(withLook.find((m) => m.id === plain.id)!.speakerLook).toMatchObject({ style: 'side' });
+    // A form sending the default template back doesn't freeze it into the meeting: when
+    // the default changes, the meeting follows.
+    await apiJson(`/api/meetings/${plain.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { templateId: tplId, design: { banner: true, titleSize: 'l' } },
+    });
+    const { id: other } = await apiJson<{ id: number }>('/api/templates', {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Другой', brandColor: 'night', pattern: null, motion: 'waves' },
+    });
+    await apiJson(`/api/groups/${g.id}/studio`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: { meetingTemplateId: other },
+    });
+    const moved = await apiJson<MeetingRow[]>(`/api/groups/${g.id}/meetings`, { user: ADMIN });
+    expect(moved.find((m) => m.id === plain.id)).toMatchObject({
+      templateId: other,
+      motion: 'waves',
+    });
+    await apiJson(`/api/groups/${g.id}/studio`, {
+      method: 'PUT',
+      user: ADMIN,
+      json: { meetingTemplateId: tplId },
+    });
     // Deleting the template takes the default away.
     await apiJson(`/api/templates/${tplId}`, { method: 'DELETE', user: ADMIN });
     expect(

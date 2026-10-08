@@ -1018,6 +1018,9 @@ export const en: Messages = {
     speakerSection: 'Speaker photos on meetings',
     speakerSectionHint:
       'For all the ministry’s meetings: the poster, the home tile, the «Next meeting» panel and the meeting screen. The photo comes from the speaker’s profile (People → person → 📷). A template or a single meeting («Poster») can set its own. Saved at once.',
+    followDefault: (name: string) => `As for all meetings («${name}»)`,
+    phoneStill:
+      'Animations are off on this phone (More → Animations, or Graphics «Still») — they don’t move here; everyone else sees them.',
     defaultForMeetings: 'Look of all meetings',
     defaultForMeetingsHint:
       'Meetings without a look of their own (and new scheduled ones) wear this template. A single meeting can be changed below — «Meetings».',
@@ -1597,6 +1600,8 @@ export const en: Messages = {
     },
   },
   env: {
+    lookInDesign: 'Screen background, animations and templates — in «Design»',
+    lookInDesignHint: 'All of the look is set in one place — the «Design» tab.',
     look: 'Look',
     layout: 'Layout',
     layouts: {

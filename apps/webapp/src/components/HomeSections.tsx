@@ -747,7 +747,8 @@ function MeetingExpanded({
 }) {
   // The meeting screen's animation, tuned in the Design studio (unless tiles have their own).
   const meetingsLook = useModuleLook('meetings');
-  const meetingTune = meetingsLook.own ? {} : meetingsLook;
+  // Settings are per animation: with tiles of their own only the old shared one is theirs.
+  const meetingTune = meetingsLook.own ? { ...meetingsLook, tune: null } : meetingsLook;
   const t = useT();
   const f = useFmt();
   const { push } = useNav();

@@ -310,7 +310,11 @@ groupMeetingRoutes.post('/:id/meetings', async (c) => {
         startsAt: start.toISOString(),
         endsAt: new Date(start.getTime() + input.durationMin * 60_000).toISOString(),
         design: input.design ? JSON.stringify(input.design) : null,
-        templateId: input.templateId ?? null,
+        // The default template itself is "follow the default".
+        templateId:
+          input.templateId && input.templateId !== group.meetingTemplateId
+            ? input.templateId
+            : null,
         speakers: input.speakers?.length ? JSON.stringify(input.speakers) : null,
         posterMotion: input.posterMotion ?? null,
         motion: input.motion ?? null,
@@ -649,6 +653,15 @@ meetingRoutes.patch('/:id', async (c) => {
   if (!a.edit && !rights.designer)
     throw new HTTPException(a.member ? 403 : 404, { message: 'forbidden' });
   const input = await parseBody(c, updateMeetingSchema);
+  // The ministry's default template sent back by a form is "follow the default", not an
+  // own choice: stored as none, so the meeting keeps following when the default changes.
+  if (input.templateId != null) {
+    const g = await db.query.groups.findFirst({
+      columns: { meetingTemplateId: true },
+      where: eq(groups.id, meeting.groupId),
+    });
+    if (g?.meetingTemplateId === input.templateId) input.templateId = null;
+  }
   const given = (Object.keys(input) as (keyof typeof input)[]).filter(
     (k) => input[k] !== undefined && k !== 'applyToSeries',
   );

@@ -36,11 +36,19 @@ export function MotionTargets({
   const labels = [t.design.previewApp, t.design.previewTile, t.design.previewPoster];
   const part = parts[slide] ?? screen;
   const tuneOf = (m: MeetingMotion): MotionTune | null =>
-    tunes?.value[m] ?? tunes?.inherited?.[m] ?? null;
+    tunes ? { ...tunes.inherited?.[m], ...tunes.value[m] } : null;
+  // Only the settings that differ from what it follows become its own, so later changes of
+  // the template still reach the rest.
   const onTune = (m: MeetingMotion, tune: MotionTune | null) => {
     if (!tunes) return;
+    const base = tunes.inherited?.[m] ?? {};
+    const diff = Object.fromEntries(
+      Object.entries(tune ?? {}).filter(
+        ([k, v]) => v != null && v !== (base as Record<string, unknown>)[k],
+      ),
+    ) as MotionTune;
     const next = { ...tunes.value };
-    if (tune) next[m] = tune;
+    if (Object.keys(diff).length) next[m] = diff;
     else delete next[m];
     tunes.set(next);
   };

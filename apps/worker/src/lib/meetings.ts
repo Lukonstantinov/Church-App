@@ -23,6 +23,9 @@ import {
   readSpeakerLook,
   readSpeakers,
   readTunes,
+  type MotionTune,
+  type MotionTunes,
+  type SpeakerLook,
   repeatSchema,
   meetingServicesSchema,
   DEFAULT_MEETING_REMINDERS,
@@ -242,6 +245,20 @@ export async function generateMeetings(
 
 // ---------- rows & counts ----------
 
+/** Settings per animation, field by field: `own` over `base` (each kind merged). */
+export function mergeTunes(base: MotionTunes, own: MotionTunes): MotionTunes {
+  const out: MotionTunes = { ...base };
+  for (const [k, v] of Object.entries(own) as [keyof MotionTunes, MotionTune][])
+    out[k] = { ...base[k], ...v };
+  return out;
+}
+
+/** Speaker-photo looks merged field by field, later ones winning; null when none is set. */
+export function mergeLooks(...looks: (SpeakerLook | null | undefined)[]): SpeakerLook | null {
+  const set = looks.filter((l): l is SpeakerLook => !!l);
+  return set.length ? Object.assign({}, ...set) : null;
+}
+
 /**
  * Speakers with their photo links; `secret` signs them (without it `photoUrl` stays null).
  * A speaker picked from the members without an own photo shows their profile photo.
@@ -320,8 +337,11 @@ export async function toMeetingRows(
   const motions = new Map(groupRows.map((g) => [g.id, readMotion(g.motion)]));
   const defaults = new Map(groupRows.map((g) => [g.id, g.template]));
   const groupSpeakerLooks = new Map(groupRows.map((g) => [g.id, readSpeakerLook(g.speakerLook)]));
+  // Only an own look (own pattern / photo) leaves the default; own fonts, title size or
+  // speaker photos on top of it don't.
   const tplOf = list.map(
-    (m) => m.templateId ?? (m.design ? null : defaults.get(m.groupId)) ?? null,
+    (m) =>
+      m.templateId ?? (readPostDesign(m.design)?.custom ? null : defaults.get(m.groupId)) ?? null,
   );
   const { brandOf, templateOf } = secret
     ? await lookSources(
@@ -424,16 +444,18 @@ export async function toMeetingRows(
       (tplOf[i] ? templateMotions.get(tplOf[i]!)?.poster : null) ??
       null,
     ownPosterMotion: readMotion(m.posterMotion),
-    motionTunes: {
-      ...(tplOf[i] ? templateMotions.get(tplOf[i]!)?.tunes : null),
-      ...readTunes(m.motionTunes),
-    },
+    // Settings field by field: the meeting's own changes over its template's.
+    motionTunes: mergeTunes(
+      (tplOf[i] ? templateMotions.get(tplOf[i]!)?.tunes : null) ?? {},
+      readTunes(m.motionTunes),
+    ),
     ownMotionTunes: readTunes(m.motionTunes),
-    speakerLook:
-      readPostDesign(m.design)?.speakerLook ??
-      (tplOf[i] ? templateMotions.get(tplOf[i]!)?.speakerLook : null) ??
-      groupSpeakerLooks.get(m.groupId) ??
-      null,
+    // Field by field too: own changes over the template's over the ministry's.
+    speakerLook: mergeLooks(
+      groupSpeakerLooks.get(m.groupId),
+      tplOf[i] ? templateMotions.get(tplOf[i]!)?.speakerLook : null,
+      readPostDesign(m.design)?.speakerLook,
+    ),
     posterTemplateId: m.posterTemplateId,
     poster: (m.posterTemplateId && posters.get(m.posterTemplateId)) || null,
     snackDeclined: (!m.snackUserId && m.snackDeclinedBy && people.get(m.snackDeclinedBy)) || null,

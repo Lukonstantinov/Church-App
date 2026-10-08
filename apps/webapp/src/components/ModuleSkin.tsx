@@ -114,7 +114,9 @@ export function SkinLayer({ look }: { look: ModuleLook }) {
 export function useMeetingTune(groupId: number): Pick<ModuleLook, 'tune' | 'tunes' | 'icon'> {
   const groups = useGroups();
   const look = groups.data?.find((x) => x.id === groupId)?.screenLook.meetings;
-  return look && !look.own ? { tune: look.tune, tunes: look.tunes, icon: look.icon } : {};
+  // Settings are kept per animation, so the screen keeps its own even when the tiles have
+  // a different animation; only the old shared setting belongs to the tiles then.
+  return look ? { tune: look.own ? null : look.tune, tunes: look.tunes, icon: look.icon } : {};
 }
 
 /** The light's strength, speed and slant as values its CSS reads. */
