@@ -528,15 +528,15 @@ class Engine {
           ctx.fill();
         });
       case 'bubbles':
-        return sprite('bubble', size, 2, r, (ctx, s) => {
+        return sprite(`bubble|${c}`, size, 2, r, (ctx, s) => {
           const g = ctx.createRadialGradient(s * 0.3, s * 0.3, 0, s * 0.3, s * 0.3, s * 0.45);
-          g.addColorStop(0, 'rgba(255,255,255,0.45)');
-          g.addColorStop(1, 'rgba(255,255,255,0)');
+          g.addColorStop(0, c ? `${c}73` : 'rgba(255,255,255,0.45)');
+          g.addColorStop(1, c ? `${c}00` : 'rgba(255,255,255,0)');
           ctx.fillStyle = g;
           dot(ctx, s);
           ctx.fill();
           ctx.lineWidth = 1.5;
-          ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+          ctx.strokeStyle = c ? `${c}8c` : 'rgba(255,255,255,0.55)';
           ctx.beginPath();
           ctx.arc(s / 2, s / 2, s / 2 - 0.75, 0, Math.PI * 2);
           ctx.stroke();

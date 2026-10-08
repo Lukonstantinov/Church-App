@@ -37,13 +37,21 @@ const svg = (body: string, w = 300, h = 300, extra = '') =>
     `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}' ${extra}>${body}</svg>`,
   )}")`;
 
-/** Soft white cloud texture: fractal noise turned into white with see-through holes. */
-const cloud = (sharp: number) =>
-  svg(
-    `<filter id='c' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='0.011' numOctaves='4' seed='3'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  ${(1.4 + sharp * 2.2).toFixed(2)} 0 0 0 ${(-0.45 - sharp * 0.9).toFixed(2)}'/></filter><rect width='100%' height='100%' filter='url(#c)'/>`,
+/** A colour as the 0…1 red, green and blue an SVG colour matrix takes. */
+function rgb01(hex: string | null | undefined, fallback: [number, number, number]) {
+  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return fallback.map((v) => v.toFixed(2));
+  return [1, 3, 5].map((i) => (Number.parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(2));
+}
+
+/** Soft cloud texture (white, or the chosen colour): fractal noise with see-through holes. */
+const cloud = (sharp: number, color?: string | null) => {
+  const [r, g, b] = rgb01(color, [1, 1, 1]);
+  return svg(
+    `<filter id='c' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='0.011' numOctaves='4' seed='3'/><feColorMatrix values='0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  ${(1.4 + sharp * 2.2).toFixed(2)} 0 0 0 ${(-0.45 - sharp * 0.9).toFixed(2)}'/></filter><rect width='100%' height='100%' filter='url(#c)'/>`,
     400,
     400,
   );
+};
 
 /** Grey film / TV grain. */
 const GRAIN = svg(
@@ -52,12 +60,15 @@ const GRAIN = svg(
   160,
 );
 
-/** Frost: fine crystals (sharp noise) in icy white-blue. */
-const FROST = svg(
-  `<filter id='f'><feTurbulence type='turbulence' baseFrequency='0.045' numOctaves='4' seed='9'/><feColorMatrix values='0 0 0 0 0.86  0 0 0 0 0.94  0 0 0 0 1  2.6 0 0 0 -0.35'/></filter><rect width='100%' height='100%' filter='url(#f)'/>`,
-  300,
-  300,
-);
+/** Frost: fine crystals (sharp noise) in icy white-blue, or the chosen colour. */
+const frost = (color?: string | null) => {
+  const [r, g, b] = rgb01(color, [0.86, 0.94, 1]);
+  return svg(
+    `<filter id='f'><feTurbulence type='turbulence' baseFrequency='0.045' numOctaves='4' seed='9'/><feColorMatrix values='0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  2.6 0 0 0 -0.35'/></filter><rect width='100%' height='100%' filter='url(#f)'/>`,
+    300,
+    300,
+  );
+};
 
 /** Crumpled metal for the foil: noise lit from the top left gives the crinkles. */
 const crinkle = (sharp: number) =>
@@ -68,7 +79,7 @@ const crinkle = (sharp: number) =>
   );
 
 /** Cracked glass: lines from a point of impact with a few rings, light over a dark edge. */
-const cracks = (weight: number) => {
+const cracks = (weight: number, color?: string | null) => {
   const lines = [
     'M270 92 L318 70 L352 58 L400 30',
     'M270 92 L330 108 L372 128 L400 150',
@@ -89,7 +100,7 @@ const cracks = (weight: number) => {
     `<path d='${d}' fill='none' stroke='${stroke}' stroke-width='${width}' stroke-linejoin='bevel' transform='translate(0 ${dy})'/>`;
   const all = [...lines, rings].join(' ');
   return svg(
-    path(all, 'rgba(0,0,0,0.45)', w, 1) + path(all, 'rgba(255,255,255,0.85)', w),
+    path(all, 'rgba(0,0,0,0.45)', w, 1) + path(all, color ?? 'rgba(255,255,255,0.85)', w),
     400,
     240,
     "viewBox='0 0 400 240' preserveAspectRatio='xMidYMid slice'",
@@ -102,19 +113,22 @@ export function PhotoEffect({
   density,
   weight,
   sharp,
+  color,
 }: {
   kind: MeetingMotion;
   image?: string | null;
   density: number;
   weight: number;
   sharp: number | null;
+  /** The chosen colour (smoke, frost, cracks…; others read it as --p-color). */
+  color?: string | null;
 }) {
   const id = `fx${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const photo = image ? { backgroundImage: `url("${image}")` } : undefined;
   switch (kind) {
     case 'smoke': {
       const n = Math.min(6, Math.max(2, Math.round(4 * density)));
-      const tex = cloud(sharp ?? 0.3);
+      const tex = cloud(sharp ?? 0.3, color);
       return (
         <span className="fx fx-smoke">
           {Array.from({ length: n }, (_, i) => (
@@ -137,7 +151,7 @@ export function PhotoEffect({
       const mask = `radial-gradient(ellipse at center, transparent ${clear}%, #000 ${clear + 34}%)`;
       return (
         <span className="fx fx-frost" style={{ WebkitMaskImage: mask, maskImage: mask }}>
-          <i className="ice" style={{ backgroundImage: FROST }} />
+          <i className="ice" style={{ backgroundImage: frost(color) }} />
           <i className="glint" />
         </span>
       );
@@ -145,7 +159,7 @@ export function PhotoEffect({
     case 'crack':
       return (
         <span className="fx fx-crack">
-          <i className="lines" style={{ backgroundImage: cracks(weight) }} />
+          <i className="lines" style={{ backgroundImage: cracks(weight, color) }} />
           <i className="glint" />
         </span>
       );
@@ -245,7 +259,7 @@ export function PhotoEffect({
         <span
           className="fx"
           style={{
-            background: `radial-gradient(ellipse at center, transparent ${clear}%, rgba(0,0,0,0.75) 100%)`,
+            background: `radial-gradient(ellipse at center, transparent ${clear}%, color-mix(in srgb, ${color ?? '#000'} 75%, transparent) 100%)`,
           }}
         />
       );

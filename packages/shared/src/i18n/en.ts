@@ -1378,6 +1378,9 @@ export const en: Messages = {
     changeEffects: 'Change',
     hideEffects: 'Hide',
     effectsDone: 'Done — hide effects',
+    effectCopyHint: 'Repeat an effect with its own settings — e.g. smoke from the other side:',
+    effectCopy: 'copy',
+    effectCopyRemove: 'Remove the copy',
     tabMeetings: 'Meetings',
     tabEvents: 'Events',
     title: 'Events',
@@ -1635,6 +1638,12 @@ export const en: Messages = {
     },
   },
   motionExport: {
+    quality: { standard: 'Standard', high: 'High', max: 'Maximum' },
+    qualityHint: {
+      standard: 'Video 720p, GIF 540 px — quick and light',
+      high: 'Video 1080p, GIF 720 px — sharper, takes longer, bigger file',
+      max: 'Video 1080p with extra detail, GIF 900 px, smoother — the longest, GIF up to 20–30 MB',
+    },
     coverTitle: '🎬 Video cover',
     coverHint:
       'The cover photo with its effects is recorded as one short video — phones play it instead of every effect (cards, the pinned event, the event screen). After changing the photo or effects, record it again.',

@@ -659,7 +659,14 @@ export function LivingLayer({
         )}
         {kind === 'flames' && <Flames sharp={sharp ?? 0.7} weight={weight} density={density} />}
         {PHOTO_EFFECTS.includes(kind) && (
-          <PhotoEffect kind={kind} image={image} density={density} weight={weight} sharp={sharp} />
+          <PhotoEffect
+            kind={kind}
+            image={image}
+            density={density}
+            weight={weight}
+            sharp={sharp}
+            color={c}
+          />
         )}
         {kind === 'glitch' && <Glitch image={image} density={density} weight={weight} />}
         {kind === 'crt' && (

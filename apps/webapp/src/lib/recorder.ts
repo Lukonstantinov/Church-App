@@ -21,8 +21,10 @@ export interface RecordOptions {
   fps?: number;
   /** Width of the video in pixels (the height follows the block's shape). */
   width?: number;
-  /** Also make a GIF (smaller, fewer frames and colours). */
+  /** Also make a GIF (fewer frames and colours). */
   gif?: boolean;
+  /** Width of the GIF in pixels (default 540). */
+  gifWidth?: number;
   /** Video quality: bits per pixel per frame (0.12 for posters; less for backgrounds). */
   quality?: number;
   onProgress?: (done: number) => void;
@@ -333,7 +335,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     // The GIF: half the frames, 540 px wide. A phone that can't make videos gets one too.
     const wantGif = opts.gif || !encoder;
     const gifStep = Math.max(1, Math.round(fps / 10));
-    const gifW = even(Math.min(outW, 540));
+    const gifW = even(Math.min(outW, opts.gifWidth ?? 540));
     const gifH = even((outH * gifW) / outW);
     const gifCanvas = wantGif ? canvasOf(gifW, gifH) : null;
     const gifCtx = gifCanvas?.getContext('2d', { willReadFrequently: true }) ?? null;

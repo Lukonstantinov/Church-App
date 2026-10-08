@@ -5,7 +5,7 @@ import { SpeakerStrip } from '../components/Speakers';
 import { isLiveWindow } from '../lib/live';
 import { EventChat } from '../components/EventChat';
 import { EventExport } from '../components/EventExport';
-import { EventCover } from '../components/EventCard';
+import { EventCover, EventHeroText } from '../components/EventCard';
 import { CoverPicture } from '../components/CoverSlideshow';
 import { EventReminderSheet } from '../components/EventReminderSheet';
 import { PublishRequestCard } from '../components/PublishRequestCard';
@@ -24,7 +24,6 @@ import {
 } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { Pill } from '../components/LookControls';
-import { useEventWhen } from '../components/EventCard';
 import {
   IconCheck,
   IconCoins,
@@ -32,7 +31,6 @@ import {
   IconSend,
   IconEdit,
   IconImage,
-  IconMapPin,
   IconPlus,
   IconTelegram,
   IconTrash,
@@ -85,7 +83,6 @@ export function EventScreen({ eventId }: { eventId: number }) {
 function EventBody({ e }: { e: EventDetail }) {
   const t = useT();
   const toast = useToast();
-  const when = useEventWhen();
   const { push } = useNav();
   const update = useUpdateEvent(e.id);
   const [reminding, setReminding] = useState(false);
@@ -102,27 +99,7 @@ function EventBody({ e }: { e: EventDetail }) {
     }
   }
 
-  const header = (
-    <>
-      <div className="flex items-center gap-2">
-        <span className="text-[12px] font-bold uppercase tracking-wider opacity-80">
-          {e.groupName}
-        </span>
-        {cancelled && <Badge tone="danger">{t.events.cancelled}</Badge>}
-      </div>
-      <h1
-        className={`mt-1 text-[26px] font-bold leading-tight tracking-tight ${cancelled ? 'line-through' : ''}`}
-      >
-        {e.title}
-      </h1>
-      <div className="mt-1.5 text-[15px] opacity-90">{when(e)}</div>
-      {e.location && (
-        <div className="mt-0.5 flex items-center gap-1.5 text-[15px] opacity-90">
-          <IconMapPin size={16} className="shrink-0" /> {e.location}
-        </div>
-      )}
-    </>
-  );
+  const header = <EventHeroText e={e} />;
 
   return (
     <Screen>

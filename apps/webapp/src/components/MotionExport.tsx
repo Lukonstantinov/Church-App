@@ -5,9 +5,19 @@ import { CoverPicture } from './CoverSlideshow';
 import { useT } from '../lib/i18n';
 import { sendAnimationToChat, useCoverLoop } from '../lib/queries';
 import { haptic } from '../lib/telegram';
-import { EventCover, useEventWhen } from './EventCard';
+import { EventCover, EventHeroText, useEventWhen } from './EventCard';
 import { useToast } from './Toast';
 import { Button } from './ui';
+
+/**
+ * Quality of a moving poster: the video's and the GIF's width, frames a second and how much
+ * detail the video keeps. Higher takes longer to record and makes bigger files.
+ */
+const QUALITY = {
+  standard: { video: 720, gif: 540, fps: 20, bitrate: 0.12 },
+  high: { video: 1080, gif: 720, fps: 20, bitrate: 0.12 },
+  max: { video: 1080, gif: 900, fps: 24, bitrate: 0.2 },
+} as const;
 
 /**
  * «Send me the animation»: records the poster with its moving effects (lib/recorder.ts)
@@ -30,6 +40,7 @@ export function MotionExport({
   const t = useT();
   const toast = useToast();
   const [busy, setBusy] = useState<'video' | 'gif' | null>(null);
+  const [quality, setQuality] = useState<keyof typeof QUALITY>('standard');
   const [progress, setProgress] = useState(0);
   const [sending, setSending] = useState(false);
 
@@ -48,7 +59,16 @@ export function MotionExport({
         toast(t.motionExport.noEffects, 'error');
         return;
       }
-      const rec = await recordLoop(el, { gif: kind === 'gif', onProgress: setProgress });
+      const q = QUALITY[quality];
+      const rec = await recordLoop(el, {
+        gif: kind === 'gif',
+        // The picture is drawn at least as wide as the file that is made from it.
+        width: kind === 'gif' ? Math.max(720, q.gif) : q.video,
+        gifWidth: q.gif,
+        fps: q.fps,
+        quality: q.bitrate,
+        onProgress: setProgress,
+      });
       const file = kind === 'gif' ? rec.gif : (rec.mp4 ?? rec.gif);
       if (!file) throw new Error('no_file');
       if (kind === 'video' && !rec.mp4) toast(t.motionExport.noVideo);
@@ -87,14 +107,31 @@ export function MotionExport({
           </div>
         </div>
       ) : (
-        <div className="flex gap-2">
-          <Button small onClick={() => void run('video')}>
-            {t.motionExport.video}
-          </Button>
-          <Button small variant="secondary" onClick={() => void run('gif')}>
-            {t.motionExport.gif}
-          </Button>
-        </div>
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            {(Object.keys(QUALITY) as (keyof typeof QUALITY)[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setQuality(k)}
+                className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                  quality === k ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                }`}
+              >
+                {t.motionExport.quality[k]}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-hint">{t.motionExport.qualityHint[quality]}</p>
+          <div className="flex gap-2">
+            <Button small onClick={() => void run('video')}>
+              {t.motionExport.video}
+            </Button>
+            <Button small variant="secondary" onClick={() => void run('gif')}>
+              {t.motionExport.gif}
+            </Button>
+          </div>
+        </>
       )}
     </div>
   );
@@ -116,19 +153,17 @@ export function EventMotionPoster({
   const photo = !!e.coverUrl && !e.poster;
   return (
     <div ref={ref} className="relative w-[400px] overflow-hidden bg-black text-white">
-      <EventCover e={{ ...e, coverLoop: null }} className="aspect-[4/5]" />
+      {/* The shape, shade and name block of the event screen's cover, so the poster shows
+          the photo framed exactly as in the app. */}
+      <EventCover
+        e={{ ...e, coverLoop: null }}
+        className={photo || e.poster ? 'aspect-[4/3]' : undefined}
+      />
       {photo && (
         <>
-          <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+          <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
           <div className="absolute inset-x-0 bottom-0 p-5">
-            <div className="text-[11px] font-bold uppercase tracking-wider opacity-80">
-              {e.groupName}
-            </div>
-            <div className="mt-1 text-[28px] font-extrabold leading-tight tracking-tight">
-              {e.title}
-            </div>
-            <div className="mt-1.5 text-[14px] opacity-90">{when(e)}</div>
-            {e.location && <div className="mt-0.5 text-[14px] opacity-90">📍 {e.location}</div>}
+            <EventHeroText e={e} />
           </div>
         </>
       )}

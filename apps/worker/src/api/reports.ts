@@ -228,8 +228,8 @@ photoRoutes.post('/', async (c) => {
   return c.json({ ok: true });
 });
 
-/** A recorded poster loop may be a few megabytes. */
-const ANIMATION_MAX_BYTES = 20_000_000;
+/** A recorded poster loop: up to ~30 MB for a large GIF (Telegram takes 50 MB). */
+const ANIMATION_MAX_BYTES = 45_000_000;
 
 /**
  * A moving poster recorded on the phone (lib/recorder.ts) to the person's own chat, with

@@ -1403,6 +1403,9 @@ export const lt: Messages = {
     changeEffects: 'Keisti',
     hideEffects: 'Slėpti',
     effectsDone: 'Baigta — slėpti efektus',
+    effectCopyHint: 'Pakartokite efektą su savo nustatymais — pvz., dūmai iš kitos pusės:',
+    effectCopy: 'kopija',
+    effectCopyRemove: 'Pašalinti kopiją',
     tabMeetings: 'Susitikimai',
     tabEvents: 'Renginiai',
     title: 'Renginiai',
@@ -1670,6 +1673,12 @@ export const lt: Messages = {
     },
   },
   motionExport: {
+    quality: { standard: 'Standartinė', high: 'Aukšta', max: 'Maksimali' },
+    qualityHint: {
+      standard: 'Vaizdo įrašas 720p, GIF 540 px — greita ir lengva',
+      high: 'Vaizdo įrašas 1080p, GIF 720 px — ryškiau, ilgiau, didesnis failas',
+      max: 'Vaizdo įrašas 1080p su daugiau detalių, GIF 900 px, sklandžiau — ilgiausia, GIF iki 20–30 MB',
+    },
     coverTitle: '🎬 Vaizdo viršelis',
     coverHint:
       'Viršelio nuotrauka su efektais įrašoma vienu trumpu vaizdo įrašu — telefonai groja jį vietoj visų efektų (kortelės, prisegtas renginys, renginio ekranas). Pakeitę nuotrauką ar efektus įrašykite iš naujo.',

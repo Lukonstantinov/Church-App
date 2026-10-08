@@ -169,3 +169,34 @@ export function EventCard({
     </BurnFrame>
   );
 }
+
+/**
+ * The event's name block over its cover photo — ministry, title, dates, place — as on the
+ * event screen. The moving poster uses the same block, so both line up exactly.
+ */
+export function EventHeroText({ e }: { e: EventSummary }) {
+  const t = useT();
+  const when = useEventWhen();
+  const cancelled = e.status === 'cancelled';
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <span className="text-[12px] font-bold uppercase tracking-wider opacity-80">
+          {e.groupName}
+        </span>
+        {cancelled && <Badge tone="danger">{t.events.cancelled}</Badge>}
+      </div>
+      <h1
+        className={`mt-1 text-[26px] font-bold leading-tight tracking-tight ${cancelled ? 'line-through' : ''}`}
+      >
+        {e.title}
+      </h1>
+      <div className="mt-1.5 text-[15px] opacity-90">{when(e)}</div>
+      {e.location && (
+        <div className="mt-0.5 flex items-center gap-1.5 text-[15px] opacity-90">
+          <IconMapPin size={16} className="shrink-0" /> {e.location}
+        </div>
+      )}
+    </>
+  );
+}

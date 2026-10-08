@@ -1717,14 +1717,14 @@ html[data-motion='off'] [class*='app-bg-'] {
   position: absolute;
   inset: -20px;
   background:
-    radial-gradient(1.6px 1.6px at 12% 22%, #fff, transparent),
-    radial-gradient(1.2px 1.2px at 28% 68%, #fff, transparent),
-    radial-gradient(2px 2px at 46% 34%, #fff, transparent),
-    radial-gradient(1.3px 1.3px at 63% 78%, #fff, transparent),
-    radial-gradient(1.8px 1.8px at 78% 18%, #fff, transparent),
-    radial-gradient(1.2px 1.2px at 90% 56%, #fff, transparent),
-    radial-gradient(1.5px 1.5px at 8% 84%, #fff, transparent),
-    radial-gradient(1.1px 1.1px at 54% 8%, #fff, transparent);
+    radial-gradient(1.6px 1.6px at 12% 22%, var(--p-color, #fff), transparent),
+    radial-gradient(1.2px 1.2px at 28% 68%, var(--p-color, #fff), transparent),
+    radial-gradient(2px 2px at 46% 34%, var(--p-color, #fff), transparent),
+    radial-gradient(1.3px 1.3px at 63% 78%, var(--p-color, #fff), transparent),
+    radial-gradient(1.8px 1.8px at 78% 18%, var(--p-color, #fff), transparent),
+    radial-gradient(1.2px 1.2px at 90% 56%, var(--p-color, #fff), transparent),
+    radial-gradient(1.5px 1.5px at 8% 84%, var(--p-color, #fff), transparent),
+    radial-gradient(1.1px 1.1px at 54% 8%, var(--p-color, #fff), transparent);
   opacity: 0.85;
   animation: living-twinkle 3.6s ease-in-out infinite;
 }
@@ -1741,7 +1741,7 @@ html[data-motion='off'] [class*='app-bg-'] {
   width: 200%;
   aspect-ratio: 1;
   border-radius: 43%;
-  background: rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, var(--p-color, #fff) 12%, transparent);
   animation: living-spin 14s linear infinite;
 }
 .living-wave.w1 {
@@ -1750,21 +1750,25 @@ html[data-motion='off'] [class*='app-bg-'] {
 .living-wave.w2 {
   top: 70%;
   border-radius: 40%;
-  background: rgba(255, 255, 255, 0.09);
+  background: color-mix(in srgb, var(--p-color, #fff) 9%, transparent);
   animation-duration: 19s;
   animation-direction: reverse;
 }
 .living-wave.w3 {
   top: 78%;
   border-radius: 46%;
-  background: rgba(255, 255, 255, 0.07);
+  background: color-mix(in srgb, var(--p-color, #fff) 7%, transparent);
   animation-duration: 24s;
 }
 .living-bokeh {
   position: absolute;
   bottom: -60px;
   border-radius: 9999px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.05) 70%);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--p-color, #fff) 55%, transparent),
+    color-mix(in srgb, var(--p-color, #fff) 5%, transparent) 70%
+  );
   filter: blur(calc(1px + 5px * (1 - var(--k-soft-b, 1))));
   opacity: 0;
   animation: living-float 11s ease-in infinite;
@@ -2206,7 +2210,7 @@ html[data-motion='off'] .soon-fire-icon {
   inset: calc(((100% + 80px) / var(--k-gap, 1) - 100%) / -2);
   background: repeating-linear-gradient(
     135deg,
-    rgba(255, 255, 255, calc(0.14 * var(--k-strength, 1))) 0
+    color-mix(in srgb, var(--p-color, #fff) calc(14% * var(--k-strength, 1)), transparent) 0
       calc(2px * var(--k-weight, 1) / var(--k-gap, 1)),
     transparent 0 14px
   );
@@ -2227,7 +2231,11 @@ html[data-motion='off'] .soon-fire-icon {
   right: -60%;
   bottom: -20%;
   height: 170%;
-  --grid-line: rgba(255, 255, 255, calc(0.45 * var(--k-strength, 1)));
+  --grid-line: color-mix(
+    in srgb,
+    var(--p-color, #fff) calc(45% * var(--k-strength, 1)),
+    transparent
+  );
   --grid-w: calc(1.5px * var(--k-weight, 1) / var(--k-gap, 1));
   background-image:
     linear-gradient(var(--grid-line) var(--grid-w), transparent var(--grid-w)),
@@ -3591,7 +3599,7 @@ html[data-motion='off'] .shine::before {
   background: linear-gradient(
     110deg,
     transparent 40%,
-    rgba(255, 255, 255, 0.55) 50%,
+    color-mix(in srgb, var(--p-color, #fff) 55%, transparent) 50%,
     transparent 60%
   );
   animation: fx-glint 6s ease-in-out infinite;
@@ -3796,8 +3804,8 @@ html[data-motion='off'] .shine::before {
   background: linear-gradient(
     115deg,
     transparent 38%,
-    rgba(255, 255, 255, 0.28) 48%,
-    rgba(255, 255, 255, 0.05) 54%,
+    color-mix(in srgb, var(--p-color, #fff) 28%, transparent) 48%,
+    color-mix(in srgb, var(--p-color, #fff) 5%, transparent) 54%,
     transparent 62%
   );
   animation: fx-glint 8s ease-in-out infinite;
@@ -3807,8 +3815,8 @@ html[data-motion='off'] .shine::before {
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.42) 0%,
-    rgba(255, 255, 255, 0.12) 42%,
+    color-mix(in srgb, var(--p-color, #fff) 42%, transparent) 0%,
+    color-mix(in srgb, var(--p-color, #fff) 12%, transparent) 42%,
     transparent 43%,
     transparent 100%
   );
@@ -3920,7 +3928,11 @@ html[data-motion='off'] .shine::before {
 }
 /* Halftone: a grid of print dots over the picture. */
 .fx-halftone {
-  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.55) 32%, transparent 36%);
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--p-color, #000) 55%, transparent) 32%,
+    transparent 36%
+  );
   mix-blend-mode: multiply;
   opacity: 0.75;
 }
@@ -3937,8 +3949,8 @@ html[data-motion='off'] .shine::before {
   background: radial-gradient(
     circle,
     #fff 0 6%,
-    rgba(255, 236, 190, 0.85) 12%,
-    rgba(255, 170, 90, 0.35) 30%,
+    color-mix(in srgb, var(--p-color, #ffecbe) 85%, transparent) 12%,
+    color-mix(in srgb, var(--p-color, #ffaa5a) 35%, transparent) 30%,
     transparent 62%
   );
   mix-blend-mode: screen;
@@ -3950,7 +3962,10 @@ html[data-motion='off'] .shine::before {
   width: 120%;
   aspect-ratio: 1;
   translate: -50% -50%;
-  background: repeating-conic-gradient(rgba(255, 240, 210, 0.22) 0 2deg, transparent 2deg 14deg);
+  background: repeating-conic-gradient(
+    color-mix(in srgb, var(--p-color, #fff0d2) 22%, transparent) 0 2deg,
+    transparent 2deg 14deg
+  );
   -webkit-mask-image: radial-gradient(circle, #000 4%, transparent 45%);
   mask-image: radial-gradient(circle, #000 4%, transparent 45%);
   mix-blend-mode: screen;

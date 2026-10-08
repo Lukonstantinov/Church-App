@@ -3,15 +3,20 @@ import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
 import { IconChevronDown } from './icons';
 import { MotionPicker } from './MotionPicker';
+import { MotionTuneControls, TunePanel } from './MotionTune';
 import { Button, LivingLayers, Section } from './ui';
 
 /** How many effects one cover can wear at once (the first plus three layers). */
 export const MAX_EFFECTS = 4;
 
-/** A cover's effects while being edited: in the order picked, each with its own settings. */
+/**
+ * A cover's effects while being edited: in the order picked, each with its own settings,
+ * plus copies of picked ones with settings of their own (two smokes from different sides).
+ */
 export interface EffectsState {
   effects: MeetingMotion[];
   tunes: Partial<Record<MeetingMotion, MotionTune>>;
+  copies: MotionLayer[];
 }
 
 type Saved = Partial<Pick<EventSummary, 'motion' | 'motionTune' | 'motionLayers'>>;
@@ -23,30 +28,38 @@ export function initEffects(e?: Saved | null): EffectsState {
     effects.push(e.motion);
     if (e.motionTune) tunes[e.motion] = e.motionTune;
   }
+  const copies: MotionLayer[] = [];
   for (const l of e?.motionLayers ?? []) {
-    if (effects.includes(l.kind)) continue;
+    // The same effect again is a copy with its own settings.
+    if (effects.includes(l.kind)) {
+      copies.push({ kind: l.kind, tune: l.tune ?? null });
+      continue;
+    }
     effects.push(l.kind);
     if (l.tune) tunes[l.kind] = l.tune;
   }
-  return { effects, tunes };
+  return { effects, tunes, copies };
 }
+
+/** Every layer the cover draws: the picked effects, then the copies. */
+export const effectLayers = (s: EffectsState): MotionLayer[] => [
+  ...s.effects.map((kind) => ({ kind, tune: s.tunes[kind] ?? null })),
+  ...s.copies,
+];
 
 /** What the API stores: the first effect, its settings, and the rest as layers. */
 export function effectsPayload(s: EffectsState): Required<Saved> {
-  const [first, ...rest] = s.effects;
+  const [first, ...rest] = effectLayers(s).slice(0, MAX_EFFECTS);
   return {
-    motion: first ?? null,
-    motionTune: first ? (s.tunes[first] ?? null) : null,
-    motionLayers: rest.map((kind): MotionLayer => ({ kind, tune: s.tunes[kind] ?? null })),
+    motion: first?.kind ?? null,
+    motionTune: first?.tune ?? null,
+    motionLayers: rest,
   };
 }
 
 /** All of a cover's effects, drawn over each other (the glitch tears `image`). */
 export function CoverEffectLayers({ e, image }: { e: Saved; image?: string | null }) {
-  const { effects, tunes } = initEffects(e);
-  return (
-    <LivingLayers layers={effects.map((kind) => ({ kind, tune: tunes[kind] }))} image={image} />
-  );
+  return <LivingLayers layers={effectLayers(initEffects(e))} image={image} />;
 }
 
 /**
@@ -66,18 +79,38 @@ export function CoverEffects({
   onOpen: (open: boolean) => void;
 }) {
   const t = useT();
-  const names = state.effects.map((m) => t.meetings.motions[m]).join(' + ');
+  const names = effectLayers(state)
+    .map((l) => t.meetings.motions[l.kind])
+    .join(' + ');
+  const total = state.effects.length + state.copies.length;
   const toggle = (m: MeetingMotion) => {
-    if (m === 'off') return onChange({ ...state, effects: [] });
+    if (m === 'off') return onChange({ ...state, effects: [], copies: [] });
     const on = state.effects.includes(m);
     onChange({
       ...state,
-      // Adding a fifth drops the oldest.
+      // Adding a fifth drops the oldest; switching one off drops its copies too.
       effects: on
         ? state.effects.filter((x) => x !== m)
-        : [...state.effects, m].slice(-MAX_EFFECTS),
+        : [...state.effects, m].slice(-(MAX_EFFECTS - state.copies.length)),
+      copies: on ? state.copies.filter((c) => c.kind !== m) : state.copies,
     });
   };
+  // A copy starts turned round (from the other side), with the original's other settings.
+  const addCopy = (m: MeetingMotion) => {
+    const base = state.tunes[m] ?? {};
+    haptic.tap();
+    onChange({
+      ...state,
+      copies: [
+        ...state.copies,
+        { kind: m, tune: { ...base, angle: ((base.angle ?? 0) + 180) % 360 } },
+      ],
+    });
+  };
+  const setCopy = (i: number, tune: MotionTune | null) =>
+    onChange({ ...state, copies: state.copies.map((c, k) => (k === i ? { ...c, tune } : c)) });
+  const dropCopy = (i: number) =>
+    onChange({ ...state, copies: state.copies.filter((_, k) => k !== i) });
   return (
     <Section title={t.events.coverMotion} footer={open ? t.events.coverMotionHint : undefined}>
       <button
@@ -94,7 +127,7 @@ export function CoverEffects({
             {names || t.events.noEffects}
           </span>
           <span className="block text-[12px] text-hint">
-            {t.events.effectsCount(state.effects.length, MAX_EFFECTS)}
+            {t.events.effectsCount(total, MAX_EFFECTS)}
           </span>
         </span>
         <span className="flex items-center gap-1 text-[14px] font-semibold text-accent">
@@ -111,6 +144,43 @@ export function CoverEffects({
             tuneOf={(m) => state.tunes[m] ?? null}
             onTune={(m, tune) => onChange({ ...state, tunes: { ...state.tunes, [m]: tune ?? {} } })}
           />
+          {/* The same effect again with its own settings, e.g. smoke from both sides. */}
+          {state.effects.length > 0 && total < MAX_EFFECTS && (
+            <div className="flex flex-col gap-2">
+              <div className="text-[13px] text-hint">{t.events.effectCopyHint}</div>
+              <div className="flex flex-wrap gap-2">
+                {state.effects.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => addCopy(m)}
+                    className="rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold active:scale-95"
+                  >
+                    ＋ {t.meetings.motions[m]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {state.copies.map((c, i) => (
+            <TunePanel
+              key={`${c.kind}${i}`}
+              title={`${t.meetings.motions[c.kind]} · ${t.events.effectCopy}`}
+            >
+              <MotionTuneControls
+                kind={c.kind}
+                tune={c.tune ?? {}}
+                onChange={(tune) => setCopy(i, tune)}
+              />
+              <button
+                type="button"
+                onClick={() => dropCopy(i)}
+                className="mt-3 text-[13px] font-semibold text-destructive"
+              >
+                {t.events.effectCopyRemove}
+              </button>
+            </TunePanel>
+          ))}
           <Button variant="secondary" onClick={() => onOpen(false)}>
             {t.events.effectsDone}
           </Button>
