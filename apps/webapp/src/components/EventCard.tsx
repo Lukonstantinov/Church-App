@@ -39,6 +39,7 @@ export function EventCover({
       Pick<
         EventSummary,
         | 'speakers'
+        | 'speakerLook'
         | 'motion'
         | 'motionTune'
         | 'motionLayers'
@@ -85,7 +86,8 @@ export function EventCover({
         photos={[]}
         tint={null}
         look={e.look}
-        design={e.design}
+        // Its own speaker-photo setting, else its template's.
+        design={{ ...e.design, speakerLook: e.design.speakerLook ?? e.speakerLook ?? null }}
         compact={compact}
         speakers={e.speakers}
       />

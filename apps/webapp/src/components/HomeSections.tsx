@@ -7,8 +7,10 @@ import {
   type EventSummary,
   type GroupSummary,
   type MeetingMotion,
+  type MotionTunes,
   tuneFor,
 } from '@church/shared';
+import { CardSpeaker } from './MeetingPoster';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
@@ -173,6 +175,9 @@ export type MeetingTileData = Pick<
       | 'motion'
       | 'tileMotion'
       | 'poster'
+      | 'speakers'
+      | 'speakerLook'
+      | 'motionTunes'
     >
   >;
 
@@ -474,14 +479,24 @@ function TileMotion({
   motion,
   tile,
   live,
+  tunes,
 }: {
   motion?: MeetingMotion;
   tile?: MeetingMotion | null;
   live?: boolean;
+  /** The meeting's own settings per animation (over the Design studio's). */
+  tunes?: MotionTunes;
 }) {
   const look = useModuleLook('meetings');
   const kind = tile ?? (look.own ? (look.motion ?? 'off') : (motion ?? 'calm'));
-  return <LivingLayer kind={kind} live={live} tune={tuneFor(look, kind)} icon={look.icon} />;
+  return (
+    <LivingLayer
+      kind={kind}
+      live={live}
+      tune={tunes?.[kind] ?? tuneFor(look, kind)}
+      icon={look.icon}
+    />
+  );
 }
 
 function Tile({
@@ -612,7 +627,15 @@ function MeetingTile({
             m.poster ? (
               <LayeredPoster fill tpl={m.poster} texts={posterTexts(m)} />
             ) : (
-              <TileMotion motion={m.motion} tile={m.tileMotion} live={live} />
+              <>
+                <CardSpeaker m={m} />
+                <TileMotion
+                  motion={m.motion}
+                  tile={m.tileMotion}
+                  live={live}
+                  tunes={m.motionTunes}
+                />
+              </>
             )
           }
         >
@@ -671,7 +694,9 @@ function MeetingDayTile({
         <LookTop
           look={meetingLook(list[0]!) ?? g}
           className="tile-top isolate flex flex-col gap-1.5 p-2"
-          under={<TileMotion motion={next.motion} tile={next.tileMotion} />}
+          under={
+            <TileMotion motion={next.motion} tile={next.tileMotion} tunes={next.motionTunes} />
+          }
         >
           <span className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-85">
             <span>{f.relativeDay(list[0]!.startsAt)}</span>
@@ -732,8 +757,9 @@ function MeetingExpanded({
       <HeroCard
         living={m.motion ?? 'calm'}
         look={meetingLook(m)}
-        tune={tuneFor(meetingTune, m.motion ?? 'calm')}
+        tune={m.motionTunes?.[m.motion ?? 'calm'] ?? tuneFor(meetingTune, m.motion ?? 'calm')}
         icon={meetingTune.icon}
+        under={<CardSpeaker m={m} />}
       >
         <SoonTimer startsAt={m.startsAt} className="mb-2" />
         <LiveNow

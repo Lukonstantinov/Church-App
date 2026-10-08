@@ -5,6 +5,7 @@ import {
   displayName,
   fontFamily,
   resolveBrand,
+  speakerSpot,
   type AnnouncementRow,
   type PostDesign,
   type PosterLook,
@@ -36,7 +37,7 @@ import { Button, Toggle } from './ui';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { PostBlocks } from './PostBlocks';
 import { RichText } from './RichText';
-import { SpeakerStrip } from './Speakers';
+import { SpeakerBackdrop, SpeakerStrip, leadPhoto } from './Speakers';
 
 const TITLE_SIZE = { s: 'text-[20px]', m: 'text-[25px]', l: 'text-[31px]', xl: 'text-[39px]' };
 const TITLE_POS = {
@@ -106,6 +107,10 @@ export function PosterMedia({
   }
   if (!hasCover({ photos, title, design: design ?? null })) return null;
   const theme = resolveBrand(look?.brandColor ?? me.data?.church.brandColor);
+  // The speakers' photos: separate photos at a spot, or part of the background.
+  const sLook = design?.speakerLook ?? null;
+  const sStyle = sLook?.style ?? 'photo';
+  const sSpot = speakerSpot(sLook);
   const on = onBrandStyle(
     look?.textColor ?? 'auto',
     photos.length > 0 || !!look?.pattern || !!look?.backdropUrl,
@@ -171,6 +176,9 @@ export function PosterMedia({
         <>
           <PatternLayer pattern={look?.pattern} logoUrl={look?.logoUrl} />
           <BackdropLayer backdrop={look?.backdrop} url={look?.backdropUrl} />
+          {sStyle !== 'photo' && leadPhoto(speakers) && (
+            <SpeakerBackdrop url={leadPhoto(speakers)!} look={sLook} />
+          )}
         </>
       )}
       {tint && (
@@ -213,26 +221,47 @@ export function PosterMedia({
           </div>
         </div>
       )}
-      {speakers.length > 0 && (
-        <div
-          className={`pointer-events-none absolute text-white ${
-            design?.speakerLook?.place === 'top'
-              ? `inset-x-0 top-0 ${compact ? 'p-1.5' : 'px-4 pt-10'}`
-              : design?.speakerLook?.place === 'right'
-                ? `inset-y-0 right-0 flex items-center ${compact ? 'p-1.5' : 'pr-3'}`
-                : `inset-x-0 bottom-0 ${compact ? 'p-1.5' : 'px-4 pb-4'}`
-          }`}
-        >
-          <SpeakerStrip
-            speakers={speakers}
-            size={compact ? 'sm' : 'md'}
-            onColor
-            look={compact ? { ...design?.speakerLook, size: undefined } : design?.speakerLook}
-            brand={theme.light}
-            vertical={design?.speakerLook?.place === 'right'}
-          />
-        </div>
-      )}
+      {speakers.length > 0 &&
+        (sStyle !== 'photo' ? (
+          // The photo is in the background: the names go along the bottom.
+          <div
+            className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap gap-1.5 text-white ${compact ? 'p-1.5' : 'px-4 pb-4'}`}
+          >
+            {speakers.map((sp, i) => (
+              <span
+                key={`${sp.name}${i}`}
+                className={`rounded-full bg-black/35 font-semibold backdrop-blur ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-[13px]'}`}
+              >
+                🎤 {sp.name}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div
+            className={`pointer-events-none absolute flex text-white ${
+              sSpot.inline || sSpot.x === 'center'
+                ? 'inset-x-0 justify-center'
+                : sSpot.x === 'left'
+                  ? 'left-0'
+                  : 'right-0'
+            } ${
+              sSpot.inline || sSpot.y === 'bottom'
+                ? `bottom-0 ${compact ? 'p-1.5' : 'px-4 pb-4'}`
+                : sSpot.y === 'top'
+                  ? `top-0 ${compact ? 'p-1.5' : 'px-4 pt-10'}`
+                  : `top-1/2 -translate-y-1/2 ${compact ? 'p-1.5' : 'px-3'}`
+            }`}
+          >
+            <SpeakerStrip
+              speakers={speakers}
+              size={compact ? 'sm' : 'md'}
+              onColor
+              look={compact ? { ...sLook, size: undefined } : sLook}
+              brand={theme.light}
+              vertical={!sSpot.inline && sSpot.x !== 'center'}
+            />
+          </div>
+        ))}
     </div>
   );
 }

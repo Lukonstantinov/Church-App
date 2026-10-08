@@ -20,7 +20,9 @@ import {
   type RollEntry,
   type Speaker,
   readPostDesign,
+  readSpeakerLook,
   readSpeakers,
+  readTunes,
   repeatSchema,
   meetingServicesSchema,
   DEFAULT_MEETING_REMINDERS,
@@ -342,12 +344,20 @@ export async function toMeetingRows(
               motion: designTemplates.motion,
               tile: designTemplates.tileMotion,
               poster: designTemplates.posterMotion,
+              tunes: designTemplates.motionTunes,
+              speakerLook: designTemplates.speakerLook,
             })
             .from(designTemplates)
             .where(inArray(designTemplates.id, templateIds))
         ).map((t) => [
           t.id,
-          { motion: readMotion(t.motion), tile: readMotion(t.tile), poster: readMotion(t.poster) },
+          {
+            motion: readMotion(t.motion),
+            tile: readMotion(t.tile),
+            poster: readMotion(t.poster),
+            tunes: readTunes(t.tunes),
+            speakerLook: readSpeakerLook(t.speakerLook),
+          },
         ])
       : [],
   );
@@ -412,6 +422,15 @@ export async function toMeetingRows(
       (tplOf[i] ? templateMotions.get(tplOf[i]!)?.poster : null) ??
       null,
     ownPosterMotion: readMotion(m.posterMotion),
+    motionTunes: {
+      ...(tplOf[i] ? templateMotions.get(tplOf[i]!)?.tunes : null),
+      ...readTunes(m.motionTunes),
+    },
+    ownMotionTunes: readTunes(m.motionTunes),
+    speakerLook:
+      readPostDesign(m.design)?.speakerLook ??
+      (tplOf[i] ? templateMotions.get(tplOf[i]!)?.speakerLook : null) ??
+      null,
     posterTemplateId: m.posterTemplateId,
     poster: (m.posterTemplateId && posters.get(m.posterTemplateId)) || null,
     snackDeclined: (!m.snackUserId && m.snackDeclinedBy && people.get(m.snackDeclinedBy)) || null,

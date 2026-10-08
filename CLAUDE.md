@@ -80,7 +80,9 @@ look (colour, pattern, logo, photo), background, default place, Telegram chat; a
 positions with rights, labels, contacts, profile photos (`users.photo_media_id`, set on the person
 screen via `PUT /api/users/:id/photo`; used on meeting cards and as speakers' photos on posters —
 speakers can be picked from people, `speaker.userId`; missing photos give a warning; their look on
-posters — place, edge, shape, size, opacity — is `design.speakerLook`).
+posters and meeting cards — style photo/side/background, nine spots, edge, shape, size, opacity, on
+cards — is `design.speakerLook`, defaulting to the template's `speaker_look`; `CardSpeaker` on tiles,
+panel and hero). Animation settings per meeting/template: `motion_tunes` (`MotionTargets`).
 
 **Meetings** — one-off, repeating series (weekly / biweekly / monthly, all dates created
 at once: `meetings.series_id`, `repeat_rule`; edits can apply to the rest of the series),

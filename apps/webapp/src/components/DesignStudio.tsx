@@ -290,6 +290,7 @@ function PinnedPiece({ g }: { g: GroupSummary }) {
     poster: null,
     countdown: false,
     speakers: [],
+    speakerLook: null,
     createdAt: new Date().toISOString(),
     look: null,
     myRsvp: null,

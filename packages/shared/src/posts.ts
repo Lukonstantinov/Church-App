@@ -90,20 +90,62 @@ const fontKey = z.string().refine(isFontKey, 'font');
  * have a look of its own.
  */
 /**
- * The speakers' photos on a poster: how see-through, where (with the text, at the top, at
- * the bottom, or a column on the right), the edge around them, their shape and size.
+ * The speakers' photos on a poster and on meeting cards. Style: separate photos, one big
+ * photo filling a side of the background (fading into it), or the whole background. Place:
+ * with the text, or one of nine spots (x: left/centre/right × y: top/centre/bottom; for
+ * the background styles they pick the side and the part of the photo kept in view).
  */
-export const SPEAKER_PLACES = ['inline', 'top', 'bottom', 'right'] as const;
+export const SPEAKER_STYLES = ['photo', 'side', 'background'] as const;
+export const SPEAKER_X = ['left', 'center', 'right'] as const;
+export const SPEAKER_Y = ['top', 'center', 'bottom'] as const;
+export const SPEAKER_PLACES = ['inline', 'top', 'bottom', 'right', 'free'] as const;
 export const SPEAKER_EDGES = ['white', 'none', 'brand', 'gold', 'glow', 'shadow'] as const;
-export const SPEAKER_SHAPES = ['circle', 'rounded', 'square'] as const;
+export const SPEAKER_SHAPES = ['circle', 'rounded', 'square', 'portrait'] as const;
+export const SPEAKER_SIZES = ['s', 'm', 'l', 'xl'] as const;
 export const speakerLookSchema = z.object({
-  opacity: z.number().min(0.2).max(1).optional(),
+  style: z.enum(SPEAKER_STYLES).optional(),
+  opacity: z.number().min(0.1).max(1).optional(),
+  /** "inline" = with the text; "free" = at x/y (top/bottom/right: older settings). */
   place: z.enum(SPEAKER_PLACES).optional(),
+  x: z.enum(SPEAKER_X).optional(),
+  y: z.enum(SPEAKER_Y).optional(),
   edge: z.enum(SPEAKER_EDGES).optional(),
   shape: z.enum(SPEAKER_SHAPES).optional(),
-  size: z.enum(['s', 'm', 'l']).optional(),
+  size: z.enum(SPEAKER_SIZES).optional(),
+  /** The speaker's photo also on the meeting's home tile, panel and screen (default yes). */
+  onCards: z.boolean().optional(),
 });
 export type SpeakerLook = z.infer<typeof speakerLookSchema>;
+
+/** Reads a stored speaker look (null when absent or invalid). */
+export function readSpeakerLook(v: unknown): SpeakerLook | null {
+  let raw = v;
+  if (typeof v === 'string') {
+    try {
+      raw = JSON.parse(v);
+    } catch {
+      return null;
+    }
+  }
+  if (!raw) return null;
+  const r = speakerLookSchema.safeParse(raw);
+  return r.success ? r.data : null;
+}
+
+/** Where the photos go: with the text, or a spot (older "top/bottom/right" read as spots). */
+export function speakerSpot(look: SpeakerLook | null | undefined): {
+  inline: boolean;
+  x: (typeof SPEAKER_X)[number];
+  y: (typeof SPEAKER_Y)[number];
+} {
+  const p = look?.place;
+  if (p === 'top') return { inline: false, x: 'center', y: 'top' };
+  if (p === 'bottom') return { inline: false, x: 'center', y: 'bottom' };
+  if (p === 'right') return { inline: false, x: 'right', y: 'center' };
+  const x = look?.x ?? (look?.style && look.style !== 'photo' ? 'right' : 'center');
+  const y = look?.y ?? 'center';
+  return { inline: p === 'inline' || (p === undefined && !look?.x), x, y };
+}
 
 export const postDesignSchema = z.object({
   /** Show the cover banner (default yes). */

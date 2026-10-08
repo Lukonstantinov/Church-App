@@ -405,6 +405,23 @@ export const en: Messages = {
     speakerRole: 'Who / about what (optional)',
     speakerPhoto: 'Photo',
     speakerFromPeople: 'From the people',
+    meetingMotions: 'Meeting animations',
+    meetingMotionsHint:
+      'The meeting screen, the home tile and the poster each have their own animation. Tap the chosen one for its settings (speed, size, direction…). «As in the template» = no changes of its own.',
+    speakerStyle: 'Style',
+    speakerStyles: {
+      photo: 'Separate photos',
+      side: 'Side of background',
+      background: 'Whole background',
+    },
+    speakerX: { left: 'left', center: 'centre', right: 'right' },
+    speakerY: { top: 'Top', center: 'Middle', bottom: 'Bottom' },
+    speakerSpotHint: 'Tap a dot and the photos go there. «With the text» = under the topic.',
+    speakerSideHint:
+      'Left/right = which side the photo is on; top/bottom = which part of it shows.',
+    speakerOnCards: "Speaker's photo on the meeting tile and panel",
+    speakerOnCardsHint:
+      'Once a speaker is chosen, their profile photo shows at the side of the tile, the «Next meeting» panel and the meeting screen.',
     speakerLook: 'Speaker photos on the poster',
     speakerPlace: 'Where',
     speakerPlaces: { inline: 'With the text', top: 'Top', bottom: 'Bottom', right: 'Right' },
@@ -418,9 +435,9 @@ export const en: Messages = {
       shadow: 'Shadow',
     },
     speakerShape: 'Shape',
-    speakerShapes: { circle: 'Circle', rounded: 'Rounded', square: 'Square' },
+    speakerShapes: { circle: 'Circle', rounded: 'Rounded', square: 'Square', portrait: 'Portrait' },
     speakerSize: 'Size',
-    speakerSizes: { s: 'Small', m: 'Medium', l: 'Large' },
+    speakerSizes: { s: 'Small', m: 'Medium', l: 'Large', xl: 'Extra large' },
     speakerOpacity: 'Photo opacity',
     speakerNoPhoto: 'No photo — the poster shows initials. Tap the circle to add one.',
     speakerNoProfilePhoto:
@@ -990,6 +1007,8 @@ export const en: Messages = {
     templates: 'Templates',
     templatesHint:
       'Colour, pattern, photo and animation. Meetings and events using a template change with it.',
+    speakerLookHint:
+      'How speakers’ photos sit on the posters and cards of every meeting with this template. A meeting can change it.',
     defaultForMeetings: 'Look of all meetings',
     defaultForMeetingsHint:
       'Meetings without a look of their own (and new scheduled ones) wear this template. A single meeting can be changed below — «Meetings».',

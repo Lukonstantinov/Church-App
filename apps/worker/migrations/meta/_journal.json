@@ -337,6 +337,13 @@
       "when": 1791451633841,
       "tag": "0047_meeting_template",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1791453445224,
+      "tag": "0048_speaker_look_tunes",
+      "breakpoints": true
     }
   ]
 }

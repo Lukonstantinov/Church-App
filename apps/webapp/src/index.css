@@ -2782,6 +2782,22 @@ html[data-motion='off'] .edge {
 .card-clip ~ .living-clip {
   clip-path: inset(0 round var(--clip-r, 0px));
 }
+/* A part's own pictures (Design studio): behind its content, cut to its corner shape. */
+.part-clip {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  clip-path: inset(0 round var(--clip-r, 0px));
+  /* Makes iPhones clip a zoomed (moved) picture to the rounded corners too. */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(white, black);
+}
+.shine {
+  clip-path: inset(0 round var(--clip-r, 0px));
+}
 
 /* ---------- Seasons: falling leaves, snowfall, petals ---------- */
 .living-fallitem {

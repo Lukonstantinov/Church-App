@@ -406,6 +406,19 @@ export const lt: Messages = {
     speakerRole: 'Kas / apie ką (nebūtina)',
     speakerPhoto: 'Nuotrauka',
     speakerFromPeople: 'Iš narių',
+    meetingMotions: 'Susitikimo animacijos',
+    meetingMotionsHint:
+      'Susitikimo ekranas, plytelė pradžioje ir plakatas turi savo animaciją. Paspauskite pasirinktą — atsivers jos nustatymai (greitis, dydis, kryptis…).',
+    speakerStyle: 'Stilius',
+    speakerStyles: { photo: 'Atskiros nuotraukos', side: 'Fono šone', background: 'Visas fonas' },
+    speakerX: { left: 'kairėje', center: 'centre', right: 'dešinėje' },
+    speakerY: { top: 'Viršuje', center: 'Viduryje', bottom: 'Apačioje' },
+    speakerSpotHint: 'Paspauskite tašką — nuotraukos atsidurs ten. «Su tekstu» — po tema.',
+    speakerSideHint:
+      'Kairė/dešinė — kurioje pusėje nuotrauka; viršus/apačia — kuri jos dalis matoma.',
+    speakerOnCards: 'Kalbėtojo nuotrauka susitikimo plytelėje ir skydelyje',
+    speakerOnCardsHint:
+      'Pasirinkus kalbėtoją, jo profilio nuotrauka rodoma plytelės, skydelio «Artimiausias susitikimas» ir susitikimo ekrano šone.',
     speakerLook: 'Kalbėtojų nuotraukos plakate',
     speakerPlace: 'Kur',
     speakerPlaces: { inline: 'Su tekstu', top: 'Viršuje', bottom: 'Apačioje', right: 'Dešinėje' },
@@ -419,9 +432,14 @@ export const lt: Messages = {
       shadow: 'Šešėlis',
     },
     speakerShape: 'Forma',
-    speakerShapes: { circle: 'Apskritimas', rounded: 'Suapvalinta', square: 'Kvadratas' },
+    speakerShapes: {
+      circle: 'Apskritimas',
+      rounded: 'Suapvalinta',
+      square: 'Kvadratas',
+      portrait: 'Portretas',
+    },
     speakerSize: 'Dydis',
-    speakerSizes: { s: 'Maži', m: 'Vidutiniai', l: 'Dideli' },
+    speakerSizes: { s: 'Maži', m: 'Vidutiniai', l: 'Dideli', xl: 'Labai dideli' },
     speakerOpacity: 'Nuotraukų neskaidrumas',
     speakerNoPhoto:
       'Nėra nuotraukos — plakate bus inicialai. Paspauskite apskritimą, kad pridėtumėte.',
@@ -1013,6 +1031,8 @@ export const lt: Messages = {
     templates: 'Šablonai',
     templatesHint:
       'Spalva, raštas, nuotrauka ir animacija. Susitikimai ir renginiai su šablonu keičiasi kartu.',
+    speakerLookHint:
+      'Kaip kalbėtojų nuotraukos dedamos visų susitikimų su šiuo šablonu plakatuose ir kortelėse. Susitikime galima pakeisti.',
     defaultForMeetings: 'Visų susitikimų išvaizda',
     defaultForMeetingsHint:
       'Susitikimai be savo išvaizdos (ir nauji pagal tvarkaraštį) naudoja šį šabloną. Atskirą susitikimą galima pakeisti žemiau — «Susitikimai».',

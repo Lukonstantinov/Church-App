@@ -288,6 +288,8 @@ export const meetings = sqliteTable(
     /** Its home tile's / poster's own animations (null = the template's, else default). */
     tileMotion: text('tile_motion'),
     posterMotion: text('poster_motion'),
+    /** This meeting's own settings per animation: JSON {kind: MotionTune} (over the template's). */
+    motionTunes: text('motion_tunes'),
     /** A poster template from Design → Posters (null = the usual poster). */
     posterTemplateId: integer('poster_template_id'),
     rollTakenBy: integer('roll_taken_by'),
@@ -781,6 +783,10 @@ export const designTemplates = sqliteTable('design_templates', {
   tileMotion: text('tile_motion'),
   /** The poster's animation (NULL = none). */
   posterMotion: text('poster_motion'),
+  /** Settings per animation: JSON {kind: MotionTune}. */
+  motionTunes: text('motion_tunes'),
+  /** How speakers' photos show on posters and meeting cards (SpeakerLook JSON). */
+  speakerLook: text('speaker_look'),
   createdBy: integer('created_by').references(() => users.id),
   createdAt: createdAt(),
 });

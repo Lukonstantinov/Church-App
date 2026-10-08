@@ -1,6 +1,14 @@
-import type { GroupSummary, MeetingHelper, MeetingMotion, MeetingRow } from '@church/shared';
-import { Group, Pill } from './LookControls';
-import { MotionPicker } from './MotionPicker';
+import { useState } from 'react';
+import type {
+  GroupSummary,
+  MeetingHelper,
+  MeetingMotion,
+  MeetingRow,
+  MotionTunes,
+  SpeakerLook,
+} from '@church/shared';
+import { Pill } from './LookControls';
+import { MotionTargets } from './MotionTargets';
 import { useT } from '../lib/i18n';
 import {
   CoverLookControls,
@@ -21,7 +29,7 @@ import {
 } from './Speakers';
 import { Section } from './ui';
 
-/** Everything that makes up a meeting's poster: its look and its speakers. */
+/** Everything that makes up a meeting's look: poster, speakers, animations and their settings. */
 export interface MeetingPosterState {
   cover: CoverState;
   speakers: SpeakerDraft[];
@@ -29,21 +37,51 @@ export interface MeetingPosterState {
   posterMotion: MeetingMotion | null;
   /** What it shows without one of its own (from the template). */
   inheritedMotion: MeetingMotion | null;
+  /** Its own animations on its screen and home tile (null = the template's / ministry's). */
+  motion: MeetingMotion | null;
+  tileMotion: MeetingMotion | null;
+  /** Its own settings per animation, and those it follows (its template's). */
+  motionTunes: MotionTunes;
+  inheritedTunes: MotionTunes;
+  /** The speaker-photo look it follows without its own (its template's). */
+  inheritedSpeakerLook: SpeakerLook | null;
 }
 
 export const initMeetingPoster = (
   m?: Pick<
     MeetingRow,
-    'design' | 'templateId' | 'look' | 'speakers' | 'posterMotion' | 'ownPosterMotion'
+    | 'design'
+    | 'templateId'
+    | 'look'
+    | 'speakers'
+    | 'posterMotion'
+    | 'ownPosterMotion'
+    | 'ownMotion'
+    | 'ownTileMotion'
+    | 'motionTunes'
+    | 'ownMotionTunes'
+    | 'speakerLook'
   >,
-): MeetingPosterState => ({
-  cover: initCover(m?.design, m?.templateId, m?.look, true),
-  speakers: toDrafts(m?.speakers),
-  posterMotion: m?.ownPosterMotion ?? null,
-  inheritedMotion: m?.ownPosterMotion ? null : (m?.posterMotion ?? null),
-});
+): MeetingPosterState => {
+  const own = m?.ownMotionTunes ?? {};
+  // What the template gives: the resolved settings without the meeting's own on top.
+  const inherited = Object.fromEntries(
+    Object.entries(m?.motionTunes ?? {}).filter(([k]) => !(k in own)),
+  ) as MotionTunes;
+  return {
+    cover: initCover(m?.design, m?.templateId, m?.look, true),
+    speakers: toDrafts(m?.speakers),
+    posterMotion: m?.ownPosterMotion ?? null,
+    inheritedMotion: m?.ownPosterMotion ? null : (m?.posterMotion ?? null),
+    motion: m?.ownMotion ?? null,
+    tileMotion: m?.ownTileMotion ?? null,
+    motionTunes: own,
+    inheritedTunes: inherited,
+    inheritedSpeakerLook: m?.design?.speakerLook ? null : (m?.speakerLook ?? null),
+  };
+};
 
-/** The pieces the API stores for a meeting's poster. */
+/** The pieces the API stores for a meeting's look. */
 export function meetingPosterPayload(
   state: MeetingPosterState,
   templateId: number | null,
@@ -52,11 +90,17 @@ export function meetingPosterPayload(
   templateId: number | null;
   speakers: ReturnType<typeof toSpeakerInputs>;
   posterMotion: MeetingMotion | null;
+  motion: MeetingMotion | null;
+  tileMotion: MeetingMotion | null;
+  motionTunes: MotionTunes;
 } {
   return {
     ...coverPayload(state.cover, templateId),
     speakers: toSpeakerInputs(state.speakers),
     posterMotion: state.posterMotion,
+    motion: state.motion,
+    tileMotion: state.tileMotion,
+    motionTunes: state.motionTunes,
   };
 }
 
@@ -84,6 +128,7 @@ export function MeetingPosterDesigner({
 }) {
   const t = useT();
   const { look } = useCoverLook(state.cover, g);
+  const [motionSlide, setMotionSlide] = useState(2);
   const setDesign = (patch: Partial<MeetingPosterState['cover']['design']>) =>
     onChange({ ...state, cover: { ...state.cover, design: { ...state.cover.design, ...patch } } });
   return (
@@ -100,6 +145,8 @@ export function MeetingPosterDesigner({
                   design: state.cover.design,
                   speakers: toShown(state.speakers),
                   posterMotion: state.posterMotion ?? state.inheritedMotion,
+                  motionTunes: { ...state.inheritedTunes, ...state.motionTunes },
+                  speakerLook: state.inheritedSpeakerLook,
                 }}
                 g={g}
               />
@@ -130,14 +177,6 @@ export function MeetingPosterDesigner({
             </div>
           </div>
           <TitleStyleControls design={state.cover.design} set={setDesign} />
-          <Group title={t.meetings.posterMotion}>
-            <MotionPicker
-              value={state.posterMotion}
-              onChange={(posterMotion) => onChange({ ...state, posterMotion })}
-              allowInherit
-              inheritLabel={t.meetings.motionDefault}
-            />
-          </Group>
         </div>
       </Section>
       <Section title={t.meetings.speakers}>
@@ -150,8 +189,37 @@ export function MeetingPosterDesigner({
       <Section title={t.meetings.speakerLook}>
         <div className="p-4">
           <SpeakerLookControls
-            value={state.cover.design.speakerLook}
+            // Without its own, it starts from what the template gives.
+            value={state.cover.design.speakerLook ?? state.inheritedSpeakerLook}
             onChange={(speakerLook) => setDesign({ speakerLook })}
+          />
+        </div>
+      </Section>
+      <Section title={t.meetings.meetingMotions} footer={t.meetings.meetingMotionsHint}>
+        <div className="p-4">
+          <MotionTargets
+            slide={motionSlide}
+            onSlide={setMotionSlide}
+            screen={{
+              value: state.motion,
+              set: (motion) => onChange({ ...state, motion }),
+              inherit: t.meetings.motionMinistry,
+            }}
+            tile={{
+              value: state.tileMotion,
+              set: (tileMotion) => onChange({ ...state, tileMotion }),
+              inherit: t.meetings.motionDefault,
+            }}
+            poster={{
+              value: state.posterMotion,
+              set: (posterMotion) => onChange({ ...state, posterMotion }),
+              inherit: t.meetings.motionDefault,
+            }}
+            tunes={{
+              value: state.motionTunes,
+              inherited: state.inheritedTunes,
+              set: (motionTunes) => onChange({ ...state, motionTunes }),
+            }}
           />
         </div>
       </Section>

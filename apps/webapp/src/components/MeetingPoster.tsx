@@ -3,6 +3,7 @@ import {
   displayName,
   fontFamily,
   resolveBrand,
+  speakerSpot,
   type GroupSummary,
   type MeetingHelper,
   type MeetingPerson,
@@ -12,13 +13,15 @@ import {
   type PostDesign,
   type PosterLook,
   type Speaker,
+  type SpeakerLook,
+  type MotionTunes,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { LivingLayer } from './ui';
 import { LayeredPoster, usePosterTexts } from './LayeredPoster';
-import { SpeakerStrip, withoutPhoto } from './Speakers';
+import { SpeakerBackdrop, SpeakerStrip, leadPhoto, withoutPhoto } from './Speakers';
 
 const TITLE_PX = { s: 32, m: 40, l: 50, xl: 60 } as const;
 
@@ -60,6 +63,40 @@ export function posterMissingPhotos(
 ): string[] {
   if (m.poster) return [];
   return withoutPhoto(posterSpeakers(m, leaderRole));
+}
+
+/**
+ * The speaker's photo on a meeting's cards (home tile, "next meeting" panel, its screen):
+ * filling the side (or the whole background) and fading into the card. Off when the
+ * design says so, or with a poster template.
+ */
+export function CardSpeaker({
+  m,
+}: {
+  m: Parameters<typeof posterSpeakers>[0] & {
+    speakerLook?: SpeakerLook | null;
+    poster?: PosterTemplate | null;
+  };
+}) {
+  const t = useT();
+  const look = m.speakerLook ?? null;
+  if (m.poster || look?.onCards === false) return null;
+  const url = leadPhoto(posterSpeakers(m, t.meetings.leader));
+  if (!url) return null;
+  const whole = look?.style === 'background';
+  return (
+    <SpeakerBackdrop
+      url={url}
+      look={{
+        style: whole ? 'background' : 'side',
+        place: 'free',
+        x: look?.style === 'side' && look.x ? look.x : 'right',
+        // Faces are usually near the top of a photo.
+        y: look?.y ?? 'top',
+        opacity: look?.style && look.style !== 'photo' ? look.opacity : undefined,
+      }}
+    />
+  );
 }
 
 /** A note under a poster preview when a speaker will show initials instead of a photo. */
@@ -107,6 +144,10 @@ export const MeetingPoster = forwardRef<
         posterMotion: MeetingMotion | null;
         /** A poster template (Design → Posters): drawn instead of the usual poster. */
         poster: PosterTemplate | null;
+        /** How speakers' photos show when the design has no setting of its own (its template's). */
+        speakerLook: SpeakerLook | null;
+        /** Settings per animation (the poster's animation uses its own). */
+        motionTunes: MotionTunes;
       }>;
     g: GroupSummary;
     /** Stamped "cancelled" across. */
@@ -129,9 +170,11 @@ export const MeetingPoster = forwardRef<
     design?.posterLayout === 'collage' ? speakers.filter((sp) => sp.photoUrl).slice(0, 4) : [];
   const place =
     design?.titlePos === 'top' ? 'mt-8' : design?.titlePos === 'center' ? 'my-auto' : 'mt-auto';
-  // The speakers' photos: where and how they look (Design → poster → speaker photos).
-  const speakerLook = design?.speakerLook ?? null;
-  const spot = speakers.length ? (speakerLook?.place ?? 'inline') : null;
+  // The speakers' photos: how they look (this poster's own setting, else its template's).
+  const speakerLook = design?.speakerLook ?? m.speakerLook ?? null;
+  const style = speakerLook?.style ?? 'photo';
+  const spot = speakerSpot(speakerLook);
+  const backdropPhoto = style !== 'photo' && !collage.length ? leadPhoto(speakers) : null;
   const strip = (className?: string, vertical?: boolean) => (
     <SpeakerStrip
       speakers={collage.length ? speakers.map((sp) => ({ ...sp, photoUrl: null })) : speakers}
@@ -143,6 +186,21 @@ export const MeetingPoster = forwardRef<
       className={className}
     />
   );
+  // Photos at one of nine spots (over the poster), or with the text.
+  const placed =
+    speakers.length > 0 && style === 'photo' && !spot.inline ? (
+      <div
+        className={`absolute flex ${
+          spot.x === 'left'
+            ? 'left-10'
+            : spot.x === 'right'
+              ? 'right-10'
+              : 'inset-x-10 justify-center'
+        } ${spot.y === 'top' ? 'top-28' : spot.y === 'bottom' ? 'bottom-10' : 'top-1/2 -translate-y-1/2'}`}
+      >
+        {strip(undefined, spot.x !== 'center')}
+      </div>
+    ) : null;
   if (m.poster)
     return (
       <div ref={ref} className="relative h-[675px] w-[540px] overflow-hidden">
@@ -186,11 +244,18 @@ export const MeetingPoster = forwardRef<
         <>
           <PatternLayer pattern={look.pattern} logoUrl={look.logoUrl} />
           <BackdropLayer backdrop={look.backdrop} url={look.backdropUrl} />
+          {backdropPhoto && <SpeakerBackdrop url={backdropPhoto} look={speakerLook} />}
         </>
       )}
       {/* Drawn at print size, so its particles are drawn larger. */}
       {m.posterMotion && m.posterMotion !== 'off' && (
-        <LivingLayer kind={m.posterMotion} tune={{ size: 1.6 }} />
+        <LivingLayer
+          kind={m.posterMotion}
+          tune={{
+            ...m.motionTunes?.[m.posterMotion],
+            size: (m.motionTunes?.[m.posterMotion]?.size ?? 1) * 1.6,
+          }}
+        />
       )}
       <span
         aria-hidden="true"
@@ -206,10 +271,7 @@ export const MeetingPoster = forwardRef<
         )}
         <span className="text-[20px] font-bold uppercase tracking-wider">{g.name}</span>
       </div>
-      {spot === 'top' && strip('relative mt-6')}
-      {spot === 'right' && (
-        <div className="absolute right-8 top-1/2 -translate-y-1/2">{strip(undefined, true)}</div>
-      )}
+
       <div
         className={`relative flex flex-col gap-4 ${place} ${center ? 'items-center text-center' : ''}`}
       >
@@ -235,7 +297,21 @@ export const MeetingPoster = forwardRef<
           </div>
         </div>
         {m.topic && <div className="text-[28px] font-bold leading-tight">«{m.topic}»</div>}
-        {spot === 'inline' && strip()}
+        {speakers.length > 0 && style === 'photo' && spot.inline && strip()}
+        {/* With the photo in the background, the names go with the text. */}
+        {style !== 'photo' && speakers.length > 0 && (
+          <div className={`flex flex-wrap gap-2 ${center ? 'justify-center' : ''}`}>
+            {speakers.map((sp, i) => (
+              <span
+                key={`${sp.name}${i}`}
+                className="rounded-full bg-white px-4 py-1.5 text-[19px] font-semibold text-[var(--brand)]"
+              >
+                🎤 {sp.name}
+                {sp.role ? <span className="opacity-70"> · {sp.role}</span> : null}
+              </span>
+            ))}
+          </div>
+        )}
         <div
           className={`flex flex-wrap gap-2 text-[19px] font-semibold ${center ? 'justify-center' : ''}`}
         >
@@ -251,8 +327,8 @@ export const MeetingPoster = forwardRef<
             <span className="rounded-full bg-white/22 px-4 py-1.5">📍 {m.location}</span>
           )}
         </div>
-        {spot === 'bottom' && strip()}
       </div>
+      {placed}
       {cancelled && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/35">
           <span className="-rotate-12 rounded-2xl border-[6px] border-[#ef4444] bg-white/90 px-8 py-3 text-[56px] font-black tracking-widest text-[#ef4444]">

@@ -5,6 +5,7 @@ import {
   readPostDesign,
   motionTuneSchema,
   motionLayersSchema,
+  readSpeakerLook,
   coverSlidesSchema,
   type MotionLayer,
   type EventDetail,
@@ -367,6 +368,7 @@ async function summarize(
         poster: (e.posterTemplateId && posters.get(e.posterTemplateId)) || null,
         countdown: e.countdown,
         speakers: await speakersOf(db, e.speakers, secret),
+        speakerLook: design?.speakerLook ?? readSpeakerLook(tpl?.speakerLook) ?? null,
         createdAt: e.createdAt,
         look: brand ? await posterLook(secret, brand, design, tpl) : null,
       };

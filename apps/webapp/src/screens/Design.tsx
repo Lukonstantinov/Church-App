@@ -7,10 +7,12 @@ import type {
   GroupSummary,
   MeetingMotion,
   MeetingRow,
+  MotionTunes,
   PatternConfig,
   PostDesign,
   PosterLook,
   PosterTemplate,
+  SpeakerLook,
 } from '@church/shared';
 import { initCover } from '../components/CoverDesigner';
 import {
@@ -26,7 +28,8 @@ import { GroupSwitcher } from '../components/GroupSwitcher';
 import { Group, LookControls, Pill } from '../components/LookControls';
 import { LookTop } from '../components/LookTop';
 import { MeetingPoster, groupLook } from '../components/MeetingPoster';
-import { MotionPicker } from '../components/MotionPicker';
+import { MotionTargets } from '../components/MotionTargets';
+import { SpeakerLookControls } from '../components/Speakers';
 import { QualityPicker } from '../components/QualityPicker';
 import { Sheet } from '../components/Sheet';
 import { ThemePicker } from '../components/ThemePicker';
@@ -293,8 +296,11 @@ export function DesignPreviews({
   poster,
   slide,
   onSlide,
+  tunes,
 }: {
   look: PosterLook;
+  /** Settings per animation. */
+  tunes?: MotionTunes;
   /** A poster template (Design → Posters) shown in all three instead of the look. */
   poster?: PosterTemplate | null;
   motion: MeetingMotion;
@@ -372,7 +378,7 @@ export function DesignPreviews({
                 className="mx-auto aspect-[4/3] h-[200px] rounded-[var(--radius-card)] shadow-card"
               />
             ) : (
-              <HeroCard look={look} living={motion}>
+              <HeroCard look={look} living={motion} tune={tunes?.[motion]}>
                 <div className="mb-3 truncate text-[12px] font-bold uppercase tracking-wider opacity-80">
                   {g.name}
                 </div>
@@ -399,7 +405,7 @@ export function DesignPreviews({
                 poster ? (
                   <LayeredPoster fill tpl={poster} texts={words} />
                 ) : (
-                  <LivingLayer kind={tileMotion ?? motion} />
+                  <LivingLayer kind={tileMotion ?? motion} tune={tunes?.[tileMotion ?? motion]} />
                 )
               }
             >
@@ -435,6 +441,7 @@ export function DesignPreviews({
                   design: design ?? null,
                   speakers: [],
                   posterMotion: posterMotion ?? null,
+                  motionTunes: tunes,
                   poster: poster ?? null,
                 }}
                 g={g}
@@ -444,48 +451,6 @@ export function DesignPreviews({
         </Slide>
       </div>
     </div>
-  );
-}
-
-/**
- * The animation for the part shown above (meeting screen, home tile or poster): a switch
- * that turns the carousel too, and the picker for that part.
- */
-function MotionTargets({
-  slide,
-  onSlide,
-  screen,
-  tile,
-  poster,
-}: {
-  slide: number;
-  onSlide: (i: number) => void;
-  screen: { value: MeetingMotion | null; set: (m: MeetingMotion | null) => void; inherit: string };
-  tile: { value: MeetingMotion | null; set: (m: MeetingMotion | null) => void; inherit: string };
-  poster: { value: MeetingMotion | null; set: (m: MeetingMotion | null) => void; inherit?: string };
-}) {
-  const t = useT();
-  const parts = [screen, tile, poster];
-  const labels = [t.design.previewApp, t.design.previewTile, t.design.previewPoster];
-  const part = parts[slide] ?? screen;
-  return (
-    <Group title={t.design.motion}>
-      <div className="flex flex-col gap-3">
-        <div className="flex gap-1.5">
-          {labels.map((l, i) => (
-            <Pill key={l} on={slide === i} onClick={() => onSlide(i)} label={l} />
-          ))}
-        </div>
-        {slide === 2 && <p className="text-[13px] text-hint">{t.design.posterMotionHint}</p>}
-        <MotionPicker
-          key={slide}
-          value={part.value}
-          onChange={part.set}
-          allowInherit={!!part.inherit}
-          inheritLabel={part.inherit}
-        />
-      </div>
-    </Group>
   );
 }
 
@@ -535,6 +500,8 @@ function TemplateSheet({
   const [motion, setMotion] = useState<MeetingMotion | null>(tpl?.motion ?? 'calm');
   const [tileMotion, setTileMotion] = useState<MeetingMotion | null>(tpl?.tileMotion ?? null);
   const [posterMotion, setPosterMotion] = useState<MeetingMotion | null>(tpl?.posterMotion ?? null);
+  const [tunes, setTunes] = useState<MotionTunes>(tpl?.motionTunes ?? {});
+  const [speakerLook, setSpeakerLook] = useState<SpeakerLook | null>(tpl?.speakerLook ?? null);
   const [slide, setSlide] = useState(0);
   const preview: PosterLook = {
     brandColor: brandColor ?? g.brandColor,
@@ -558,6 +525,8 @@ function TemplateSheet({
         motion,
         tileMotion,
         posterMotion: posterMotion === 'off' ? null : posterMotion,
+        motionTunes: tunes,
+        speakerLook,
       });
       haptic.success();
       toast(t.common.saved);
@@ -575,6 +544,7 @@ function TemplateSheet({
           motion={motion ?? group.data?.meetingMotion ?? 'calm'}
           tileMotion={tileMotion}
           posterMotion={posterMotion}
+          tunes={tunes}
           g={g}
           slide={slide}
           onSlide={setSlide}
@@ -596,7 +566,12 @@ function TemplateSheet({
           screen={{ value: motion, set: setMotion, inherit: t.meetings.motionMinistry }}
           tile={{ value: tileMotion, set: setTileMotion, inherit: t.design.motionSameAsApp }}
           poster={{ value: posterMotion ?? 'off', set: setPosterMotion }}
+          tunes={{ value: tunes, set: setTunes }}
         />
+        <Group title={t.meetings.speakerLook}>
+          <p className="mb-3 text-[13px] text-hint">{t.design.speakerLookHint}</p>
+          <SpeakerLookControls value={speakerLook} onChange={setSpeakerLook} />
+        </Group>
         <Button disabled={save.isPending} onClick={() => void submit()}>
           {save.isPending ? t.common.saving : t.common.save}
         </Button>
@@ -649,6 +624,10 @@ function ApplySheet({
   const startPoster = item.kind === 'meeting' ? item.m.ownPosterMotion : null;
   const [ownTile, setOwnTile] = useState<MeetingMotion | null>(startTile);
   const [ownPoster, setOwnPoster] = useState<MeetingMotion | null>(startPoster);
+  const [startTunes] = useState<MotionTunes>(() =>
+    item.kind === 'meeting' ? item.m.ownMotionTunes : {},
+  );
+  const [ownTunes, setOwnTunes] = useState<MotionTunes>(startTunes);
   const [slide, setSlide] = useState(0);
   // An event's cover effects (several can combine) and whether the picker is open.
   const [startEffects] = useState(() => initEffects(item.kind === 'event' ? item.e : null));
@@ -674,6 +653,9 @@ function ApplySheet({
     ownPoster ??
     tpl?.posterMotion ??
     (same && item.kind === 'meeting' ? item.m.posterMotion : null);
+  // Settings it follows without its own: the chosen template's, else what it had.
+  const inheritedTunes: MotionTunes =
+    tpl?.motionTunes ?? (same && item.kind === 'meeting' ? item.m.motionTunes : {});
   const pending = updateMeeting.isPending || updateEvent.isPending;
 
   async function save() {
@@ -682,6 +664,7 @@ function ApplySheet({
       ownMotion === startMotion &&
       ownTile === startTile &&
       ownPoster === startPoster &&
+      ownTunes === startTunes &&
       effects === startEffects &&
       posterTpl === startPosterTpl
     )
@@ -702,6 +685,7 @@ function ApplySheet({
           motion: ownMotion,
           tileMotion: ownTile,
           posterMotion: ownPoster,
+          motionTunes: ownTunes,
           posterTemplateId: posterTpl,
         });
       else
@@ -726,6 +710,7 @@ function ApplySheet({
           motion={motion}
           tileMotion={tileMotion}
           posterMotion={posterMotion}
+          tunes={{ ...inheritedTunes, ...ownTunes }}
           g={g}
           title={thing.title}
           design={thing.design}
@@ -755,6 +740,7 @@ function ApplySheet({
             screen={{ value: ownMotion, set: setOwnMotion, inherit: t.meetings.motionMinistry }}
             tile={{ value: ownTile, set: setOwnTile, inherit: t.meetings.motionDefault }}
             poster={{ value: ownPoster, set: setOwnPoster, inherit: t.meetings.motionDefault }}
+            tunes={{ value: ownTunes, inherited: inheritedTunes, set: setOwnTunes }}
           />
         )}
         <Group title={t.design.apply}>

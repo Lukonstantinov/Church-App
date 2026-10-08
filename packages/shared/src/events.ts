@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import type { PosterLook } from './api';
-import { postDesignSchema, speakersSchema, type PostDesign, type Speaker } from './posts';
+import {
+  postDesignSchema,
+  speakersSchema,
+  type PostDesign,
+  type Speaker,
+  type SpeakerLook,
+} from './posts';
 import type { PersonRef, TransactionRow } from './finance';
 import type { PosterTemplate } from './posterTemplates';
 import { MEETING_MOTIONS, motionTuneSchema, type MeetingMotion, type MotionTune } from './motions';
@@ -194,6 +200,8 @@ export interface EventSummary {
   countdown: boolean;
   /** Up to four speakers shown on the poster. */
   speakers: Speaker[];
+  /** How speakers' photos show (its own design's, else its template's). */
+  speakerLook: SpeakerLook | null;
   createdAt: string;
   /** The cover's look when there is no cover photo. */
   look: PosterLook | null;

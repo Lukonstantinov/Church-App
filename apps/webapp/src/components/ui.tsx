@@ -918,6 +918,7 @@ export function HeroCard({
   tune,
   icon,
   look,
+  under,
 }: {
   children: ReactNode;
   className?: string;
@@ -933,6 +934,8 @@ export function HeroCard({
   /** Speed, size, direction and colour of the living wallpaper (from the Design studio). */
   tune?: MotionTune | null;
   icon?: MotionIcon | null;
+  /** Drawn over its pattern and photo, under the animation and text (a speaker's photo). */
+  under?: ReactNode;
 }) {
   // Inside a ministry, its pattern decorates the hero blocks too.
   const { env } = useEnv();
@@ -960,6 +963,7 @@ export function HeroCard({
       <span aria-hidden="true" className="card-clip">
         <PatternLayer pattern={src?.pattern} logoUrl={src?.logoUrl} />
         <BackdropLayer backdrop={src?.backdrop} url={src?.backdropUrl} />
+        {under}
       </span>
       <LivingLayer
         kind={living === true ? 'lively' : living || 'off'}

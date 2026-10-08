@@ -313,6 +313,12 @@ groupMeetingRoutes.post('/:id/meetings', async (c) => {
         templateId: input.templateId ?? null,
         speakers: input.speakers?.length ? JSON.stringify(input.speakers) : null,
         posterMotion: input.posterMotion ?? null,
+        motion: input.motion ?? null,
+        tileMotion: input.tileMotion ?? null,
+        motionTunes:
+          input.motionTunes && Object.keys(input.motionTunes).length
+            ? JSON.stringify(input.motionTunes)
+            : null,
         posterTemplateId: input.posterTemplateId ?? null,
         seriesId,
         repeatRule: input.repeat ? JSON.stringify(input.repeat) : null,
@@ -446,6 +452,7 @@ const MEETING_LOOK = [
   'motion',
   'tileMotion',
   'posterMotion',
+  'motionTunes',
   'posterTemplateId',
   'peopleLook',
 ] as const;
@@ -689,6 +696,11 @@ meetingRoutes.patch('/:id', async (c) => {
   if (input.motion !== undefined) patch.motion = input.motion;
   if (input.tileMotion !== undefined) patch.tileMotion = input.tileMotion;
   if (input.posterMotion !== undefined) patch.posterMotion = input.posterMotion;
+  if (input.motionTunes !== undefined)
+    patch.motionTunes =
+      input.motionTunes && Object.keys(input.motionTunes).length
+        ? JSON.stringify(input.motionTunes)
+        : null;
   if (input.posterTemplateId !== undefined) patch.posterTemplateId = input.posterTemplateId;
   if (input.peopleLook !== undefined) {
     if (input.peopleLook?.photoMediaId)
@@ -753,6 +765,10 @@ meetingRoutes.patch('/:id', async (c) => {
         'posterTemplateId',
         'speakers',
         'kind',
+        'motion',
+        'tileMotion',
+        'posterMotion',
+        'motionTunes',
       ] as const)
         if (k in patch) (shared as Record<string, unknown>)[k] = patch[k];
       if (Object.keys(shared).length > 0)

@@ -14,16 +14,23 @@ import {
   type PatternConfig,
 } from './brand';
 import type { Permission } from './permissions';
-import { MEETING_MOTIONS, type MeetingMotion } from './motions';
+import {
+  MEETING_MOTIONS,
+  motionTunesSchema,
+  type MeetingMotion,
+  type MotionTunes,
+} from './motions';
 import type { PosterTemplate } from './posterTemplates';
 import { chatUrlSchema, type EventSummary } from './events';
 import {
   postBlocksSchema,
   postDesignSchema,
+  speakerLookSchema,
   speakersSchema,
   type PostBlockView,
   type PostDesign,
   type Speaker,
+  type SpeakerLook,
 } from './posts';
 import { LOCALES, type Locale } from './i18n/locales';
 
@@ -544,6 +551,11 @@ export interface MeetingRow {
   /** The poster's animation: its own, else its template's (null = none). */
   posterMotion: MeetingMotion | null;
   ownPosterMotion: MeetingMotion | null;
+  /** Settings per animation: its own over its template's. */
+  motionTunes: MotionTunes;
+  ownMotionTunes: MotionTunes;
+  /** How speakers' photos show (its own poster design's, else its template's). */
+  speakerLook: SpeakerLook | null;
   /** A poster template (Design → Posters) used for its hero, tile and poster (null = none). */
   posterTemplateId: number | null;
   poster: PosterTemplate | null;
@@ -576,6 +588,10 @@ export const createMeetingSchema = z.object({
   speakers: speakersSchema.optional(),
   /** The poster's animation (null = the template's, else none). */
   posterMotion: z.enum(MEETING_MOTIONS).nullish(),
+  /** Its own screen and tile animations and settings per animation (null = the template's). */
+  motion: z.enum(MEETING_MOTIONS).nullish(),
+  tileMotion: z.enum(MEETING_MOTIONS).nullish(),
+  motionTunes: motionTunesSchema.nullish(),
   posterTemplateId: z.number().int().positive().nullish(),
   /** Make it a repeating meeting: the calendar is filled for all of them. */
   repeat: repeatSchema.nullish(),
@@ -602,6 +618,8 @@ export const updateMeetingSchema = z.object({
   /** Its home tile's and its poster's own animations (null = the template's / default). */
   tileMotion: z.enum(MEETING_MOTIONS).nullable().optional(),
   posterMotion: z.enum(MEETING_MOTIONS).nullable().optional(),
+  /** Its own settings per animation (null = the template's). */
+  motionTunes: motionTunesSchema.nullable().optional(),
   posterTemplateId: z.number().int().positive().nullable().optional(),
   /** With a series: apply the change to this and all the later meetings of it. */
   applyToSeries: z.boolean().optional(),
@@ -985,6 +1003,10 @@ export const templateInputSchema = z.object({
   tileMotion: z.enum(MEETING_MOTIONS).nullish(),
   /** The poster's animation (null = none; the sent picture keeps one still frame of it). */
   posterMotion: z.enum(MEETING_MOTIONS).nullish(),
+  /** Settings per animation. */
+  motionTunes: motionTunesSchema.nullish(),
+  /** How speakers' photos show on posters and meeting cards. */
+  speakerLook: speakerLookSchema.nullish(),
 });
 export type TemplateInput = z.input<typeof templateInputSchema>;
 
@@ -1000,6 +1022,8 @@ export interface DesignTemplate {
   motion: MeetingMotion | null;
   tileMotion: MeetingMotion | null;
   posterMotion: MeetingMotion | null;
+  motionTunes: MotionTunes;
+  speakerLook: SpeakerLook | null;
   mine: boolean;
 }
 

@@ -197,3 +197,21 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   tiltshift: ['weight'],
   motionblur: ['weight'],
 };
+
+/** Settings per animation (an item's own, over its template's): {kind: MotionTune}. */
+export const motionTunesSchema = z.partialRecord(z.enum(MEETING_MOTIONS), motionTuneSchema);
+export type MotionTunes = z.output<typeof motionTunesSchema>;
+
+/** Reads stored settings per animation, dropping anything unknown. */
+export function readTunes(v: unknown): MotionTunes {
+  let raw = v;
+  if (typeof v === 'string') {
+    try {
+      raw = JSON.parse(v);
+    } catch {
+      return {};
+    }
+  }
+  const r = motionTunesSchema.safeParse(raw ?? {});
+  return r.success ? r.data : {};
+}

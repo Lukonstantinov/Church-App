@@ -80,9 +80,14 @@ export function SkinLayer({ look }: { look: ModuleLook }) {
   return (
     <>
       <span ref={marker} hidden />
-      {look.photo?.url && <PartPhoto photo={look.photo} />}
-      {look.photo2?.url && look.photo?.split && look.photo.split !== 'full' && (
-        <PartPhoto photo={{ ...look.photo2, split: OTHER_HALF[look.photo.split] }} />
+      {look.photo?.url && (
+        // The pictures sit in one frame cut to the block's own corners (its corner shape).
+        <span aria-hidden="true" className="part-clip">
+          <PartPhoto photo={look.photo} />
+          {look.photo2?.url && look.photo.split && look.photo.split !== 'full' && (
+            <PartPhoto photo={{ ...look.photo2, split: OTHER_HALF[look.photo.split] }} />
+          )}
+        </span>
       )}
       {look.shine && look.shine !== 'none' && (
         <span

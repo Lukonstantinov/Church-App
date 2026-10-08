@@ -13,6 +13,7 @@ import {
 import { GroupTheme } from '../components/GroupTheme';
 import { LiveNow, SoonPulse, SoonTimer } from '../components/Live';
 import { SpeakerStrip } from '../components/Speakers';
+import { CardSpeaker } from '../components/MeetingPoster';
 import { AudiencePicker } from '../components/AudiencePicker';
 import { IconCalendar, IconClock, IconMapPin, IconPlus, IconSend } from '../components/icons';
 import { Pill } from '../components/LookControls';
@@ -167,8 +168,9 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
           living={cancelled ? 'off' : m.motion}
           live={live}
           look={meetingLook(m)}
-          tune={tuneFor(meetingTune, m.motion)}
+          tune={m.motionTunes[m.motion] ?? tuneFor(meetingTune, m.motion)}
           icon={meetingTune.icon}
+          under={<CardSpeaker m={m} />}
         >
           <div className="mb-3 flex items-center justify-between gap-2 text-[12px] font-bold uppercase tracking-wider text-white/80">
             <span className="truncate">{m.groupName}</span>

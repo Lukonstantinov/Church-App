@@ -14,6 +14,8 @@ import {
   templateInputSchema,
   readBackdrop,
   readPattern,
+  readSpeakerLook,
+  readTunes,
   type DesignTemplate,
 } from '@church/shared';
 import type { Env } from '../env';
@@ -449,6 +451,8 @@ templateRoutes.get('/', async (c) => {
       motion: readMotion(r.motion),
       tileMotion: readMotion(r.tileMotion),
       posterMotion: readMotion(r.posterMotion),
+      motionTunes: readTunes(r.motionTunes),
+      speakerLook: readSpeakerLook(r.speakerLook),
       mine: r.createdBy === user.id,
     })),
   );
@@ -477,6 +481,8 @@ templateRoutes.post('/', async (c) => {
       motion: input.motion ?? null,
       tileMotion: input.tileMotion ?? null,
       posterMotion: input.posterMotion ?? null,
+      motionTunes: input.motionTunes ? JSON.stringify(input.motionTunes) : null,
+      speakerLook: input.speakerLook ? JSON.stringify(input.speakerLook) : null,
       createdBy: user.id,
     })
     .returning({ id: designTemplates.id });
@@ -511,6 +517,8 @@ templateRoutes.put('/:id', async (c) => {
       motion: input.motion ?? null,
       tileMotion: input.tileMotion ?? null,
       posterMotion: input.posterMotion ?? null,
+      motionTunes: input.motionTunes ? JSON.stringify(input.motionTunes) : null,
+      speakerLook: input.speakerLook ? JSON.stringify(input.speakerLook) : null,
     })
     .where(eq(designTemplates.id, row.id));
   return c.json({ id: row.id });
