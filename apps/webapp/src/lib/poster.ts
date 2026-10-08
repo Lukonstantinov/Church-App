@@ -16,6 +16,50 @@ async function picturesReady(node: HTMLElement): Promise<void> {
 }
 
 /**
+ * Swaps every picture in the poster for a plain PNG copy that is already decoded, and
+ * returns how to put the originals back. iPhones often leave photos out of the drawing when
+ * they come straight from their files (WebP, or not decoded yet when the drawing is made);
+ * a ready PNG is drawn every time. Big photos are scaled to what the poster needs.
+ */
+async function inlinePictures(node: HTMLElement): Promise<() => void> {
+  const swaps: { img: HTMLImageElement; src: string; srcset: string }[] = [];
+  for (const img of [...node.querySelectorAll('img')]) {
+    if (!img.currentSrc && !img.src) continue;
+    if (img.src.startsWith('data:')) continue;
+    try {
+      if (!img.complete) await new Promise((r) => img.addEventListener('load', r, { once: true }));
+      await img.decode().catch(() => undefined);
+      if (!img.naturalWidth) continue;
+      const box = img.getBoundingClientRect();
+      // Enough for a sharp poster (drawn at up to twice its size), never more than the photo.
+      const want = Math.max(box.width, box.height, 64) * 2.5;
+      const scale = Math.min(
+        1,
+        1400 / Math.max(img.naturalWidth, img.naturalHeight),
+        want / Math.min(img.naturalWidth, img.naturalHeight) || 1,
+      );
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+      const data = c.toDataURL('image/png');
+      swaps.push({ img, src: img.src, srcset: img.srcset });
+      img.srcset = '';
+      img.src = data;
+      await img.decode().catch(() => undefined);
+    } catch {
+      // A picture that can't be copied is drawn as it is.
+    }
+  }
+  return () => {
+    for (const s of swaps) {
+      s.img.src = s.src;
+      s.img.srcset = s.srcset;
+    }
+  };
+}
+
+/**
  * Whether a drawn poster came out blank (one flat colour, or black where its photo should
  * be — on iPhones a drawing can miss its pictures, and a JPEG turns the gaps black).
  */
@@ -52,9 +96,11 @@ async function looksBlank(dataUrl: string): Promise<boolean> {
  * comes out blank, so the bot sends the cover photo instead of a black square.
  */
 export async function capturePoster(node: HTMLElement, sharp = false): Promise<Blob | null> {
+  let restore: (() => void) | undefined;
   try {
     const { toJpeg } = await import('html-to-image');
     await picturesReady(node);
+    restore = await inlinePictures(node);
     // Moving effects stay out of the still picture: those blending with what is under them
     // (smoke, light leaks…) can't be drawn into it and would come out as black patches.
     node.classList.add('capturing');
@@ -72,9 +118,10 @@ export async function capturePoster(node: HTMLElement, sharp = false): Promise<B
     ] as const;
     for (const skipFonts of [false, true]) {
       try {
-        // A first small drawing loads everything into the copy (iPhones draw pictures only
-        // from the second time on); it is thrown away.
-        await toJpeg(node, { pixelRatio: 0.25, quality: 0.3, skipFonts }).catch(() => undefined);
+        // Two first small drawings load everything into the copy (iPhones draw pictures only
+        // from the second or third time on); they are thrown away.
+        for (let i = 0; i < 2; i++)
+          await toJpeg(node, { pixelRatio: 0.25, quality: 0.3, skipFonts }).catch(() => undefined);
         for (const [pixelRatio, quality] of attempts) {
           let dataUrl = await toJpeg(node, { pixelRatio, quality, skipFonts });
           if (await looksBlank(dataUrl)) {
@@ -95,6 +142,7 @@ export async function capturePoster(node: HTMLElement, sharp = false): Promise<B
     // No poster is better than no save.
   } finally {
     node.classList.remove('capturing');
+    restore?.();
   }
   return null;
 }

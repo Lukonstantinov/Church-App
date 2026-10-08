@@ -30,6 +30,7 @@ import { LookTop } from '../components/LookTop';
 import { MeetingPoster, groupLook } from '../components/MeetingPoster';
 import { MotionTargets } from '../components/MotionTargets';
 import { SpeakerLookControls } from '../components/Speakers';
+import { SpeakerLookPreview } from '../components/SpeakerLookPreview';
 import { QualityPicker } from '../components/QualityPicker';
 import { Sheet } from '../components/Sheet';
 import { ThemePicker } from '../components/ThemePicker';
@@ -577,6 +578,9 @@ function TemplateSheet({
         />
         <Group title={t.meetings.speakerLook}>
           <p className="mb-3 text-[13px] text-hint">{t.design.speakerLookHint}</p>
+          <div className="mb-4">
+            <SpeakerLookPreview look={speakerLook} g={g} colors={preview} />
+          </div>
           <SpeakerLookControls value={speakerLook} onChange={setSpeakerLook} />
         </Group>
         <Button disabled={save.isPending} onClick={() => void submit()}>
@@ -808,7 +812,8 @@ function MinistrySpeakerLook({ g }: { g: GroupSummary }) {
   const value = draft === undefined ? (group.data?.speakerLook ?? null) : draft;
   return (
     <Section title={`🎤 ${t.design.speakerSection}`} footer={t.design.speakerSectionHint}>
-      <div className="p-4">
+      <div className="flex flex-col gap-4 p-4">
+        <SpeakerLookPreview look={value} g={g} />
         <SpeakerLookControls
           value={value}
           onChange={(v) => {

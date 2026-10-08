@@ -223,8 +223,11 @@ export function SpeakerBackdrop({ url, look }: { url: string; look: SpeakerLook 
       src={url}
       alt=""
       aria-hidden="true"
-      className={`pointer-events-none absolute inset-y-0 h-full object-cover ${
-        x === 'left' ? 'left-0 w-[58%]' : x === 'right' ? 'right-0 w-[58%]' : 'left-0 w-full'
+      // Sized by the card's height and keeping the photo's own shape, so a face is framed
+      // the same on a wide, short card (the meeting screen) as on the taller panel or tile;
+      // only a very wide photo is cut at most to 62% of the card.
+      className={`pointer-events-none absolute inset-y-0 h-full w-auto max-w-[62%] object-cover ${
+        x === 'left' ? 'left-0' : x === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2'
       }`}
       style={{
         opacity: look?.opacity ?? 1,

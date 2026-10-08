@@ -1038,6 +1038,8 @@ export const lt: Messages = {
       'Spalva, raštas, nuotrauka ir animacija. Susitikimai ir renginiai su šablonu keičiasi kartu.',
     speakerLookHint:
       'Kaip kalbėtojų nuotraukos dedamos visų susitikimų su šiuo šablonu plakatuose ir kortelėse. Susitikime galima pakeisti.',
+    speakerPreviewNoPhoto:
+      'Niekas tarnystėje dar neturi profilio nuotraukos — pavyzdys su inicialais.',
     speakerSection: 'Kalbėtojų nuotraukos susitikimuose',
     speakerSectionHint:
       'Visiems tarnystės susitikimams: plakatas, plytelė, skydelis «Artimiausias susitikimas» ir susitikimo ekranas. Nuotrauka imama iš kalbėtojo profilio (Žmonės → žmogus → 📷). Šablonas arba pats susitikimas («Plakatas») gali turėti savo. Išsaugoma iš karto.',
