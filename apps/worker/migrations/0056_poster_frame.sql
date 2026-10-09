@@ -1,0 +1,1 @@
+ALTER TABLE `poster_templates` ADD `frame` text;

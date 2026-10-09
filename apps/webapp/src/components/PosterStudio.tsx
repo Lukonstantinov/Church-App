@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   MAX_EFFECTS,
+  MAX_POSTER_LAYERS,
   BLEND_MODES,
+  FILL_MOVES,
+  LAYER_SHAPES,
   TEXT_SOURCES,
   type BlendMode,
   type FontKey,
   type GroupSummary,
   type LayerStyle,
+  type MotionLayer,
   type PosterBackground,
+  type PosterFrame,
   type PosterLayer,
   type PosterTemplate,
   type PosterTexts,
@@ -80,7 +85,7 @@ function Mockup({
 }: {
   view: View;
   kind: Kind;
-  tpl: Pick<PosterTemplate, 'background' | 'layers'>;
+  tpl: Pick<PosterTemplate, 'background' | 'layers' | 'frame'>;
   g: GroupSummary;
 }) {
   const t = useT();
@@ -195,6 +200,17 @@ export function PosterStudio({ g }: { g: GroupSummary }) {
   );
 }
 
+/** A new colour layer: covering the whole poster, under what is added after it. */
+const FILL_START = {
+  type: 'fill',
+  x: 50,
+  y: 50,
+  w: 100,
+  h: 100,
+  rotate: 0,
+  angle: 135,
+} as const;
+
 /** A starting point: a red background with the event's name in big letters. */
 const STARTER: { background: PosterBackground; layers: PosterLayer[] } = {
   background: { type: 'gradient', colors: ['#e8402c', '#7a1410'], angle: 160, dim: null },
@@ -244,6 +260,7 @@ function PosterEditor({
     tpl?.background ?? STARTER.background,
   );
   const [layers, setLayers] = useState<PosterLayer[]>(tpl?.layers ?? STARTER.layers);
+  const [frame, setFrame] = useState<PosterFrame | null>(tpl?.frame ?? null);
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<View>('poster');
   const [kind, setKind] = useState<Kind>('event');
@@ -263,7 +280,7 @@ function PosterEditor({
     });
   const add = (layer: PosterLayer) => {
     haptic.tap();
-    setLayers((all) => [...all, layer].slice(-12));
+    setLayers((all) => [...all, layer].slice(-MAX_POSTER_LAYERS));
     setSelected(layer.id);
   };
 
@@ -312,6 +329,7 @@ function PosterEditor({
         name: name.trim() || t.posters.defaultName,
         background,
         layers,
+        frame,
       });
       haptic.success();
       toast(t.common.saved);
@@ -330,7 +348,9 @@ function PosterEditor({
         ? l.source === 'custom'
           ? l.text || t.posters.sources.custom
           : t.posters.sources[l.source]
-        : t.meetings.motions[l.kind];
+        : l.type === 'fill'
+          ? t.posters.fillLayer(l.paint)
+          : t.meetings.motions[l.kind];
 
   return (
     <Sheet open onClose={onClose} title={tpl ? `🖼 ${tpl.name}` : `🖼 ${t.posters.new}`}>
@@ -378,7 +398,7 @@ function PosterEditor({
             ))}
           </div>
           <div className="flex h-[262px] items-center justify-center">
-            <Mockup view={view} kind={kind} tpl={{ background, layers }} g={g} />
+            <Mockup view={view} kind={kind} tpl={{ background, layers, frame }} g={g} />
           </div>
           <p className="mt-1.5 text-center text-[11px] text-hint">{t.posters.mockHint}</p>
         </div>
@@ -415,6 +435,34 @@ function PosterEditor({
             />
             <Pill
               on={false}
+              onClick={() =>
+                add({
+                  ...FILL_START,
+                  id: newId(),
+                  paint: 'color',
+                  colors: ['#111111'],
+                  opacity: 0.5,
+                })
+              }
+              label={`🎨 ${t.posters.colorLayer}`}
+            />
+            <Pill
+              on={false}
+              onClick={() =>
+                add({
+                  ...FILL_START,
+                  id: newId(),
+                  paint: 'linear',
+                  colors: ['#7c3aed', '#ec4899', '#f59e0b'],
+                  move: 'flow',
+                  opacity: 0.7,
+                  blend: 'overlay',
+                })
+              }
+              label={`🌈 ${t.posters.gradientLayer}`}
+            />
+            <Pill
+              on={false}
               onClick={() => add({ type: 'effect', id: newId(), kind: 'sparkle' })}
               label={`✨ ${t.posters.effect}`}
             />
@@ -426,11 +474,23 @@ function PosterEditor({
           <div className="px-1 text-[13px] font-semibold uppercase tracking-wide text-section-header">
             {t.posters.layers}
           </div>
+          {/* The frame is in front of everything. */}
+          <LayerRow
+            title={t.posters.frame}
+            icon="▢"
+            hidden={!frame}
+            open={selected === 'frame'}
+            onOpen={() => setSelected(selected === 'frame' ? null : 'frame')}
+          >
+            <FrameSettings value={frame} onChange={setFrame} />
+          </LayerRow>
           {ordered.map((l, i) => (
             <LayerRow
               key={l.id}
               title={label(l)}
-              icon={l.type === 'image' ? '🖼' : l.type === 'text' ? 'T' : '✨'}
+              icon={
+                l.type === 'image' ? '🖼' : l.type === 'text' ? 'T' : l.type === 'fill' ? '🎨' : '✨'
+              }
               thumb={l.type === 'image' ? l.url : null}
               hidden={!!l.hidden}
               open={selected === l.id}
@@ -639,7 +699,58 @@ function PlaceAndLook({
   const cover = layer.type === 'image' && layer.fit === 'cover';
   return (
     <>
-      {layer.type !== 'effect' && (
+      {layer.type === 'fill' && (
+        <Group title={t.posters.position}>
+          <div className="flex flex-col gap-3">
+            <Knob
+              label={t.posters.x}
+              value={layer.x}
+              min={-20}
+              max={120}
+              step={1}
+              show={pct}
+              onChange={(x) => onChange({ x })}
+            />
+            <Knob
+              label={t.posters.y}
+              value={layer.y}
+              min={-20}
+              max={120}
+              step={1}
+              show={pct}
+              onChange={(y) => onChange({ y })}
+            />
+            <Knob
+              label={t.posters.width}
+              value={layer.w}
+              min={4}
+              max={200}
+              step={1}
+              show={pct}
+              onChange={(w) => onChange({ w })}
+            />
+            <Knob
+              label={t.posters.height}
+              value={layer.h}
+              min={4}
+              max={200}
+              step={1}
+              show={pct}
+              onChange={(h) => onChange({ h })}
+            />
+            <Knob
+              label={t.posters.rotate}
+              value={layer.rotate}
+              min={-180}
+              max={180}
+              step={1}
+              show={(v) => `${v}°`}
+              onChange={(rotate) => onChange({ rotate })}
+            />
+          </div>
+        </Group>
+      )}
+      {layer.type !== 'effect' && layer.type !== 'fill' && (
         <Group title={t.posters.position}>
           <div className="flex flex-col gap-3">
             <Knob
@@ -760,18 +871,11 @@ function StyleControls({
   );
 }
 
-/** Effects drawn on the picture itself: several at once, tap again to remove. */
-function PictureEffects({
-  layer,
-  onChange,
-}: {
-  layer: Extract<PosterLayer, { type: 'image' }>;
-  onChange: (p: Partial<PosterLayer>) => void;
-}) {
-  const t = useT();
-  const list = layer.effects ?? [];
-  const kinds = list.map((e) => e.kind);
-  // Pictures saved before their shape was known get it now (their effects line up then).
+/** Pictures saved before their shape was known get it now (their effects line up then). */
+function useKnownRatio(
+  layer: Extract<PosterLayer, { type: 'image' }>,
+  onChange: (p: Partial<PosterLayer>) => void,
+) {
   const url = layer.url;
   const known = layer.ratio != null;
   useEffect(() => {
@@ -782,11 +886,32 @@ function PictureEffects({
     img.src = url;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [known, url]);
+}
+
+/**
+ * Effects of one layer only (a picture, a text, a colour layer): several at once, tap
+ * again to remove, saved sets to apply with one tap.
+ */
+function LayerEffects({
+  title,
+  hint,
+  list,
+  onChange,
+  children,
+}: {
+  title: string;
+  hint: string;
+  list: MotionLayer[];
+  onChange: (effects: MotionLayer[]) => void;
+  children?: ReactNode;
+}) {
+  const kinds = list.map((e) => e.kind);
   return (
-    <Group title={t.posters.pictureEffects}>
-      <p className="mb-2 px-1 text-[12px] text-hint">{t.posters.pictureEffectsHint}</p>
+    <Group title={title}>
+      <p className="mb-2 px-1 text-[12px] text-hint">{hint}</p>
+      {children}
       <div className="mb-3">
-        <EffectSets current={list} onApply={(effects) => onChange({ effects })} />
+        <EffectSets current={list} onApply={onChange} />
       </div>
       <MotionPicker
         value={null}
@@ -794,21 +919,212 @@ function PictureEffects({
         many={{
           values: kinds,
           toggle: (m) =>
-            onChange({
-              effects:
-                m === 'off'
-                  ? []
-                  : kinds.includes(m)
-                    ? list.filter((e) => e.kind !== m)
-                    : [...list, { kind: m }].slice(-MAX_EFFECTS),
-            }),
+            onChange(
+              m === 'off'
+                ? []
+                : kinds.includes(m)
+                  ? list.filter((e) => e.kind !== m)
+                  : [...list, { kind: m }].slice(-MAX_EFFECTS),
+            ),
         }}
         tuneOf={(m) => list.find((e) => e.kind === m)?.tune ?? null}
-        onTune={(m, tune) =>
-          onChange({ effects: list.map((e) => (e.kind === m ? { ...e, tune } : e)) })
-        }
+        onTune={(m, tune) => onChange(list.map((e) => (e.kind === m ? { ...e, tune } : e)))}
       />
     </Group>
+  );
+}
+
+/** A layer's outline (rectangle, rounded, circle, oval) and how soft its edges are. */
+function EdgeControls({
+  layer,
+  onChange,
+}: {
+  layer: Extract<PosterLayer, { type: 'image' | 'fill' }>;
+  onChange: (p: Partial<PosterLayer>) => void;
+}) {
+  const t = useT();
+  return (
+    <Group title={t.posters.edges}>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {LAYER_SHAPES.map((sh) => (
+            <Pill
+              key={sh}
+              on={(layer.shape ?? 'rect') === sh}
+              onClick={() => onChange({ shape: sh === 'rect' ? null : sh })}
+              label={t.posters.shapes[sh]}
+            />
+          ))}
+        </div>
+        <Knob
+          label={t.posters.soft}
+          value={layer.soft ?? 0}
+          min={0}
+          max={1}
+          step={0.05}
+          show={(v) => pct(v * 100)}
+          onChange={(soft) => onChange({ soft: soft || null })}
+        />
+      </div>
+    </Group>
+  );
+}
+
+/** A colour layer: one colour or a gradient (up to four colours) that can move. */
+function FillSettings({
+  layer,
+  onChange,
+}: {
+  layer: Extract<PosterLayer, { type: 'fill' }>;
+  onChange: (p: Partial<PosterLayer>) => void;
+}) {
+  const t = useT();
+  const one = layer.paint === 'color';
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        {(['color', 'linear', 'radial'] as const).map((p) => (
+          <Pill
+            key={p}
+            on={layer.paint === p}
+            onClick={() =>
+              onChange({
+                paint: p,
+                colors:
+                  p !== 'color' && layer.colors.length < 2
+                    ? [layer.colors[0] ?? '#7c3aed', '#ec4899']
+                    : layer.colors,
+              })
+            }
+            label={t.posters.paints[p]}
+          />
+        ))}
+      </div>
+      {(one ? [0] : [0, 1, 2, 3]).map((i) =>
+        // A further colour slot appears once the one before it is set.
+        i > layer.colors.length ? null : (
+          <div key={i}>
+            <div className="mb-1.5 text-[14px]">{t.posters.colorN(i + 1)}</div>
+            <ColorDots
+              value={layer.colors[i] ?? null}
+              allowNone={i >= 2}
+              onChange={(c) => {
+                const colors = [...layer.colors];
+                if (c) colors[i] = c;
+                else colors.splice(i, 1);
+                onChange({ colors: colors.filter(Boolean).slice(0, 4) });
+              }}
+            />
+          </div>
+        ),
+      )}
+      {layer.paint === 'linear' && (
+        <Knob
+          label={t.posters.angle}
+          value={layer.angle}
+          min={0}
+          max={360}
+          step={5}
+          show={(v) => `${v}°`}
+          onChange={(angle) => onChange({ angle })}
+        />
+      )}
+      {!one && (
+        <Group title={t.posters.moveTitle}>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-1.5">
+              {FILL_MOVES.map((m) => (
+                <Pill
+                  key={m}
+                  on={(layer.move ?? 'none') === m}
+                  onClick={() => onChange({ move: m === 'none' ? null : m })}
+                  label={t.posters.moves[m]}
+                />
+              ))}
+            </div>
+            {layer.move && layer.move !== 'none' && (
+              <Knob
+                label={t.posters.speed}
+                value={layer.speed ?? 1}
+                min={0.25}
+                max={3}
+                step={0.05}
+                show={(v) => `×${v.toFixed(2)}`}
+                onChange={(speed) => onChange({ speed })}
+              />
+            )}
+          </div>
+        </Group>
+      )}
+    </>
+  );
+}
+
+/** The frame round the poster: on/off, colour, thickness, distance, corners, glow. */
+function FrameSettings({
+  value,
+  onChange,
+}: {
+  value: PosterFrame | null;
+  onChange: (f: PosterFrame | null) => void;
+}) {
+  const t = useT();
+  const f = value;
+  const set = (p: Partial<PosterFrame>) => f && onChange({ ...f, ...p });
+  return (
+    <>
+      <Toggle
+        label={t.posters.frameOn}
+        checked={!!f}
+        onChange={(on) =>
+          onChange(on ? { width: 1.2, color: '#ffffff', inset: 3, radius: 3, glow: null } : null)
+        }
+      />
+      {f && (
+        <>
+          <div>
+            <div className="mb-1.5 text-[14px]">{t.posters.color}</div>
+            <ColorDots value={f.color} onChange={(color) => set({ color: color ?? '#ffffff' })} />
+          </div>
+          <Knob
+            label={t.posters.frameWidth}
+            value={f.width}
+            min={0.2}
+            max={8}
+            step={0.1}
+            show={(v) => v.toFixed(1)}
+            onChange={(width) => set({ width })}
+          />
+          <Knob
+            label={t.posters.frameInset}
+            value={f.inset}
+            min={0}
+            max={12}
+            step={0.5}
+            show={(v) => v.toFixed(1)}
+            onChange={(inset) => set({ inset })}
+          />
+          <Knob
+            label={t.posters.frameRadius}
+            value={f.radius}
+            min={0}
+            max={30}
+            step={0.5}
+            show={(v) => v.toFixed(1)}
+            onChange={(radius) => set({ radius })}
+          />
+          <div>
+            <div className="mb-1.5 text-[14px]">{t.posters.frameGlow}</div>
+            <ColorDots value={f.glow} onChange={(glow) => set({ glow })} allowNone />
+          </div>
+          <Toggle
+            label={t.posters.frameDouble}
+            checked={!!f.double}
+            onChange={(double) => set({ double })}
+          />
+        </>
+      )}
+    </>
   );
 }
 
@@ -832,34 +1148,91 @@ function LayerSettings({
           tuneOf={(m) => (m === layer.kind ? (layer.tune ?? null) : null)}
           onTune={(m, tune) => m === layer.kind && onChange({ tune: tune ?? {} })}
         />
+        <div>
+          <Knob
+            label={t.posters.fade}
+            value={layer.fade ?? 0}
+            min={0}
+            max={1}
+            step={0.05}
+            show={(v) => pct(v * 100)}
+            onChange={(fade) => onChange({ fade: fade || null })}
+          />
+          <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.fadeHint}</p>
+        </div>
         <PlaceAndLook layer={layer} onChange={onChange} />
+      </>
+    );
+  if (layer.type === 'fill')
+    return (
+      <>
+        <FillSettings layer={layer} onChange={onChange} />
+        <PlaceAndLook layer={layer} onChange={onChange} />
+        <EdgeControls layer={layer} onChange={onChange} />
+        <LayerEffects
+          title={t.posters.layerEffects}
+          hint={t.posters.layerEffectsHint}
+          list={layer.effects ?? []}
+          onChange={(effects) => onChange({ effects })}
+        />
       </>
     );
   if (layer.type === 'image')
-    return (
-      <>
-        <Button variant="secondary" onClick={onPicture}>
-          🖼 {t.posters.replacePicture}
-        </Button>
-        <div>
-          <Toggle
-            label={t.posters.fill}
-            checked={layer.fit === 'cover'}
-            onChange={(on) =>
-              onChange(
-                on
-                  ? { fit: 'cover', x: 50, y: 50, size: 100, rotate: 0 }
-                  : { fit: 'free', x: 50, y: 50, size: 70 },
-              )
-            }
-          />
-          <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.fillHint}</p>
-        </div>
-        <PlaceAndLook layer={layer} onChange={onChange} />
-        <PictureEffects layer={layer} onChange={onChange} />
-        <StyleControls value={layer.style} onChange={(style) => onChange({ style })} />
-      </>
-    );
+    return <ImageSettings layer={layer} onChange={onChange} onPicture={onPicture} />;
+  return <TextSettings layer={layer} onChange={onChange} />;
+}
+
+function ImageSettings({
+  layer,
+  onChange,
+  onPicture,
+}: {
+  layer: Extract<PosterLayer, { type: 'image' }>;
+  onChange: (p: Partial<PosterLayer>) => void;
+  onPicture: () => void;
+}) {
+  const t = useT();
+  useKnownRatio(layer, onChange);
+  return (
+    <>
+      <Button variant="secondary" onClick={onPicture}>
+        🖼 {t.posters.replacePicture}
+      </Button>
+      <div>
+        <Toggle
+          label={t.posters.fill}
+          checked={layer.fit === 'cover'}
+          onChange={(on) =>
+            onChange(
+              on
+                ? { fit: 'cover', x: 50, y: 50, size: 100, rotate: 0 }
+                : { fit: 'free', x: 50, y: 50, size: 70 },
+            )
+          }
+        />
+        <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.fillHint}</p>
+      </div>
+      <PlaceAndLook layer={layer} onChange={onChange} />
+      <EdgeControls layer={layer} onChange={onChange} />
+      <LayerEffects
+        title={t.posters.pictureEffects}
+        hint={t.posters.pictureEffectsHint}
+        list={layer.effects ?? []}
+        onChange={(effects) => onChange({ effects })}
+      />
+      <StyleControls value={layer.style} onChange={(style) => onChange({ style })} />
+    </>
+  );
+}
+
+function TextSettings({
+  layer,
+  onChange,
+}: {
+  layer: Extract<PosterLayer, { type: 'text' }>;
+  onChange: (p: Partial<PosterLayer>) => void;
+}) {
+  const t = useT();
   return (
     <>
       <div className="flex flex-wrap gap-1.5">
@@ -917,6 +1290,23 @@ function LayerSettings({
       />
       <PlaceAndLook layer={layer} onChange={onChange} />
       <StyleControls value={layer.style} onChange={(style) => onChange({ style })} />
+      <LayerEffects
+        title={t.posters.textEffects}
+        hint={t.posters.textEffectsHint}
+        list={layer.effects ?? []}
+        onChange={(effects) => onChange({ effects })}
+      >
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {(['letters', 'around'] as const).map((m) => (
+            <Pill
+              key={m}
+              on={(layer.fxIn ?? 'letters') === m}
+              onClick={() => onChange({ fxIn: m === 'letters' ? null : m })}
+              label={t.posters.fxIn[m]}
+            />
+          ))}
+        </div>
+      </LayerEffects>
     </>
   );
 }

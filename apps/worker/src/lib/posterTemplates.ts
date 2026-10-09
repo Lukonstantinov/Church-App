@@ -1,6 +1,7 @@
 import { inArray } from 'drizzle-orm';
 import {
   posterBackgroundSchema,
+  posterFrameSchema,
   posterLayerSchema,
   type PosterLayer,
   type PosterTemplate,
@@ -45,6 +46,7 @@ export async function readPosterTemplate(
       url: background.mediaId ? await signedMediaUrl(secret, background.mediaId) : null,
     },
     layers,
+    frame: row.frame ? (posterFrameSchema.safeParse(parse(row.frame)).data ?? null) : null,
     mine: userId !== undefined && row.createdBy === userId,
   };
 }

@@ -41,6 +41,7 @@ function toColumns(input: ReturnType<typeof posterTemplateInputSchema.parse>) {
     layers: JSON.stringify(
       input.layers.map((l) => (l.type === 'image' ? { ...l, url: undefined } : l)),
     ),
+    frame: input.frame ? JSON.stringify(input.frame) : null,
   };
 }
 

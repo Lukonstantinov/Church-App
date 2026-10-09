@@ -814,6 +814,43 @@ export const lt: Messages = {
     fillHint:
       'Nuotrauka vienodai užpildo plakatą, plytelę ir ekraną; slankikliai parenka, kuri nuotraukos dalis matoma.',
     zoom: 'Priartinimas',
+    colorLayer: 'Spalva',
+    gradientLayer: 'Gradientas',
+    fillLayer: (paint: 'color' | 'linear' | 'radial') =>
+      paint === 'color'
+        ? 'Spalvos sluoksnis'
+        : paint === 'radial'
+          ? 'Gradientas iš centro'
+          : 'Gradientas',
+    paints: { color: 'Viena spalva', linear: 'Gradientas', radial: 'Iš centro' },
+    moveTitle: 'Spalvų judėjimas',
+    moves: { none: 'Nėra', flow: '〰 Teka', spin: '🔄 Sukasi', pulse: '💗 Kvėpuoja' },
+    speed: 'Greitis',
+    width: 'Plotis',
+    height: 'Aukštis',
+    edges: 'Forma ir kraštai',
+    shapes: {
+      rect: '▭ Stačiakampis',
+      rounded: '▢ Suapvalintas',
+      circle: '● Apskritimas',
+      oval: '⬭ Ovalas',
+    },
+    soft: 'Švelnūs kraštai',
+    fade: 'Išnyksta link plakato kraštų',
+    fadeHint: 'Efektas švelniai išnyksta prie kraštų, o ne nukerpamas.',
+    layerEffects: 'Sluoksnio efektai',
+    layerEffectsHint: 'Tik šiame sluoksnyje. Paspauskite dar kartą, kad pašalintumėte.',
+    textEffects: 'Efektai tekste',
+    textEffectsHint:
+      'Tik ant šių žodžių – pvz., dūmai raidėse ar kibirkštys aplink. Paspauskite dar kartą, kad pašalintumėte.',
+    fxIn: { letters: 'Raidėse', around: 'Aplink tekstą' },
+    frame: 'Rėmelis',
+    frameOn: 'Rėmelis aplink plakatą',
+    frameWidth: 'Storis',
+    frameInset: 'Atstumas nuo krašto',
+    frameRadius: 'Suapvalinti kampai',
+    frameGlow: 'Rėmelio švytėjimas',
+    frameDouble: 'Dviguba linija',
     pictureEffects: 'Efektai ant paveikslėlio',
     pictureEffectsHint:
       'Piešiami tiesiai ant paveikslėlio (ant skaidraus — tik jo kontūro viduje). Paspauskite dar kartą, kad pašalintumėte.',

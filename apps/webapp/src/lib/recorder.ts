@@ -7,9 +7,9 @@ import { boxIn, drawShot, freeCanvas, picturesReady } from './poster';
  * (plays like a GIF in Telegram and WhatsApp) and, when asked, a real GIF file.
  *
  * It works in layers, so only what moves is drawn again for every frame:
- * - below the effects (background, photos) and above them (texts, speaker photos, logo)
- *   are drawn once — photos by our own code, as iPhones leave big photos out of the
- *   drawing library's pictures (lib/poster.ts);
+ * - the still parts below the effects (background, photos), between them and above them
+ *   (texts, speaker photos, logo) are drawn once, in their order — photos by our own code,
+ *   as iPhones leave big photos out of the drawing library's pictures (lib/poster.ts);
  * - each effect layer is stopped and stepped through time: its CSS animations are set to
  *   the frame's moment and drawn, particle canvases are drawn at that moment;
  * - the last moments fade into the first ones, so the loop has no visible jump.
@@ -60,23 +60,31 @@ function hideFor(hidden: HTMLElement[]): () => void {
 const tops = (els: HTMLElement[]) => els.filter((e) => !els.some((o) => o !== e && o.contains(e)));
 
 /**
- * Splits the block around its effects: what is painted before the first effect (below
- * it), the effects, and what comes after (above). Elements holding an effect are neither.
+ * Splits the block around its effects, keeping the order they are painted in: `bands[0]`
+ * is what comes before the first effect (below it), `bands[i]` what comes after effect i
+ * and before the next one — a still colour layer between two moving ones stays between
+ * them. Elements holding an effect are in none (their insides are sorted instead).
  */
 function layers(node: HTMLElement) {
   const effects = tops([...node.querySelectorAll<HTMLElement>(EFFECTS)]);
-  const first = effects[0];
   const all = [...node.querySelectorAll<HTMLElement>('*')];
   const holds = (e: HTMLElement) => effects.some((x) => e.contains(x));
   const inEffect = (e: HTMLElement) => effects.some((x) => x.contains(e));
-  const after: HTMLElement[] = [];
-  const before: HTMLElement[] = [];
+  const bands: HTMLElement[][] = effects.map(() => []);
+  bands.push([]);
+  const holders: HTMLElement[] = [];
   for (const e of all) {
-    if (inEffect(e) || holds(e)) continue;
-    if (first && first.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) after.push(e);
-    else before.push(e);
+    if (inEffect(e)) continue;
+    if (holds(e)) {
+      holders.push(e);
+      continue;
+    }
+    const after = effects.filter(
+      (x) => x.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).length;
+    bands[after]!.push(e);
   }
-  return { effects, before: tops(before), after: tops(after) };
+  return { effects, bands: bands.map(tops), holders };
 }
 
 /** A canvas of the block's size at the output scale. */
@@ -88,12 +96,13 @@ function canvasOf(w: number, h: number) {
 }
 
 /**
- * Draws the block's still parts once: `below` (background and photos) and `above` (texts,
- * speaker photos, logo) on see-through canvases at the output size.
+ * Draws the block's still parts once, on see-through canvases at the output size: `below`
+ * (background and photos), then for each effect what lies on it until the next effect
+ * (null when nothing does) — the last one with the texts, speaker photos and logo.
  */
 async function stillParts(node: HTMLElement, k: number, outW: number, outH: number) {
   const { toCanvas } = await import('html-to-image');
-  const { effects, after } = layers(node);
+  const { effects, bands, holders } = layers(node);
   const unders = [...node.querySelectorAll<HTMLElement>('[data-shot="under"]')];
   const topShots = [...node.querySelectorAll<HTMLElement>('[data-shot="top"]')];
   const W = node.offsetWidth;
@@ -110,7 +119,7 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
 
   const below = canvasOf(outW, outH);
   const b = below.getContext('2d')!;
-  let undo = hideFor([...effects, ...after, ...unders]);
+  let undo = hideFor([...effects, ...bands.slice(1).flat(), ...unders]);
   try {
     const pic = await draw();
     b.drawImage(pic, 0, 0, outW, outH);
@@ -123,30 +132,59 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
   for (const u of unders) drawShot(b, node, u);
   b.restore();
 
-  const above = canvasOf(outW, outH);
-  const a = above.getContext('2d')!;
-  // Only what comes after the effects: the block itself is hidden (its background and
-  // the surfaces some blocks paint in ::before/::after were drawn below), those shown.
-  const keep = after.filter((e) => !topShots.some((x) => x === e));
-  const was = [node, ...keep].map((e) => e.style.visibility);
-  node.style.visibility = 'hidden';
-  keep.forEach((e) => (e.style.visibility = 'visible'));
-  undo = hideFor(topShots);
-  try {
-    if (keep.length) {
-      const pic = await draw();
-      a.drawImage(pic, 0, 0, outW, outH);
-      freeCanvas(pic);
+  const over: (HTMLCanvasElement | null)[] = [];
+  for (let i = 1; i < bands.length; i++) {
+    const last = i === bands.length - 1;
+    // Only this band's parts (what the block paints itself was drawn below).
+    const keep = bands[i]!.filter((e) => !topShots.some((x) => x === e));
+    if (keep.length === 0 && !(last && topShots.length)) {
+      over.push(null);
+      continue;
     }
-  } finally {
-    undo();
-    [node, ...keep].forEach((e, i) => (e.style.visibility = was[i]!));
+    const band = canvasOf(outW, outH);
+    const a = band.getContext('2d')!;
+    // Everything else is hidden, and the boxes holding parts show none of their own paint
+    // (background, shadows, ::before/::after: drawn below). They stay visible themselves:
+    // a hidden box's mask (soft edges, a cut-out's outline) isn't applied to what it holds.
+    undo = hideFor([...effects, ...bands.flatMap((b, j) => (j === i ? [] : b)), ...topShots]);
+    // A box with words of its own (not in a child) is hidden instead, its parts shown.
+    const words = (e: HTMLElement) =>
+      [...e.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && c.textContent?.trim());
+    const bare = [node, ...holders].filter((e) => !words(e));
+    const shut = [node, ...holders].filter(words);
+    const was = bare.map((e) => [e.style.background, e.style.boxShadow] as const);
+    const vis = [...shut, ...keep].map((e) => e.style.visibility);
+    bare.forEach((e) => {
+      e.style.background = 'none';
+      e.style.boxShadow = 'none';
+      e.classList.add('rec-bare');
+    });
+    shut.forEach((e) => (e.style.visibility = 'hidden'));
+    keep.forEach((e) => (e.style.visibility = 'visible'));
+    try {
+      if (keep.length) {
+        const pic = await draw();
+        a.drawImage(pic, 0, 0, outW, outH);
+        freeCanvas(pic);
+      }
+    } finally {
+      undo();
+      bare.forEach((e, j) => {
+        e.style.background = was[j]![0];
+        e.style.boxShadow = was[j]![1];
+        e.classList.remove('rec-bare');
+      });
+      [...shut, ...keep].forEach((e, j) => (e.style.visibility = vis[j]!));
+    }
+    if (last) {
+      a.save();
+      a.scale(k, k);
+      for (const t of topShots) drawShot(a, node, t);
+      a.restore();
+    }
+    over.push(band);
   }
-  a.save();
-  a.scale(k, k);
-  for (const t of topShots) drawShot(a, node, t);
-  a.restore();
-  return { below, above, effects };
+  return { below, over, effects };
 }
 
 /** One effect layer, ready to be drawn at any moment. */
@@ -157,6 +195,154 @@ interface Effect {
   opacity: number;
   canvas: HTMLCanvasElement | null;
   anims: Animation[];
+  /** The masks of the boxes it sits in (a cut-out's outline, letters, soft edges). */
+  masks: Mask[];
+}
+
+/** A box's CSS mask drawn once as a picture of the box, placed where the box is. */
+interface Mask {
+  box: { x: number; y: number; w: number; h: number };
+  pic: HTMLCanvasElement;
+}
+
+/** The corner-clipping trick (`radial-gradient(white, black)`) hides nothing: skipped. */
+const CLIP_TRICK =
+  /^(-webkit-)?radial-gradient\((white|rgb\(255, 255, 255\)), (black|rgb\(0, 0, 0\))\)$/;
+
+/**
+ * Draws a box's mask as a white picture with the mask's see-through parts: a single
+ * picture mask (a cut-out, a text's letters) is drawn stretched over the box as the poster
+ * sets it; anything else (soft edges, circles) is drawn by the browser on a copy of the box.
+ */
+async function drawMask(el: HTMLElement, css: CSSStyleDeclaration, k: number) {
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  const pic = canvasOf(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+  if (el.dataset.edge) {
+    drawEdge(
+      pic,
+      el.dataset.edge,
+      Number(el.dataset.soft) || 0,
+      (Number.parseFloat(css.borderTopLeftRadius) || 0) * k,
+    );
+    return pic;
+  }
+  const image = css.maskImage && css.maskImage !== 'none' ? css.maskImage : css.webkitMaskImage;
+  const one = /^url\("?([^")]+)"?\)$/.exec(image.trim());
+  if (one) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = one[1]!;
+    await img.decode().catch(() => undefined);
+    if (img.naturalWidth) pic.getContext('2d')!.drawImage(img, 0, 0, pic.width, pic.height);
+    return pic;
+  }
+  const { toCanvas } = await import('html-to-image');
+  const copy = document.createElement('div');
+  const keep = [
+    'maskImage',
+    'maskSize',
+    'maskRepeat',
+    'maskPosition',
+    'maskComposite',
+    'webkitMaskImage',
+    'webkitMaskSize',
+    'webkitMaskRepeat',
+    'webkitMaskPosition',
+    'webkitMaskComposite',
+    'borderRadius',
+    'clipPath',
+  ] as const;
+  for (const p of keep) if (css[p]) copy.style[p] = css[p];
+  Object.assign(copy.style, {
+    position: 'fixed',
+    left: '-10000px',
+    top: '0',
+    width: `${w}px`,
+    height: `${h}px`,
+    background: '#fff',
+  });
+  document.body.appendChild(copy);
+  try {
+    const drawn = await toCanvas(copy, { pixelRatio: k, skipFonts: true, width: w, height: h });
+    pic.getContext('2d')!.drawImage(drawn, 0, 0, pic.width, pic.height);
+    freeCanvas(drawn);
+  } catch {
+    // Not drawable here: the effect goes unmasked rather than missing.
+    pic.getContext('2d')!.fillRect(0, 0, pic.width, pic.height);
+  } finally {
+    copy.remove();
+  }
+  return pic;
+}
+
+/**
+ * A poster layer's outline (LayeredPoster `data-edge`): a circle or oval fading out from
+ * `soft`, or a (rounded) rectangle whose sides fade over soft × half the box.
+ */
+function drawEdge(pic: HTMLCanvasElement, shape: string, soft: number, radius: number) {
+  const ctx = pic.getContext('2d')!;
+  const W = pic.width;
+  const H = pic.height;
+  if (shape === 'circle' || shape === 'oval') {
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    if (shape === 'oval') ctx.scale(W / 2, H / 2);
+    else ctx.scale(Math.min(W, H) / 2, Math.min(W, H) / 2);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(Math.max(0, 0.99 - soft * 0.99), '#fff');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(-1, -1, 2, 2);
+    ctx.restore();
+    return;
+  }
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  if (shape === 'rounded' && radius > 0) ctx.roundRect(0, 0, W, H, radius);
+  else ctx.rect(0, 0, W, H);
+  ctx.fill();
+  if (soft <= 0) return;
+  const p = Math.min(0.5, soft * 0.5);
+  ctx.globalCompositeOperation = 'destination-in';
+  for (const [x1, y1] of [
+    [W, 0],
+    [0, H],
+  ] as const) {
+    const g = ctx.createLinearGradient(0, 0, x1, y1);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(p, '#fff');
+    g.addColorStop(1 - p, '#fff');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/** The masks round an effect, from its own box out to the block's (each drawn once). */
+async function masksOf(
+  node: HTMLElement,
+  el: HTMLElement,
+  k: number,
+  drawn: Map<HTMLElement, Mask>,
+): Promise<Mask[]> {
+  const out: Mask[] = [];
+  for (let p = el.parentElement; p && p !== node; p = p.parentElement) {
+    const css = getComputedStyle(p);
+    // The second half of a soft edge: drawn whole with the first (drawEdge).
+    if (p.dataset.edgePart !== undefined) continue;
+    const image = css.maskImage && css.maskImage !== 'none' ? css.maskImage : css.webkitMaskImage;
+    const clipped = css.clipPath && css.clipPath !== 'none';
+    if ((!image || image === 'none' || CLIP_TRICK.test(image)) && !clipped) continue;
+    let m = drawn.get(p);
+    if (!m) {
+      m = { box: boxIn(node, p), pic: await drawMask(p, css, k) };
+      drawn.set(p, m);
+    }
+    out.push(m);
+  }
+  return out;
 }
 
 /**
@@ -217,8 +403,14 @@ async function preparePictures(roots: HTMLElement[], k: number): Promise<() => v
   return () => undo.forEach((u) => u());
 }
 
-function prepareEffects(node: HTMLElement, effects: HTMLElement[]): Effect[] {
-  return effects.map((el) => {
+async function prepareEffects(
+  node: HTMLElement,
+  effects: HTMLElement[],
+  k: number,
+): Promise<Effect[]> {
+  const drawn = new Map<HTMLElement, Mask>();
+  const masks = await Promise.all(effects.map((el) => masksOf(node, el, k, drawn)));
+  return effects.map((el, i) => {
     const css = getComputedStyle(el);
     // How the layer mixes with what is under it (the same names, but one).
     const mode = css.mixBlendMode === 'plus-lighter' ? 'lighter' : css.mixBlendMode;
@@ -233,20 +425,28 @@ function prepareEffects(node: HTMLElement, effects: HTMLElement[]): Effect[] {
       // A particle layer is one canvas we draw ourselves (no CSS animations in it).
       canvas: canvas && anims.length === 0 ? canvas : null,
       anims,
+      masks: masks[i]!,
     };
   });
 }
 
-/** Draws every effect as it is `t` seconds in. */
+/** Where masked effects are put together before going onto the frame. */
+let maskScratch: HTMLCanvasElement | null = null;
+
+/**
+ * Draws every effect as it is `t` seconds in, each followed by the still parts lying on
+ * it (`over`, from stillParts).
+ */
 async function drawEffects(
   ctx: CanvasRenderingContext2D,
   node: HTMLElement,
   list: Effect[],
   t: number,
   k: number,
+  over: (HTMLCanvasElement | null)[] = [],
 ) {
   const { toCanvas } = await import('html-to-image');
-  for (const fx of list) {
+  for (const [i, fx] of list.entries()) {
     let pic: HTMLCanvasElement;
     if (fx.canvas) {
       seekParticles(fx.el, t);
@@ -261,13 +461,32 @@ async function drawEffects(
         height: fx.el.offsetHeight,
       });
     }
+    let src: CanvasImageSource = pic;
+    let at = [fx.box.x * k, fx.box.y * k, fx.box.w * k, fx.box.h * k] as const;
+    if (fx.masks.length > 0) {
+      // Inside its masks only: drawn alone, cut to each mask, then put on the frame.
+      const { width, height } = ctx.canvas;
+      if (!maskScratch || maskScratch.width !== width || maskScratch.height !== height)
+        maskScratch = canvasOf(width, height);
+      const m = maskScratch.getContext('2d')!;
+      m.globalCompositeOperation = 'source-over';
+      m.clearRect(0, 0, width, height);
+      m.drawImage(pic, ...at);
+      m.globalCompositeOperation = 'destination-in';
+      for (const mask of fx.masks)
+        m.drawImage(mask.pic, mask.box.x * k, mask.box.y * k, mask.box.w * k, mask.box.h * k);
+      src = maskScratch;
+      at = [0, 0, width, height];
+    }
     ctx.save();
     ctx.globalAlpha = fx.canvas ? fx.opacity : 1;
     ctx.globalCompositeOperation = fx.blend;
-    ctx.drawImage(pic, fx.box.x * k, fx.box.y * k, fx.box.w * k, fx.box.h * k);
+    ctx.drawImage(src, ...at);
     ctx.restore();
     // A drawn copy of the layer is used once; the particle canvas is the live one.
     if (!fx.canvas) freeCanvas(pic);
+    const still = over[i];
+    if (still) ctx.drawImage(still, 0, 0);
   }
 }
 
@@ -513,9 +732,10 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
   // Every canvas of this recording, freed at the end (see freeCanvas).
   const used: HTMLCanvasElement[] = [];
   try {
-    const { below, above, effects } = await stillParts(node, k, outW, outH);
-    used.push(below, above);
-    const list = prepareEffects(node, effects);
+    const { below, over, effects } = await stillParts(node, k, outW, outH);
+    used.push(below, ...over.filter((c): c is HTMLCanvasElement => !!c));
+    const list = await prepareEffects(node, effects, k);
+    for (const fx of list) used.push(...fx.masks.map((m) => m.pic));
     const scratch = canvasOf(outW, outH);
     used.push(scratch);
     restoreTextures = await preparePictures(effects, k);
@@ -578,8 +798,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
       const t = i / fps;
       f.clearRect(0, 0, outW, outH);
       f.drawImage(below, 0, 0);
-      await drawEffects(f, node, list, t, k);
-      f.drawImage(above, 0, 0);
+      await drawEffects(f, node, list, t, k, over);
       if (i < fade) {
         const keep = canvasOf(outW, outH);
         keep.getContext('2d')!.drawImage(frame, 0, 0);
@@ -640,6 +859,8 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     return { mp4, gif: gifBlob, feed: encoder ? feed : null };
   } finally {
     used.forEach(freeCanvas);
+    freeCanvas(maskScratch);
+    maskScratch = null;
     restoreTextures?.();
     holdParticles(node, false);
     for (const a of node.getAnimations({ subtree: true })) a.play();

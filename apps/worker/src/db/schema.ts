@@ -453,6 +453,8 @@ export const posterTemplates = sqliteTable('poster_templates', {
   name: text('name').notNull(),
   background: text('background').notNull(),
   layers: text('layers').notNull(),
+  /** JSON PosterFrame, or null for none. */
+  frame: text('frame'),
   createdBy: integer('created_by').references(() => users.id),
   createdAt: createdAt(),
 });

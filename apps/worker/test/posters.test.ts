@@ -173,3 +173,42 @@ describe('effect templates', () => {
     expect(after.some((x) => x.id === made.id)).toBe(false);
   });
 });
+
+describe('poster layers', () => {
+  it('keeps colour layers, text effects, soft edges and the frame', async () => {
+    const saved = await apiJson<{
+      id: number;
+      frame: { color: string; double?: boolean } | null;
+      layers: { type: string; move?: string; effects?: { kind: string }[]; shape?: string }[];
+    }>('/api/poster-templates', {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        name: 'Слои',
+        background: { type: 'color', colors: ['#000000'] },
+        frame: { width: 1, color: '#ffffff', inset: 3, radius: 4, double: true },
+        layers: [
+          {
+            type: 'fill',
+            id: 'f',
+            paint: 'linear',
+            colors: ['#ff0000', '#0000ff'],
+            move: 'flow',
+            shape: 'oval',
+            soft: 0.4,
+            effects: [{ kind: 'sparkle' }],
+          },
+          { type: 'text', id: 't', source: 'title', effects: [{ kind: 'smoke' }], fxIn: 'around' },
+          { type: 'effect', id: 'e', kind: 'snow', fade: 0.5 },
+        ],
+      },
+    });
+    const read = (await apiJson<(typeof saved)[]>('/api/poster-templates', { user: ADMIN })).find(
+      (x) => x.id === saved.id,
+    )!;
+    expect(read.frame).toMatchObject({ color: '#ffffff', double: true });
+    expect(read.layers.map((l) => l.type)).toEqual(['fill', 'text', 'effect']);
+    expect(read.layers[0]).toMatchObject({ move: 'flow', shape: 'oval' });
+    expect(read.layers[1]!.effects?.[0]?.kind).toBe('smoke');
+  });
+});

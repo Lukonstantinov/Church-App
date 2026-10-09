@@ -4184,3 +4184,52 @@ html[data-sheet] #root *::before,
 html[data-sheet] #root *::after {
   animation-play-state: paused !important;
 }
+
+/* ---------- Moving colour layers on posters (LayeredPoster): transform / opacity only ---------- */
+.fill-flow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 200%;
+  background-repeat: repeat-x;
+  animation: fill-flow 8s linear infinite;
+}
+@keyframes fill-flow {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.fill-spin {
+  position: absolute;
+  animation: fill-spin 14s linear infinite;
+}
+@keyframes fill-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fill-pulse {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: fill-pulse 5s ease-in-out infinite;
+}
+@keyframes fill-pulse {
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fill-flow,
+  .fill-spin,
+  .fill-pulse {
+    animation: none;
+  }
+}
+
+/* A box drawn by the recorder for the parts it holds only (lib/recorder.ts stillParts). */
+.rec-bare::before,
+.rec-bare::after {
+  display: none !important;
+}

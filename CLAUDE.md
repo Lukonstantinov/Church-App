@@ -173,10 +173,13 @@ strength, angle, colour + `MOTION_KNOBS` density/weight/sharp; shine `shineTune`
 (animations sorted by `MOTION_GROUPS`).
 
 Poster templates (Design → «Постеры», `components/PosterStudio.tsx`, `shared/posterTemplates.ts`,
-`/api/poster-templates`, table `poster_templates`): background + up to 12 layers (pictures keep
+`/api/poster-templates`, table `poster_templates`): background + up to 20 layers (pictures keep
 transparency via `prepareCutout`; a plain photo fills the poster (`fit: cover`) so it lines up in every
-shape; own effects on a picture, masked to a cut-out's outline), texts filled from the event/meeting,
-effect layers anywhere in the stack; editor previews are mockups of the real event/meeting shapes; place in % / container units, opacity, blend mode, layer styles); chosen per event or
+shape; own effects on a picture, masked to a cut-out's outline), texts filled from the event/meeting
+(own effects inside the letters — a PNG mask of the lines — or around them, `fxIn`), colour/gradient
+layers (`type: fill`, a gradient can flow / turn / breathe), shapes with soft edges (`shape`, `soft`;
+`data-edge` for the recorder), effect layers anywhere in the stack (fade at the poster edge), a frame
+(`frame`); the recorder keeps the still parts in bands between effects and cuts effects to their masks; editor previews are mockups of the real event/meeting shapes; place in % / container units, opacity, blend mode, layer styles); chosen per event or
 meeting (`poster_template_id`, rows carry `poster`) and drawn by `LayeredPoster` on covers, screens,
 tiles, the pinned card and the bot poster.
 
