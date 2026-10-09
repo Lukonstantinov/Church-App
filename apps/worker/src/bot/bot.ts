@@ -1,14 +1,22 @@
 import { decidePublish } from '../lib/publishRequests';
 import { eq } from 'drizzle-orm';
 import { Bot, InlineKeyboard, type Context } from 'grammy';
-import { displayName, messages, type Messages, type TestAsInput } from '@church/shared';
+import {
+  displayName,
+  localDate,
+  messages,
+  type Locale,
+  type Messages,
+  type TestAsInput,
+} from '@church/shared';
+import { birthdayMessage, birthdayRows, comingBirthdays } from '../lib/birthdays';
 import { adminTelegramIds, isDeveloper, type Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { events, meetings, memberships, type User } from '../db/schema';
 import { eventPictureId, eventRoster, rosterMessage } from '../lib/eventRoster';
 import { eventAccess } from '../lib/events';
 import { acceptPrivacy, upsertTelegramUser } from '../lib/users';
-import { churchDefaultLocale, localeOf } from '../lib/church';
+import { churchDefaultLocale, getChurch, localeOf } from '../lib/church';
 import { botApi, getBotInfo } from '../lib/telegram';
 import { DEEP_LINK } from '../lib/codes';
 import { mediaFile } from '../lib/media';
@@ -20,7 +28,7 @@ import {
   notifyJoinRequest,
   requestJoin,
 } from '../lib/membership';
-import { can } from '../lib/access';
+import { can, groupsWithPermission } from '../lib/access';
 import { claimProfile } from '../lib/claim';
 import {
   myServicesText,
@@ -421,6 +429,43 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
       reply_markup: openAppKeyboard(ctx.t),
       link_preview_options: NO_PREVIEW,
     });
+  });
+
+  // Birthdays of the coming week (/birthdays) or month (/birthdays month), for church admins
+  // (everyone) and those who manage people in a ministry (their ministries' people).
+  const birthdaysFor = async (user: User, days: number, locale: Locale) => {
+    const t = messages(locale);
+    const groupIds = user.isAdmin
+      ? undefined
+      : await groupsWithPermission(db, user.id, 'people.manage');
+    if (groupIds && groupIds.length === 0) return null;
+    const today = localDate(new Date(), (await getChurch(db)).timezone);
+    const list = comingBirthdays(await birthdayRows(db, groupIds), today, days);
+    return birthdayMessage(
+      locale,
+      days > 7 ? t.birthdays.monthTitle : t.birthdays.weekTitle(days),
+      list,
+    );
+  };
+  const birthdayKb = (t: Messages) =>
+    new InlineKeyboard().text(t.birthdays.week, 'bd:7').text(t.birthdays.month, 'bd:31');
+  pm.command('birthdays', async (ctx) => {
+    const days = /month|мес|mėn/i.test(String(ctx.match ?? '')) ? 31 : 7;
+    const text = await birthdaysFor(ctx.dbUser, days, localeOf(ctx.dbUser, churchLocale));
+    if (!text) return void (await ctx.reply(ctx.t.birthdays.notAllowed));
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: birthdayKb(ctx.t) });
+  });
+  pm.callbackQuery(/^bd:(7|31)$/, async (ctx) => {
+    const text = await birthdaysFor(
+      ctx.dbUser,
+      Number(ctx.match[1]),
+      localeOf(ctx.dbUser, churchLocale),
+    );
+    await ctx.answerCallbackQuery();
+    if (!text) return;
+    await ctx
+      .editMessageText(text, { parse_mode: 'HTML', reply_markup: birthdayKb(ctx.t) })
+      .catch(() => undefined);
   });
 
   pm.callbackQuery(/^sc:([wmq])$/, async (ctx) => {

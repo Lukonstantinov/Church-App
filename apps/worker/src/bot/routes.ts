@@ -68,9 +68,16 @@ botRoutes.post('/setup', async (c) => {
     const t = messages(churchLocale);
     for (const id of adminTelegramIds(c.env)) {
       await bot.api
-        .setMyCommands([...commandsFor(t), { command: 'testas', description: t.commands.testas }], {
-          scope: { type: 'chat', chat_id: id },
-        })
+        .setMyCommands(
+          [
+            ...commandsFor(t),
+            { command: 'birthdays', description: t.commands.birthdays },
+            { command: 'testas', description: t.commands.testas },
+          ],
+          {
+            scope: { type: 'chat', chat_id: id },
+          },
+        )
         .catch(() => undefined);
     }
     step = 'setChatMenuButton';

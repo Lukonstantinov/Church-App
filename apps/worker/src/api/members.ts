@@ -246,6 +246,9 @@ userRoutes.get('/:id', async (c) => {
       photoUrl: target.photoMediaId
         ? await signedMediaUrl(c.env.WEBHOOK_SECRET, target.photoMediaId)
         : null,
+      // Personal: only the person and those who manage them see it.
+      birthday: target.birthday,
+      birthYear: target.birthYear,
     },
     memberships: rows.map(
       ({ m, groupName, brandColor, logoMediaId, positionName, positionLook, permissions }) => ({
@@ -268,6 +271,8 @@ userRoutes.get('/:id', async (c) => {
       canEditPhoto: canManage || isSelf,
       canIssueClaimCode: canManage && target.telegramId === null,
       canSetAdmin: actor.isAdmin && !isSelf && target.telegramId !== null,
+      // Only the person and those who manage them get this far.
+      canSeeBirthday: true,
     },
   };
   return c.json(detail);
@@ -277,9 +282,22 @@ userRoutes.patch('/:id', async (c) => {
   const db = c.get('db');
   const actor = c.get('user');
   const id = idParam(c);
-  if (!(await canManageUser(db, actor, id))) throw new HTTPException(404, { message: 'not_found' });
+  const canManage = await canManageUser(db, actor, id);
+  if (!canManage && id !== actor.id) throw new HTTPException(404, { message: 'not_found' });
   const input = await parseBody(c, updateUserSchema);
+  // A person may set their own birthday; the rest only whoever manages them.
+  const own = input.birthday !== undefined || input.birthYear !== undefined;
+  const other =
+    input.firstName !== undefined ||
+    input.lastName !== undefined ||
+    input.guardianConsent !== undefined;
+  if (!canManage && (other || !own)) throw new HTTPException(403, { message: 'forbidden' });
   const patch: Partial<typeof users.$inferInsert> = {};
+  if (input.birthday !== undefined) {
+    patch.birthday = input.birthday;
+    if (!input.birthday) patch.birthYear = null;
+  }
+  if (input.birthYear !== undefined && input.birthday !== null) patch.birthYear = input.birthYear;
   if (input.firstName !== undefined) patch.firstName = input.firstName;
   if (input.lastName !== undefined) patch.lastName = input.lastName;
   if (input.guardianConsent !== undefined) {

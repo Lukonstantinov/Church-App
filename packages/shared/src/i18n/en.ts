@@ -1757,6 +1757,17 @@ export const en: Messages = {
     remove: (name: string) => `Delete the set “${name}”?`,
     count: (n: number) => `${n} fx`,
   },
+  birthdays: {
+    weekTitle: (days: number) =>
+      days === 7 ? '🎂 Birthdays this week' : `🎂 Birthdays — the next ${days} days`,
+    monthTitle: '🎂 Birthdays in the coming month',
+    todayTitle: '🎉 Birthday today',
+    none: 'No birthdays in these days.',
+    turns: (n: number) => `turns ${n}`,
+    week: 'Week',
+    month: 'Month',
+    notAllowed: 'Birthdays are seen by admins and those who manage people in a ministry.',
+  },
   freePoster: {
     title: 'Animated poster',
     hint: 'A GIF or video from a photo, a poster template or the ministry’s colours — no event needed. Effects, own text or none; it comes to your chat with the bot — forward it anywhere.',
@@ -2300,6 +2311,7 @@ export const en: Messages = {
     back: '← Back',
   },
   commands: {
+    birthdays: 'Birthdays (week / month)',
     services: 'My services',
     events: 'Nearest events',
     schedule: 'Meeting schedule',

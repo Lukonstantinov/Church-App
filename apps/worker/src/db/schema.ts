@@ -48,6 +48,13 @@ export const churchSettings = sqliteTable(
     designLock: integer('design_lock', { mode: 'boolean' }).notNull().default(false),
     /** The main page's parts as set in the Design studio (ScreenLook JSON). */
     screenLook: text('screen_look', { mode: 'json' }),
+    /** The bot's birthday report to church admins (BirthdayReport JSON; NULL = the default). */
+    birthdayReport: text('birthday_report', { mode: 'json' }),
+    /**
+     * Developer testing: birthdays (calendar, reports, /birthdays) count only the made-up
+     * people; off = only the real ones.
+     */
+    mockOnly: integer('mock_only', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [check('church_settings_singleton', sql`${t.id} = 1`)],
 );
@@ -77,6 +84,12 @@ export const users = sqliteTable('users', {
   lastSeenAt: text('last_seen_at'),
   /** Their photo (a ministry picture), shown on meeting cards instead of initials. */
   photoMediaId: integer('photo_media_id'),
+  /** Birthday "MM-DD" (seen by those who manage the person; the person sets their own too). */
+  birthday: text('birthday'),
+  /** The birth year when known (an age in the birthday report). */
+  birthYear: integer('birth_year'),
+  /** A made-up person the developer pasted in to try birthdays and statistics with. */
+  isMock: integer('is_mock', { mode: 'boolean' }).notNull().default(false),
   /**
    * A developer's test person (same name and photo as the developer): the developer's
    * user id. The developer opens the app as this person to try other roles (lib/testing.ts).
@@ -98,6 +111,11 @@ export const groups = sqliteTable('groups', {
   membersSeeAttendance: integer('members_see_attendance', { mode: 'boolean' })
     .notNull()
     .default(false),
+  /**
+   * Which meetings count in attendance statistics: JSON list of MEETING_KINDS plus 'regular'
+   * (meetings without a kind); NULL = all of them. A meeting's own `counts` overrides it.
+   */
+  statKinds: text('stat_kinds', { mode: 'json' }).$type<string[]>(),
   /** Expected monthly dues per paying member, in cents of the church currency. */
   monthlyFeeCents: integer('monthly_fee_cents').notNull().default(500),
   /** Link to the group's Telegram chat (t.me/…), shown to members. */
@@ -236,6 +254,8 @@ export const meetingSchedules = sqliteTable(
     durationMin: integer('duration_min').notNull().default(120),
     title: text('title').notNull(),
     active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    /** The meetings it makes count in statistics (false = optional ones). */
+    counts: integer('counts', { mode: 'boolean' }),
     createdAt: createdAt(),
   },
   (t) => [
@@ -264,6 +284,8 @@ export const meetings = sqliteTable(
     topic: text('topic'),
     /** MEETING_KINDS: prayer, worship, outside, guest, prophetic. */
     kind: text('kind'),
+    /** Counts in attendance statistics: true / false by choice, NULL = the ministry's rule. */
+    counts: integer('counts', { mode: 'boolean' }),
     /** Who leads this meeting (assigned ahead, gets a bot message). */
     leaderUserId: integer('leader_user_id').references(() => users.id),
     /** Who buys food / spends the budget. */

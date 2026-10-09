@@ -1807,6 +1807,17 @@ export const lt: Messages = {
     remove: (name: string) => `Ištrinti rinkinį „${name}“?`,
     count: (n: number) => `${n} ef.`,
   },
+  birthdays: {
+    weekTitle: (days: number) =>
+      days === 7 ? '🎂 Gimtadieniai šią savaitę' : `🎂 Gimtadieniai – artimiausios ${days} d.`,
+    monthTitle: '🎂 Gimtadieniai artimiausią mėnesį',
+    todayTitle: '🎉 Šiandien gimtadienis',
+    none: 'Šiomis dienomis gimtadienių nėra.',
+    turns: (n: number) => `sukanka ${n}`,
+    week: 'Savaitė',
+    month: 'Mėnuo',
+    notAllowed: 'Gimtadienius mato administratoriai ir tie, kurie tarnystėje rūpinasi žmonėmis.',
+  },
   freePoster: {
     title: 'Animuotas plakatas',
     hint: 'GIF ar vaizdo įrašas iš nuotraukos, plakato šablono ar tarnystės spalvų — be renginio. Efektai, savas tekstas arba be jo; ateina į pokalbį su botu — persiųskite kur norite.',
@@ -2361,6 +2372,7 @@ export const lt: Messages = {
     back: '← Atgal',
   },
   commands: {
+    birthdays: 'Gimtadieniai (savaitė / mėnuo)',
     services: 'Mano tarnystės',
     events: 'Artimiausi renginiai',
     schedule: 'Susitikimų tvarkaraštis',

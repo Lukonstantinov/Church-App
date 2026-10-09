@@ -1,10 +1,29 @@
 import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, desc, eq, gte, isNotNull, sql } from 'drizzle-orm';
-import { clientErrorSchema, testAsSchema, type Telemetry } from '@church/shared';
+import { and, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import {
+  clientErrorSchema,
+  mockPeopleSchema,
+  testAsSchema,
+  type MockPeopleInfo,
+  type Telemetry,
+} from '@church/shared';
 import { isDeveloper, type Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
-import { clientErrors, groups, jobRuns, media, outbox, positions, users } from '../db/schema';
+import {
+  attendance,
+  churchSettings,
+  clientErrors,
+  groups,
+  jobRuns,
+  media,
+  memberships,
+  outbox,
+  positions,
+  users,
+} from '../db/schema';
+import { defaultPositionId } from '../lib/positions';
 import { startTesting, stopTesting, testOptions } from '../lib/testing';
 import { parseBody } from './util';
 
@@ -213,4 +232,94 @@ devRoutes.delete('/test-as', async (c) => {
   const dev = developerOf(c);
   await stopTesting(c.get('db'), dev);
   return c.json({ ok: true });
+});
+
+// ---------- Made-up people for trying birthdays and statistics ----------
+
+/**
+ * GET /api/dev/mock-people — how many made-up people there are, whether birthdays count
+ * only them, and the ministries to add them to. The developer only (their real self).
+ */
+devRoutes.get('/mock-people', async (c) => {
+  developerOf(c);
+  const db = c.get('db');
+  const [n] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(users)
+    .where(eq(users.isMock, true));
+  const church = await db.query.churchSettings.findFirst({ columns: { mockOnly: true } });
+  const list = await db
+    .select({ id: groups.id, name: groups.name })
+    .from(groups)
+    .where(isNull(groups.archivedAt))
+    .orderBy(groups.sort, groups.name);
+  const info: MockPeopleInfo = {
+    count: Number(n?.n ?? 0),
+    mockOnly: church?.mockOnly ?? false,
+    groups: list,
+  };
+  return c.json(info);
+});
+
+/**
+ * POST /api/dev/mock-people — adds pasted people to a ministry as offline members marked
+ * made-up (`users.is_mock`), with their birthdays and, when a position of that name exists
+ * there, that position.
+ */
+devRoutes.post('/mock-people', async (c) => {
+  developerOf(c);
+  const db = c.get('db');
+  const input = await parseBody(c, mockPeopleSchema);
+  const group = await db.query.groups.findFirst({ where: eq(groups.id, input.groupId) });
+  if (!group) throw new HTTPException(404, { message: 'group_not_found' });
+  const posList = await db.select().from(positions).where(eq(positions.groupId, group.id));
+  const byName = new Map(posList.map((p) => [p.name.trim().toLowerCase(), p.id]));
+  const fallback = await defaultPositionId(db, group.id);
+  const now = new Date().toISOString();
+  for (const p of input.people) {
+    const [u] = await db
+      .insert(users)
+      .values({
+        firstName: p.firstName,
+        lastName: p.lastName,
+        birthday: p.birthday,
+        birthYear: p.birthYear,
+        isMock: true,
+      })
+      .returning({ id: users.id });
+    await db.insert(memberships).values({
+      userId: u!.id,
+      groupId: group.id,
+      role: 'member',
+      status: 'active',
+      joinedAt: now,
+      positionId: (p.role && byName.get(p.role.toLowerCase())) || fallback,
+    });
+  }
+  return c.json({ added: input.people.length });
+});
+
+/** PATCH /api/dev/mock-people {mockOnly} — birthdays count only the made-up people, or the real. */
+devRoutes.patch('/mock-people', async (c) => {
+  developerOf(c);
+  const { mockOnly } = await parseBody(c, z.object({ mockOnly: z.boolean() }));
+  await c.get('db').update(churchSettings).set({ mockOnly }).where(eq(churchSettings.id, 1));
+  return c.json({ ok: true });
+});
+
+/** DELETE /api/dev/mock-people — removes every made-up person (and goes back to the real ones). */
+devRoutes.delete('/mock-people', async (c) => {
+  developerOf(c);
+  const db = c.get('db');
+  const ids = (await db.select({ id: users.id }).from(users).where(eq(users.isMock, true))).map(
+    (u) => u.id,
+  );
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90);
+    await db.delete(attendance).where(inArray(attendance.userId, chunk));
+    await db.delete(memberships).where(inArray(memberships.userId, chunk));
+    await db.delete(users).where(inArray(users.id, chunk));
+  }
+  await db.update(churchSettings).set({ mockOnly: false }).where(eq(churchSettings.id, 1));
+  return c.json({ removed: ids.length });
 });

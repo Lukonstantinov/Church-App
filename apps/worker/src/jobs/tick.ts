@@ -1,9 +1,18 @@
 import { and, eq, gte, isNotNull, isNull, lt, lte } from 'drizzle-orm';
 import { InlineKeyboard } from 'grammy';
-import { DAY_MS, HOUR_MS, INTL_LOCALE, messages, type Locale } from '@church/shared';
+import {
+  DAY_MS,
+  HOUR_MS,
+  INTL_LOCALE,
+  localDate,
+  messages,
+  type BirthdayReport,
+  type Locale,
+} from '@church/shared';
 import type { Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { events, groups, jobRuns, meetings, outbox } from '../db/schema';
+import { adminRecipients, birthdayMessage, birthdayRows, comingBirthdays } from '../lib/birthdays';
 import { sendEventReminder } from '../lib/eventReminder';
 import { sendLiveNotices, sendMeetingReminders } from '../lib/liveNotice';
 import { pruneNotifications } from '../lib/notifications';
@@ -45,11 +54,75 @@ export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
   await remindMissingRollCalls(db, env, church.timezone, now);
   await remindUpcomingEvents(db, env, now);
   await sendLiveNotices(db, env, now);
+  await sendBirthdayReports(db, church, now);
 
   if (await claim(db, 'housekeeping', 'all', now.toISOString().slice(0, 10))) {
     const cutoff = new Date(now.getTime() - 7 * DAY_MS).toISOString();
     await db.delete(outbox).where(and(eq(outbox.status, 'sent'), lt(outbox.createdAt, cutoff)));
     await pruneNotifications(db, now);
+  }
+}
+
+/**
+ * Birthdays for the church admins, at the hour set in church settings (church time): once a
+ * week on the chosen weekday the list of the coming days, and on the morning of a birthday
+ * a short note. Each is claimed per day, so a repeated tick never sends it twice.
+ */
+export async function sendBirthdayReports(
+  db: Db,
+  church: { timezone: string; birthdayReport: BirthdayReport },
+  now: Date,
+) {
+  const report = church.birthdayReport;
+  if (!report.on && !report.dayOf) return;
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      hourCycle: 'h23',
+      timeZone: church.timezone,
+    }).format(now),
+  );
+  if (hour !== report.hour) return;
+  const today = localDate(now, church.timezone);
+  // 0 = Monday, as the setting counts.
+  const weekday = (new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7;
+  const weekly = report.on && weekday === report.weekday;
+  if (!weekly && !report.dayOf) return;
+  const rows = await birthdayRows(db);
+  const admins = await adminRecipients(db);
+  if (weekly && (await claim(db, 'birthday_week', 'all', today))) {
+    const list = comingBirthdays(rows, today, report.days);
+    if (list.length)
+      for (const a of admins)
+        await enqueue(db, {
+          chatId: a.chatId,
+          method: 'sendMessage',
+          payload: {
+            chat_id: a.chatId,
+            text: birthdayMessage(
+              a.locale,
+              messages(a.locale).birthdays.weekTitle(report.days),
+              list,
+            ),
+            parse_mode: 'HTML',
+          },
+          dedupeKey: `bday-week:${today}:${a.chatId}`,
+        });
+  }
+  if (report.dayOf && (await claim(db, 'birthday_day', 'all', today))) {
+    const list = comingBirthdays(rows, today, 1);
+    if (list.length)
+      for (const a of admins)
+        await enqueue(db, {
+          chatId: a.chatId,
+          method: 'sendMessage',
+          payload: {
+            chat_id: a.chatId,
+            text: birthdayMessage(a.locale, messages(a.locale).birthdays.todayTitle, list),
+            parse_mode: 'HTML',
+          },
+          dedupeKey: `bday-day:${today}:${a.chatId}`,
+        });
   }
 }
 

@@ -1,3 +1,4 @@
+import { countedIn, meetingCounts } from './statsRule';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import {
   absenceStreak,
@@ -228,6 +229,7 @@ export async function generateMeetings(
             groupId: schedule.groupId,
             scheduleId: schedule.id,
             title: schedule.title,
+            counts: schedule.counts,
             startsAt: startsAt.toISOString(),
             endsAt: endsAt.toISOString(),
             slotAt: startsAt.toISOString(),
@@ -330,10 +332,12 @@ export async function toMeetingRows(
           motion: groups.meetingMotion,
           template: groups.meetingTemplateId,
           speakerLook: groups.speakerLook,
+          statKinds: groups.statKinds,
         })
         .from(groups)
         .where(inArray(groups.id, groupIds))
     : [];
+  const statRules = new Map(groupRows.map((g) => [g.id, g.statKinds]));
   const motions = new Map(groupRows.map((g) => [g.id, readMotion(g.motion)]));
   const defaults = new Map(groupRows.map((g) => [g.id, g.template]));
   const groupSpeakerLooks = new Map(groupRows.map((g) => [g.id, readSpeakerLook(g.speakerLook)]));
@@ -418,6 +422,8 @@ export async function toMeetingRows(
     location: m.location,
     topic: m.topic,
     kind: meetingKind(m.kind),
+    statChoice: m.counts,
+    countsInStats: meetingCounts(m, statRules.get(m.groupId)),
     leader: (m.leaderUserId && people.get(m.leaderUserId)) || null,
     snackPerson: (m.snackUserId && people.get(m.snackUserId)) || null,
     budgetCents: m.budgetCents,
@@ -614,6 +620,7 @@ export function editWindow(meeting: Meeting, now = new Date()) {
 
 export async function groupStats(db: Db, groupId: number, now = new Date()): Promise<GroupStats> {
   const nowIso = now.toISOString();
+  const counted = await countedIn(db, groupId);
   const [counts, done, next, awaiting] = await Promise.all([
     db
       .select({
@@ -628,7 +635,7 @@ export async function groupStats(db: Db, groupId: number, now = new Date()): Pro
     db
       .select()
       .from(meetings)
-      .where(and(eq(meetings.groupId, groupId), eq(meetings.status, 'done')))
+      .where(and(eq(meetings.groupId, groupId), eq(meetings.status, 'done'), counted))
       .orderBy(desc(meetings.startsAt))
       .limit(8),
     db
@@ -698,10 +705,13 @@ export async function memberAttendance(
   const now = args.now ?? new Date();
   const joinedDay = joinedAt ? dayStart(joinedAt, timezone) : null;
 
+  // Only meetings that count in statistics (optional ones don't change the percentage).
   const held = await db
     .select({ id: meetings.id, startsAt: meetings.startsAt })
     .from(meetings)
-    .where(and(eq(meetings.groupId, groupId), eq(meetings.status, 'done')))
+    .where(
+      and(eq(meetings.groupId, groupId), eq(meetings.status, 'done'), await countedIn(db, groupId)),
+    )
     .orderBy(desc(meetings.startsAt))
     .limit(200);
   const ids = held.map((m) => m.id);

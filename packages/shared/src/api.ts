@@ -74,6 +74,41 @@ export interface ChurchInfo {
   screenLook: ScreenLook;
   /** Only people with the designer right may change the look of meetings, events and posts. */
   designLock: boolean;
+  /** The bot's birthday report to church admins. */
+  birthdayReport: BirthdayReport;
+}
+
+/**
+ * The bot's birthday report to church admins: once a week on `weekday` (0 = Monday) at
+ * `hour` (church time), the birthdays of the next `days` days with names and positions;
+ * `dayOf` also sends a note on the morning of each birthday.
+ */
+export const birthdayReportSchema = z.object({
+  on: z.boolean(),
+  weekday: z.number().int().min(0).max(6),
+  hour: z.number().int().min(0).max(23),
+  days: z.union([z.literal(7), z.literal(14), z.literal(31)]),
+  dayOf: z.boolean(),
+});
+export type BirthdayReport = z.output<typeof birthdayReportSchema>;
+export const DEFAULT_BIRTHDAY_REPORT: BirthdayReport = {
+  on: true,
+  weekday: 0,
+  hour: 9,
+  days: 7,
+  dayOf: true,
+};
+
+/** A person's birthday as listed (calendar, reports): "MM-DD", age when the year is known. */
+export interface BirthdayRow {
+  userId: number;
+  firstName: string;
+  lastName: string | null;
+  /** "MM-DD". */
+  birthday: string;
+  birthYear: number | null;
+  /** Their positions in their ministries ("Лидер — CZK Youth"). */
+  roles: string[];
 }
 
 export const updateMeSchema = z.object({ locale: z.enum(LOCALES) });
@@ -91,6 +126,7 @@ export const updateChurchSchema = z.object({
   sheetLabel: z.string().trim().max(40).nullable().optional(),
   appBackground: appBackgroundSchema.nullable().optional(),
   designLock: z.boolean().optional(),
+  birthdayReport: birthdayReportSchema.optional(),
 });
 export type UpdateChurchInput = z.input<typeof updateChurchSchema>;
 
@@ -208,6 +244,8 @@ export interface GroupDetail extends GroupSummary {
   eventReminderHours: number | null;
   /** Members without rights see their own attendance on the home screen. */
   membersSeeAttendance: boolean;
+  /** Which meetings count in statistics: MEETING_KINDS plus 'regular' (null = all). */
+  statKinds: StatKind[] | null;
   /** Minutes before each meeting a reminder goes out (empty = none). */
   meetingReminders: number[];
   /** How lively the ministry's meetings move. */
@@ -243,6 +281,11 @@ export type CreateGroupInput = z.input<typeof createGroupSchema>;
 export const REMINDER_MINUTES = [15, 30, 60, 120, 180, 1440] as const;
 export const DEFAULT_MEETING_REMINDERS = [120, 60];
 
+export const MEETING_KINDS = ['prayer', 'worship', 'outside', 'guest', 'prophetic'] as const;
+/** What can count in statistics: meetings without a kind ('regular') and each kind. */
+export const STAT_KINDS = ['regular', ...MEETING_KINDS] as const;
+export type StatKind = (typeof STAT_KINDS)[number];
+
 export const updateGroupSchema = z.object({
   brandColor: z.string().refine(isBrandValue, 'theme').nullable().optional(),
   pattern: patternSchema.nullable().optional(),
@@ -269,6 +312,8 @@ export const updateGroupSchema = z.object({
   meetingMotion: z.enum(MEETING_MOTIONS).nullable().optional(),
   /** Members without rights see their own attendance (off by default). */
   membersSeeAttendance: z.boolean().optional(),
+  /** Which meetings count in statistics (null = all). */
+  statKinds: z.array(z.enum(STAT_KINDS)).max(10).nullable().optional(),
 });
 export type UpdateGroupInput = z.input<typeof updateGroupSchema>;
 
@@ -353,6 +398,9 @@ export interface MemberDetail {
     hasActiveClaimCode: boolean;
     /** Profile photo (used on meeting cards and speaker posters); null = initials. */
     photoUrl: string | null;
+    /** "MM-DD" — only for the person themselves and those who manage them. */
+    birthday: string | null;
+    birthYear: number | null;
   };
   /** Memberships in groups the requester can see. */
   memberships: (MeMembership & {
@@ -370,6 +418,8 @@ export interface MemberDetail {
     canEditPhoto: boolean;
     canIssueClaimCode: boolean;
     canSetAdmin: boolean;
+    /** May see and change the birthday (the person, or whoever manages them). */
+    canSeeBirthday: boolean;
   };
 }
 
@@ -393,6 +443,13 @@ export const updateUserSchema = z.object({
   firstName: name.optional(),
   lastName: optionalText(64).optional(),
   guardianConsent: z.boolean().optional(),
+  /** "MM-DD" (null = clear) and the year if known. */
+  birthday: z
+    .string()
+    .regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'MM-DD')
+    .nullable()
+    .optional(),
+  birthYear: z.number().int().min(1900).max(2100).nullable().optional(),
 });
 export type UpdateUserInput = z.input<typeof updateUserSchema>;
 
@@ -424,6 +481,8 @@ export interface ScheduleRow {
   durationMin: number;
   title: string;
   active: boolean;
+  /** Its meetings count in statistics (null = the ministry's rule). */
+  counts: boolean | null;
 }
 
 export const createScheduleSchema = z.object({
@@ -431,6 +490,7 @@ export const createScheduleSchema = z.object({
   startTime: time,
   durationMin: duration.default(120),
   title: name,
+  counts: z.boolean().nullable().optional(),
 });
 export type CreateScheduleInput = z.input<typeof createScheduleSchema>;
 
@@ -440,11 +500,11 @@ export const updateScheduleSchema = z.object({
   durationMin: duration.optional(),
   title: name.optional(),
   active: z.boolean().optional(),
+  counts: z.boolean().nullable().optional(),
 });
 export type UpdateScheduleInput = z.input<typeof updateScheduleSchema>;
 
 /** Kinds of youth meeting (optional label). */
-export const MEETING_KINDS = ['prayer', 'worship', 'outside', 'guest', 'prophetic'] as const;
 export type MeetingKind = (typeof MEETING_KINDS)[number];
 
 export interface MeetingPerson {
@@ -557,6 +617,10 @@ export interface MeetingRow {
   location: string | null;
   topic: string | null;
   kind: MeetingKind | null;
+  /** Counts in statistics by its own choice (null = the ministry's rule). */
+  statChoice: boolean | null;
+  /** Whether it counts in statistics after all (own choice, else the ministry's rule). */
+  countsInStats: boolean;
   /** Who leads this meeting. */
   leader: MeetingPerson | null;
   /** Who buys food / spends the meeting budget. */
@@ -632,6 +696,8 @@ export const createMeetingSchema = z.object({
   /** Only these people (user ids); omitted or empty = everyone in the ministry. */
   audience: z.array(z.number().int().positive()).max(500).optional(),
   kind: z.enum(MEETING_KINDS).nullable().optional(),
+  /** Counts in statistics (null = the ministry's rule). */
+  counts: z.boolean().nullish(),
   design: postDesignSchema.nullish(),
   templateId: z.number().int().positive().nullish(),
   speakers: speakersSchema.optional(),
@@ -660,6 +726,7 @@ export const updateMeetingSchema = z.object({
   location: optionalText(120).optional(),
   topic: optionalText(200).optional(),
   kind: z.enum(MEETING_KINDS).nullable().optional(),
+  counts: z.boolean().nullable().optional(),
   design: postDesignSchema.nullable().optional(),
   templateId: z.number().int().positive().nullable().optional(),
   speakers: speakersSchema.optional(),
@@ -861,6 +928,8 @@ export interface CalendarData {
   /** null when the person can't see leaders' notes. */
   notes: CalendarNote[] | null;
   canNote: boolean;
+  /** Birthdays of the ministry's people (null when the person may not see them). */
+  birthdays: BirthdayRow[] | null;
 }
 export type NotifyMeetingInput = z.input<typeof notifyMeetingSchema>;
 

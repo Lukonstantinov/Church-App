@@ -1,7 +1,9 @@
+import { countedWhere } from '../lib/statsRule';
 import { audienceOf, meetingIsFor, readMotion, readReminders, readServices } from '../lib/meetings';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { STAT_KINDS, type StatKind } from '@church/shared';
 import {
   ENTER_ANIMATIONS,
   PERMISSIONS,
@@ -347,6 +349,7 @@ groupRoutes.get('/:id', async (c) => {
     defaultLocation: group.defaultLocation,
     eventReminderHours: group.eventReminderHours,
     membersSeeAttendance: group.membersSeeAttendance,
+    statKinds: readStatKinds(group.statKinds),
     meetingReminders: readReminders(group.meetingReminders),
     meetingMotion: readMotion(group.meetingMotion) ?? 'calm',
     meetingTemplateId: group.meetingTemplateId,
@@ -531,7 +534,13 @@ groupRoutes.get('/:id/members', async (c) => {
   const recent = await db
     .select({ id: meetings.id })
     .from(meetings)
-    .where(and(eq(meetings.groupId, group.id), eq(meetings.status, 'done')))
+    .where(
+      and(
+        eq(meetings.groupId, group.id),
+        eq(meetings.status, 'done'),
+        countedWhere(group.statKinds),
+      ),
+    )
     .orderBy(desc(meetings.startsAt))
     .limit(8);
   const rates = new Map<number, { attended: number; counted: number }>();
@@ -853,3 +862,9 @@ groupRoutes.post('/:id/feed/read', async (c) => {
   await markFeedRead(db, user.id, group.id);
   return c.json({ ok: true });
 });
+
+/** A ministry's stored rule of which meetings count (unknown kinds dropped; null = all). */
+function readStatKinds(v: unknown): StatKind[] | null {
+  if (!Array.isArray(v)) return null;
+  return v.filter((k): k is StatKind => (STAT_KINDS as readonly string[]).includes(k));
+}

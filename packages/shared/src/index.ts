@@ -15,3 +15,4 @@ export * from './posts';
 export * from './labels';
 export * from './background';
 export * from './screenLook';
+export * from './people';

@@ -1,3 +1,4 @@
+import { birthdayRows } from '../lib/birthdays';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or, type SQL } from 'drizzle-orm';
@@ -110,6 +111,7 @@ const toScheduleRow = (s: MeetingSchedule): ScheduleRow => ({
   id: s.id,
   groupId: s.groupId,
   weekday: s.weekday,
+  counts: s.counts,
   startTime: s.startTime,
   durationMin: s.durationMin,
   title: s.title,
@@ -183,7 +185,10 @@ groupMeetingRoutes.get('/:id/calendar', async (c) => {
   );
   const visible = manage ? coming : coming.filter((m) => meetingIsFor(audience, m.id, user.id));
   const today = localDate(new Date(), (await getChurch(db)).timezone);
+  // Birthdays of the ministry's people: church admins and those who manage its people.
+  const seesBirthdays = user.isAdmin || access.perms.has('people.manage');
   const body: CalendarData = {
+    birthdays: seesBirthdays ? await birthdayRows(db, [group.id]) : null,
     meetings: await toMeetingRows(db, visible, c.env.WEBHOOK_SECRET),
     events: [
       ...(await listEvents(db, c.env.WEBHOOK_SECRET, [group.id], user.id, 'past', 100)).reverse(),
@@ -314,6 +319,7 @@ groupMeetingRoutes.post('/:id/meetings', async (c) => {
         groupId: group.id,
         title: input.title,
         kind: input.kind ?? null,
+        counts: input.counts ?? null,
         startsAt: start.toISOString(),
         endsAt: new Date(start.getTime() + input.durationMin * 60_000).toISOString(),
         design: input.design ? JSON.stringify(input.design) : null,
@@ -392,6 +398,12 @@ scheduleRoutes.patch('/:id', async (c) => {
     .set(input)
     .where(eq(meetingSchedules.id, schedule.id))
     .returning();
+  // Counting or not goes for all its meetings, those held too (the statistics follow).
+  if (input.counts !== undefined)
+    await db
+      .update(meetings)
+      .set({ counts: input.counts })
+      .where(eq(meetings.scheduleId, schedule.id));
   await audit(db, {
     actorUserId: user.id,
     action: 'schedule_updated',
@@ -727,6 +739,7 @@ meetingRoutes.patch('/:id', async (c) => {
   if (input.location !== undefined) patch.location = input.location;
   if (input.topic !== undefined) patch.topic = input.topic;
   if (input.kind !== undefined) patch.kind = input.kind;
+  if (input.counts !== undefined) patch.counts = input.counts;
   if (input.design !== undefined) {
     const photo = input.design?.custom?.backdrop?.mediaId;
     if (photo) await assertGroupMedia(db, meeting.groupId, photo);

@@ -1,3 +1,4 @@
+import { countedWhere } from './statsRule';
 import { and, asc, eq, gte, inArray, lt, ne } from 'drizzle-orm';
 import {
   addDays,
@@ -30,7 +31,7 @@ const pct = (part: number, whole: number) =>
  */
 export async function groupStatistics(
   db: Db,
-  group: Pick<Group, 'id' | 'name'>,
+  group: Pick<Group, 'id' | 'name'> & { statKinds?: string[] | null },
   period: { from: string; to: string },
   timezone: string,
 ): Promise<GroupStatistics> {
@@ -46,7 +47,8 @@ export async function groupStatistics(
     db
       .select()
       .from(meetings)
-      .where(and(inPeriod, eq(meetings.status, 'done')))
+      // Only meetings that count (the ministry's rule and each meeting's own choice).
+      .where(and(inPeriod, eq(meetings.status, 'done'), countedWhere(group.statKinds)))
       .orderBy(asc(meetings.startsAt))
       .limit(500),
     db

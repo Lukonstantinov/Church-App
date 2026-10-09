@@ -1,3 +1,4 @@
+import { birthdayReportSchema, DEFAULT_BIRTHDAY_REPORT, type BirthdayReport } from '@church/shared';
 import {
   DEFAULT_BRAND,
   isBrandValue,
@@ -24,6 +25,7 @@ export async function getChurch(db: Db): Promise<ChurchInfo> {
       appBackground: true,
       designLock: true,
       screenLook: true,
+      birthdayReport: true,
     },
   });
   const brand = row?.brandColor ?? DEFAULT_BRAND;
@@ -37,6 +39,7 @@ export async function getChurch(db: Db): Promise<ChurchInfo> {
     sheetLabel: row?.sheetLabel || null,
     appBackground: row?.appBackground ?? null,
     designLock: row?.designLock ?? false,
+    birthdayReport: readBirthdayReport(row?.birthdayReport),
     screenLook: readScreenLook(row?.screenLook),
   };
 }
@@ -64,4 +67,10 @@ export function isValidTimezone(tz: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** The stored birthday-report setting, or the default (weekly on Monday at 9, a week ahead). */
+export function readBirthdayReport(v: unknown): BirthdayReport {
+  const r = birthdayReportSchema.safeParse(v);
+  return r.success ? r.data : DEFAULT_BIRTHDAY_REPORT;
 }
