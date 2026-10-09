@@ -1034,6 +1034,8 @@ export interface AnnouncementRow {
   photos: { id: number; url: string }[];
   /** The cover drawn as a picture (what the bot sends); null = none made. */
   posterUrl: string | null;
+  /** The poster is a moving loop (a short video, played muted). */
+  posterMoving: boolean;
   tint: { color: string; strength: number } | null;
   templateId: number | null;
   eventId: number | null;

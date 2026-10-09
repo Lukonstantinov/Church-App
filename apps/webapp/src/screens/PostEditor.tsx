@@ -1,5 +1,10 @@
 import { useRef, useState } from 'react';
 import { capturePoster } from '../lib/poster';
+import { recordPosterVideo } from '../lib/movingPoster';
+import { FullMotion } from '../lib/perf';
+import { CoverEffects, effectsPayload, initEffects } from '../components/CoverEffects';
+import { MotionExport } from '../components/MotionExport';
+import { PosterTextLayer } from '../components/PosterText';
 import {
   POST_KINDS,
   POST_KIND_KEYS,
@@ -104,6 +109,16 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
   const [notify, setNotify] = useState(true);
   const [uploading, setUploading] = useState<[number, number] | null>(null);
   const [making, setMaking] = useState(false);
+  // Moving effects over the cover (stored in the design), and the picture sent with it.
+  const [fxOpen, setFxOpen] = useState(false);
+  const fx = initEffects({
+    motion: design.effects?.motion ?? null,
+    motionTune: design.effects?.motionTune ?? null,
+    motionLayers: design.effects?.motionLayers ?? [],
+  });
+  const moves = fx.effects.length > 0;
+  const [moving, setMoving] = useState(false);
+  const [recording, setRecording] = useState<number | null>(null);
   const posterNode = useRef<HTMLDivElement>(null);
   const addBlock = (b: DraftBlock) => setBlocks((list) => [...list, b]);
   const uploads = useBlockUploads(groupId, addBlock);
@@ -146,6 +161,19 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
   /** The cover as a picture (for the bot message): drawn at full size off screen, then uploaded. */
   async function makePoster(): Promise<number | null> {
     if (!coverShown || !posterNode.current) return null;
+    // The moving cover: recorded now (plays like a GIF in Telegram); else the still one.
+    if (moving && moves && notify) {
+      setRecording(0);
+      try {
+        await new Promise((r) => setTimeout(r, 400));
+        const id = await recordPosterVideo(posterNode.current, groupId, setRecording);
+        if (id) return id;
+      } catch (err) {
+        console.warn('moving post poster failed', err);
+      } finally {
+        setRecording(null);
+      }
+    }
     const blob = await capturePoster(posterNode.current);
     if (!blob) return null;
     return upload
@@ -221,15 +249,17 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
       {coverShown && (
         <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0, width: 720 }}>
           <div ref={posterNode}>
-            <PosterMedia
-              title={title.trim() || null}
-              photos={photos}
-              tint={
-                photos.length && tintColor ? { color: tintColor, strength: tintStrength } : null
-              }
-              look={look}
-              design={design}
-            />
+            <FullMotion.Provider value={recording !== null}>
+              <PosterMedia
+                title={title.trim() || null}
+                photos={photos}
+                tint={
+                  photos.length && tintColor ? { color: tintColor, strength: tintStrength } : null
+                }
+                look={look}
+                design={design}
+              />
+            </FullMotion.Provider>
           </div>
         </div>
       )}
@@ -262,6 +292,15 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
             </div>
           )}
         </Section>
+      )}
+
+      {mayDesign && coverShown && (
+        <CoverEffects
+          state={fx}
+          onChange={(st) => set({ effects: effectsPayload(st) })}
+          open={fxOpen}
+          onOpen={setFxOpen}
+        />
       )}
 
       <Section title={t.feed.headline}>
@@ -435,10 +474,63 @@ function PostForm({ groupId, post }: { groupId: number; post?: AnnouncementRow }
         </div>
       </Section>
 
+      {/* The moving poster to oneself (to forward), with own words on it or none. */}
+      {coverShown && moves && (
+        <MotionExport
+          name={title.trim() || t.freePoster.fileName}
+          caption={[title.trim(), text.trim()].filter(Boolean).join('\n\n').slice(0, 1000)}
+          preview={{
+            preset: title.trim(),
+            modes: ['design', 'custom', 'none'],
+            render: (words) => (
+              <>
+                <PosterMedia
+                  title={words.mode === 'design' ? title.trim() || null : null}
+                  photos={photos}
+                  tint={
+                    photos.length && tintColor ? { color: tintColor, strength: tintStrength } : null
+                  }
+                  look={look}
+                  design={design}
+                />
+                <PosterTextLayer value={words} />
+              </>
+            ),
+          }}
+        />
+      )}
+
       {!post && (
         <Section>
           <Toggle label={t.feed.notify} checked={notify} onChange={setNotify} />
+          {notify && coverShown && moves && (
+            <div className="flex flex-col gap-2 border-t border-hairline p-4">
+              <div className="text-[13px] font-semibold">{t.meetings.pictureTitle}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {([false, true] as const).map((v) => (
+                  <button
+                    key={String(v)}
+                    type="button"
+                    onClick={() => {
+                      haptic.tap();
+                      setMoving(v);
+                    }}
+                    className={`rounded-full px-3 py-1.5 text-[13px] font-semibold ${
+                      moving === v ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                    }`}
+                  >
+                    {v ? t.events.picture.moving : t.events.picture.still}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </Section>
+      )}
+      {recording !== null && (
+        <p className="text-center text-[13px] text-hint">
+          {t.motionExport.recording(Math.round(recording * 100))}
+        </p>
       )}
 
       <Button onClick={() => void submit()} disabled={!canSubmit || pending || uploading !== null}>

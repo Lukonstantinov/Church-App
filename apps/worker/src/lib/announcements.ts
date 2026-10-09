@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm'
 import { InlineKeyboard } from 'grammy';
 import {
   displayName,
+  loopUrl,
   messages,
   readPostBlocks,
   readPostDesign,
@@ -26,6 +27,7 @@ import {
   users,
   type Group,
   type User,
+  media,
 } from '../db/schema';
 import { audit } from './audit';
 import { churchDefaultLocale, localeOf } from './church';
@@ -309,6 +311,18 @@ async function toRows(
       : Promise.resolve([]),
     filesById(db, fileIds),
   ]);
+  // Posters recorded as moving loops (videos) play from their public link.
+  const posterIds = rows.map((r) => r.a.posterMediaId).filter((x): x is number => x !== null);
+  const movingPosters = new Set(
+    posterIds.length
+      ? (
+          await db
+            .select({ id: media.id })
+            .from(media)
+            .where(and(inArray(media.id, posterIds), eq(media.mime, 'video/mp4')))
+        ).map((m) => m.id)
+      : [],
+  );
   // Distinct voters per poll (a person may pick several options).
   const votersBy = hasPolls
     ? new Map(
@@ -436,7 +450,12 @@ async function toRows(
         photos: await Promise.all(
           (a.mediaIds ?? []).map(async (id) => ({ id, url: await signedMediaUrl(secret, id) })),
         ),
-        posterUrl: a.posterMediaId ? await signedMediaUrl(secret, a.posterMediaId) : null,
+        posterUrl: a.posterMediaId
+          ? movingPosters.has(a.posterMediaId)
+            ? loopUrl(a.posterMediaId)
+            : await signedMediaUrl(secret, a.posterMediaId)
+          : null,
+        posterMoving: !!a.posterMediaId && movingPosters.has(a.posterMediaId),
         tint:
           a.tintColor !== null ? { color: a.tintColor, strength: a.tintStrength ?? 0.35 } : null,
         templateId: a.templateId,

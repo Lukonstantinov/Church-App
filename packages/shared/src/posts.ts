@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { backdropSchema, isBrandValue, isTextColor, patternSchema, type BrandColor } from './brand';
+import { MEETING_MOTIONS, motionTuneSchema } from './motions';
 
 /**
  * Fonts for post headlines and text. All of them cover Cyrillic and the Lithuanian
@@ -188,6 +189,20 @@ export const postDesignSchema = z.object({
   posterLayout: z.enum(['classic', 'collage']).optional(),
   /** How the speakers' photos look on the poster. */
   speakerLook: speakerLookSchema.nullish(),
+  /**
+   * Posts: moving effects over the cover (up to four together, each with its settings),
+   * like an event's cover. Events keep theirs in their own fields.
+   */
+  effects: z
+    .object({
+      motion: z.enum(MEETING_MOTIONS).nullish(),
+      motionTune: motionTuneSchema.nullish(),
+      motionLayers: z
+        .array(z.object({ kind: z.enum(MEETING_MOTIONS), tune: motionTuneSchema.nullish() }))
+        .max(3)
+        .nullish(),
+    })
+    .nullish(),
 });
 export type PostDesign = z.infer<typeof postDesignSchema>;
 export type PostDesignInput = z.input<typeof postDesignSchema>;

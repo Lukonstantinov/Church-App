@@ -147,6 +147,35 @@ describe('rich posts', () => {
     expect(bad.status).toBe(400);
   });
 
+  it('a post can carry moving effects and a moving poster for the bot message', async () => {
+    const g = await createEnv('Живые посты');
+    const mp4 = Uint8Array.from([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 1]);
+    const { id: posterMediaId } = (await (
+      await api(`/api/groups/${g.id}/loops`, { method: 'POST', user: ADMIN, body: mp4 })
+    ).json()) as { id: number };
+    await post(g.id, {
+      title: 'Вечер хвалы',
+      text: 'Ждём всех',
+      posterMediaId,
+      design: {
+        banner: true,
+        effects: {
+          motion: 'smoke',
+          motionTune: { color: '#ec4899' },
+          motionLayers: [{ kind: 'smoke', tune: { angle: 180 } }],
+        },
+      },
+    });
+    const [row] = await feedOf(g.id, ADMIN);
+    expect(row!.design?.effects).toMatchObject({
+      motion: 'smoke',
+      motionLayers: [{ kind: 'smoke', tune: { angle: 180 } }],
+    });
+    // The moving poster plays from its public link.
+    expect(row!.posterMoving).toBe(true);
+    expect(row!.posterUrl).toBe(`/media/v/${posterMediaId}`);
+  });
+
   it('blocks: pictures, tables, files in parts, polls and quizzes', async () => {
     const g = await createEnv('Блоки');
     const m = fakeUser('Голосующий');

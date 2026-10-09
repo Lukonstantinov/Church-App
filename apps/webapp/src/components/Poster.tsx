@@ -35,6 +35,7 @@ import { Sheet, SheetOption } from './Sheet';
 import { useToast } from './Toast';
 import { Button, Toggle } from './ui';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
+import { CoverEffectLayers } from './CoverEffects';
 import { PostBlocks } from './PostBlocks';
 import { RichText } from './RichText';
 import { SpeakerBackdrop, SpeakerStrip, leadPhoto } from './Speakers';
@@ -184,6 +185,17 @@ export function PosterMedia({
             <SpeakerBackdrop url={leadPhoto(speakers)!} look={sLook} />
           )}
         </>
+      )}
+      {/* A post's moving effects over its cover (the glitch tears the first photo). */}
+      {design?.effects && (
+        <CoverEffectLayers
+          e={{
+            motion: design.effects.motion ?? null,
+            motionTune: design.effects.motionTune ?? null,
+            motionLayers: design.effects.motionLayers ?? [],
+          }}
+          image={photos[0]?.url ?? null}
+        />
       )}
       {tint && (
         <span
@@ -470,13 +482,24 @@ function ResendSheet({ post, onClose }: { post: AnnouncementRow; onClose: () => 
             <div className="px-1">
               <Toggle label={t.events.withPoster} checked={withPoster} onChange={setWithPoster} />
             </div>
-            {withPoster && (
-              <img
-                src={picture}
-                alt=""
-                className="mx-4 mb-3 mt-1 max-h-48 w-[calc(100%-2rem)] rounded-lg object-cover"
-              />
-            )}
+            {withPoster &&
+              (post.posterMoving && picture === post.posterUrl ? (
+                // A moving poster (recorded loop) plays here as it will in the chat.
+                <video
+                  src={picture}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="mx-4 mb-3 mt-1 max-h-48 w-[calc(100%-2rem)] rounded-lg object-cover"
+                />
+              ) : (
+                <img
+                  src={picture}
+                  alt=""
+                  className="mx-4 mb-3 mt-1 max-h-48 w-[calc(100%-2rem)] rounded-lg object-cover"
+                />
+              ))}
           </div>
         )}
         <AudienceChoice

@@ -179,7 +179,8 @@ effect layers anywhere in the stack; editor previews are mockups of the real eve
 meeting (`poster_template_id`, rows carry `poster`) and drawn by `LayeredPoster` on covers, screens,
 tiles, the pinned card and the bot poster.
 
-**Posts & home** — posts with photos, blocks, types, looks, reactions, comments, resend;
+**Posts & home** — posts with photos, blocks, types, looks, moving effects (`design.effects`, animated poster when
+publishing, `posterMoving`), reactions, comments, resend;
 home tiles (drag to reorder, expand), several meetings of a day share one tile.
 
 **Money** — income / expense / donation, receipts, dues, voiding, meeting & event money,
