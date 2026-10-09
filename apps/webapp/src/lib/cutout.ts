@@ -209,6 +209,60 @@ function dropSpecks(mask: Float32Array, w: number, h: number) {
     }
 }
 
+/**
+ * Fills small holes inside the people (a patterned shirt, a hand on a face the model was
+ * unsure of): background parts that don't reach the photo's edge and are small become
+ * solid, so the layer below never shows through a person.
+ */
+function fillInnerHoles(alpha: Float32Array, w: number, h: number) {
+  const k = Math.min(1, 300 / Math.max(w, h));
+  const sw = Math.max(1, Math.round(w * k));
+  const sh = Math.max(1, Math.round(h * k));
+  const back = new Uint8Array(sw * sh);
+  for (let y = 0; y < sh; y++)
+    for (let x = 0; x < sw; x++)
+      back[y * sw + x] =
+        alpha[Math.min(h - 1, Math.floor(y / k)) * w + Math.min(w - 1, Math.floor(x / k))]! < 0.5
+          ? 1
+          : 0;
+  const label = new Int32Array(sw * sh);
+  const fill: boolean[] = [false];
+  const stack: number[] = [];
+  for (let i = 0; i < back.length; i++) {
+    if (!back[i] || label[i]) continue;
+    const id = fill.length;
+    let n = 0;
+    let edge = false;
+    stack.push(i);
+    label[i] = id;
+    while (stack.length) {
+      const p = stack.pop()!;
+      n++;
+      const px = p % sw;
+      const py = (p - px) / sw;
+      if (px === 0 || py === 0 || px === sw - 1 || py === sh - 1) edge = true;
+      for (const q of [
+        px > 0 ? p - 1 : -1,
+        px < sw - 1 ? p + 1 : -1,
+        py > 0 ? p - sw : -1,
+        py < sh - 1 ? p + sw : -1,
+      ])
+        if (q >= 0 && back[q] && !label[q]) {
+          label[q] = id;
+          stack.push(q);
+        }
+    }
+    // Small and enclosed: a hole in a person, not the gap between two people.
+    fill.push(!edge && n < sw * sh * 0.004);
+  }
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const l =
+        label[Math.min(sh - 1, Math.floor(y * k)) * sw + Math.min(sw - 1, Math.floor(x * k))]!;
+      if (l && fill[l]) alpha[y * w + x] = 1;
+    }
+}
+
 /** Sums over a (2r+1)² box round every pixel, from a running-total table. */
 function boxMean(src: Float32Array, w: number, h: number, r: number): Float32Array {
   const sat = new Float64Array((w + 1) * (h + 1));
@@ -453,6 +507,7 @@ export async function cutOutPeople(
       alpha = firstMask.map(edge);
       kept = Math.round(first * w * h);
     }
+    fillInnerHoles(alpha, w, h);
     const found = kept > w * h * 0.005;
     // For the developer (Telemetry): what each step saw when nobody was found.
     if (!found)

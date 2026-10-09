@@ -72,6 +72,15 @@ export const MEETING_MOTIONS = [
   'bulge',
   'godrays',
   'reflection',
+  // Particles made for a colour of one's own (the colour knob paints them).
+  'rain',
+  'stardust',
+  'orbs',
+  'meteors',
+  'glitter',
+  'fireworks',
+  'notes',
+  'crosses',
 ] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
 
@@ -88,6 +97,7 @@ export const MOTION_GROUPS: {
     | 'stage'
     | 'icons'
     | 'seasons'
+    | 'colour'
     | 'gpu';
   items: MeetingMotion[];
 }[] = [
@@ -131,6 +141,10 @@ export const MOTION_GROUPS: {
   { key: 'stage', items: ['spotlight', 'disco', 'sparkle', 'hearts'] },
   { key: 'icons', items: ['iconfloat', 'iconrain', 'iconorbit'] },
   { key: 'seasons', items: ['leaves', 'snowfall', 'petals'] },
+  {
+    key: 'colour',
+    items: ['rain', 'stardust', 'orbs', 'meteors', 'glitter', 'fireworks', 'notes', 'crosses'],
+  },
   {
     key: 'gpu',
     items: [
@@ -242,6 +256,14 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   bulge: ['weight'],
   godrays: ['density'],
   reflection: ['weight'],
+  rain: PARTICLE_KNOBS,
+  stardust: PARTICLE_KNOBS,
+  orbs: PARTICLE_KNOBS,
+  meteors: PARTICLE_KNOBS,
+  glitter: PARTICLE_KNOBS,
+  fireworks: PARTICLE_KNOBS,
+  notes: PARTICLE_KNOBS,
+  crosses: PARTICLE_KNOBS,
 };
 
 /** Settings per animation (an item's own, over its template's): {kind: MotionTune}. */

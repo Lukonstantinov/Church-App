@@ -352,9 +352,18 @@ export function PosterLayersEditor({
       [next[i], next[j]] = [next[j]!, next[i]!];
       return next;
     });
+  // A new layer goes right above the chosen one (on top when none is chosen), as in
+  // Photoshop — not always to the very front.
   const add = (layer: PosterLayer) => {
     haptic.tap();
-    setLayers((all) => [...all, layer].slice(-MAX_POSTER_LAYERS));
+    setLayers((all) => {
+      if (all.length >= MAX_POSTER_LAYERS) return all;
+      const at = all.findIndex((l) => l.id === selected);
+      if (at < 0) return [...all, layer];
+      const next = [...all];
+      next.splice(at + 1, 0, layer);
+      return next;
+    });
     setSelected(layer.id);
   };
 
@@ -401,6 +410,10 @@ export function PosterLayersEditor({
         effects: null,
         style: null,
         hidden: null,
+        // Solid, whatever the photo was set to: the people cover what is below them
+        // (a see-through or blended photo let the layer under it show through them).
+        opacity: null,
+        blend: null,
         source,
         sourceUrl,
         cut: kind,

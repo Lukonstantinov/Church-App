@@ -27,6 +27,14 @@ export const PARTICLE_KINDS: ReadonlySet<MeetingMotion> = new Set<MeetingMotion>
   'iconfloat',
   'iconrain',
   'iconorbit',
+  'rain',
+  'stardust',
+  'orbs',
+  'meteors',
+  'glitter',
+  'fireworks',
+  'notes',
+  'crosses',
 ]);
 
 export interface ParticleLayer {
@@ -237,7 +245,11 @@ function plan(layer: ParticleLayer, lite: boolean, small: boolean): LayerPlan {
   base.forEach((p, i) => {
     // Weaker phones draw every other particle; small blocks a third of them.
     if (lite && i % 2) return;
-    if (small && i % 3 !== 2 && kind !== 'sparkle' && kind !== 'hearts') return;
+    // A burst is a dozen sparks: a third as many fireworks as other particles (in a small
+    // block too — not thinned twice down to none).
+    if (kind === 'fireworks') {
+      if (i % 3) return;
+    } else if (small && i % 3 !== 2 && kind !== 'sparkle' && kind !== 'hearts') return;
     let size = p.s;
     let dur = p.d;
     let off = p.t;
@@ -292,6 +304,46 @@ function plan(layer: ParticleLayer, lite: boolean, small: boolean): LayerPlan {
         dur = 16;
         off = p.t * 1.3;
         x = 50;
+        break;
+      case 'rain':
+        size = 14 + p.s * 3;
+        dur = 0.7 + (p.d % 3) * 0.25;
+        off = p.t * 0.3;
+        break;
+      case 'stardust':
+        size = 3 + p.s * 0.8;
+        y = (p.t * 29 + p.x * 3) % 95;
+        dur = 3 + (p.d % 5);
+        off = p.t * 0.7;
+        break;
+      case 'orbs':
+        size = 36 + p.s * 7;
+        y = (p.t * 17 + p.x) % 85;
+        dur = p.d * 1.6;
+        break;
+      case 'meteors':
+        size = 60 + p.s * 6;
+        y = (p.t * 13) % 45;
+        dur = 3 + (p.d % 4);
+        off = p.t * 1.1;
+        break;
+      case 'glitter':
+        size = 5 + p.s * 1.2;
+        dur = p.d * 1.6;
+        off = p.t * 1.3;
+        break;
+      case 'fireworks':
+        size = 4 + p.s * 0.5;
+        x = 15 + p.x * 0.7;
+        y = 12 + ((p.t * 31) % 45);
+        dur = 2.4 + (p.d % 3) * 0.4;
+        off = p.t * 0.9;
+        break;
+      case 'notes':
+      case 'crosses':
+        size = 12 + p.s * 2.5;
+        dur = p.d * 1.25;
+        off = p.t * 1.2;
         break;
     }
     items.push({ x, y, size: size * weight, dur, off, i });
@@ -387,12 +439,85 @@ class Engine {
       case 'embers':
       case 'bubbles':
       case 'hearts':
+      case 'notes':
+      case 'crosses':
       case 'iconfloat': {
-        const startBottom = k === 'iconfloat' || k === 'hearts' ? 0.14 : 0.1;
-        cy = H * (1 + startBottom) - it.size / 2 - track(phase, TRAVEL) * H;
+        const big = k === 'iconfloat' || k === 'hearts' || k === 'notes' || k === 'crosses';
+        cy = H * (1 + (big ? 0.14 : 0.1)) - it.size / 2 - track(phase, TRAVEL) * H;
         cx += track(phase, mirror ? SWAY_B : SWAY_A);
-        alpha = track(phase, RISE_OPACITY) * (k === 'iconfloat' || k === 'hearts' ? 0.85 : 1);
+        alpha = track(phase, RISE_OPACITY) * (big ? 0.85 : 1);
         break;
+      }
+      case 'rain': {
+        // Straight down and a little sideways, like rain in a light wind.
+        cy = -H * 0.15 + phase * H * 1.3;
+        cx += phase * H * 0.12;
+        rot = -5;
+        alpha = 0.6;
+        break;
+      }
+      case 'stardust': {
+        cy = (it.y / 100) * H - phase * H * 0.12;
+        cx += Math.sin(phase * Math.PI * 2 + it.i) * 6;
+        alpha = Math.sin(Math.PI * phase) * (0.6 + 0.4 * Math.sin(time * 3 + it.i));
+        break;
+      }
+      case 'orbs': {
+        // Slow wandering, breathing light.
+        const span = it.dur;
+        const wp = ((((time + it.off) % (span * 2)) + span * 2) % (span * 2)) / span;
+        const pp = wp > 1 ? 2 - wp : wp;
+        cx += easedTrack(pp, [
+          [0, 0],
+          [0.5, 40],
+          [1, -20],
+        ]);
+        cy =
+          (it.y / 100) * H +
+          easedTrack(pp, [
+            [0, 0],
+            [0.5, -26],
+            [1, 18],
+          ]);
+        alpha = 0.45 + 0.25 * Math.sin(time * 0.9 + it.i);
+        break;
+      }
+      case 'meteors': {
+        // A streak across the top part, then a pause until the next one.
+        if (phase > 0.35) return;
+        const q = phase / 0.35;
+        cx = left + W * 0.3 - q * W * 0.5;
+        cy = (it.y / 100) * H + q * H * 0.35;
+        rot = (Math.atan2(H * 0.35, -W * 0.5) * 180) / Math.PI;
+        alpha = Math.sin(Math.PI * q);
+        break;
+      }
+      case 'glitter': {
+        const path = mirror ? LEAF_B : LEAF_A;
+        cy = -H * 0.12 + it.size / 2 + track(phase, LEAF_Y) * H;
+        cx += track(phase, path.x) * 0.6;
+        rot = track(phase, path.r);
+        alpha = track(phase, LEAF_OPACITY) * (0.55 + 0.45 * Math.sin(time * 5 + it.i * 1.7));
+        break;
+      }
+      case 'fireworks': {
+        // A burst: a ring of sparks flying out, falling a little and fading.
+        const sp = this.spriteFor(plan, it);
+        if (!sp) return;
+        const out = 1 - (1 - phase) ** 3;
+        const R = Math.min(W, H) * 0.17 * out;
+        const fade = (1 - phase) ** 1.5 * plan.alpha;
+        if (fade <= 0.01) return;
+        const ox = left;
+        const oy = (it.y / 100) * H + phase * phase * H * 0.06;
+        ctx.globalAlpha = fade;
+        for (let j = 0; j < 12; j++) {
+          const a = (j / 12) * Math.PI * 2 + it.i;
+          const sx = ox + Math.cos(a) * R;
+          const sy = oy + Math.sin(a) * R;
+          ctx.drawImage(sp.img, sx - sp.half, sy - sp.half, sp.half * 2, sp.half * 2);
+        }
+        return;
       }
       case 'snow':
       case 'iconrain': {
@@ -593,6 +718,88 @@ class Engine {
           ),
         );
       }
+      case 'rain':
+        return sprite(`rain|${c}`, size, 2, r, (ctx, s) => {
+          const g = ctx.createLinearGradient(0, 0, 0, s);
+          g.addColorStop(0, 'rgba(255,255,255,0)');
+          g.addColorStop(1, c ?? '#cfe8ff');
+          ctx.strokeStyle = g;
+          ctx.lineWidth = Math.max(1, s * 0.06);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(s / 2, 0);
+          ctx.lineTo(s / 2, s);
+          ctx.stroke();
+        });
+      case 'stardust':
+        return sprite(`dust|${c}`, size, 8, r, (ctx, s, k) => {
+          ctx.shadowBlur = 6 * k;
+          ctx.shadowColor = c ?? '#fde68a';
+          ctx.fillStyle = c ?? '#fff7d6';
+          dot(ctx, s);
+          ctx.fill();
+        });
+      case 'orbs':
+        return sprite(`orb|${c}`, size, 0, r, (ctx, s) => {
+          const col = c ?? '#f0abfc';
+          const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+          g.addColorStop(0, `${col}e6`);
+          g.addColorStop(0.45, `${col}66`);
+          g.addColorStop(1, `${col}00`);
+          ctx.fillStyle = g;
+          dot(ctx, s);
+          ctx.fill();
+        });
+      case 'meteors':
+        return sprite(`meteor|${c}`, size, 6, r, (ctx, s, k) => {
+          // A tail fading out behind a bright head (the head points along the travel).
+          const g = ctx.createLinearGradient(0, s / 2, s, s / 2);
+          g.addColorStop(0, 'rgba(255,255,255,0)');
+          g.addColorStop(0.8, c ?? '#bae6fd');
+          g.addColorStop(1, '#ffffff');
+          ctx.strokeStyle = g;
+          ctx.lineWidth = Math.max(1.5, s * 0.035);
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(0, s / 2);
+          ctx.lineTo(s, s / 2);
+          ctx.stroke();
+          ctx.shadowBlur = 8 * k;
+          ctx.shadowColor = c ?? '#ffffff';
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(s - 2, s / 2, Math.max(1.5, s * 0.03), 0, Math.PI * 2);
+          ctx.fill();
+        });
+      case 'glitter': {
+        const col = c ?? `hsl(${(it.i * 53) % 360} 95% 70%)`;
+        return sprite(`glitter|${col}`, size, 6, r, (ctx, s, k) =>
+          glyph(ctx, s, '◆', col, { blur: 5, color: col }, k),
+        );
+      }
+      case 'fireworks': {
+        const col = c ?? `hsl(${(it.i * 67) % 360} 95% 65%)`;
+        return sprite(`spark2|${col}`, size, 8, r, (ctx, s, k) => {
+          ctx.shadowBlur = 7 * k;
+          ctx.shadowColor = col;
+          ctx.fillStyle = '#ffffff';
+          dot(ctx, s);
+          ctx.fill();
+          ctx.shadowBlur = 3 * k;
+          ctx.fillStyle = col;
+          ctx.fill();
+        });
+      }
+      case 'notes': {
+        const text = ['♪', '♫', '♬'][it.i % 3]!;
+        return sprite(`note|${text}|${c}`, size, 8, r, (ctx, s, k) =>
+          glyph(ctx, s, text, c ?? '#ffffff', { blur: 6, color: c ?? 'rgba(255,255,255,0.6)' }, k),
+        );
+      }
+      case 'crosses':
+        return sprite(`cross|${c}`, size, 10, r, (ctx, s, k) =>
+          glyph(ctx, s, '✝', c ?? '#fde68a', { blur: 9, color: c ?? '#fde68a' }, k),
+        );
       case 'iconfloat':
       case 'iconrain':
       case 'iconorbit': {

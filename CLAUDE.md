@@ -141,7 +141,8 @@ off by default; checked every 5 min) plus manual reminders. Meeting reminders
 `job_runs` as `meeting_remind`) with who serves; meeting animation (`MEETING_MOTIONS`: off / calm / lively / stars / waves / bokeh / rays /
 aurora / silk / mesh / embers / bubbles / snow / lines / grid / grain / glitch / crt / static / matrix / spotlight /
 disco / sparkle / hearts …, listed in `shared/motions.ts`; GPU ones — heat haze, shockwave, bloom, zoom burst, swirl,
-bulge, god rays, reflection: `GPU_MOTIONS`, PixiJS filters lazy-loaded in `components/GpuEffect.tsx`, max 6 live WebGL
+bulge, god rays, reflection: `GPU_MOTIONS`; colour-your-own particles — rain, stardust, orbs, meteors, glitter,
+fireworks, notes, crosses (group `colour`), PixiJS filters lazy-loaded in `components/GpuEffect.tsx`, max 6 live WebGL
 canvases, recorder steps them via `seekGpu`; `LivingLayer` + `.living-*` CSS)
 (`groups.meeting_motion`, per meeting `meetings.motion`; the home tile and the poster can have their
 own: `tile_motion` / `poster_motion` on meetings and design templates);
