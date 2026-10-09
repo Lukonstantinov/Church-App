@@ -1627,3 +1627,7 @@ export function useReadNotifications() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['me', 'notifications'] }),
   });
 }
+
+/** Fresh links to poster pictures (a design draft kept on the phone gets them back). */
+export const posterLinks = (ids: number[]) =>
+  apiFetch<Record<number, string>>('/poster-templates/links', send('POST', { ids }));

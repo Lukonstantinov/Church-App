@@ -8,7 +8,7 @@ import {
   type PosterLook,
 } from '@church/shared';
 import { useEnv } from '../lib/env';
-import { useEffectQuality, watchOffscreen } from '../lib/perf';
+import { useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { GpuEffect } from './GpuEffect';
@@ -476,10 +476,14 @@ export function LivingLayer({
   const clip = useRef<HTMLSpanElement>(null);
   const { env } = useEnv();
   const quality = useEffectQuality();
+  const unlimited = useUnlimited();
   // Off screen it stands still, and only a few layers run at once (no work for the phone).
   useEffect(
-    () => (clip.current ? watchOffscreen(clip.current, !preview || quality !== 'full') : undefined),
-    [kind, quality, preview],
+    () =>
+      clip.current
+        ? watchOffscreen(clip.current, !unlimited && (!preview || quality !== 'full'))
+        : undefined,
+    [kind, quality, preview, unlimited],
   );
   const speed = tune?.speed ?? 1;
   // Speed for every kind at once: the browser's own playback rate of its animations.

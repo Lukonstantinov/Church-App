@@ -182,7 +182,11 @@ shape; own effects on a picture, masked to a cut-out's outline), texts filled fr
 layers (`type: fill`, a gradient can flow / turn / breathe), shapes with soft edges (`shape`, `soft`;
 `data-edge` for the recorder), effect layers anywhere in the stack (fade at the poster edge), a frame
 (`frame`), «✂️ background removal» on the phone (MediaPipe selfie model, `lib/cutout.ts`; engine copied into
-`dist/mediapipe` at build, model relayed by `/media/model/:name`) onto its own layer above the photo; the recorder keeps the still parts in bands between effects and cuts effects to their masks; editor previews are mockups of the real event/meeting shapes; place in % / container units, opacity, blend mode, layer styles); chosen per event or
+`dist/mediapipe` at build, model relayed by `/media/model/:name`) as two layers (people + the photo without them, hole filled; both keep `source`), an eraser
+(`EraserSheet.tsx`, brings back from the source photo); layers move with fingers on the preview (`PosterGestures.tsx`,
+`data-layer-id`; effect layers have optional x/y/w/h); unfinished work is kept as a draft on the phone (`lib/drafts.ts`,
+fresh picture links via POST `/api/poster-templates/links`); the animated poster maker can use the same layer editor
+(«Свои слои», `PosterLayersEditor`); Telegram's swipe-to-close is off (`disableVerticalSwipes`); the recorder keeps the still parts in bands between effects and cuts effects to their masks; editor previews are mockups of the real event/meeting shapes; place in % / container units, opacity, blend mode, layer styles); chosen per event or
 meeting (`poster_template_id`, rows carry `poster`) and drawn by `LayeredPoster` on covers, screens,
 tiles, the pinned card and the bot poster.
 

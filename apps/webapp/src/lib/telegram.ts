@@ -45,6 +45,13 @@ export function initTelegram(): void {
   if (!tg) return;
   tg.ready();
   tg.expand();
+  // Dragging down inside the app (moving a poster layer, scrolling up) must not swipe the
+  // whole app shut: it closes only with its own close button.
+  try {
+    if (tg.isVersionAtLeast?.('7.7')) tg.disableVerticalSwipes();
+  } catch {
+    // Older clients: nothing to switch off.
+  }
   applyColorScheme();
   tg.onEvent?.('themeChanged', applyColorScheme);
   try {
@@ -116,4 +123,24 @@ export function openTelegramLink(url: string): void {
     tg.openTelegramLink(url);
   else if (tg?.openLink) tg.openLink(url);
   else window.open(url, '_blank');
+}
+
+/**
+ * While something unsaved is open (a poster being designed), Telegram asks before the app
+ * is closed. Returns how to stop asking.
+ */
+export function askBeforeClosing(): () => void {
+  const tg = webApp();
+  try {
+    tg?.enableClosingConfirmation();
+  } catch {
+    return () => undefined;
+  }
+  return () => {
+    try {
+      tg?.disableClosingConfirmation();
+    } catch {
+      // Gone already.
+    }
+  };
 }

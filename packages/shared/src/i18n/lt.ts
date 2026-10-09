@@ -861,14 +861,37 @@ export const lt: Messages = {
     frameGlow: 'Rėmelio švytėjimas',
     frameDouble: 'Dviguba linija',
     pictureNoBg: 'Nuotrauka be fono',
-    cutPeople: 'Iškirpti žmones į atskirą sluoksnį',
+    cutPeople: 'Atskirti: žmonės ir fonas be jų',
     cutHint:
-      'Fonas pašalinamas pačiame telefone (nemokamas Google MediaPipe modelis, nuotrauka niekur nesiunčiama). Žmonės atsiras atskirame sluoksnyje virš nuotraukos – foną galima palikti, patamsinti, pakeisti ar paslėpti. Geriausiai veikia su žmonėmis.',
+      'Fonas pašalinamas pačiame telefone (nemokamas Google MediaPipe modelis, nuotrauka niekur nesiunčiama). Gausite du sluoksnius: žmones ir foną be jų (vieta už jų užpildoma) – kiekvienas su savo efektais; foną galima patamsinti, pakeisti ar paslėpti. Geriausiai veikia su žmonėmis.',
     cutLoading: 'Įkeliamas modelis (vieną kartą, apie 16 MB)…',
     cutWorking: 'Šalinamas fonas…',
-    cutDone: 'Atlikta: žmonės – atskirame sluoksnyje virš nuotraukos',
+    cutDone: 'Atlikta: žmonės ir fonas be jų – du atskiri sluoksniai',
     cutNone: 'Nuotraukoje žmonių nerasta',
     cutFailed: 'Nepavyko pašalinti fono – bandykite dar kartą',
+    peopleLayer: 'Žmonės (iškirpti)',
+    backgroundLayer: 'Fonas be žmonių',
+    dragHint:
+      'Tempkite sluoksnį pirštu, dviem pirštais – dydis ir pasukimas. Paspauskite sluoksnį, kad jį pasirinktumėte.',
+    draftRestored: 'Atkurtas neišsaugotas darbas',
+    draftDiscard: 'Pradėti iš naujo',
+    draftDiscardConfirm: 'Ištrinti neišsaugotus pakeitimus ir pradėti iš naujo?',
+    wholePoster: 'Visas plakatas',
+    eraser: {
+      open: 'Trintukas',
+      openHint:
+        'Ištrinkite tai, ko nereikia (scenos dalį ant iškirptų žmonių), arba grąžinkite ištrintą.',
+      title: 'Trintukas',
+      hint: 'Braukite pirštu per tai, ką reikia ištrinti. „Grąžinti“ piešia paveikslėlį atgal.',
+      hintSource:
+        'Braukite pirštu per tai, ko nereikia. „Grąžinti“ piešia iš originalios nuotraukos – pataisykite, ką iškirpimas praleido.',
+      erase: 'Ištrinti',
+      restore: 'Grąžinti',
+      undo: 'Atšaukti',
+      size: 'Teptuko dydis',
+      soft: 'Teptuko švelnumas',
+      done: 'Atlikta',
+    },
     pictureEffects: 'Efektai ant paveikslėlio',
     pictureEffectsHint:
       'Piešiami tiesiai ant paveikslėlio (ant skaidraus — tik jo kontūro viduje). Paspauskite dar kartą, kad pašalintumėte.',
@@ -1780,6 +1803,9 @@ export const lt: Messages = {
     choosePhoto: 'Pasirinkti nuotrauką',
     otherPhoto: 'Kita nuotrauka',
     template: 'Plakato šablonas',
+    layers: '🧩 Savi sluoksniai',
+    layersHint:
+      'Kaip plakatų redaktoriuje: nuotraukos, iškirpti žmonės, tekstas, spalva, gradientas, efektai – kiekvieną sluoksnį tempkite pirštu tiesiog peržiūroje.',
     shape: 'Forma',
     shapes: {
       '4:3': 'Pokalbiui 4:3',

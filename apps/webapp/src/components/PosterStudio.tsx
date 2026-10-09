@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import {
   MAX_EFFECTS,
   MAX_POSTER_LAYERS,
@@ -19,22 +27,27 @@ import {
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
-import { removeBackground } from '../lib/cutout';
+import { cutOutPeople } from '../lib/cutout';
+import { dropDraft, readDraft, useDraft } from '../lib/drafts';
 import { prepareCutout } from '../lib/image';
+import { FullMotion } from '../lib/perf';
 import {
+  posterLinks,
   useDeletePosterTemplate,
   usePosterTemplates,
   useSavePosterTemplate,
   useUploadMedia,
 } from '../lib/queries';
-import { confirmDialog, haptic } from '../lib/telegram';
+import { askBeforeClosing, confirmDialog, haptic } from '../lib/telegram';
 import { EffectSets } from './EffectSets';
+import { EraserSheet } from './EraserSheet';
 import { FontPicker } from './FontPicker';
 import { IconChevronDown, IconPlus, IconX } from './icons';
 import { LayeredPoster } from './LayeredPoster';
 import { LookTop } from './LookTop';
 import { Group, Pill } from './LookControls';
 import { MotionPicker } from './MotionPicker';
+import { PosterGestures } from './PosterGestures';
 import { Knob, PALETTE } from './MotionTune';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
@@ -242,35 +255,92 @@ const STARTER: { background: PosterBackground; layers: PosterLayer[] } = {
   ],
 };
 
-function PosterEditor({
-  tpl,
+/** A poster's design: background, layers (front last) and frame. */
+export interface PosterDoc {
+  background: PosterBackground;
+  layers: PosterLayer[];
+  frame: PosterFrame | null;
+}
+
+/** A new design: a red background with the title and the date. */
+export const starterDoc = (): PosterDoc => ({ ...STARTER, frame: null });
+
+/**
+ * A design kept on the phone gets fresh links to its pictures (they last a day or two):
+ * the server signs the same pictures again.
+ */
+export async function freshLinks(doc: PosterDoc): Promise<PosterDoc> {
+  const ids = [
+    doc.background.mediaId,
+    ...doc.layers.flatMap((l) => (l.type === 'image' ? [l.mediaId, l.source] : [])),
+  ].filter((x): x is number => !!x);
+  if (ids.length === 0) return doc;
+  const links = await posterLinks([...new Set(ids)]).catch(() => ({}) as Record<number, string>);
+  const link = (id: number | null | undefined, old?: string | null) =>
+    (id && links[id]) || old || null;
+  return {
+    ...doc,
+    background: { ...doc.background, url: link(doc.background.mediaId, doc.background.url) },
+    layers: doc.layers.map((l) =>
+      l.type === 'image'
+        ? { ...l, url: link(l.mediaId, l.url), sourceUrl: link(l.source, l.sourceUrl) }
+        : l,
+    ),
+  };
+}
+
+/** Keeps a design as a draft on this phone and brings it back (with fresh picture links). */
+export function usePosterDraft(key: string, initial: () => PosterDoc) {
+  const [kept] = useState(() => readDraft<PosterDoc>(key));
+  const [doc, setDoc] = useState<PosterDoc>(() => kept?.data ?? initial());
+  const [restored, setRestored] = useState(!!kept);
+  useEffect(() => {
+    if (!kept) return;
+    let stop = false;
+    void freshLinks(kept.data).then((d) => !stop && setDoc(d));
+    return () => {
+      stop = true;
+    };
+  }, [kept]);
+  useDraft(key, doc);
+  const forget = () => {
+    dropDraft(key);
+    setRestored(false);
+  };
+  return { doc, setDoc, restored, forget };
+}
+
+/**
+ * The layers of a design, to add, cut out, erase, order, hide and set up — the poster editor
+ * and the animated poster maker both use it. The preview with finger moving is the caller's
+ * (PosterGestures round LayeredPoster).
+ */
+export function PosterLayersEditor({
+  doc,
+  setDoc,
   g,
-  onClose,
+  selected,
+  setSelected,
 }: {
-  tpl: PosterTemplate | null;
+  doc: PosterDoc;
+  setDoc: Dispatch<SetStateAction<PosterDoc>>;
   g: GroupSummary;
-  onClose: () => void;
+  selected: string | null;
+  setSelected: (id: string | null) => void;
 }) {
   const t = useT();
   const toast = useToast();
-  const save = useSavePosterTemplate();
-  const remove = useDeletePosterTemplate();
   const upload = useUploadMedia(g.id, 'event');
-  const [name, setName] = useState(tpl?.name ?? t.posters.defaultName);
-  const [background, setBackground] = useState<PosterBackground>(
-    tpl?.background ?? STARTER.background,
-  );
-  const [layers, setLayers] = useState<PosterLayer[]>(tpl?.layers ?? STARTER.layers);
-  const [frame, setFrame] = useState<PosterFrame | null>(tpl?.frame ?? null);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [view, setView] = useState<View>('poster');
-  const [kind, setKind] = useState<Kind>('event');
   const picture = useRef<HTMLInputElement>(null);
   const [pictureFor, setPictureFor] = useState<string | null>(null);
   // The next new photo also gets its people cut out onto a layer of their own.
   const [cutNew, setCutNew] = useState(false);
   const [cutting, setCutting] = useState<'loading' | 'working' | null>(null);
+  const [erasing, setErasing] = useState<Extract<PosterLayer, { type: 'image' }> | null>(null);
+  const { background, layers, frame } = doc;
 
+  const setLayers = (f: (all: PosterLayer[]) => PosterLayer[]) =>
+    setDoc((d) => ({ ...d, layers: f(d.layers) }));
   const patch = (id: string, p: Partial<PosterLayer>) =>
     setLayers((all) => all.map((l) => (l.id === id ? ({ ...l, ...p } as PosterLayer) : l)));
   const move = (id: string, by: number) =>
@@ -289,31 +359,43 @@ function PosterEditor({
   };
 
   /**
-   * The people of a picture layer cut out (background removed on the phone) onto a new
-   * layer right above it, placed the same: the photo stays below as the background, to
-   * keep, change, darken or hide; the people get effects and styles of their own.
+   * A picture layer split in two, both placed the same: the photo without the people (the
+   * hole filled from around it) stays where the photo was, and the people go on a new layer
+   * right above it — each with its own effects, styles and edges. Both remember the whole
+   * photo, so the eraser can bring parts of it back.
    */
   async function cutOut(from: Extract<PosterLayer, { type: 'image' }>, src: Blob | string) {
     try {
-      const cut = await removeBackground(src, setCutting);
+      const cut = await cutOutPeople(src, setCutting);
       if (!cut.found) {
         toast(t.posters.cutNone, 'error');
         return;
       }
-      const up = await upload.mutateAsync(cut.blob);
+      const [people, back] = await Promise.all([
+        upload.mutateAsync(cut.people),
+        upload.mutateAsync(cut.background),
+      ]);
+      const source = from.source ?? from.mediaId;
+      const sourceUrl = from.source ? from.sourceUrl : from.url;
       const layer: PosterLayer = {
         ...from,
         id: newId(),
-        mediaId: up.id,
-        url: up.url,
+        mediaId: people.id,
+        url: people.url,
         ratio: cut.ratio,
         cutout: true,
         effects: null,
         style: null,
         hidden: null,
+        source,
+        sourceUrl,
       };
       setLayers((all) => {
-        const next = [...all];
+        const next = all.map((l) =>
+          l.id === from.id
+            ? ({ ...l, mediaId: back.id, url: back.url, source, sourceUrl } as PosterLayer)
+            : l,
+        );
         next.splice(next.findIndex((l) => l.id === from.id) + 1, 0, layer);
         return next.slice(-MAX_POSTER_LAYERS);
       });
@@ -334,9 +416,18 @@ function PosterEditor({
       const up = await upload.mutateAsync(cut.blob);
       const shape = { ratio: cut.ratio, cutout: cut.transparent };
       if (pictureFor === 'background') {
-        setBackground((b) => ({ ...b, type: 'photo', mediaId: up.id, url: up.url }));
+        setDoc((d) => ({
+          ...d,
+          background: { ...d.background, type: 'photo', mediaId: up.id, url: up.url },
+        }));
       } else if (pictureFor) {
-        patch(pictureFor, { mediaId: up.id, url: up.url, ...shape } as Partial<PosterLayer>);
+        patch(pictureFor, {
+          mediaId: up.id,
+          url: up.url,
+          source: null,
+          sourceUrl: null,
+          ...shape,
+        } as Partial<PosterLayer>);
       } else {
         // A cut-out (letters, a logo) is placed like a sticker; a plain photo fills the
         // poster, so it lines up the same in the poster, the tile and the screen.
@@ -369,28 +460,15 @@ function PosterEditor({
     picture.current?.click();
   };
 
-  async function submit() {
-    try {
-      await save.mutateAsync({
-        id: tpl?.id,
-        name: name.trim() || t.posters.defaultName,
-        background,
-        layers,
-        frame,
-      });
-      haptic.success();
-      toast(t.common.saved);
-      onClose();
-    } catch {
-      toast(t.common.saveFailed, 'error');
-    }
-  }
-
   // Front first in the list, as in Photoshop.
   const ordered = [...layers].reverse();
   const label = (l: PosterLayer) =>
     l.type === 'image'
-      ? t.posters.picture
+      ? l.cutout && l.source
+        ? t.posters.peopleLayer
+        : l.source
+          ? t.posters.backgroundLayer
+          : t.posters.picture
       : l.type === 'text'
         ? l.source === 'custom'
           ? l.text || t.posters.sources.custom
@@ -400,7 +478,7 @@ function PosterEditor({
           : t.meetings.motions[l.kind];
 
   return (
-    <Sheet open onClose={onClose} title={tpl ? `🖼 ${tpl.name}` : `🖼 ${t.posters.new}`}>
+    <>
       <input
         ref={picture}
         type="file"
@@ -408,6 +486,213 @@ function PosterEditor({
         className="hidden"
         onChange={(e) => void pickPicture(e.target.files?.[0])}
       />
+      <div>
+        <div className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+          {t.posters.addLayer}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Pill on={false} onClick={() => choosePicture(null)} label={`🖼 ${t.posters.picture}`} />
+          <Pill
+            on={false}
+            onClick={() => choosePicture(null, true)}
+            label={`✂️ ${t.posters.pictureNoBg}`}
+          />
+          <Pill
+            on={false}
+            onClick={() =>
+              add({
+                type: 'text',
+                id: newId(),
+                source: 'custom',
+                text: t.posters.sampleWords,
+                x: 50,
+                y: 50,
+                size: 30,
+                rotate: 0,
+              })
+            }
+            label={`T ${t.posters.text}`}
+          />
+          <Pill
+            on={false}
+            onClick={() =>
+              add({
+                ...FILL_START,
+                id: newId(),
+                paint: 'color',
+                colors: ['#111111'],
+                opacity: 0.5,
+              })
+            }
+            label={`🎨 ${t.posters.colorLayer}`}
+          />
+          <Pill
+            on={false}
+            onClick={() =>
+              add({
+                ...FILL_START,
+                id: newId(),
+                paint: 'linear',
+                colors: ['#7c3aed', '#ec4899', '#f59e0b'],
+                move: 'flow',
+                opacity: 0.7,
+                blend: 'overlay',
+              })
+            }
+            label={`🌈 ${t.posters.gradientLayer}`}
+          />
+          <Pill
+            on={false}
+            onClick={() => add({ type: 'effect', id: newId(), kind: 'sparkle' })}
+            label={`✨ ${t.posters.effect}`}
+          />
+        </div>
+        <p className="mt-1.5 px-1 text-[12px] text-hint">{t.posters.pictureHint}</p>
+        <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.cutHint}</p>
+        {cutting && (
+          <p className="mt-2 rounded-xl bg-hairline px-3 py-2 text-[13px] font-semibold">
+            ✂️ {cutting === 'loading' ? t.posters.cutLoading : t.posters.cutWorking}
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="px-1 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+          {t.posters.layers}
+        </div>
+        {/* The frame is in front of everything. */}
+        <LayerRow
+          title={t.posters.frame}
+          icon="▢"
+          hidden={!frame}
+          open={selected === 'frame'}
+          onOpen={() => setSelected(selected === 'frame' ? null : 'frame')}
+        >
+          <FrameSettings value={frame} onChange={(f) => setDoc((d) => ({ ...d, frame: f }))} />
+        </LayerRow>
+        {ordered.map((l, i) => (
+          <LayerRow
+            key={l.id}
+            title={label(l)}
+            icon={
+              l.type === 'image' ? '🖼' : l.type === 'text' ? 'T' : l.type === 'fill' ? '🎨' : '✨'
+            }
+            thumb={l.type === 'image' ? l.url : null}
+            hidden={!!l.hidden}
+            open={selected === l.id}
+            onOpen={() => setSelected(selected === l.id ? null : l.id)}
+            onHide={() => patch(l.id, { hidden: !l.hidden })}
+            onUp={i > 0 ? () => move(l.id, 1) : undefined}
+            onDown={i < ordered.length - 1 ? () => move(l.id, -1) : undefined}
+            onDelete={() => {
+              setLayers((all) => all.filter((x) => x.id !== l.id));
+              setSelected(null);
+            }}
+          >
+            <LayerSettings
+              layer={l}
+              onChange={(p) => patch(l.id, p)}
+              onPicture={() => choosePicture(l.id)}
+              onCut={
+                l.type === 'image' && l.url && !cutting
+                  ? () => void cutOut(l, l.sourceUrl && !l.cutout ? l.sourceUrl : l.url!)
+                  : undefined
+              }
+              onErase={l.type === 'image' && l.url ? () => setErasing(l) : undefined}
+              cutting={cutting}
+            />
+          </LayerRow>
+        ))}
+        <LayerRow
+          title={t.posters.background}
+          icon="▦"
+          thumb={background.type === 'photo' ? background.url : null}
+          hidden={false}
+          open={selected === 'background'}
+          onOpen={() => setSelected(selected === 'background' ? null : 'background')}
+        >
+          <BackgroundSettings
+            value={background}
+            onChange={(b) => setDoc((d) => ({ ...d, background: b }))}
+            onPhoto={() => choosePicture('background')}
+          />
+        </LayerRow>
+      </div>
+      {erasing?.url && (
+        <EraserSheet
+          url={erasing.url}
+          sourceUrl={erasing.sourceUrl}
+          onClose={() => setErasing(null)}
+          onDone={async (blob) => {
+            try {
+              const up = await upload.mutateAsync(blob);
+              // Rubbed-out parts make it see-through: effects then follow its outline.
+              patch(erasing.id, { mediaId: up.id, url: up.url, cutout: true });
+            } catch {
+              toast(t.treasury.uploadFailed, 'error');
+              throw new Error('upload');
+            }
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function PosterEditor({
+  tpl,
+  g,
+  onClose,
+}: {
+  tpl: PosterTemplate | null;
+  g: GroupSummary;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const save = useSavePosterTemplate();
+  const remove = useDeletePosterTemplate();
+  const draftKey = `poster.${tpl?.id ?? 'new'}`;
+  const { doc, setDoc, restored, forget } = usePosterDraft(draftKey, () =>
+    tpl ? { background: tpl.background, layers: tpl.layers, frame: tpl.frame } : starterDoc(),
+  );
+  const [name, setName] = useState(
+    () => readDraft<string>(`${draftKey}.name`)?.data ?? tpl?.name ?? t.posters.defaultName,
+  );
+  useDraft(`${draftKey}.name`, name);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [view, setView] = useState<View>('poster');
+  const [kind, setKind] = useState<Kind>('event');
+  // Closing Telegram by mistake asks first (the draft is kept anyway).
+  useEffect(() => askBeforeClosing(), []);
+
+  const patch = (id: string, p: Partial<PosterLayer>) =>
+    setDoc((d) => ({
+      ...d,
+      layers: d.layers.map((l) => (l.id === id ? ({ ...l, ...p } as PosterLayer) : l)),
+    }));
+
+  async function submit() {
+    try {
+      await save.mutateAsync({
+        id: tpl?.id,
+        name: name.trim() || t.posters.defaultName,
+        background: doc.background,
+        layers: doc.layers,
+        frame: doc.frame,
+      });
+      forget();
+      dropDraft(`${draftKey}.name`);
+      haptic.success();
+      toast(t.common.saved);
+      onClose();
+    } catch {
+      toast(t.common.saveFailed, 'error');
+    }
+  }
+
+  return (
+    <Sheet open onClose={onClose} title={tpl ? `🖼 ${tpl.name}` : `🖼 ${t.posters.new}`}>
       <div className="flex flex-col gap-4 px-4 pb-4">
         {/* The poster in the chosen shape, pinned while the settings scroll. */}
         <div className="sticky top-0 z-20 -mx-4 rounded-b-[22px] bg-[var(--color-section)] px-4 pb-3 pt-1 shadow-card">
@@ -444,11 +729,45 @@ function PosterEditor({
               </button>
             ))}
           </div>
-          <div className="flex h-[262px] items-center justify-center">
-            <Mockup view={view} kind={kind} tpl={{ background, layers, frame }} g={g} />
-          </div>
-          <p className="mt-1.5 text-center text-[11px] text-hint">{t.posters.mockHint}</p>
+          <PosterGestures
+            layers={doc.layers}
+            selected={selected}
+            onSelect={setSelected}
+            onPatch={patch}
+            outline
+          >
+            {/* What is being designed always moves, whatever the phone's graphics setting. */}
+            <FullMotion.Provider value>
+              <div className="flex h-[262px] items-center justify-center">
+                <Mockup view={view} kind={kind} tpl={doc} g={g} />
+              </div>
+            </FullMotion.Provider>
+          </PosterGestures>
+          <p className="mt-1.5 text-center text-[11px] text-hint">{t.posters.dragHint}</p>
         </div>
+
+        {restored && (
+          <div className="flex items-center gap-2 rounded-xl bg-hairline px-3 py-2 text-[13px]">
+            <span className="flex-1">💾 {t.posters.draftRestored}</span>
+            <button
+              type="button"
+              className="font-semibold text-link"
+              onClick={async () => {
+                if (!(await confirmDialog(t.posters.draftDiscardConfirm))) return;
+                forget();
+                dropDraft(`${draftKey}.name`);
+                setDoc(
+                  tpl
+                    ? { background: tpl.background, layers: tpl.layers, frame: tpl.frame }
+                    : starterDoc(),
+                );
+                setName(tpl?.name ?? t.posters.defaultName);
+              }}
+            >
+              {t.posters.draftDiscard}
+            </button>
+          </div>
+        )}
 
         <input
           value={name}
@@ -458,137 +777,15 @@ function PosterEditor({
           className="rounded-xl bg-hairline px-3 py-2.5 text-[16px] outline-none placeholder:text-hint"
         />
 
-        <div>
-          <div className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-            {t.posters.addLayer}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Pill on={false} onClick={() => choosePicture(null)} label={`🖼 ${t.posters.picture}`} />
-            <Pill
-              on={false}
-              onClick={() => choosePicture(null, true)}
-              label={`✂️ ${t.posters.pictureNoBg}`}
-            />
-            <Pill
-              on={false}
-              onClick={() =>
-                add({
-                  type: 'text',
-                  id: newId(),
-                  source: 'custom',
-                  text: t.posters.sampleWords,
-                  x: 50,
-                  y: 50,
-                  size: 30,
-                  rotate: 0,
-                })
-              }
-              label={`T ${t.posters.text}`}
-            />
-            <Pill
-              on={false}
-              onClick={() =>
-                add({
-                  ...FILL_START,
-                  id: newId(),
-                  paint: 'color',
-                  colors: ['#111111'],
-                  opacity: 0.5,
-                })
-              }
-              label={`🎨 ${t.posters.colorLayer}`}
-            />
-            <Pill
-              on={false}
-              onClick={() =>
-                add({
-                  ...FILL_START,
-                  id: newId(),
-                  paint: 'linear',
-                  colors: ['#7c3aed', '#ec4899', '#f59e0b'],
-                  move: 'flow',
-                  opacity: 0.7,
-                  blend: 'overlay',
-                })
-              }
-              label={`🌈 ${t.posters.gradientLayer}`}
-            />
-            <Pill
-              on={false}
-              onClick={() => add({ type: 'effect', id: newId(), kind: 'sparkle' })}
-              label={`✨ ${t.posters.effect}`}
-            />
-          </div>
-          <p className="mt-1.5 px-1 text-[12px] text-hint">{t.posters.pictureHint}</p>
-          <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.cutHint}</p>
-          {cutting && (
-            <p className="mt-2 rounded-xl bg-hairline px-3 py-2 text-[13px] font-semibold">
-              ✂️ {cutting === 'loading' ? t.posters.cutLoading : t.posters.cutWorking}
-            </p>
-          )}
-        </div>
+        <PosterLayersEditor
+          doc={doc}
+          setDoc={setDoc}
+          g={g}
+          selected={selected}
+          setSelected={setSelected}
+        />
 
-        <div className="flex flex-col gap-2">
-          <div className="px-1 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-            {t.posters.layers}
-          </div>
-          {/* The frame is in front of everything. */}
-          <LayerRow
-            title={t.posters.frame}
-            icon="▢"
-            hidden={!frame}
-            open={selected === 'frame'}
-            onOpen={() => setSelected(selected === 'frame' ? null : 'frame')}
-          >
-            <FrameSettings value={frame} onChange={setFrame} />
-          </LayerRow>
-          {ordered.map((l, i) => (
-            <LayerRow
-              key={l.id}
-              title={label(l)}
-              icon={
-                l.type === 'image' ? '🖼' : l.type === 'text' ? 'T' : l.type === 'fill' ? '🎨' : '✨'
-              }
-              thumb={l.type === 'image' ? l.url : null}
-              hidden={!!l.hidden}
-              open={selected === l.id}
-              onOpen={() => setSelected(selected === l.id ? null : l.id)}
-              onHide={() => patch(l.id, { hidden: !l.hidden })}
-              onUp={i > 0 ? () => move(l.id, 1) : undefined}
-              onDown={i < ordered.length - 1 ? () => move(l.id, -1) : undefined}
-              onDelete={() => {
-                setLayers((all) => all.filter((x) => x.id !== l.id));
-                setSelected(null);
-              }}
-            >
-              <LayerSettings
-                layer={l}
-                onChange={(p) => patch(l.id, p)}
-                onPicture={() => choosePicture(l.id)}
-                onCut={
-                  l.type === 'image' && l.url && !cutting ? () => void cutOut(l, l.url!) : undefined
-                }
-                cutting={cutting}
-              />
-            </LayerRow>
-          ))}
-          <LayerRow
-            title={t.posters.background}
-            icon="▦"
-            thumb={background.type === 'photo' ? background.url : null}
-            hidden={false}
-            open={selected === 'background'}
-            onOpen={() => setSelected(selected === 'background' ? null : 'background')}
-          >
-            <BackgroundSettings
-              value={background}
-              onChange={setBackground}
-              onPhoto={() => choosePicture('background')}
-            />
-          </LayerRow>
-        </div>
-
-        <Button disabled={save.isPending || upload.isPending} onClick={() => void submit()}>
+        <Button disabled={save.isPending} onClick={() => void submit()}>
           {save.isPending ? t.common.saving : t.common.save}
         </Button>
         {tpl?.mine !== false && tpl && (
@@ -598,6 +795,7 @@ function PosterEditor({
             onClick={async () => {
               if (!(await confirmDialog(t.posters.deleteConfirm))) return;
               await remove.mutateAsync(tpl.id).catch(() => toast(t.common.actionFailed, 'error'));
+              forget();
               onClose();
             }}
           >
@@ -809,6 +1007,38 @@ function PlaceAndLook({
               show={(v) => `${v}°`}
               onChange={(rotate) => onChange({ rotate })}
             />
+          </div>
+        </Group>
+      )}
+      {layer.type === 'effect' && (
+        <Group title={t.posters.position}>
+          <div className="flex flex-col gap-3">
+            {(
+              [
+                ['x', t.posters.x, 50, -20, 120],
+                ['y', t.posters.y, 50, -20, 120],
+                ['w', t.posters.width, 100, 5, 200],
+                ['h', t.posters.height, 100, 5, 200],
+              ] as const
+            ).map(([k, label, base, min, max]) => (
+              <Knob
+                key={k}
+                label={label}
+                value={layer[k] ?? base}
+                min={min}
+                max={max}
+                step={1}
+                show={pct}
+                onChange={(v) => onChange({ [k]: v })}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={() => onChange({ x: null, y: null, w: null, h: null })}
+              className="self-start text-[13px] font-semibold text-link"
+            >
+              ↺ {t.posters.wholePoster}
+            </button>
           </div>
         </Group>
       )}
@@ -1195,6 +1425,7 @@ function LayerSettings({
   onChange,
   onPicture,
   onCut,
+  onErase,
   cutting,
 }: {
   layer: PosterLayer;
@@ -1202,6 +1433,8 @@ function LayerSettings({
   onPicture: () => void;
   /** Cut the people out onto a new layer above (pictures). */
   onCut?: () => void;
+  /** Open the eraser (pictures). */
+  onErase?: () => void;
   cutting: 'loading' | 'working' | null;
 }) {
   const t = useT();
@@ -1251,6 +1484,7 @@ function LayerSettings({
         onChange={onChange}
         onPicture={onPicture}
         onCut={onCut}
+        onErase={onErase}
         cutting={cutting}
       />
     );
@@ -1262,12 +1496,14 @@ function ImageSettings({
   onChange,
   onPicture,
   onCut,
+  onErase,
   cutting,
 }: {
   layer: Extract<PosterLayer, { type: 'image' }>;
   onChange: (p: Partial<PosterLayer>) => void;
   onPicture: () => void;
   onCut?: () => void;
+  onErase?: () => void;
   cutting: 'loading' | 'working' | null;
 }) {
   const t = useT();
@@ -1287,6 +1523,12 @@ function ImageSettings({
             : t.posters.cutPeople}
         </Button>
         <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.cutHint}</p>
+      </div>
+      <div>
+        <Button variant="secondary" disabled={!onErase} onClick={onErase}>
+          🧽 {t.posters.eraser.open}
+        </Button>
+        <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.eraser.openHint}</p>
       </div>
       <div>
         <Toggle

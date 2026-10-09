@@ -112,6 +112,13 @@ export const useQuality = () =>
  */
 export const FullMotion = createContext(false);
 
+/**
+ * Whether these animation layers are a design preview or a copy to record (FullMotion):
+ * they always run, outside the limit on how many run at once — what is being designed
+ * must be seen moving (a moving gradient stood still in the poster editor).
+ */
+export const useUnlimited = () => useContext(FullMotion);
+
 /** The quality the animation layers use here: full inside a recorded copy. */
 export function useEffectQuality(): Quality {
   const forced = useContext(FullMotion);

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { MeetingMotion, MotionIcon, MotionTune } from '@church/shared';
 import { useEnv } from '../lib/env';
 import { getMotion } from '../lib/motion';
-import { getQuality, useEffectQuality, watchOffscreen } from '../lib/perf';
+import { getQuality, useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
 import { PARTICLES, SEASON_ITEMS, particleSpots, type Particle } from './particleData';
 
 /**
@@ -710,6 +710,7 @@ export function ParticleCanvas({
   const canvas = useRef<HTMLCanvasElement>(null);
   const engine = useRef<Engine | null>(null);
   const quality = useEffectQuality();
+  const unlimited = useUnlimited();
   const { env } = useEnv();
   const iconUrl = icon?.url ?? (icon?.emoji ? null : (env?.logoUrl ?? null));
   const iconEmoji = icon?.emoji ?? '✨';
@@ -717,8 +718,11 @@ export function ParticleCanvas({
 
   // Off screen it stands still, and it counts against the layers allowed to run at once.
   useEffect(
-    () => (clip.current ? watchOffscreen(clip.current, !preview || quality !== 'full') : undefined),
-    [quality, preview],
+    () =>
+      clip.current
+        ? watchOffscreen(clip.current, !unlimited && (!preview || quality !== 'full'))
+        : undefined,
+    [quality, preview, unlimited],
   );
 
   useEffect(() => {

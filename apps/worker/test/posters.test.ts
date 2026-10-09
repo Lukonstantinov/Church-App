@@ -219,3 +219,48 @@ describe('model relay', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('poster pictures', () => {
+  const PNG = Uint8Array.from(
+    atob(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    ),
+    (c) => c.charCodeAt(0),
+  );
+
+  it('keeps the whole photo a cut-out came from and gives drafts fresh links', async () => {
+    const g = await createEnv('Вырезы');
+    const upload = async () => {
+      const res = await api(`/api/groups/${g.id}/media?kind=event`, {
+        method: 'POST',
+        user: ADMIN,
+        body: PNG,
+      });
+      return ((await res.json()) as { id: number }).id;
+    };
+    const photo = await upload();
+    const people = await upload();
+    const saved = await apiJson<{ layers: { sourceUrl?: string | null; source?: number }[] }>(
+      '/api/poster-templates',
+      {
+        method: 'POST',
+        user: ADMIN,
+        json: {
+          name: 'Вырез',
+          background: { type: 'color', colors: ['#000000'] },
+          layers: [
+            { type: 'image', id: 'p', mediaId: people, source: photo, cutout: true, fit: 'cover' },
+          ],
+        },
+      },
+    );
+    expect(saved.layers[0]!.source).toBe(photo);
+    expect(saved.layers[0]!.sourceUrl).toMatch(/^\/media\/m\/\d+\?e=/);
+    const links = await apiJson<Record<string, string>>('/api/poster-templates/links', {
+      method: 'POST',
+      user: ADMIN,
+      json: { ids: [photo, people, 999999] },
+    });
+    expect(Object.keys(links).sort()).toEqual([String(photo), String(people)].sort());
+  });
+});

@@ -4251,3 +4251,10 @@ html[data-sheet] #root *::after {
   font-size: 28px;
   background: radial-gradient(circle, rgb(255 255 255 / 0.25), transparent 70%);
 }
+
+/* A poster keeps every layer inside its own rounded edge (iPhones let moving layers spill
+   over rounded corners without a mask). */
+.layered-poster {
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(white, black);
+}

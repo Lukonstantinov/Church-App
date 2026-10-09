@@ -86,6 +86,12 @@ export const posterLayerSchema = z.discriminatedUnion('type', [
     mediaId: z.number().int().positive(),
     /** Filled by the server when reading (a signed link). */
     url: z.string().max(600).nullish(),
+    /**
+     * The whole photo a cut-out (or a background with the people removed) was made from:
+     * the eraser's "bring back" brush paints it back in. With its signed link on reading.
+     */
+    source: z.number().int().positive().nullish(),
+    sourceUrl: z.string().max(600).nullish(),
     style: layerStyleSchema.nullish(),
     /**
      * "cover" fills the whole box like a background photo, so it lines up the same in the
@@ -143,6 +149,11 @@ export const posterLayerSchema = z.discriminatedUnion('type', [
     tune: motionTuneSchema.nullish(),
     /** Fades out towards the poster's edges instead of being cut off (0 … 1). */
     fade: z.number().min(0).max(1).nullish(),
+    /** Its box when moved or resized (centre and size in % of the poster); none = all of it. */
+    x: z.number().min(-50).max(150).nullish(),
+    y: z.number().min(-50).max(150).nullish(),
+    w: z.number().min(5).max(300).nullish(),
+    h: z.number().min(5).max(300).nullish(),
   }),
 ]);
 export type PosterLayer = z.output<typeof posterLayerSchema>;

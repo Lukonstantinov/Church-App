@@ -34,7 +34,11 @@ export async function readPosterTemplate(
     if (!l.success) continue;
     layers.push(
       l.data.type === 'image'
-        ? { ...l.data, url: await signedMediaUrl(secret, l.data.mediaId) }
+        ? {
+            ...l.data,
+            url: await signedMediaUrl(secret, l.data.mediaId),
+            sourceUrl: l.data.source ? await signedMediaUrl(secret, l.data.source) : null,
+          }
         : l.data,
     );
   }

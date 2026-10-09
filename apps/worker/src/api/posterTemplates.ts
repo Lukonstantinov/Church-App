@@ -1,10 +1,12 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
+import { z } from 'zod';
 import { posterTemplateInputSchema, type PosterTemplateInput } from '@church/shared';
 import type { Env } from '../env';
 import type { AuthVariables } from '../auth/middleware';
 import { events, media, meetings, posterTemplates } from '../db/schema';
+import { signedMediaUrl } from '../lib/media';
 import { readPosterTemplate } from '../lib/posterTemplates';
 import { canDesign } from './announcements';
 import { idParam, parseBody } from './util';
@@ -22,7 +24,7 @@ export const posterTemplateRoutes = new Hono<App>();
 async function assertPictures(db: AuthVariables['db'], input: PosterTemplateInput) {
   const ids = [
     input.background.mediaId,
-    ...input.layers.map((l) => (l.type === 'image' ? l.mediaId : null)),
+    ...input.layers.flatMap((l) => (l.type === 'image' ? [l.mediaId, l.source] : [])),
   ].filter((x): x is number => !!x);
   if (ids.length === 0) return;
   const found = await db
@@ -39,11 +41,33 @@ function toColumns(input: ReturnType<typeof posterTemplateInputSchema.parse>) {
     name: input.name,
     background: JSON.stringify({ ...input.background, url: undefined }),
     layers: JSON.stringify(
-      input.layers.map((l) => (l.type === 'image' ? { ...l, url: undefined } : l)),
+      input.layers.map((l) =>
+        l.type === 'image' ? { ...l, url: undefined, sourceUrl: undefined } : l,
+      ),
     ),
     frame: input.frame ? JSON.stringify(input.frame) : null,
   };
 }
+
+/**
+ * POST /api/poster-templates/links {ids} — fresh links to poster pictures (signed links
+ * last a day or two): a design draft kept on the phone gets its pictures back. Event and
+ * poster pictures only, never receipts.
+ */
+posterTemplateRoutes.post('/links', async (c) => {
+  if (!(await canDesign(c))) throw new HTTPException(403, { message: 'forbidden' });
+  const input = await parseBody(c, z.object({ ids: z.array(z.number().int().positive()).max(60) }));
+  const rows = input.ids.length
+    ? await c
+        .get('db')
+        .select({ id: media.id })
+        .from(media)
+        .where(and(inArray(media.id, input.ids), eq(media.kind, 'event')))
+    : [];
+  const links: Record<number, string> = {};
+  for (const r of rows) links[r.id] = await signedMediaUrl(c.env.WEBHOOK_SECRET, r.id);
+  return c.json(links);
+});
 
 posterTemplateRoutes.get('/', async (c) => {
   const db = c.get('db');

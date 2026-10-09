@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { displayName, type PosterAudience } from '@church/shared';
 import type { EventDetail, EventSummary } from '@church/shared';
+import { readDraft, useDraft } from '../lib/drafts';
 import { FullMotion } from '../lib/perf';
 import { CoverPicture } from './CoverSlideshow';
 import { useT } from '../lib/i18n';
@@ -51,6 +52,7 @@ export function MotionExport({
   onRecording,
   share,
   extra,
+  draftKey,
 }: {
   /** The poster to record, drawn by the caller (no preview here). */
   node?: RefObject<HTMLElement | null>;
@@ -76,6 +78,8 @@ export function MotionExport({
   share?: { kind: 'event' | 'meeting'; id: number; groupId: number };
   /** More settings shown right under the pinned preview (the poster maker's picture, shape, effects). */
   extra?: ReactNode;
+  /** Keeps the words and the message on this phone under this name until changed again. */
+  draftKey?: string;
 }) {
   const t = useT();
   const toast = useToast();
@@ -83,14 +87,22 @@ export function MotionExport({
   const own = useRef<HTMLDivElement>(null);
   const node = outer ?? own;
   // The words on the poster: prepared from the event until the person changes them.
-  const [style, setStyle] = useState<PosterTextValue>(() =>
-    posterText('', preview?.modes?.[0] ?? 'custom'),
+  const [kept] = useState(() =>
+    draftKey
+      ? readDraft<{ style: PosterTextValue; ownWords: string | null; ownText: string | null }>(
+          draftKey,
+        )?.data
+      : undefined,
   );
-  const [ownWords, setOwnWords] = useState<string | null>(null);
+  const [style, setStyle] = useState<PosterTextValue>(
+    () => kept?.style ?? posterText('', preview?.modes?.[0] ?? 'custom'),
+  );
+  const [ownWords, setOwnWords] = useState<string | null>(kept?.ownWords ?? null);
   const words: PosterTextValue = { ...style, text: ownWords ?? preview?.preset ?? '' };
   // The text under the poster: prepared from the event/meeting, editable; follows the
   // prepared text until the person changes it.
-  const [ownText, setOwnText] = useState<string | null>(null);
+  const [ownText, setOwnText] = useState<string | null>(kept?.ownText ?? null);
+  useDraft(draftKey ?? '', { style, ownWords, ownText }, !draftKey);
   const text = ownText ?? caption ?? '';
   const [to, setTo] = useState<PosterAudience>('me');
   const [chosen, setChosen] = useState<number[]>([]);

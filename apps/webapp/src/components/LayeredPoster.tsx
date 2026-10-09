@@ -10,7 +10,7 @@ import {
   type PosterTexts,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
-import { useEffectQuality, watchOffscreen } from '../lib/perf';
+import { useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
 import { freeCanvas } from '../lib/poster';
 import { LivingLayer, LivingLayers } from './ui';
 
@@ -136,6 +136,19 @@ function edgeMark(shape: LayerShape | null | undefined, soft: number | null | un
     : {};
 }
 
+/**
+ * Where an effect layer sits: the whole poster, or (moved or resized by finger in the
+ * editor) a box with its centre at x/y and its size in % of the poster.
+ */
+export function effectBox(layer: Extract<PosterLayer, { type: 'effect' }>): CSSProperties {
+  const w = layer.w ?? 100;
+  const h = layer.h ?? 100;
+  const x = layer.x ?? 50;
+  const y = layer.y ?? 50;
+  if (w === 100 && h === 100 && x === 50 && y === 50) return { inset: 0 };
+  return { left: `${x}%`, top: `${y}%`, width: `${w}%`, height: `${h}%`, translate: '-50% -50%' };
+}
+
 /** Photoshop-like layer styles as CSS: shadow, glow, stroke and bevel (for pictures). */
 function pictureFilter(s: LayerStyle | null | undefined): string | undefined {
   if (!s) return undefined;
@@ -202,26 +215,34 @@ function Layer({
     ...(layer.opacity != null && layer.opacity < 1 ? { opacity: layer.opacity } : {}),
     ...(layer.blend && layer.blend !== 'normal' ? { mixBlendMode: layer.blend } : {}),
   };
+  // Which layer a finger touches in the editor (PosterGestures).
+  const mark = { 'data-layer-id': layer.id };
   if (layer.type === 'effect')
     return (
       <span
-        className="absolute inset-0"
-        style={{ ...look, ...(layer.fade ? edgeLook('rect', layer.fade * 0.6, '') : {}) }}
+        className="absolute"
+        style={{
+          ...effectBox(layer),
+          ...look,
+          ...(layer.fade ? edgeLook('rect', layer.fade * 0.6, '') : {}),
+        }}
         {...(layer.fade ? edgeMark('rect', layer.fade * 0.6) : {})}
+        {...mark}
       >
         <SoftY shape="rect" soft={layer.fade ? layer.fade * 0.6 : 0}>
           <LivingLayer kind={layer.kind} tune={layer.tune} image={picture} />
         </SoftY>
       </span>
     );
-  if (layer.type === 'fill') return <Fill layer={layer} look={look} />;
+  if (layer.type === 'fill') return <Fill layer={layer} look={look} mark={mark} />;
   const at: CSSProperties = {
     left: `${layer.x}%`,
     top: `${layer.y}%`,
     translate: '-50% -50%',
     ...(layer.rotate ? { rotate: `${layer.rotate}deg` } : {}),
   };
-  if (layer.type === 'image') return layer.url ? <Picture layer={layer} look={look} /> : null;
+  if (layer.type === 'image')
+    return layer.url ? <Picture layer={layer} look={look} mark={mark} /> : null;
   const words = layer.source === 'custom' ? layer.text : (texts[layer.source] ?? layer.text);
   if (!words) return null;
   const type: CSSProperties = {
@@ -239,6 +260,7 @@ function Layer({
       <span
         className="absolute w-max max-w-[92%] whitespace-pre-line leading-[1.05]"
         style={{ ...at, ...look, ...type }}
+        {...mark}
       >
         {words}
       </span>
@@ -246,7 +268,7 @@ function Layer({
   // The words first, their effects after them: a recording draws them in that order too.
   if (layer.fxIn === 'around')
     return (
-      <span className="absolute w-max max-w-[92%]" style={{ ...at, ...look }}>
+      <span className="absolute w-max max-w-[92%]" style={{ ...at, ...look }} {...mark}>
         <span className="relative block whitespace-pre-line leading-[1.05]" style={type}>
           {words}
         </span>
@@ -266,6 +288,7 @@ function Layer({
       effects={effects}
       at={{ ...at, ...look }}
       type={type}
+      id={layer.id}
     />
   );
 }
@@ -298,12 +321,14 @@ function LetterEffects({
   effects,
   at,
   type,
+  id,
 }: {
   words: string;
   upper: boolean;
   effects: MotionLayer[];
   at: CSSProperties;
   type: CSSProperties;
+  id: string;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [lines, setLines] = useState<string[] | null>(null);
@@ -391,7 +416,7 @@ function LetterEffects({
   return (
     // No width limit here: the lines are already broken to fit, and a word too long for the
     // poster stays centred with its effects on it.
-    <span className="absolute w-max" style={at}>
+    <span className="absolute w-max" style={at} data-layer-id={id}>
       <span
         ref={ref}
         className={`relative block w-max leading-[1.05] ${lines ? 'whitespace-pre' : 'max-w-[92cqw] whitespace-pre-line'}`}
@@ -430,9 +455,11 @@ function paintOf(
 function Fill({
   layer,
   look,
+  mark,
 }: {
   layer: Extract<PosterLayer, { type: 'fill' }>;
   look: CSSProperties;
+  mark: Record<string, string>;
 }) {
   const corner = `${(Math.min(layer.w, layer.h) * 0.12).toFixed(2)}cqmin`;
   const effects = (layer.effects ?? []).filter((e) => e.kind !== 'off');
@@ -451,6 +478,7 @@ function Fill({
         ...edgeLook(layer.shape, layer.soft, corner),
       }}
       {...edgeMark(layer.shape, layer.soft)}
+      {...mark}
     >
       <SoftY shape={layer.shape} soft={layer.soft}>
         <span
@@ -470,7 +498,11 @@ const FILL_SECONDS = { flow: 8, spin: 14, pulse: 5 } as const;
 function FillMotion({ layer }: { layer: Extract<PosterLayer, { type: 'fill' }> }) {
   const clip = useRef<HTMLSpanElement>(null);
   const quality = useEffectQuality();
-  useEffect(() => (clip.current ? watchOffscreen(clip.current, true) : undefined), [quality]);
+  const unlimited = useUnlimited();
+  useEffect(
+    () => (clip.current ? watchOffscreen(clip.current, !unlimited) : undefined),
+    [quality, unlimited],
+  );
   if (quality === 'still' || !layer.move || layer.move === 'none') return null;
   const time = {
     animationDuration: `${(FILL_SECONDS[layer.move] / (layer.speed ?? 1)).toFixed(2)}s`,
@@ -550,9 +582,11 @@ function Frame({ frame }: { frame: PosterFrame }) {
 function Picture({
   layer,
   look,
+  mark,
 }: {
   layer: Extract<PosterLayer, { type: 'image' }>;
   look: CSSProperties;
+  mark: Record<string, string>;
 }) {
   const url = layer.url!;
   const effects = (layer.effects ?? []).filter((e) => e.kind !== 'off');
@@ -586,7 +620,11 @@ function Picture({
     const w = ratio ? `calc(max(100cqw, ${ratio} * 100cqh) * ${zoom})` : `${zoom * 100}cqw`;
     const h = ratio ? `calc(max(100cqh, 100cqw / ${ratio}) * ${zoom})` : `${zoom * 100}cqh`;
     return (
-      <span className="absolute inset-0" style={{ ...look, filter: pictureFilter(layer.style) }}>
+      <span
+        className="absolute inset-0"
+        style={{ ...look, filter: pictureFilter(layer.style) }}
+        {...mark}
+      >
         <span
           className="absolute inset-0 overflow-hidden"
           style={edgeLook(layer.shape, layer.soft, '6cqmin')}
@@ -624,6 +662,7 @@ function Picture({
         width: `${layer.size}cqmin`,
         filter: pictureFilter(layer.style),
       }}
+      {...mark}
     >
       {ratio ? (
         <span
