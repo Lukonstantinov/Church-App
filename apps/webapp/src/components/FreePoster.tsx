@@ -95,8 +95,9 @@ export function FreePoster({ g }: { g: GroupSummary }) {
     </div>
   );
 
-  return (
-    <div className="flex flex-col gap-3">
+  // The preview first, pinned while everything that changes it scrolls below.
+  const settings = (
+    <>
       <div className="flex flex-col gap-2">
         <div className="text-[12px] font-semibold text-hint">{tf.picture}</div>
         <div className="flex flex-wrap gap-1.5">
@@ -145,10 +146,14 @@ export function FreePoster({ g }: { g: GroupSummary }) {
         </div>
       </div>
       <CoverEffects state={effects} onChange={setEffects} open={fxOpen} onOpen={setFxOpen} />
-      <MotionExport
-        name={tf.fileName}
-        preview={{ preset: g.name, render, modes: ['custom', 'none'] }}
-      />
-    </div>
+    </>
+  );
+
+  return (
+    <MotionExport
+      name={tf.fileName}
+      preview={{ preset: g.name, render, modes: ['custom', 'none'] }}
+      extra={settings}
+    />
   );
 }

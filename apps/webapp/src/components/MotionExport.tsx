@@ -50,6 +50,7 @@ export function MotionExport({
   caption,
   onRecording,
   share,
+  extra,
 }: {
   /** The poster to record, drawn by the caller (no preview here). */
   node?: RefObject<HTMLElement | null>;
@@ -73,6 +74,8 @@ export function MotionExport({
    * chosen people, the whole ministry, the whole church (church admins) or those serving.
    */
   share?: { kind: 'event' | 'meeting'; id: number; groupId: number };
+  /** More settings shown right under the pinned preview (the poster maker's picture, shape, effects). */
+  extra?: ReactNode;
 }) {
   const t = useT();
   const toast = useToast();
@@ -179,6 +182,7 @@ export function MotionExport({
           <LivePreview node={own} width={preview.width}>
             {preview.render(words)}
           </LivePreview>
+          {!busy && extra}
           {!busy && (
             <PosterTextControls
               value={words}
@@ -307,35 +311,49 @@ export function LivePreview({
   width?: number;
 }) {
   const box = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [size, setSize] = useState({ w: 0, h: 0, max: 0 });
   useEffect(() => {
     const outerEl = box.current;
     const inner = node.current;
     if (!outerEl || !inner) return;
-    const measure = () => setSize({ w: outerEl.clientWidth, h: inner.offsetHeight });
+    const measure = () =>
+      setSize({
+        w: outerEl.clientWidth,
+        h: inner.offsetHeight,
+        // At most about a third of the screen: the settings below stay in reach.
+        max: Math.max(180, window.innerHeight * 0.34),
+      });
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(outerEl);
     ro.observe(inner);
-    return () => ro.disconnect();
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, [node]);
-  const k = size.w ? Math.min(1, size.w / width) : 1;
+  const k = size.w ? Math.min(1, size.w / width, size.h ? size.max / size.h : 1) : 1;
   return (
-    <div
-      ref={box}
-      className="w-full overflow-hidden rounded-xl bg-black"
-      style={{ height: size.h ? size.h * k : undefined }}
-    >
-      <div style={{ width, transform: `scale(${k})`, transformOrigin: 'top left' }}>
-        <FullMotion.Provider value>
-          <div
-            ref={node}
-            className="relative overflow-hidden bg-black text-white"
-            style={{ width }}
-          >
-            {children}
+    // Pinned at the top while the settings under it scroll, so every change is seen.
+    <div className="sticky top-0 z-20 -mx-3 bg-[var(--color-section)] px-3 pb-2 pt-1 shadow-card">
+      <div ref={box} className="flex w-full justify-center">
+        <div
+          className="overflow-hidden rounded-xl bg-black"
+          style={{ width: width * k, height: size.h ? size.h * k : undefined }}
+        >
+          <div style={{ width, transform: `scale(${k})`, transformOrigin: 'top left' }}>
+            <FullMotion.Provider value>
+              <div
+                ref={node}
+                className="relative overflow-hidden bg-black text-white"
+                style={{ width }}
+              >
+                {children}
+              </div>
+            </FullMotion.Provider>
           </div>
-        </FullMotion.Provider>
+        </div>
       </div>
     </div>
   );

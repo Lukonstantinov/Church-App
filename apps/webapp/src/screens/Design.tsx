@@ -903,9 +903,12 @@ function MinistrySpeakerLook({ g }: { g: GroupSummary }) {
   const [draft, setDraft] = useState<SpeakerLook | null | undefined>(undefined);
   const value = draft === undefined ? (group.data?.speakerLook ?? null) : draft;
   return (
-    <Section>
+    <Section sticky>
       <div className="flex flex-col gap-4 p-4">
-        <SpeakerLookPreview look={value} g={g} />
+        {/* Pinned while the settings under it scroll, so every change is seen. */}
+        <div className="sticky top-0 z-20 -mx-4 -mt-4 bg-[var(--color-section)] px-4 pb-3 pt-4 shadow-card">
+          <SpeakerLookPreview look={value} g={g} />
+        </div>
         <SpeakerLookControls
           value={value}
           onChange={(v) => {
