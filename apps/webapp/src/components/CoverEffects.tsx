@@ -7,6 +7,7 @@ import {
 } from '@church/shared';
 import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
+import { EffectSets } from './EffectSets';
 import { IconChevronDown } from './icons';
 import { MotionPicker } from './MotionPicker';
 import { MotionTuneControls, TunePanel } from './MotionTune';
@@ -94,7 +95,7 @@ export function CoverEffects({
     const on = state.effects.includes(m);
     onChange({
       ...state,
-      // Adding a fifth drops the oldest; switching one off drops its copies too.
+      // Adding one past the limit drops the oldest; switching one off drops its copies too.
       effects: on
         ? state.effects.filter((x) => x !== m)
         : [...state.effects, m].slice(-(MAX_EFFECTS - state.copies.length)),
@@ -143,6 +144,19 @@ export function CoverEffects({
       </button>
       {open && (
         <div className="flex flex-col gap-3 border-t border-hairline p-3">
+          <EffectSets
+            current={effectLayers(state)}
+            onApply={(layers) => {
+              const [first, ...rest] = layers;
+              onChange(
+                initEffects({
+                  motion: first?.kind ?? null,
+                  motionTune: first?.tune ?? null,
+                  motionLayers: rest,
+                }),
+              );
+            }}
+          />
           <MotionPicker
             value={null}
             onChange={() => undefined}

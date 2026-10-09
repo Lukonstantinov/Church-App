@@ -22,6 +22,7 @@ import {
   useUploadMedia,
 } from '../lib/queries';
 import { confirmDialog, haptic } from '../lib/telegram';
+import { EffectSets } from './EffectSets';
 import { FontPicker } from './FontPicker';
 import { IconChevronDown, IconPlus, IconX } from './icons';
 import { LayeredPoster } from './LayeredPoster';
@@ -784,6 +785,9 @@ function PictureEffects({
   return (
     <Group title={t.posters.pictureEffects}>
       <p className="mb-2 px-1 text-[12px] text-hint">{t.posters.pictureEffectsHint}</p>
+      <div className="mb-3">
+        <EffectSets current={list} onApply={(effects) => onChange({ effects })} />
+      </div>
       <MotionPicker
         value={null}
         onChange={() => undefined}

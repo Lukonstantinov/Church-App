@@ -134,3 +134,42 @@ describe('moving poster to others', () => {
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
 });
+
+describe('effect templates', () => {
+  it('designers save, share and delete sets of effects; others may not change them', async () => {
+    const set = {
+      name: 'Дым и искры',
+      effects: [
+        { kind: 'smoke', tune: { speed: 1.5 } },
+        { kind: 'sparkle', tune: null },
+      ],
+    };
+    const made = await apiJson<{ id: number; mine: boolean }>('/api/effect-templates', {
+      method: 'POST',
+      user: ADMIN,
+      json: set,
+    });
+    expect(made.mine).toBe(true);
+    const list = await apiJson<{ name: string; effects: { kind: string }[] }[]>(
+      '/api/effect-templates',
+      { user: ADMIN },
+    );
+    expect(list.at(-1)).toMatchObject({ name: 'Дым и искры' });
+    expect(list.at(-1)!.effects.map((e) => e.kind)).toEqual(['smoke', 'sparkle']);
+    // More than eight at once is refused.
+    const many = await api('/api/effect-templates', {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'x', effects: Array.from({ length: 9 }, () => ({ kind: 'snow' })) },
+    });
+    expect(many.status).toBe(400);
+    // Someone without design rights sees none of it.
+    const g = await createEnv('Эффекты');
+    const m = fakeUser('Мила');
+    await join(m, g);
+    expect((await api('/api/effect-templates', { user: m })).status).toBe(403);
+    await apiJson(`/api/effect-templates/${made.id}`, { method: 'DELETE', user: ADMIN });
+    const after = await apiJson<{ id: number }[]>('/api/effect-templates', { user: ADMIN });
+    expect(after.some((x) => x.id === made.id)).toBe(false);
+  });
+});

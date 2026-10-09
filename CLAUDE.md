@@ -107,8 +107,9 @@ time-changed and cancelled notices with "Will you come?" answers. Roll call (als
 past meeting), expenses against a budget, calendar with notes (last 12 months + all coming;
 past meetings are never auto-removed, only `DELETE /api/meetings/:id` after two confirmations). Meeting screen has a living animated hero.
 
-**Events** — cover photo or designed cover with up to 4 combined effects (`events.motion`, `motion_tune`,
-`motion_layers`; `components/CoverEffects.tsx`, folds away; the TV glitch tears the cover photo itself), cover
+**Events** — cover photo or designed cover with up to 8 combined effects (`MAX_EFFECTS`; `events.motion`, `motion_tune`,
+`motion_layers`; `components/CoverEffects.tsx`, folds away; saved effect sets shared church-wide in every effects
+picker: `effect_templates`, `/api/effect-templates`, `EffectSets.tsx`; the TV glitch tears the cover photo itself), cover
 slideshow (`cover_slides`: up to 9 more photos in turn, each settling from a slight zoom; `CoverSlideshow.tsx`), speakers, countdown, burning outline,
 RSVP, duties (with bot notices), burning outline colour any / rainbow / two-colour gradient (`design.burnColor`), cost and payments, gallery, programme, in-app chat or a
 bot-managed Telegram chat, pin to the main page, picture/PDF export.

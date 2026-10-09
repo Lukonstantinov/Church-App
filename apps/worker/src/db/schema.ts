@@ -457,6 +457,16 @@ export const posterTemplates = sqliteTable('poster_templates', {
   createdAt: createdAt(),
 });
 
+/** Saved sets of effects (Design → effect templates), shared church-wide. */
+export const effectTemplates = sqliteTable('effect_templates', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  /** JSON: [{ kind, tune }] in the order drawn. */
+  effects: text('effects').notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: createdAt(),
+});
+
 /** Errors the app hit on people's phones (a screen that crashed, an unhandled error), for the developer. */
 export const clientErrors = sqliteTable('client_errors', {
   id: integer('id').primaryKey({ autoIncrement: true }),

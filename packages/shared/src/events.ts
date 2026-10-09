@@ -44,6 +44,27 @@ export const motionLayersSchema = z
   .max(MAX_EFFECTS - 1);
 export type MotionLayer = { kind: MeetingMotion; tune?: MotionTune | null };
 
+/**
+ * A saved set of effects (Design → effect templates): a name and up to eight effects with
+ * their settings, shared by everyone who designs, applied with one tap to a cover, a post,
+ * a free poster or a poster layer.
+ */
+export const effectTemplateInputSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  effects: z
+    .array(z.object({ kind: z.enum(MEETING_MOTIONS), tune: motionTuneSchema.nullish() }))
+    .min(1)
+    .max(MAX_EFFECTS),
+});
+export type EffectTemplateInput = z.infer<typeof effectTemplateInputSchema>;
+export interface EffectTemplate {
+  id: number;
+  name: string;
+  effects: MotionLayer[];
+  /** Made by this person (they may rename or delete it; admins may too). */
+  mine: boolean;
+}
+
 /** More cover photos shown in turn after the cover (up to 9), each for `seconds`. */
 export const coverSlidesSchema = z.object({
   mediaIds: z.array(z.number().int().positive()).max(9),

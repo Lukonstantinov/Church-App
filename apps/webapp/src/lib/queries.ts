@@ -58,6 +58,8 @@ import type {
   UpdateMembershipInput,
   UpdateUserInput,
   PosterTemplate,
+  EffectTemplate,
+  EffectTemplateInput,
   PosterTemplateInput,
 } from '@church/shared';
 import type {
@@ -959,6 +961,33 @@ export function useDeletePosterTemplate() {
   return useMutation({
     mutationFn: (id: number) => apiFetch(`/poster-templates/${id}`, send('DELETE')),
     onSuccess: () => void qc.invalidateQueries(),
+  });
+}
+
+/** Saved sets of effects (shared church-wide); quietly empty for those who may not use them. */
+export function useEffectTemplates(enabled = true) {
+  return useQuery({
+    queryKey: ['effectTemplates'],
+    queryFn: () => apiFetch<EffectTemplate[]>('/effect-templates'),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useSaveEffectTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: EffectTemplateInput) =>
+      apiFetch<EffectTemplate>('/effect-templates', send('POST', input)),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['effectTemplates'] }),
+  });
+}
+
+export function useDeleteEffectTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiFetch(`/effect-templates/${id}`, send('DELETE')),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['effectTemplates'] }),
   });
 }
 
