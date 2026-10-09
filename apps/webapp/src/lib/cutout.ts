@@ -432,3 +432,352 @@ export async function cutOutPeople(
   }
   throw new Error('too large');
 }
+
+/**
+ * A smooth guess of the background behind whatever stands out: colours weighted by how
+ * much each pixel is background, pulled down to a coarse grid (cells about 1/28 of the
+ * picture), gaps there filled from coarser grids, then spread back smoothly. Letters and
+ * shapes, however big, leave no trace in it.
+ */
+function smoothBackground(
+  rgb: Float32Array,
+  weight: Float32Array,
+  w: number,
+  h: number,
+): Float32Array {
+  type Level = { w: number; h: number; c: Float32Array; a: Float32Array };
+  let cur: Level = { w, h, c: new Float32Array(w * h * 3), a: new Float32Array(weight) };
+  for (let i = 0; i < w * h; i++)
+    for (let k = 0; k < 3; k++) cur.c[i * 3 + k] = rgb[i * 3 + k]! * weight[i]!;
+  const target = Math.max(w, h) / 28;
+  const levels: Level[] = [];
+  // Sums (not averages) down to the coarse grid, then on to 1 × 1 for the gaps.
+  while (cur.w > 1 || cur.h > 1) {
+    levels.push(cur);
+    const nw = Math.max(1, Math.ceil(cur.w / 2));
+    const nh = Math.max(1, Math.ceil(cur.h / 2));
+    const n: Level = {
+      w: nw,
+      h: nh,
+      c: new Float32Array(nw * nh * 3),
+      a: new Float32Array(nw * nh),
+    };
+    for (let y = 0; y < cur.h; y++)
+      for (let x = 0; x < cur.w; x++) {
+        const i = y * cur.w + x;
+        const j = (y >> 1) * nw + (x >> 1);
+        n.a[j] = n.a[j]! + cur.a[i]!;
+        for (let k = 0; k < 3; k++) n.c[j * 3 + k] = n.c[j * 3 + k]! + cur.c[i * 3 + k]!;
+      }
+    cur = n;
+  }
+  levels.push(cur);
+  const coarse = levels.findIndex((l) => Math.max(l.w, l.h) <= Math.max(w, h) / target);
+  const L = coarse < 0 ? levels.length - 1 : coarse;
+  // Averages from the top down to the coarse grid; an empty cell takes its parent's colour.
+  const avg = (l: Level, i: number, k: number) => l.c[i * 3 + k]! / l.a[i]!;
+  const mean: Float32Array[] = [];
+  for (let li = levels.length - 1; li >= L; li--) {
+    const l = levels[li]!;
+    const m = new Float32Array(l.w * l.h * 3);
+    const up = mean[0];
+    const upL = levels[li + 1];
+    for (let y = 0; y < l.h; y++)
+      for (let x = 0; x < l.w; x++) {
+        const i = y * l.w + x;
+        for (let k = 0; k < 3; k++) {
+          const own = l.a[i]! > 0.5 ? avg(l, i, k) : NaN;
+          const parent = up && upL ? up[((y >> 1) * upL.w + (x >> 1)) * 3 + k]! : own;
+          // Little known here: lean on the parent so the guess stays smooth.
+          const t = Math.min(1, l.a[i]! / 4);
+          m[i * 3 + k] = Number.isNaN(own)
+            ? parent
+            : own * t + (Number.isNaN(parent) ? own : parent) * (1 - t);
+        }
+      }
+    mean.unshift(m);
+  }
+  // Spread the coarse grid back over the picture smoothly (bilinear).
+  const g = levels[L]!;
+  const m = mean[0]!;
+  const out = new Float32Array(w * h * 3);
+  for (let y = 0; y < h; y++) {
+    const fy = Math.min(g.h - 1, Math.max(0, ((y + 0.5) * g.h) / h - 0.5));
+    const y0 = Math.floor(fy);
+    const y1 = Math.min(g.h - 1, y0 + 1);
+    const ty = fy - y0;
+    for (let x = 0; x < w; x++) {
+      const fx = Math.min(g.w - 1, Math.max(0, ((x + 0.5) * g.w) / w - 0.5));
+      const x0 = Math.floor(fx);
+      const x1 = Math.min(g.w - 1, x0 + 1);
+      const tx = fx - x0;
+      for (let k = 0; k < 3; k++)
+        out[(y * w + x) * 3 + k] =
+          (m[(y0 * g.w + x0) * 3 + k]! * (1 - tx) + m[(y0 * g.w + x1) * 3 + k]! * tx) * (1 - ty) +
+          (m[(y1 * g.w + x0) * 3 + k]! * (1 - tx) + m[(y1 * g.w + x1) * 3 + k]! * tx) * ty;
+    }
+  }
+  return out;
+}
+
+/** Solves a small square system (Gaussian elimination with pivoting); null if singular. */
+function solve(a: number[][], b: number[]): number[] | null {
+  const n = b.length;
+  const m = a.map((row, i) => [...row, b[i]!]);
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(m[r]![c]!) > Math.abs(m[p]![c]!)) p = r;
+    if (Math.abs(m[p]![c]!) < 1e-12) return null;
+    [m[c], m[p]] = [m[p]!, m[c]!];
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = m[r]![c]! / m[c]![c]!;
+      if (f) for (let k = c; k <= n; k++) m[r]![k] = m[r]![k]! - f * m[c]![k]!;
+    }
+  }
+  return m.map((row, i) => row[n]! / row[i]!);
+}
+
+/**
+ * One smooth curved surface per colour over the whole picture (powers of x up to 3 and of
+ * y up to 5: a sky fading into grass, a light band across), fitted to the pixels while
+ * ignoring ever more of those that don't fit (robust re-weighting): big letters, however
+ * much of the picture they cover, can't bend it. Returns how far each pixel is from it.
+ */
+function surfaceDistance(rgb: Float32Array, w: number, h: number): Float32Array {
+  const terms: [number, number][] = [];
+  for (let i = 0; i <= 3; i++) for (let j = 0; j <= 5; j++) terms.push([i, j]);
+  const step = Math.max(1, Math.floor(Math.sqrt((w * h) / 5000)));
+  const pts: { f: number[]; c: [number, number, number] }[] = [];
+  for (let y = 0; y < h; y += step)
+    for (let x = 0; x < w; x += step) {
+      const u = (x / (w - 1 || 1)) * 2 - 1;
+      const v = (y / (h - 1 || 1)) * 2 - 1;
+      const i = y * w + x;
+      pts.push({
+        f: terms.map(([a, b]) => u ** a * v ** b),
+        c: [rgb[i * 3]!, rgb[i * 3 + 1]!, rgb[i * 3 + 2]!],
+      });
+    }
+  const T = terms.length;
+  let wts = pts.map(() => 1);
+  let coef: number[][] = [];
+  for (const cut of [0.35, 0.22, 0.14, 0.1, 0.08]) {
+    const ata = Array.from({ length: T }, () => new Array<number>(T).fill(0));
+    const atb = [0, 1, 2].map(() => new Array<number>(T).fill(0));
+    pts.forEach((p, n) => {
+      const wt = wts[n]!;
+      if (wt <= 0) return;
+      for (let a = 0; a < T; a++) {
+        const fa = p.f[a]! * wt;
+        for (let b = a; b < T; b++) ata[a]![b] = ata[a]![b]! + fa * p.f[b]!;
+        for (let k = 0; k < 3; k++) atb[k]![a] = atb[k]![a]! + fa * p.c[k]!;
+      }
+    });
+    for (let a = 0; a < T; a++) {
+      ata[a]![a] = ata[a]![a]! + 1e-6;
+      for (let b = 0; b < a; b++) ata[a]![b] = ata[b]![a]!;
+    }
+    const next = [0, 1, 2].map((k) => solve(ata, atb[k]!));
+    if (next.some((x) => !x)) break;
+    coef = next as number[][];
+    // Tukey's weights: pixels far from the surface stop counting at all.
+    wts = pts.map((p) => {
+      let d = 0;
+      for (let k = 0; k < 3; k++) {
+        let s = 0;
+        for (let a = 0; a < T; a++) s += coef[k]![a]! * p.f[a]!;
+        d += (p.c[k]! - s) ** 2;
+      }
+      const r = Math.sqrt(d / 3) / cut;
+      return r < 1 ? (1 - r * r) ** 2 : 0;
+    });
+  }
+  const out = new Float32Array(w * h);
+  // No fit at all (a blank picture): everything counts as background.
+  if (coef.length === 0) return out;
+  const fx = [0, 0, 0, 0];
+  for (let y = 0; y < h; y++) {
+    const v = (y / (h - 1 || 1)) * 2 - 1;
+    for (let x = 0; x < w; x++) {
+      const u = (x / (w - 1 || 1)) * 2 - 1;
+      for (let a = 0; a <= 3; a++) fx[a] = u ** a;
+      const i = y * w + x;
+      let d = 0;
+      for (let k = 0; k < 3; k++) {
+        let s = 0;
+        let t = 0;
+        for (let a = 0; a <= 3; a++)
+          for (let b = 0, vb = 1; b <= 5; b++, vb *= v) s += coef[k]![t++]! * fx[a]! * vb;
+        d += (rgb[i * 3 + k]! - s) ** 2;
+      }
+      out[i] = Math.sqrt(d / 3);
+    }
+  }
+  return out;
+}
+
+/** Drops tiny bits (noise, JPEG specks) from a mask: parts under `min` pixels of a small copy. */
+function dropTiny(mask: Float32Array, w: number, h: number, min: number) {
+  const k = Math.min(1, 400 / Math.max(w, h));
+  const sw = Math.max(1, Math.round(w * k));
+  const sh = Math.max(1, Math.round(h * k));
+  const on = new Uint8Array(sw * sh);
+  for (let y = 0; y < sh; y++)
+    for (let x = 0; x < sw; x++)
+      on[y * sw + x] =
+        mask[Math.min(h - 1, Math.floor(y / k)) * w + Math.min(w - 1, Math.floor(x / k))]! > 0.4
+          ? 1
+          : 0;
+  const label = new Int32Array(sw * sh);
+  const sizes = [0];
+  const stack: number[] = [];
+  for (let i = 0; i < on.length; i++) {
+    if (!on[i] || label[i]) continue;
+    const id = sizes.length;
+    let n = 0;
+    stack.push(i);
+    label[i] = id;
+    while (stack.length) {
+      const p = stack.pop()!;
+      n++;
+      const px = p % sw;
+      const py = (p - px) / sw;
+      for (const q of [
+        px > 0 ? p - 1 : -1,
+        px < sw - 1 ? p + 1 : -1,
+        py > 0 ? p - sw : -1,
+        py < sh - 1 ? p + sw : -1,
+      ])
+        if (q >= 0 && on[q] && !label[q]) {
+          label[q] = id;
+          stack.push(q);
+        }
+    }
+    sizes.push(n);
+  }
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const l =
+        label[Math.min(sh - 1, Math.floor(y * k)) * sw + Math.min(sw - 1, Math.floor(x * k))]!;
+      if (l && sizes[l]! < min) mask[y * w + x] = 0;
+    }
+}
+
+/**
+ * Text, logos and drawings split from the background behind them (a gradient, a plain or
+ * blurred backdrop, a sky): the background is guessed smoothly, everything that clearly
+ * stands out from it becomes the front layer — its colours freed of the background showing
+ * through the soft edges — and the background is filled in where it was. Works on
+ * pictures whose background changes slowly; on a busy photo use the people split.
+ */
+export async function splitGraphics(
+  src: Blob | string,
+): Promise<{ front: Blob; background: Blob; ratio: number; found: boolean }> {
+  const img = await imageOf(src);
+  let side = 1400;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const scale = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * scale));
+    const h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(img, 0, 0, w, h);
+    const pixels = ctx.getImageData(0, 0, w, h);
+    const n = w * h;
+    const rgb = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++)
+      for (let k = 0; k < 3; k++) rgb[i * 3 + k] = pixels.data[i * 4 + k]! / 255;
+    // How far each pixel is from the background guess (0 … 1).
+    const dist = (bg: Float32Array) => {
+      const d = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const a = rgb[i * 3]! - bg[i * 3]!;
+        const b = rgb[i * 3 + 1]! - bg[i * 3 + 1]!;
+        const c = rgb[i * 3 + 2]! - bg[i * 3 + 2]!;
+        d[i] = Math.sqrt((a * a + b * b + c * c) / 3);
+      }
+      return d;
+    };
+    // First one smooth surface over the whole picture finds what surely is background;
+    // then a finer guess from those pixels only follows the background's own detail.
+    // A pixel the surface threw out never comes back in (big letters can't leak in).
+    const far = surfaceDistance(rgb, w, h);
+    const surely = new Float32Array(n);
+    for (let i = 0; i < n; i++)
+      surely[i] = far[i]! < 0.08 ? 1 : far[i]! < 0.14 ? (0.14 - far[i]!) / 0.06 : 0;
+    let weight = surely;
+    let bg = smoothBackground(rgb, weight, w, h);
+    for (let round = 0; round < 2; round++) {
+      const d = dist(bg);
+      weight = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const local = d[i]! < 0.06 ? 1 : d[i]! < 0.1 ? (0.1 - d[i]!) / 0.04 : 0;
+        weight[i] = Math.min(local, surely[i]! > 0 ? 1 : 0);
+      }
+      bg = smoothBackground(rgb, weight, w, h);
+    }
+    const d = dist(bg);
+    // How much the background itself varies (grain, JPEG noise): the typical difference of
+    // the pixels counted as background. What stands out clearly above that is the front.
+    const quiet: number[] = [];
+    for (let i = 0; i < n; i += 7) if (weight[i]! >= 1) quiet.push(d[i]!);
+    quiet.sort((a, b) => a - b);
+    const noise = quiet[Math.floor(quiet.length * 0.9)] ?? 0.02;
+    const lo = Math.max(0.06, noise * 2.2);
+    const span = 0.1;
+    const alpha = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = Math.min(1, Math.max(0, (d[i]! - lo) / span));
+      alpha[i] = x * x * (3 - 2 * x);
+    }
+    dropTiny(alpha, w, h, 6);
+    let kept = 0;
+    for (let i = 0; i < n; i++) if (alpha[i]! > 0.5) kept++;
+    const found = kept > n * 0.002 && kept < n * 0.92;
+
+    // The front: its own colours (the background taken out of the soft edges).
+    const front = new ImageData(w, h);
+    for (let i = 0; i < n; i++) {
+      const a = alpha[i]!;
+      for (let k = 0; k < 3; k++) {
+        const f = bg[i * 3 + k]! + (rgb[i * 3 + k]! - bg[i * 3 + k]!) / Math.max(a, 0.15);
+        front.data[i * 4 + k] = Math.round(Math.min(1, Math.max(0, f)) * 255);
+      }
+      front.data[i * 4 + 3] = Math.round(a * 255 * (pixels.data[i * 4 + 3]! / 255));
+    }
+    ctx.putImageData(front, 0, 0);
+    const frontBlob = await encode(canvas, true);
+
+    // The background with the front taken away: where the front was (and its soft fringe,
+    // a little wider) the smooth background guess shows, with a touch of grain.
+    const near = new Float32Array(n);
+    for (let i = 0; i < n; i++) near[i] = d[i]! > lo * 0.6 ? 1 : 0;
+    const grow = boxMean(near, w, h, Math.max(2, Math.round(Math.min(w, h) / 200)));
+    const back = new ImageData(new Uint8ClampedArray(pixels.data), w, h);
+    for (let i = 0; i < n; i++) {
+      const t = Math.min(1, Math.max(alpha[i]!, grow[i]! * 3));
+      if (t > 0) {
+        const grain = (Math.random() - 0.5) * 4;
+        for (let k = 0; k < 3; k++)
+          back.data[i * 4 + k] =
+            back.data[i * 4 + k]! * (1 - t) + (bg[i * 3 + k]! * 255 + grain) * t;
+      }
+      back.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(back, 0, 0);
+    const backBlob = await encode(canvas, false);
+    freeCanvas(canvas);
+    if (
+      frontBlob &&
+      backBlob &&
+      frontBlob.size <= MEDIA_MAX_BYTES &&
+      backBlob.size <= MEDIA_MAX_BYTES
+    )
+      return { front: frontBlob, background: backBlob, ratio: w / h, found };
+    side = Math.round(side * 0.75);
+  }
+  throw new Error('too large');
+}

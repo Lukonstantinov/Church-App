@@ -311,6 +311,45 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, max: number): st
 }
 
 /**
+ * Where each line of `el`'s text really is, in its own (unturned, unscaled) pixels: one box
+ * per line, or null when the page's lines don't match the expected count.
+ */
+function placedLines(el: HTMLElement, count: number) {
+  const node = el.firstChild;
+  if (!node || node.nodeType !== Node.TEXT_NODE) return null;
+  // Measured unturned: a turned layer's boxes would be its bounding boxes.
+  const holder = el.parentElement;
+  const turned = holder?.style.rotate ?? '';
+  if (holder) holder.style.rotate = '0deg';
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const outer = el.getBoundingClientRect();
+    const k = el.offsetWidth / (outer.width || 1);
+    const rects = [...range.getClientRects()].filter((r) => r.width > 0.5 && r.height > 0.5);
+    // One box per line: pieces at the same height belong together.
+    const rows: { left: number; right: number; top: number; bottom: number }[] = [];
+    for (const r of rects.sort((a, b) => a.top - b.top)) {
+      const row = rows.find((x) => Math.abs(x.top - r.top) < r.height * 0.5);
+      if (row) {
+        row.left = Math.min(row.left, r.left);
+        row.right = Math.max(row.right, r.right);
+        row.bottom = Math.max(row.bottom, r.bottom);
+      } else rows.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+    }
+    if (rows.length === 0 || rows.length > count) return null;
+    return rows.map((r) => ({
+      left: (r.left - outer.left) * k,
+      top: (r.top - outer.top) * k,
+      width: (r.right - r.left) * k,
+      height: (r.bottom - r.top) * k,
+    }));
+  } finally {
+    if (holder) holder.style.rotate = turned;
+  }
+}
+
+/**
  * Words with effects inside their letters only (smoke in the letters, sparkles on them):
  * the letters are drawn once as a picture and used as the effects' mask. The lines are
  * broken here (not by the page) so the words and the mask line up exactly.
@@ -394,15 +433,41 @@ function LetterEffects({
       const m = ctx.measureText('Hg');
       const ascent = m.fontBoundingBoxAscent || px * 0.8;
       const descent = m.fontBoundingBoxDescent || px * 0.2;
+      // Where the page really put each line (its own font metrics, kerning, spacing): the
+      // letters are drawn exactly there, so the effects stay inside the real letters — a
+      // guess from the font's numbers put them lower with some fonts (a ghost under the text).
+      const filled = lines.filter((l) => l.trim()).length;
+      const found = placedLines(el, lines.length);
+      // Blank lines have no box: the boxes belong to the lines with words, in order.
+      const placed = found && found.length === filled ? found : null;
+      let next = 0;
       const align = cs.textAlign;
       lines.forEach((line, i) => {
-        const lw = ctx.measureText(line).width;
-        const x =
-          align === 'left' || align === 'start' ? 0 : align === 'right' ? w - lw : (w - lw) / 2;
-        // The page puts each line's letters in the middle of its line height.
-        const y = i * lh + (lh - (ascent + descent)) / 2 + ascent;
-        if (outline) ctx.strokeText(line, x, y);
-        ctx.fillText(line, x, y);
+        if (!line.trim()) return;
+        const lw = ctx.measureText(line).width || 1;
+        const box = placed?.[next++];
+        ctx.save();
+        if (box) {
+          // The line box spans the font's ascent + descent; the baseline sits between them.
+          const y = box.top + (box.height * ascent) / (ascent + descent);
+          ctx.translate(box.left, y);
+          ctx.scale(box.width / lw, 1);
+        } else {
+          const x =
+            align === 'left' || align === 'start' ? 0 : align === 'right' ? w - lw : (w - lw) / 2;
+          // The page puts each line's letters in the middle of its line height.
+          ctx.translate(x, i * lh + (lh - (ascent + descent)) / 2 + ascent);
+        }
+        if (outline) ctx.strokeText(line, 0, 0);
+        ctx.fillText(line, 0, 0);
+        // The letters' own edge stays as a thin border round the effect: the mask is
+        // eaten away along the outline (half of this line width lands inside the letters).
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineWidth = Math.max(1, px * 0.05) + outline * 2;
+        ctx.strokeText(line, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.lineWidth = outline;
+        ctx.restore();
       });
       const url = c.toDataURL('image/png');
       freeCanvas(c);

@@ -870,7 +870,7 @@ export const lt: Messages = {
     cutNone: 'Nuotraukoje žmonių nerasta',
     cutFailed: 'Nepavyko pašalinti fono – bandykite dar kartą',
     peopleLayer: 'Žmonės (iškirpti)',
-    backgroundLayer: 'Fonas be žmonių',
+    backgroundLayer: 'Fonas (be iškirptos dalies)',
     dragHint:
       'Tempkite sluoksnį pirštu, dviem pirštais – dydis ir pasukimas. Paspauskite sluoksnį, kad jį pasirinktumėte.',
     draftRestored: 'Atkurtas neišsaugotas darbas',
@@ -892,6 +892,10 @@ export const lt: Messages = {
       soft: 'Teptuko švelnumas',
       done: 'Atlikta',
     },
+    graphicsLayer: 'Tekstas ir piešinys (iškirpti)',
+    splitGraphics: 'Atskirti: tekstas/piešinys ir fonas',
+    splitDone: 'Atlikta: tekstas ir piešinys – atskirame sluoksnyje, fonas po jais užpildytas',
+    splitNone: 'Nerasta teksto ar piešinio, kuris skirtųsi nuo fono',
     pictureEffects: 'Efektai ant paveikslėlio',
     pictureEffectsHint:
       'Piešiami tiesiai ant paveikslėlio (ant skaidraus — tik jo kontūro viduje). Paspauskite dar kartą, kad pašalintumėte.',

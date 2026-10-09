@@ -92,6 +92,8 @@ export const posterLayerSchema = z.discriminatedUnion('type', [
      */
     source: z.number().int().positive().nullish(),
     sourceUrl: z.string().max(600).nullish(),
+    /** What a split made of it: the people, the text and drawings, or what was under them. */
+    cut: z.enum(['people', 'graphics', 'under']).nullish(),
     style: layerStyleSchema.nullish(),
     /**
      * "cover" fills the whole box like a background photo, so it lines up the same in the

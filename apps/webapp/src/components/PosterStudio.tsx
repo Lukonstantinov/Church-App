@@ -27,7 +27,7 @@ import {
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
-import { cutOutPeople } from '../lib/cutout';
+import { cutOutPeople, splitGraphics } from '../lib/cutout';
 import { dropDraft, readDraft, useDraft } from '../lib/drafts';
 import { prepareCutout } from '../lib/image';
 import { FullMotion } from '../lib/perf';
@@ -359,20 +359,34 @@ export function PosterLayersEditor({
   };
 
   /**
-   * A picture layer split in two, both placed the same: the photo without the people (the
-   * hole filled from around it) stays where the photo was, and the people go on a new layer
-   * right above it — each with its own effects, styles and edges. Both remember the whole
-   * photo, so the eraser can bring parts of it back.
+   * A picture layer split in two, both placed the same: the picture without what was cut
+   * out (the hole filled from around it) stays where it was, and the people — or the text
+   * and drawings — go on a new layer right above it, each with its own effects, styles and
+   * edges. Both remember the whole picture, so the eraser can bring parts of it back.
+   * "auto" looks for people first and splits off text and drawings when there are none.
    */
-  async function cutOut(from: Extract<PosterLayer, { type: 'image' }>, src: Blob | string) {
+  async function cutOut(
+    from: Extract<PosterLayer, { type: 'image' }>,
+    src: Blob | string,
+    how: 'people' | 'graphics' | 'auto' = 'auto',
+  ) {
     try {
-      const cut = await cutOutPeople(src, setCutting);
+      let kind: 'people' | 'graphics' = how === 'graphics' ? 'graphics' : 'people';
+      let cut =
+        kind === 'people'
+          ? await cutOutPeople(src, setCutting).then((c) => ({ ...c, front: c.people }))
+          : (setCutting('working'), await splitGraphics(src));
+      if (!cut.found && how === 'auto') {
+        kind = 'graphics';
+        setCutting('working');
+        cut = await splitGraphics(src);
+      }
       if (!cut.found) {
-        toast(t.posters.cutNone, 'error');
+        toast(kind === 'people' ? t.posters.cutNone : t.posters.splitNone, 'error');
         return;
       }
       const [people, back] = await Promise.all([
-        upload.mutateAsync(cut.people),
+        upload.mutateAsync(cut.front),
         upload.mutateAsync(cut.background),
       ]);
       const source = from.source ?? from.mediaId;
@@ -389,11 +403,19 @@ export function PosterLayersEditor({
         hidden: null,
         source,
         sourceUrl,
+        cut: kind,
       };
       setLayers((all) => {
         const next = all.map((l) =>
           l.id === from.id
-            ? ({ ...l, mediaId: back.id, url: back.url, source, sourceUrl } as PosterLayer)
+            ? ({
+                ...l,
+                mediaId: back.id,
+                url: back.url,
+                source,
+                sourceUrl,
+                cut: 'under',
+              } as PosterLayer)
             : l,
         );
         next.splice(next.findIndex((l) => l.id === from.id) + 1, 0, layer);
@@ -401,7 +423,7 @@ export function PosterLayersEditor({
       });
       setSelected(layer.id);
       haptic.success();
-      toast(t.posters.cutDone);
+      toast(kind === 'people' ? t.posters.cutDone : t.posters.splitDone);
     } catch {
       toast(t.posters.cutFailed, 'error');
     } finally {
@@ -464,11 +486,13 @@ export function PosterLayersEditor({
   const ordered = [...layers].reverse();
   const label = (l: PosterLayer) =>
     l.type === 'image'
-      ? l.cutout && l.source
+      ? l.cut === 'people' || (!l.cut && l.cutout && l.source)
         ? t.posters.peopleLayer
-        : l.source
-          ? t.posters.backgroundLayer
-          : t.posters.picture
+        : l.cut === 'graphics'
+          ? t.posters.graphicsLayer
+          : l.source
+            ? t.posters.backgroundLayer
+            : t.posters.picture
       : l.type === 'text'
         ? l.source === 'custom'
           ? l.text || t.posters.sources.custom
@@ -595,7 +619,7 @@ export function PosterLayersEditor({
               onPicture={() => choosePicture(l.id)}
               onCut={
                 l.type === 'image' && l.url && !cutting
-                  ? () => void cutOut(l, l.sourceUrl && !l.cutout ? l.sourceUrl : l.url!)
+                  ? (how) => void cutOut(l, l.sourceUrl && !l.cutout ? l.sourceUrl : l.url!, how)
                   : undefined
               }
               onErase={l.type === 'image' && l.url ? () => setErasing(l) : undefined}
@@ -1431,8 +1455,8 @@ function LayerSettings({
   layer: PosterLayer;
   onChange: (p: Partial<PosterLayer>) => void;
   onPicture: () => void;
-  /** Cut the people out onto a new layer above (pictures). */
-  onCut?: () => void;
+  /** Cut the people, or the text and drawings, out onto a new layer above (pictures). */
+  onCut?: (how: 'people' | 'graphics') => void;
   /** Open the eraser (pictures). */
   onErase?: () => void;
   cutting: 'loading' | 'working' | null;
@@ -1502,7 +1526,7 @@ function ImageSettings({
   layer: Extract<PosterLayer, { type: 'image' }>;
   onChange: (p: Partial<PosterLayer>) => void;
   onPicture: () => void;
-  onCut?: () => void;
+  onCut?: (how: 'people' | 'graphics') => void;
   onErase?: () => void;
   cutting: 'loading' | 'working' | null;
 }) {
@@ -1514,14 +1538,19 @@ function ImageSettings({
         🖼 {t.posters.replacePicture}
       </Button>
       <div>
-        <Button variant="secondary" disabled={!onCut} onClick={onCut}>
-          ✂️{' '}
-          {cutting
-            ? cutting === 'loading'
-              ? t.posters.cutLoading
-              : t.posters.cutWorking
-            : t.posters.cutPeople}
-        </Button>
+        <div className="flex flex-col gap-2">
+          <Button variant="secondary" disabled={!onCut} onClick={() => onCut?.('people')}>
+            ✂️{' '}
+            {cutting
+              ? cutting === 'loading'
+                ? t.posters.cutLoading
+                : t.posters.cutWorking
+              : t.posters.cutPeople}
+          </Button>
+          <Button variant="secondary" disabled={!onCut} onClick={() => onCut?.('graphics')}>
+            🔤 {cutting ? t.posters.cutWorking : t.posters.splitGraphics}
+          </Button>
+        </div>
         <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.cutHint}</p>
       </div>
       <div>
