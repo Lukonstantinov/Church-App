@@ -1,5 +1,6 @@
 import type { ImageSegmenter } from '@mediapipe/tasks-vision';
 import { MEDIA_MAX_BYTES } from '@church/shared';
+import { reportError } from '../components/CrashGuard';
 import { canvasToBlob } from './image';
 import { freeCanvas } from './poster';
 
@@ -57,9 +58,39 @@ export async function imageOf(src: Blob | string): Promise<HTMLImageElement> {
   }
 }
 
-/** How sure the model is that each pixel of `canvas` is a person (0…1), at w × h. */
-function personMask(model: ImageSegmenter, canvas: HTMLCanvasElement, w: number, h: number) {
-  const result = model.segment(canvas);
+/** The square the model is always given (the same size every time: see personMask). */
+const SIDE = 512;
+let square: HTMLCanvasElement | null = null;
+
+/**
+ * How sure the model is that each pixel of a part of `src` (sx, sy, sw × sh) is a person
+ * (0…1), at w × h. The part is always handed over fitted into the same 512 × 512 square:
+ * on iPhones the model stopped finding anyone after it had been given pictures of
+ * different sizes (a whole photo, then a close-up of it).
+ */
+function personMask(
+  model: ImageSegmenter,
+  src: HTMLCanvasElement,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  w: number,
+  h: number,
+) {
+  square ??= document.createElement('canvas');
+  square.width = SIDE;
+  square.height = SIDE;
+  const sq = square.getContext('2d')!;
+  sq.fillStyle = '#808080';
+  sq.fillRect(0, 0, SIDE, SIDE);
+  const k = Math.min(SIDE / sw, SIDE / sh);
+  const dw = sw * k;
+  const dh = sh * k;
+  const ox = (SIDE - dw) / 2;
+  const oy = (SIDE - dh) / 2;
+  sq.drawImage(src, sx, sy, sw, sh, ox, oy, dw, dh);
+  const result = model.segment(square);
   const back = result.confidenceMasks?.[0];
   if (!back) {
     result.close();
@@ -69,25 +100,33 @@ function personMask(model: ImageSegmenter, canvas: HTMLCanvasElement, w: number,
   const mw = back.width;
   const mh = back.height;
   const out = new Float32Array(w * h);
-  // Category 0 is the background; read with smooth (bilinear) upscaling.
+  // Category 0 is the background; read smoothly (bilinear) from the part's place.
   for (let y = 0; y < h; y++) {
-    const fy = Math.max(0, ((y + 0.5) * mh) / h - 0.5);
-    const y0 = Math.min(mh - 1, Math.floor(fy));
+    const fy = Math.min(mh - 1, Math.max(0, ((oy + ((y + 0.5) * dh) / h) * mh) / SIDE - 0.5));
+    const y0 = Math.floor(fy);
     const y1 = Math.min(mh - 1, y0 + 1);
     const ty = fy - y0;
     for (let x = 0; x < w; x++) {
-      const fx = Math.max(0, ((x + 0.5) * mw) / w - 0.5);
-      const x0 = Math.min(mw - 1, Math.floor(fx));
+      const fx = Math.min(mw - 1, Math.max(0, ((ox + ((x + 0.5) * dw) / w) * mw) / SIDE - 0.5));
+      const x0 = Math.floor(fx);
       const x1 = Math.min(mw - 1, x0 + 1);
       const tx = fx - x0;
       const b =
         (raw[y0 * mw + x0]! * (1 - tx) + raw[y0 * mw + x1]! * tx) * (1 - ty) +
         (raw[y1 * mw + x0]! * (1 - tx) + raw[y1 * mw + x1]! * tx) * ty;
-      out[y * w + x] = 1 - b;
+      const v = 1 - b;
+      out[y * w + x] = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
     }
   }
   result.close();
   return out;
+}
+
+/** How much of a mask is people (share of pixels over ½). */
+function share(mask: Float32Array) {
+  let n = 0;
+  for (let i = 0; i < mask.length; i++) if (mask[i]! > 0.5) n++;
+  return n / (mask.length || 1);
 }
 
 /** The box round the people (where the mask is over ½), or null when there are none. */
@@ -351,7 +390,16 @@ export async function cutOutPeople(
     ctx.drawImage(img, 0, 0, w, h);
 
     // 1–2: the whole photo, then a closer look at where the people are.
-    let mask = personMask(model, canvas, w, h);
+    let mask = personMask(model, canvas, 0, 0, w, h, w, h);
+    // Nobody at all: the model may have got stuck — a fresh one tries once more.
+    if (share(mask) < 0.002) {
+      const old = await segmenter();
+      old.close();
+      loading = null;
+      mask = personMask(await segmenter(), canvas, 0, 0, w, h, w, h);
+    }
+    const first = share(mask);
+    const firstMask = new Float32Array(mask);
     const box = bounds(mask, w, h);
     if (box) {
       const pad = Math.round(Math.max(box.x1 - box.x0, box.y1 - box.y0) * 0.12) + 8;
@@ -362,12 +410,11 @@ export async function cutOutPeople(
       const cw = cx1 - cx0;
       const ch = cy1 - cy0;
       if (cw * ch < w * h * 0.7 && cw > 16 && ch > 16) {
-        const crop = document.createElement('canvas');
-        crop.width = cw;
-        crop.height = ch;
-        crop.getContext('2d')!.drawImage(canvas, cx0, cy0, cw, ch, 0, 0, cw, ch);
-        const near = personMask(model, crop, cw, ch);
-        freeCanvas(crop);
+        const near = personMask(await segmenter(), canvas, cx0, cy0, cw, ch, cw, ch);
+        // A close-up that lost most of the people is not trusted (kept: the first look).
+        let nearShare = 0;
+        for (let i = 0; i < near.length; i++) if (near[i]! > 0.5) nearShare++;
+        const firstInBox = first * w * h;
         const next = new Float32Array(w * h);
         for (let y = 0; y < ch; y++)
           for (let x = 0; x < cw; x++) {
@@ -377,7 +424,7 @@ export async function cutOutPeople(
             const i = (y + cy0) * w + x + cx0;
             next[i] = near[y * cw + x]! * t + mask[i]! * (1 - t);
           }
-        mask = next;
+        if (nearShare > firstInBox * 0.5) mask = next;
       }
     }
     // 3: no stray specks.
@@ -395,13 +442,25 @@ export async function cutOutPeople(
     const fitted = guided(mask, guide, w, h, r);
 
     let kept = 0;
-    const alpha = new Float32Array(w * h);
+    let alpha = new Float32Array(w * h);
     for (let i = 0; i < w * h; i++) {
-      const a = edge(fitted[i]!);
+      const a = edge(Number.isFinite(fitted[i]!) ? fitted[i]! : 0);
       alpha[i] = a;
       if (a > 0.5) kept++;
     }
+    // The tidying lost (nearly) everyone the model saw: the model's own outline is kept.
+    if (kept < w * h * 0.005 && first >= 0.005) {
+      alpha = firstMask.map(edge);
+      kept = Math.round(first * w * h);
+    }
     const found = kept > w * h * 0.005;
+    // For the developer (Telemetry): what each step saw when nobody was found.
+    if (!found)
+      reportError(
+        new Error('cut-out: no people found'),
+        'cutout',
+        JSON.stringify({ w, h, first, kept: kept / (w * h) }),
+      );
 
     // The people.
     const people = new ImageData(new Uint8ClampedArray(pixels.data), w, h);
