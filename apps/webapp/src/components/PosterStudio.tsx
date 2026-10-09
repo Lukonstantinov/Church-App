@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
+  MAX_EFFECTS,
   BLEND_MODES,
   TEXT_SOURCES,
   type BlendMode,
@@ -795,7 +796,7 @@ function PictureEffects({
                   ? []
                   : kinds.includes(m)
                     ? list.filter((e) => e.kind !== m)
-                    : [...list, { kind: m }].slice(-4),
+                    : [...list, { kind: m }].slice(-MAX_EFFECTS),
             }),
         }}
         tuneOf={(m) => list.find((e) => e.kind === m)?.tune ?? null}

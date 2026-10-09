@@ -1,4 +1,10 @@
-import type { EventSummary, MeetingMotion, MotionLayer, MotionTune } from '@church/shared';
+import {
+  MAX_EFFECTS,
+  type EventSummary,
+  type MeetingMotion,
+  type MotionLayer,
+  type MotionTune,
+} from '@church/shared';
 import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
 import { IconChevronDown } from './icons';
@@ -6,8 +12,8 @@ import { MotionPicker } from './MotionPicker';
 import { MotionTuneControls, TunePanel } from './MotionTune';
 import { Button, LivingLayers, Section } from './ui';
 
-/** How many effects one cover can wear at once (the first plus three layers). */
-export const MAX_EFFECTS = 4;
+/** How many effects one cover can wear at once (shared/motions.ts). */
+export { MAX_EFFECTS };
 
 /**
  * A cover's effects while being edited: in the order picked, each with its own settings,

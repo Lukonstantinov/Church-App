@@ -4011,23 +4011,10 @@ html[data-motion='off'] .shine::before {
   -webkit-mask-image: linear-gradient(#000 0%, transparent 38%, transparent 62%, #000 100%);
   mask-image: linear-gradient(#000 0%, transparent 38%, transparent 62%, #000 100%);
 }
-/* Motion blur: the picture smeared sideways, a streak of light passing. */
+/* Motion blur: the picture smeared sideways (no light passing: a blur, not a shine). */
 .fx-motion .pic {
   inset: 0 -6%;
   opacity: 0.85;
-}
-.fx-motion .streak {
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 250%;
-  background: linear-gradient(
-    90deg,
-    transparent 40%,
-    rgba(255, 255, 255, 0.35) 50%,
-    transparent 60%
-  );
-  animation: fx-glint 2.4s ease-in-out infinite;
 }
 
 /* ---------- Layered posters (Design → Posters) ---------- */

@@ -349,7 +349,6 @@ export function PhotoEffect({
             </filter>
           </svg>
           {image && <i className="pic" style={{ ...photo, filter: `url(#${id})` }} />}
-          <i className="streak" />
         </span>
       );
     default:

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MEETING_MOTIONS, motionTuneSchema } from './motions';
+import { MAX_EFFECTS, MEETING_MOTIONS, motionTuneSchema } from './motions';
 import { isFontKey } from './posts';
 
 /**
@@ -81,7 +81,7 @@ export const posterLayerSchema = z.discriminatedUnion('type', [
     /** Effects on the picture itself (drawn inside its outline, the photo effects change it). */
     effects: z
       .array(z.object({ kind: z.enum(MEETING_MOTIONS), tune: motionTuneSchema.nullish() }))
-      .max(4)
+      .max(MAX_EFFECTS)
       .nullish(),
   }),
   z.object({

@@ -9,7 +9,13 @@ import {
 } from './posts';
 import type { PersonRef, TransactionRow } from './finance';
 import type { PosterTemplate } from './posterTemplates';
-import { MEETING_MOTIONS, motionTuneSchema, type MeetingMotion, type MotionTune } from './motions';
+import {
+  MAX_EFFECTS,
+  MEETING_MOTIONS,
+  motionTuneSchema,
+  type MeetingMotion,
+  type MotionTune,
+} from './motions';
 
 /** Optional sections of an event, switched on when creating or later when editing. */
 export interface EventFeatures {
@@ -32,10 +38,10 @@ export const chatUrlSchema = z
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM');
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
-/** More cover effects drawn over the first one (up to three), each with its settings. */
+/** More cover effects drawn over the first one (up to seven), each with its settings. */
 export const motionLayersSchema = z
   .array(z.object({ kind: z.enum(MEETING_MOTIONS), tune: motionTuneSchema.nullish() }))
-  .max(3);
+  .max(MAX_EFFECTS - 1);
 export type MotionLayer = { kind: MeetingMotion; tune?: MotionTune | null };
 
 /** More cover photos shown in turn after the cover (up to 9), each for `seconds`. */

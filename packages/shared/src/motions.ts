@@ -4,6 +4,9 @@ import { z } from 'zod';
  * How a meeting's background moves: not at all, gentle or full colour drift, twinkling
  * stars, waves, floating circles of light (bokeh) or turning rays of light.
  */
+/** How many effects one cover, post or poster layer can wear at once (more gets heavy on phones). */
+export const MAX_EFFECTS = 8;
+
 export const MEETING_MOTIONS = [
   'off',
   'calm',

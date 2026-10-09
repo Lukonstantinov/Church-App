@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { backdropSchema, isBrandValue, isTextColor, patternSchema, type BrandColor } from './brand';
-import { MEETING_MOTIONS, motionTuneSchema } from './motions';
+import { MAX_EFFECTS, MEETING_MOTIONS, motionTuneSchema } from './motions';
 
 /**
  * Fonts for post headlines and text. All of them cover Cyrillic and the Lithuanian
@@ -190,7 +190,7 @@ export const postDesignSchema = z.object({
   /** How the speakers' photos look on the poster. */
   speakerLook: speakerLookSchema.nullish(),
   /**
-   * Posts: moving effects over the cover (up to four together, each with its settings),
+   * Posts: moving effects over the cover (up to eight together, each with its settings),
    * like an event's cover. Events keep theirs in their own fields.
    */
   effects: z
@@ -199,7 +199,7 @@ export const postDesignSchema = z.object({
       motionTune: motionTuneSchema.nullish(),
       motionLayers: z
         .array(z.object({ kind: z.enum(MEETING_MOTIONS), tune: motionTuneSchema.nullish() }))
-        .max(3)
+        .max(MAX_EFFECTS - 1)
         .nullish(),
     })
     .nullish(),
