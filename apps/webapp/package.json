@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@church/shared": "workspace:*",
+    "@mediapipe/tasks-vision": "1.0.1",
     "@tanstack/react-query": "^5.104.0",
     "exceljs": "^4.4.0",
     "gifenc": "1.0.3",

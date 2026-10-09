@@ -212,3 +212,10 @@ describe('poster layers', () => {
     expect(read.layers[1]!.effects?.[0]?.kind).toBe('smoke');
   });
 });
+
+describe('model relay', () => {
+  it('serves only the known model names', async () => {
+    const res = await api('/media/model/anything-else');
+    expect(res.status).toBe(404);
+  });
+});

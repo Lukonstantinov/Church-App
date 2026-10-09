@@ -19,6 +19,7 @@ import {
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
+import { removeBackground } from '../lib/cutout';
 import { prepareCutout } from '../lib/image';
 import {
   useDeletePosterTemplate,
@@ -266,6 +267,9 @@ function PosterEditor({
   const [kind, setKind] = useState<Kind>('event');
   const picture = useRef<HTMLInputElement>(null);
   const [pictureFor, setPictureFor] = useState<string | null>(null);
+  // The next new photo also gets its people cut out onto a layer of their own.
+  const [cutNew, setCutNew] = useState(false);
+  const [cutting, setCutting] = useState<'loading' | 'working' | null>(null);
 
   const patch = (id: string, p: Partial<PosterLayer>) =>
     setLayers((all) => all.map((l) => (l.id === id ? ({ ...l, ...p } as PosterLayer) : l)));
@@ -284,6 +288,45 @@ function PosterEditor({
     setSelected(layer.id);
   };
 
+  /**
+   * The people of a picture layer cut out (background removed on the phone) onto a new
+   * layer right above it, placed the same: the photo stays below as the background, to
+   * keep, change, darken or hide; the people get effects and styles of their own.
+   */
+  async function cutOut(from: Extract<PosterLayer, { type: 'image' }>, src: Blob | string) {
+    try {
+      const cut = await removeBackground(src, setCutting);
+      if (!cut.found) {
+        toast(t.posters.cutNone, 'error');
+        return;
+      }
+      const up = await upload.mutateAsync(cut.blob);
+      const layer: PosterLayer = {
+        ...from,
+        id: newId(),
+        mediaId: up.id,
+        url: up.url,
+        ratio: cut.ratio,
+        cutout: true,
+        effects: null,
+        style: null,
+        hidden: null,
+      };
+      setLayers((all) => {
+        const next = [...all];
+        next.splice(next.findIndex((l) => l.id === from.id) + 1, 0, layer);
+        return next.slice(-MAX_POSTER_LAYERS);
+      });
+      setSelected(layer.id);
+      haptic.success();
+      toast(t.posters.cutDone);
+    } catch {
+      toast(t.posters.cutFailed, 'error');
+    } finally {
+      setCutting(null);
+    }
+  }
+
   async function pickPicture(file: File | undefined) {
     if (!file) return;
     try {
@@ -297,7 +340,7 @@ function PosterEditor({
       } else {
         // A cut-out (letters, a logo) is placed like a sticker; a plain photo fills the
         // poster, so it lines up the same in the poster, the tile and the screen.
-        add({
+        const layer: Extract<PosterLayer, { type: 'image' }> = {
           type: 'image',
           id: newId(),
           mediaId: up.id,
@@ -308,17 +351,21 @@ function PosterEditor({
           rotate: 0,
           fit: cut.transparent ? 'free' : 'cover',
           ...shape,
-        });
+        };
+        add(layer);
+        if (cutNew) await cutOut(layer, cut.blob);
       }
     } catch {
       toast(t.treasury.uploadFailed, 'error');
     } finally {
       setPictureFor(null);
+      setCutNew(false);
       if (picture.current) picture.current.value = '';
     }
   }
-  const choosePicture = (forId: string | null) => {
+  const choosePicture = (forId: string | null, cut = false) => {
     setPictureFor(forId);
+    setCutNew(cut);
     picture.current?.click();
   };
 
@@ -419,6 +466,11 @@ function PosterEditor({
             <Pill on={false} onClick={() => choosePicture(null)} label={`🖼 ${t.posters.picture}`} />
             <Pill
               on={false}
+              onClick={() => choosePicture(null, true)}
+              label={`✂️ ${t.posters.pictureNoBg}`}
+            />
+            <Pill
+              on={false}
               onClick={() =>
                 add({
                   type: 'text',
@@ -468,6 +520,12 @@ function PosterEditor({
             />
           </div>
           <p className="mt-1.5 px-1 text-[12px] text-hint">{t.posters.pictureHint}</p>
+          <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.cutHint}</p>
+          {cutting && (
+            <p className="mt-2 rounded-xl bg-hairline px-3 py-2 text-[13px] font-semibold">
+              ✂️ {cutting === 'loading' ? t.posters.cutLoading : t.posters.cutWorking}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -507,6 +565,10 @@ function PosterEditor({
                 layer={l}
                 onChange={(p) => patch(l.id, p)}
                 onPicture={() => choosePicture(l.id)}
+                onCut={
+                  l.type === 'image' && l.url && !cutting ? () => void cutOut(l, l.url!) : undefined
+                }
+                cutting={cutting}
               />
             </LayerRow>
           ))}
@@ -1132,10 +1194,15 @@ function LayerSettings({
   layer,
   onChange,
   onPicture,
+  onCut,
+  cutting,
 }: {
   layer: PosterLayer;
   onChange: (p: Partial<PosterLayer>) => void;
   onPicture: () => void;
+  /** Cut the people out onto a new layer above (pictures). */
+  onCut?: () => void;
+  cutting: 'loading' | 'working' | null;
 }) {
   const t = useT();
   if (layer.type === 'effect')
@@ -1178,7 +1245,15 @@ function LayerSettings({
       </>
     );
   if (layer.type === 'image')
-    return <ImageSettings layer={layer} onChange={onChange} onPicture={onPicture} />;
+    return (
+      <ImageSettings
+        layer={layer}
+        onChange={onChange}
+        onPicture={onPicture}
+        onCut={onCut}
+        cutting={cutting}
+      />
+    );
   return <TextSettings layer={layer} onChange={onChange} />;
 }
 
@@ -1186,10 +1261,14 @@ function ImageSettings({
   layer,
   onChange,
   onPicture,
+  onCut,
+  cutting,
 }: {
   layer: Extract<PosterLayer, { type: 'image' }>;
   onChange: (p: Partial<PosterLayer>) => void;
   onPicture: () => void;
+  onCut?: () => void;
+  cutting: 'loading' | 'working' | null;
 }) {
   const t = useT();
   useKnownRatio(layer, onChange);
@@ -1198,6 +1277,17 @@ function ImageSettings({
       <Button variant="secondary" onClick={onPicture}>
         🖼 {t.posters.replacePicture}
       </Button>
+      <div>
+        <Button variant="secondary" disabled={!onCut} onClick={onCut}>
+          ✂️{' '}
+          {cutting
+            ? cutting === 'loading'
+              ? t.posters.cutLoading
+              : t.posters.cutWorking
+            : t.posters.cutPeople}
+        </Button>
+        <p className="mt-1 px-1 text-[12px] text-hint">{t.posters.cutHint}</p>
+      </div>
       <div>
         <Toggle
           label={t.posters.fill}

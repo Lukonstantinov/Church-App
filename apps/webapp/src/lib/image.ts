@@ -2,7 +2,7 @@ import { LOGO_MAX_BYTES, MEDIA_MAX_BYTES } from '@church/shared';
 
 const SIZE = 256;
 
-function canvasToBlob(
+export function canvasToBlob(
   canvas: HTMLCanvasElement,
   type: string,
   quality?: number,

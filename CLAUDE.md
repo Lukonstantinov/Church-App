@@ -179,7 +179,8 @@ shape; own effects on a picture, masked to a cut-out's outline), texts filled fr
 (own effects inside the letters — a PNG mask of the lines — or around them, `fxIn`), colour/gradient
 layers (`type: fill`, a gradient can flow / turn / breathe), shapes with soft edges (`shape`, `soft`;
 `data-edge` for the recorder), effect layers anywhere in the stack (fade at the poster edge), a frame
-(`frame`); the recorder keeps the still parts in bands between effects and cuts effects to their masks; editor previews are mockups of the real event/meeting shapes; place in % / container units, opacity, blend mode, layer styles); chosen per event or
+(`frame`), «✂️ background removal» on the phone (MediaPipe selfie model, `lib/cutout.ts`; engine copied into
+`dist/mediapipe` at build, model relayed by `/media/model/:name`) onto its own layer above the photo; the recorder keeps the still parts in bands between effects and cuts effects to their masks; editor previews are mockups of the real event/meeting shapes; place in % / container units, opacity, blend mode, layer styles); chosen per event or
 meeting (`poster_template_id`, rows carry `poster`) and drawn by `LayeredPoster` on covers, screens,
 tiles, the pinned card and the bot poster.
 

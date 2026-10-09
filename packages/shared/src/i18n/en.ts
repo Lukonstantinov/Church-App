@@ -835,6 +835,15 @@ export const en: Messages = {
     frameRadius: 'Rounded corners',
     frameGlow: 'Frame glow',
     frameDouble: 'Double line',
+    pictureNoBg: 'Photo without background',
+    cutPeople: 'Cut the people out to a new layer',
+    cutHint:
+      'The background is removed right on the phone (free Google MediaPipe model, the photo is not sent anywhere). The people become a separate layer above the photo — keep, darken, replace or hide the background. Works best with people.',
+    cutLoading: 'Loading the model (once, about 16 MB)…',
+    cutWorking: 'Removing the background…',
+    cutDone: 'Done: the people are a separate layer above the photo',
+    cutNone: 'No people found in the photo',
+    cutFailed: 'Couldn’t remove the background — please try again',
     pictureEffects: 'Effects on the picture',
     pictureEffectsHint:
       'Drawn right on the picture (on a see-through one, only inside its outline). Tap again to remove.',

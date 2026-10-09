@@ -851,6 +851,15 @@ export const lt: Messages = {
     frameRadius: 'Suapvalinti kampai',
     frameGlow: 'Rėmelio švytėjimas',
     frameDouble: 'Dviguba linija',
+    pictureNoBg: 'Nuotrauka be fono',
+    cutPeople: 'Iškirpti žmones į atskirą sluoksnį',
+    cutHint:
+      'Fonas pašalinamas pačiame telefone (nemokamas Google MediaPipe modelis, nuotrauka niekur nesiunčiama). Žmonės atsiras atskirame sluoksnyje virš nuotraukos – foną galima palikti, patamsinti, pakeisti ar paslėpti. Geriausiai veikia su žmonėmis.',
+    cutLoading: 'Įkeliamas modelis (vieną kartą, apie 16 MB)…',
+    cutWorking: 'Šalinamas fonas…',
+    cutDone: 'Atlikta: žmonės – atskirame sluoksnyje virš nuotraukos',
+    cutNone: 'Nuotraukoje žmonių nerasta',
+    cutFailed: 'Nepavyko pašalinti fono – bandykite dar kartą',
     pictureEffects: 'Efektai ant paveikslėlio',
     pictureEffectsHint:
       'Piešiami tiesiai ant paveikslėlio (ant skaidraus — tik jo kontūro viduje). Paspauskite dar kartą, kad pašalintumėte.',

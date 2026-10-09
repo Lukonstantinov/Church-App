@@ -186,6 +186,34 @@ mediaRoutes.get('/logo', async (c) => {
   });
 });
 
+/**
+ * Free on-phone models the app downloads once (Google MediaPipe, Apache 2.0), relayed
+ * through here: their own host doesn't let other sites' pages read them. Cached at the
+ * edge and on the phone for a month; only these names, nothing else is fetched.
+ */
+const MODELS: Record<string, string> = {
+  'selfie-multiclass':
+    'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite',
+};
+
+/** GET /media/model/:name — a model file for the phone (background removal). */
+mediaRoutes.get('/model/:name', async (c) => {
+  const url = MODELS[c.req.param('name')];
+  if (!url) return c.body(null, 404);
+  const res = await fetch(url, { cf: { cacheEverything: true, cacheTtl: 2_592_000 } });
+  if (!res.ok || !res.body) return c.body(null, 502);
+  return new Response(res.body, {
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'Cache-Control': 'public, max-age=2592000, immutable',
+      'X-Content-Type-Options': 'nosniff',
+      ...(res.headers.get('content-length')
+        ? { 'Content-Length': res.headers.get('content-length')! }
+        : {}),
+    },
+  });
+});
+
 /** GET /media/m/:id?e=&s= — uploaded images (receipts, event photos) behind a signed URL. */
 mediaRoutes.get('/m/:id', async (c) => {
   const id = Number(c.req.param('id'));
