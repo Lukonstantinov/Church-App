@@ -1,10 +1,21 @@
 import { BackgroundEditor } from '../components/BackgroundEditor';
 import { useRef, useState } from 'react';
-import { LOCALE_NAMES, LOCALES, type Locale } from '@church/shared';
+import { LOCALE_NAMES, LOCALES, type BirthdayReport, type Locale } from '@church/shared';
 import { ChurchLogo } from '../components/BrandHeader';
 import { IconImage, IconTrash } from '../components/icons';
 import { useToast } from '../components/Toast';
-import { ActionRow, Button, Row, Screen, Section, TextField, Title } from '../components/ui';
+import {
+  ActionRow,
+  Button,
+  Pill,
+  Row,
+  Screen,
+  Section,
+  TextField,
+  Title,
+  Toggle,
+} from '../components/ui';
+import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { prepareLogo, squareJpeg } from '../lib/image';
 import { ThemePicker } from '../components/ThemePicker';
@@ -217,8 +228,73 @@ export function ChurchSettings() {
           </select>
         </div>
       </Section>
+      <BirthdayReportSection
+        value={church.birthdayReport}
+        onChange={(birthdayReport) => void patch({ birthdayReport })}
+      />
       <ArchivedMinistries />
     </Screen>
+  );
+}
+
+/**
+ * The bot's birthday list to church admins: on/off, which day and hour it comes, how far
+ * ahead it looks, and a note on the morning of each birthday.
+ */
+function BirthdayReportSection({
+  value,
+  onChange,
+}: {
+  value: BirthdayReport;
+  onChange: (v: BirthdayReport) => void;
+}) {
+  const t = useT();
+  const f = useFmt();
+  const tb = t.settings.birthdays;
+  const set = (p: Partial<BirthdayReport>) => onChange({ ...value, ...p });
+  return (
+    <Section title={`🎂 ${tb.title}`} footer={tb.hint}>
+      <Toggle label={tb.weekly} checked={value.on} onChange={(on) => set({ on })} />
+      {value.on && (
+        <div className="flex flex-col gap-3 border-b border-hairline p-3">
+          <div className="flex gap-2">
+            <select
+              aria-label={tb.weekday}
+              className="min-h-[44px] flex-1 rounded-xl bg-hairline px-3 text-[16px] font-medium outline-none"
+              value={value.weekday}
+              onChange={(e) => set({ weekday: Number(e.target.value) })}
+            >
+              {f.weekdaysLong.map((d, i) => (
+                <option key={i} value={i}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label={tb.hour}
+              className="min-h-[44px] w-[100px] rounded-xl bg-hairline px-3 text-[16px] font-medium outline-none"
+              value={value.hour}
+              onChange={(e) => set({ hour: Number(e.target.value) })}
+            >
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {`${String(h).padStart(2, '0')}:00`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <span className="text-[13px] text-hint">{tb.ahead}</span>
+          <div className="flex flex-wrap gap-2">
+            {([7, 14, 31] as const).map((d) => (
+              <Pill key={d} selected={value.days === d} onClick={() => set({ days: d })}>
+                {tb.days(d)}
+              </Pill>
+            ))}
+          </div>
+        </div>
+      )}
+      <Toggle label={tb.dayOf} checked={value.dayOf} onChange={(dayOf) => set({ dayOf })} />
+    </Section>
   );
 }
 

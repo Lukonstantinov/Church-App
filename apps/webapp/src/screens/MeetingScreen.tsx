@@ -16,6 +16,7 @@ import { SpeakerStrip } from '../components/Speakers';
 import { CardSpeaker } from '../components/MeetingPoster';
 import { MeetingDesignSheet } from '../components/MeetingDesignSheet';
 import { AudiencePicker } from '../components/AudiencePicker';
+import { StatChoice } from '../components/StatChoice';
 import { IconCalendar, IconClock, IconMapPin, IconPlus, IconSend } from '../components/icons';
 import { Pill } from '../components/LookControls';
 import { useMoney } from '../components/money';
@@ -549,6 +550,9 @@ function EditForm({
   // The look is changed in one place — «🎨 Оформление» — not in this form.
   const [designing, setDesigning] = useState(false);
   const [toSeries, setToSeries] = useState(false);
+  const [counts, setCounts] = useState<boolean | null>(m.statChoice);
+  // What the ministry's rule would say, so "by the rule" shows its answer.
+  const ruleCounts = m.statChoice === null ? m.countsInStats : undefined;
 
   function submit() {
     const input: UpdateMeetingInput = {
@@ -568,6 +572,7 @@ function EditForm({
         input.budgetCents = cents;
       if (JSON.stringify(audience) !== JSON.stringify(m.audience))
         input.audience = audience?.length ? audience : null;
+      if (counts !== m.statChoice) input.counts = counts;
       if (m.seriesId && toSeries) input.applyToSeries = true;
     }
     onSave(input);
@@ -652,6 +657,7 @@ function EditForm({
           <span className="text-hint">{money.symbol}</span>
         </label>
       )}
+      {m.canManage && <StatChoice value={counts} onChange={setCounts} ruleCounts={ruleCounts} />}
       {m.canManage && (
         <div>
           <div className="mb-2 text-[13px] text-hint">{t.meetings.audience}</div>

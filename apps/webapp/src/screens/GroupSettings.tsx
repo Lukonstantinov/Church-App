@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { REMINDER_MINUTES, type GroupDetail } from '@church/shared';
+import { REMINDER_MINUTES, STAT_KINDS, type GroupDetail, type StatKind } from '@church/shared';
 import { IconImage, IconTelegram, IconTrash } from '../components/icons';
 import { PatternDesigner } from '../components/PatternDesigner';
 import { Pill } from '../components/LookControls';
@@ -222,6 +222,7 @@ function Form({ g }: { g: GroupDetail }) {
       <Section title={t.meetings.motionTitle}>
         <p className="px-4 py-3 text-[14px] text-hint">🎨 {t.studio.movedHere}</p>
       </Section>
+      <StatKindsSection g={g} onChange={(statKinds) => void patchNow({ statKinds })} />
       <Section footer={t.env.attendanceOpenHint}>
         <Toggle
           label={t.env.attendanceOpen}
@@ -314,5 +315,44 @@ function Form({ g }: { g: GroupDetail }) {
         </Section>
       )}
     </Screen>
+  );
+}
+
+/**
+ * Which meetings count in the ministry's attendance statistics: all (the default) or only
+ * some types — e.g. only the regular youth meetings, so joint services or outings don't
+ * pull the numbers down. A single meeting or a weekly schedule can still say otherwise.
+ */
+function StatKindsSection({
+  g,
+  onChange,
+}: {
+  g: GroupDetail;
+  onChange: (v: StatKind[] | null) => void;
+}) {
+  const t = useT();
+  const chosen = g.statKinds ?? [...STAT_KINDS];
+  const label = (k: StatKind) => (k === 'regular' ? t.meetings.stats.regular : t.meetings.kinds[k]);
+  const toggle = (k: StatKind) => {
+    // From "all", a tap picks just that type; then more are added one by one.
+    if (g.statKinds === null) return onChange([k]);
+    const next = chosen.includes(k) ? chosen.filter((x) => x !== k) : [...chosen, k];
+    if (next.length === 0) return; // something has to count
+    onChange(next.length === STAT_KINDS.length ? null : STAT_KINDS.filter((x) => next.includes(x)));
+  };
+  return (
+    <Section title={`📊 ${t.meetings.stats.groupTitle}`} footer={t.meetings.stats.groupHint}>
+      <div className="flex flex-wrap gap-2 p-3">
+        <Pill on={g.statKinds === null} onClick={() => onChange(null)} label={t.people.all} />
+        {STAT_KINDS.map((k) => (
+          <Pill
+            key={k}
+            on={g.statKinds !== null && chosen.includes(k)}
+            onClick={() => toggle(k)}
+            label={label(k)}
+          />
+        ))}
+      </div>
+    </Section>
   );
 }

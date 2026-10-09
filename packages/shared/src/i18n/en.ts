@@ -266,6 +266,18 @@ export const en: Messages = {
     cameOf: (a: number, b: number) => `${a} of ${b} came`,
   },
   meetings: {
+    stats: {
+      title: 'In statistics',
+      rule: 'By the ministry rule',
+      yes: 'counts',
+      no: 'not counted',
+      count: 'Count',
+      skip: "Don't count",
+      regular: 'Regular (no type)',
+      groupTitle: 'Which meetings count in statistics',
+      groupHint:
+        "Attendance and people's statistics count only the chosen meeting types — e.g. only youth meetings. A single meeting or a schedule can choose otherwise.",
+    },
     pictureTitle: 'Picture with the message',
     askRsvp: 'Ask "Will you come?"',
     askRsvpHint: 'The message gets "I\'ll come" / "Can\'t" buttons. The answers come to you.',
@@ -719,6 +731,7 @@ export const en: Messages = {
     failed: 'Couldn’t create the meeting',
   },
   people: {
+    profileStats: 'Profile and statistics',
     sortByPosition: 'By position',
     sortByName: 'By name',
     all: 'All',
@@ -754,6 +767,17 @@ export const en: Messages = {
     joinShare: (group: string) => `Join the “${group}” group`,
   },
   member: {
+    countedHint: 'Only meetings the ministry counts in statistics are included.',
+    birthday: {
+      title: 'Birthday',
+      hint: 'Seen by the person and by those who manage people. Marked in the ministry calendar; admins get bot reminders.',
+      none: 'Not set',
+      add: 'Add',
+      change: 'Change',
+      remove: 'Remove',
+      knowYear: 'Year of birth is known',
+      age: (n: number) => `${n} years`,
+    },
     photo: 'Profile photo',
     photoAdd: 'Add a photo — it shows on meeting cards and on speaker posters.',
     photoChange: 'Choose another photo',
@@ -1181,6 +1205,16 @@ export const en: Messages = {
     noRights: 'No right to change the look',
   },
   settings: {
+    birthdays: {
+      title: 'Birthdays',
+      hint: 'The bot sends church admins a list of coming birthdays with positions. Command /birthdays — a week, /birthdays month — a month.',
+      weekly: 'Weekly list',
+      weekday: 'Day',
+      hour: 'Time',
+      ahead: 'How far ahead',
+      days: (d: number) => (d === 7 ? 'A week' : d === 14 ? '2 weeks' : 'A month'),
+      dayOf: 'Reminder on the birthday itself',
+    },
     botPhoto: 'Bot photo and phone icon',
     botPhotoHint:
       'Telegram shows this photo on the bot and on the app’s icon on the phone’s home screen. Icons already added may update later.',
@@ -2091,6 +2125,21 @@ export const en: Messages = {
     pinnedHint: 'Everyone in the church sees it at the top of the main page.',
   },
   dev: {
+    mock: {
+      title: 'Test people',
+      hint: 'One line, one person: "First Last — DD.MM.YYYY — Position". The year and position are optional. "Only test people" makes birthdays (calendar, bot) use just them, leaving real members out.',
+      count: 'Test people',
+      only: 'Only test people',
+      ministry: 'Ministry',
+      placeholder: 'Anna Petrova — 14.05.2001 — Leader\nIvan Ivanov — 03.11',
+      parsed: (n: number) => `Recognised: ${n}`,
+      badLines: (lines: string) => `couldn't read lines ${lines}`,
+      add: 'Add',
+      added: (n: number) => `Added: ${n}`,
+      removeAll: 'Remove all test people',
+      removeConfirm: (n: number) => `Remove ${n} test people? Real members will count again.`,
+      removed: (n: number) => `Removed: ${n}`,
+    },
     guideTitle: 'Instructions',
     guideEntry: 'For the developer: how to add, change and remove everything',
     guideSearch: 'Search',

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   displayName,
   NOTE_COLORS,
+  type BirthdayRow,
   type CalendarData,
   type CalendarNote,
   type EventSummary,
@@ -45,7 +46,14 @@ interface Day {
   meetings: MeetingRow[];
   events: EventSummary[];
   notes: CalendarNote[];
+  /** Birthdays that day (only those who manage people get them). */
+  birthdays: (BirthdayRow & { turns: number | null })[];
 }
+
+const emptyDay = (): Day => ({ meetings: [], events: [], notes: [], birthdays: [] });
+/** Birthdays are pink everywhere in the calendar. */
+const BIRTHDAY_COLOR = '#ec4899';
+const leap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
 
 /** Everything in the calendar grouped by local "YYYY-MM-DD". */
 function useDays(data: CalendarData | undefined) {
@@ -53,7 +61,7 @@ function useDays(data: CalendarData | undefined) {
   const days = new Map<string, Day>();
   const at = (d: string) => {
     let v = days.get(d);
-    if (!v) days.set(d, (v = { meetings: [], events: [], notes: [] }));
+    if (!v) days.set(d, (v = emptyDay()));
     return v;
   };
   if (!data) return days;
@@ -72,6 +80,14 @@ function useDays(data: CalendarData | undefined) {
     }
   }
   for (const n of data.notes ?? []) at(n.date).notes.push(n);
+  // Each birthday in every year the calendar can show (a year back to a year ahead);
+  // 29 February falls on the 28th in other years.
+  const year = new Date().getFullYear();
+  for (const b of data.birthdays ?? [])
+    for (const y of [year - 1, year, year + 1]) {
+      const md = b.birthday === '02-29' && !leap(y) ? '02-28' : b.birthday;
+      at(`${y}-${md}`).birthdays.push({ ...b, turns: b.birthYear ? y - b.birthYear : null });
+    }
   // Earliest first, so a day with several meetings reads in order.
   for (const d of days.values()) d.meetings.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   return days;
@@ -121,6 +137,7 @@ function MonthGrid({
         const past = day < today;
         const isToday = day === today;
         const dots = [
+          ...(d?.birthdays.length ? [BIRTHDAY_COLOR] : []),
           ...(d?.events.length ? ['#f97316'] : []),
           ...(d?.notes ?? []).map((n) => n.color),
         ].slice(0, 3);
@@ -167,6 +184,11 @@ function MonthGrid({
             } ${isToday ? 'outline outline-2 outline-offset-1 outline-[var(--brand)]' : ''}`}
           >
             <span className="leading-none">{i + 1}</span>
+            {d?.birthdays.length ? (
+              <span className="absolute left-0.5 top-0.5 text-[9px] leading-none" aria-hidden>
+                🎂
+              </span>
+            ) : null}
             {/* A past day whose meeting has its roll call taken. */}
             {past && d?.meetings.some((x) => x.status === 'done') && (
               <span className="absolute right-0.5 top-0.5 text-[9px] leading-none text-present">
@@ -264,7 +286,7 @@ export function GroupCalendar({ g }: { g: GroupSummary }) {
           g={g}
           day={day}
           today={today}
-          d={days.get(day) ?? { meetings: [], events: [], notes: [] }}
+          d={days.get(day) ?? emptyDay()}
           canNote={q.data?.canNote ?? false}
           onClose={() => setDay(null)}
         />
@@ -304,7 +326,7 @@ function DaySheet({
   const people = useMeetingPeople(assign?.id ?? 0, assign !== null);
   const manage = can('meetings.manage');
   const upcoming = day >= today;
-  const empty = !d.meetings.length && !d.events.length && !d.notes.length;
+  const empty = !d.meetings.length && !d.events.length && !d.notes.length && !d.birthdays.length;
 
   async function pickLeader(id: number | null) {
     const m = assign;
@@ -488,6 +510,36 @@ function DaySheet({
                   )}
                 </button>
               ))}
+              {d.birthdays.map((b) => (
+                <button
+                  key={`b${b.userId}`}
+                  type="button"
+                  onClick={() => push({ name: 'member', userId: b.userId })}
+                  className="flex items-center gap-2.5 rounded-xl bg-hairline/60 py-2 pr-3 text-left"
+                >
+                  <span
+                    className="w-1 self-stretch rounded-full"
+                    style={{ background: BIRTHDAY_COLOR }}
+                  />
+                  <span className="text-[18px] leading-none">🎂</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-semibold">
+                      {displayName(b)}
+                      {b.turns ? (
+                        <span className="font-normal text-hint">
+                          {' '}
+                          · {t.member.birthday.age(b.turns)}
+                        </span>
+                      ) : null}
+                    </span>
+                    {b.roles.length > 0 && (
+                      <span className="block truncate text-[12px] text-hint">
+                        {b.roles.join(', ')}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))}
               {d.notes.map((n) => (
                 <button
                   key={n.id}
@@ -572,9 +624,19 @@ export function CalendarTile({ g, onToggle }: { g: GroupSummary; onToggle: () =>
   const label = next
     ? (next.notes[0]?.text ??
       next.events[0]?.title ??
-      (next.meetings[0] ? (next.meetings[0].topic ?? next.meetings[0].title) : ''))
+      (next.meetings[0]
+        ? (next.meetings[0].topic ?? next.meetings[0].title)
+        : next.birthdays[0]
+          ? `🎂 ${displayName(next.birthdays[0])}`
+          : ''))
     : t.meetings.nothingThisDay;
-  const color = next?.notes[0]?.color ?? (next?.events.length ? '#f97316' : 'var(--brand)');
+  const color =
+    next?.notes[0]?.color ??
+    (next?.events.length
+      ? '#f97316'
+      : !next?.meetings.length && next?.birthdays.length
+        ? BIRTHDAY_COLOR
+        : 'var(--brand)');
   const look = useModuleLook('calendar');
   return (
     <button

@@ -1,5 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
-import type { Telemetry as TelemetryData } from '@church/shared';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  parseMockPeople,
+  type MockPeopleInfo,
+  type MockPeopleInput,
+  type Telemetry as TelemetryData,
+} from '@church/shared';
+import { useToast } from '../components/Toast';
 import {
   Button,
   Card,
@@ -9,11 +16,14 @@ import {
   Row,
   Screen,
   Section,
+  TextArea,
   Title,
+  Toggle,
 } from '../components/ui';
 import { apiFetch } from '../lib/api';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
+import { confirmDialog, haptic } from '../lib/telegram';
 
 const mb = (b: number) =>
   b >= 1024 * 1024
@@ -52,6 +62,8 @@ export function Telemetry() {
           {d.media.map((m) => `${m.kind} ${m.count}`).join(', ') || '0'}
         </div>
       </Card>
+
+      <MockPeople />
 
       <Section title={t.dev.people}>
         <Row title={t.dev.total} after={String(d.users.total)} />
@@ -112,5 +124,120 @@ export function Telemetry() {
         {t.dev.refresh}
       </Button>
     </Screen>
+  );
+}
+
+/**
+ * Made-up people for trying birthdays and statistics: paste one person a line (name,
+ * birthday, position), pick a ministry and add them. "Only test people" makes birthdays
+ * (calendar, bot lists) use just them and leave the real members out; turning it off — or
+ * removing the test people — brings the real ones back.
+ */
+function MockPeople() {
+  const t = useT();
+  const tm = t.dev.mock;
+  const toast = useToast();
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ['dev', 'mock-people'],
+    queryFn: () => apiFetch<MockPeopleInfo>('/dev/mock-people'),
+  });
+  const [text, setText] = useState('');
+  const [groupId, setGroupId] = useState<number | null>(null);
+  // Everything that shows people (calendar, members, statistics) changes with them.
+  const done = () => void qc.invalidateQueries();
+  const add = useMutation({
+    mutationFn: (input: MockPeopleInput) =>
+      apiFetch<{ added: number }>('/dev/mock-people', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: done,
+  });
+  const setOnly = useMutation({
+    mutationFn: (mockOnly: boolean) =>
+      apiFetch('/dev/mock-people', { method: 'PATCH', body: JSON.stringify({ mockOnly }) }),
+    onSuccess: done,
+  });
+  const removeAll = useMutation({
+    mutationFn: () => apiFetch<{ removed: number }>('/dev/mock-people', { method: 'DELETE' }),
+    onSuccess: done,
+  });
+  if (!q.data) return null;
+  const info = q.data;
+  const group = groupId ?? info.groups[0]?.id ?? null;
+  const parsed = parseMockPeople(text);
+
+  async function submit() {
+    if (!group || !parsed.people.length) return;
+    try {
+      const r = await add.mutateAsync({ groupId: group, people: parsed.people });
+      haptic.success();
+      toast(tm.added(r.added));
+      setText('');
+    } catch {
+      haptic.error();
+      toast(t.common.saveFailed, 'error');
+    }
+  }
+
+  async function wipe() {
+    if (!(await confirmDialog(tm.removeConfirm(info.count)))) return;
+    const r = await removeAll.mutateAsync();
+    toast(tm.removed(r.removed));
+  }
+
+  return (
+    <Section title={`🧪 ${tm.title}`} footer={tm.hint}>
+      <Row title={tm.count} after={String(info.count)} />
+      <Toggle
+        label={tm.only}
+        checked={info.mockOnly}
+        disabled={setOnly.isPending}
+        onChange={(v) => void setOnly.mutateAsync(v).then(() => haptic.success())}
+      />
+      <div className="flex flex-col gap-2 p-3">
+        <select
+          aria-label={tm.ministry}
+          className="min-h-[44px] w-full rounded-xl bg-hairline px-3 text-[16px] font-medium outline-none"
+          value={group ?? ''}
+          onChange={(e) => setGroupId(Number(e.target.value))}
+        >
+          {info.groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+        <div className="overflow-hidden rounded-xl bg-hairline">
+          <TextArea
+            value={text}
+            onChange={setText}
+            rows={6}
+            maxLength={30000}
+            placeholder={tm.placeholder}
+          />
+        </div>
+        {text.trim() && (
+          <p className="text-[13px] text-hint">
+            {tm.parsed(parsed.people.length)}
+            {parsed.bad.length > 0 && (
+              <span className="text-destructive"> · {tm.badLines(parsed.bad.join(', '))}</span>
+            )}
+          </p>
+        )}
+        <Button
+          disabled={!group || !parsed.people.length || parsed.people.length > 300 || add.isPending}
+          onClick={() => void submit()}
+        >
+          {add.isPending ? t.common.saving : tm.add}
+        </Button>
+        {info.count > 0 && (
+          <Button variant="destructive" disabled={removeAll.isPending} onClick={() => void wipe()}>
+            {tm.removeAll}
+          </Button>
+        )}
+      </div>
+    </Section>
   );
 }

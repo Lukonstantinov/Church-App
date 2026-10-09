@@ -125,6 +125,24 @@ export const GUIDE: GuideSection[] = [
           'Leaders can set anyone’s photo; members can set their own.',
         ],
       },
+      {
+        title: "A person's profile, statistics and birthday",
+        steps: [
+          'Contacts → the 📊 button next to a person (church admins and those who manage people) opens their profile with attendance.',
+          'Profile → 🎂 Birthday → pick the date; untick “year is known” to keep only day and month. People can set their own.',
+          'Birthdays show as 🎂 in the ministry calendar for those who manage people; tap the day to see who and their positions.',
+          'Church settings → 🎂 Birthdays: the weekly bot list to admins (day, time, a week / 2 weeks / a month ahead) and a note on the day.',
+          'In the bot: /birthdays — the coming week, /birthdays month — the coming month.',
+        ],
+      },
+      {
+        title: 'Which meetings count in statistics',
+        steps: [
+          'Ministry settings → 📊 “Which meetings count”: All, or only chosen types (e.g. “Regular” for youth meetings only).',
+          'A single meeting (Edit → 📊 In statistics) or a weekly schedule can say “Count” / “Don’t count” instead of the rule.',
+          'Attendance on profiles, the members list and the Statistics screen and its PDF/Excel follow this.',
+        ],
+      },
     ],
   },
   {
@@ -533,6 +551,14 @@ export const GUIDE: GuideSection[] = [
         steps: [
           'Developers are church admins whose Telegram ID is in the ADMIN_TELEGRAM_IDS secret.',
           'They see «Телеметрия» and these «Инструкции» on the main screen.',
+        ],
+      },
+      {
+        title: 'Test people (birthdays, statistics)',
+        steps: [
+          'Телеметрия → 🧪 Test people: pick a ministry, paste one person a line — “Anna Petrova — 14.05.2001 — Leader” (year and position optional) → Add.',
+          '“Only test people” on: birthdays (calendar, bot lists) use only them; off: only the real members.',
+          '“Remove all test people” deletes them and switches back to the real members.',
         ],
       },
     ],

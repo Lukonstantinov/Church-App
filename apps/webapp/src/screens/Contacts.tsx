@@ -6,16 +6,25 @@ import { LabelChip, PersonName } from '../components/LabelLook';
 import { useToast } from '../components/Toast';
 import { Badge, Screen, Skeleton, Title } from '../components/ui';
 import { useT } from '../lib/i18n';
-import { useContacts, useGroup } from '../lib/queries';
+import { useNav } from '../lib/nav';
+import { useContacts, useGroup, useMe } from '../lib/queries';
 import { FilterChip, SortSwitch } from './People';
 import { haptic, openTelegramLink } from '../lib/telegram';
 
-/** Everyone in the ministry with their position; tapping someone opens a Telegram chat. */
+/**
+ * Everyone in the ministry with their position; tapping someone opens a Telegram chat.
+ * Church admins and those who manage the ministry's people also get a 📊 button per
+ * person: their profile with attendance statistics and birthday.
+ */
 export function Contacts({ groupId }: { groupId: number }) {
   const t = useT();
   const toast = useToast();
   const group = useGroup(groupId);
   const contacts = useContacts(groupId);
+  const me = useMe();
+  const { push } = useNav();
+  const canProfile =
+    !!me.data?.user.isAdmin || !!group.data?.myPermissions?.includes('people.manage');
   const [q, setQ] = useState('');
   const [byName, setByName] = useState(false);
   const [only, setOnly] = useState<string | null>(null);
@@ -76,42 +85,56 @@ export function Contacts({ groupId }: { groupId: number }) {
       ) : (
         <div className="glass overflow-hidden rounded-[var(--radius-card)] shadow-card">
           {list.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => {
-                haptic.tap();
-                if (c.username) openTelegramLink(`https://t.me/${c.username}`);
-                else toast(c.offline ? t.people.offline : t.people.noUsername, 'error');
-              }}
-              className="flex min-h-[60px] w-full items-center gap-3 border-b border-hairline px-4 py-2 text-left last:border-b-0 active:bg-hairline"
-            >
-              <Avatar id={c.id} firstName={c.firstName} lastName={c.lastName} size={40} />
-              <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                  <PersonName
-                    name={displayName(c)}
-                    labels={c.labels}
-                    positionLook={c.positionLook}
-                    isAdmin={c.isAdmin}
-                    className="min-w-0 truncate text-[16px] font-medium"
-                  />
-                  {c.labels.map((l) => (
-                    <LabelChip key={l.id} label={l} small />
+            <div key={c.id} className="flex items-center border-b border-hairline last:border-b-0">
+              <button
+                type="button"
+                onClick={() => {
+                  haptic.tap();
+                  if (c.username) openTelegramLink(`https://t.me/${c.username}`);
+                  else toast(c.offline ? t.people.offline : t.people.noUsername, 'error');
+                }}
+                className="flex min-h-[60px] min-w-0 flex-1 items-center gap-3 px-4 py-2 text-left active:bg-hairline"
+              >
+                <Avatar id={c.id} firstName={c.firstName} lastName={c.lastName} size={40} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                    <PersonName
+                      name={displayName(c)}
+                      labels={c.labels}
+                      positionLook={c.positionLook}
+                      isAdmin={c.isAdmin}
+                      className="min-w-0 truncate text-[16px] font-medium"
+                    />
+                    {c.labels.map((l) => (
+                      <LabelChip key={l.id} label={l} small />
+                    ))}
+                  </span>
+                  <span className="block truncate text-[13px] text-hint">
+                    {c.username ? `@${c.username}` : c.offline ? t.people.offline : '—'}
+                  </span>
+                </span>
+                {c.positionName &&
+                  (c.positionLook ? (
+                    <LabelChip label={{ ...c.positionLook, name: c.positionName }} />
+                  ) : (
+                    <Badge>{c.positionName}</Badge>
                   ))}
-                </span>
-                <span className="block truncate text-[13px] text-hint">
-                  {c.username ? `@${c.username}` : c.offline ? t.people.offline : '—'}
-                </span>
-              </span>
-              {c.positionName &&
-                (c.positionLook ? (
-                  <LabelChip label={{ ...c.positionLook, name: c.positionName }} />
-                ) : (
-                  <Badge>{c.positionName}</Badge>
-                ))}
-              {c.username && <IconTelegram size={20} className="shrink-0 text-link" />}
-            </button>
+                {c.username && <IconTelegram size={20} className="shrink-0 text-link" />}
+              </button>
+              {canProfile && (
+                <button
+                  type="button"
+                  aria-label={t.people.profileStats}
+                  onClick={() => {
+                    haptic.tap();
+                    push({ name: 'member', userId: c.id });
+                  }}
+                  className="mr-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-hairline text-[16px] active:scale-90"
+                >
+                  📊
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}

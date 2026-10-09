@@ -25,7 +25,7 @@ import {
   Section,
   TextField,
 } from '../components/ui';
-import { useT } from '../lib/i18n';
+import { useI18n, useT } from '../lib/i18n';
 import { useNav } from '../lib/nav';
 import {
   useGroups,
@@ -128,6 +128,25 @@ export function MemberScreen({ userId }: { userId: number }) {
           a.visible && (
             <AttendanceSummary key={a.groupId} data={a} showStreak={permissions.canEditProfile} />
           ),
+      )}
+      {attendance.some((a) => a.visible) && (
+        <p className="-mt-2 px-2 text-[12px] leading-snug text-hint">{t.member.countedHint}</p>
+      )}
+
+      {permissions.canSeeBirthday && (
+        <BirthdaySection
+          birthday={user.birthday}
+          birthYear={user.birthYear}
+          onSave={(birthday, birthYear) =>
+            updateUser
+              .mutateAsync({ birthday, birthYear })
+              .then(() => {
+                haptic.success();
+                toast(t.common.saved);
+              })
+              .catch(() => toast(t.common.saveFailed, 'error'))
+          }
+        />
       )}
 
       {permissions.canEditProfile && (
@@ -373,5 +392,103 @@ function ProfilePhoto({
         />
       </Sheet>
     </>
+  );
+}
+
+/**
+ * A person's birthday: day and month, the year if known (then the age is shown). Seen and
+ * set by the person and by whoever manages them; marked in the ministry calendar and sent
+ * to church admins by the bot.
+ */
+function BirthdaySection({
+  birthday,
+  birthYear,
+  onSave,
+}: {
+  birthday: string | null;
+  birthYear: number | null;
+  onSave: (birthday: string | null, birthYear: number | null) => Promise<void>;
+}) {
+  const { t, intl } = useI18n();
+  const tb = t.member.birthday;
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(birthday ? `${birthYear ?? 2000}-${birthday}` : '');
+  const [knowYear, setKnowYear] = useState(birthYear !== null);
+  const shown = birthday
+    ? new Intl.DateTimeFormat(intl, {
+        day: 'numeric',
+        month: 'long',
+        ...(birthYear ? { year: 'numeric' } : {}),
+        timeZone: 'UTC',
+      }).format(new Date(`${birthYear ?? 2000}-${birthday}T12:00:00Z`))
+    : null;
+  const age = (() => {
+    if (!birthday || !birthYear) return null;
+    const now = new Date();
+    const md = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return now.getFullYear() - birthYear - (md < birthday ? 1 : 0);
+  })();
+  return (
+    <Section title={`🎂 ${tb.title}`} footer={tb.hint}>
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-hairline"
+        >
+          <span className="min-w-0 flex-1 text-[16px]">
+            {shown ? (
+              <>
+                {shown}
+                {age !== null && <span className="text-hint"> · {tb.age(age)}</span>}
+              </>
+            ) : (
+              <span className="text-hint">{tb.none}</span>
+            )}
+          </span>
+          <span className="text-[14px] font-semibold text-link">{shown ? tb.change : tb.add}</span>
+        </button>
+      ) : (
+        <div className="flex flex-col gap-3 p-4">
+          <input
+            type="date"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="rounded-xl bg-hairline px-3 py-2.5 text-[16px] outline-none"
+          />
+          <label className="flex items-center gap-2 text-[14px]">
+            <input
+              type="checkbox"
+              checked={knowYear}
+              onChange={(e) => setKnowYear(e.target.checked)}
+            />
+            {tb.knowYear}
+          </label>
+          <div className="flex gap-2">
+            <Button
+              disabled={!/^\d{4}-\d{2}-\d{2}$/.test(value)}
+              onClick={async () => {
+                await onSave(value.slice(5), knowYear ? Number(value.slice(0, 4)) : null);
+                setOpen(false);
+              }}
+            >
+              {t.common.save}
+            </Button>
+            {birthday && (
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  await onSave(null, null);
+                  setValue('');
+                  setOpen(false);
+                }}
+              >
+                {tb.remove}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </Section>
   );
 }

@@ -268,6 +268,18 @@ export const lt: Messages = {
     cameOf: (a: number, b: number) => `atėjo ${a} iš ${b}`,
   },
   meetings: {
+    stats: {
+      title: 'Statistikoje',
+      rule: 'Pagal tarnystės taisyklę',
+      yes: 'skaičiuojama',
+      no: 'neskaičiuojama',
+      count: 'Skaičiuoti',
+      skip: 'Neskaičiuoti',
+      regular: 'Įprasti (be tipo)',
+      groupTitle: 'Kurie susitikimai skaičiuojami statistikoje',
+      groupHint:
+        'Lankomumas ir žmonių statistika skaičiuojami tik pagal pasirinktus susitikimų tipus — pvz., tik jaunimo. Atskiram susitikimui ar tvarkaraščiui galima pasirinkti kitaip.',
+    },
     pictureTitle: 'Paveikslas prie žinutės',
     askRsvp: 'Paklausti „Ar ateisite?“',
     askRsvpHint: 'Žinutėje bus mygtukai „Ateisiu“ / „Negalėsiu“. Atsakymai ateis jums.',
@@ -724,6 +736,7 @@ export const lt: Messages = {
     failed: 'Nepavyko sukurti susitikimo',
   },
   people: {
+    profileStats: 'Profilis ir statistika',
     sortByPosition: 'Pagal pareigą',
     sortByName: 'Pagal vardą',
     all: 'Visi',
@@ -759,6 +772,17 @@ export const lt: Messages = {
     joinShare: (group: string) => `Prisijunk prie grupės „${group}“`,
   },
   member: {
+    countedHint: 'Skaičiuojami tik susitikimai, kuriuos tarnystė įtraukia į statistiką.',
+    birthday: {
+      title: 'Gimtadienis',
+      hint: 'Mato pats žmogus ir tie, kurie tvarko žmones. Pažymima tarnystės kalendoriuje; administratoriai gauna priminimus bote.',
+      none: 'Nenurodytas',
+      add: 'Nurodyti',
+      change: 'Keisti',
+      remove: 'Pašalinti',
+      knowYear: 'Gimimo metai žinomi',
+      age: (n: number) => `${n} m.`,
+    },
     photo: 'Profilio nuotrauka',
     photoAdd: 'Pridėkite nuotrauką — ji bus susitikimų kortelėse ir kalbėtojų plakatuose.',
     photoChange: 'Pasirinkti kitą nuotrauką',
@@ -1217,6 +1241,16 @@ export const lt: Messages = {
     noRights: 'Nėra teisės keisti išvaizdos',
   },
   settings: {
+    birthdays: {
+      title: 'Gimtadieniai',
+      hint: 'Botas siunčia bažnyčios administratoriams artėjančių gimtadienių sąrašą su pareigomis. Komanda /birthdays — savaitė, /birthdays month — mėnuo.',
+      weekly: 'Savaitinis sąrašas',
+      weekday: 'Diena',
+      hour: 'Laikas',
+      ahead: 'Kiek į priekį',
+      days: (d: number) => (d === 7 ? 'Savaitė' : d === 14 ? '2 savaitės' : 'Mėnuo'),
+      dayOf: 'Priminimas pačią gimtadienio dieną',
+    },
     botPhoto: 'Boto nuotrauka ir piktograma telefone',
     botPhotoHint:
       'Telegram rodo šią nuotrauką prie boto ir ant programėlės piktogramos telefono ekrane. Jau pridėtos piktogramos gali atsinaujinti vėliau.',
@@ -2150,6 +2184,22 @@ export const lt: Messages = {
     pinnedHint: 'Renginį matys visa bažnyčia — pagrindinio puslapio viršuje.',
   },
   dev: {
+    mock: {
+      title: 'Bandomieji žmonės',
+      hint: 'Viena eilutė — vienas žmogus: „Vardas Pavardė — DD.MM.MMMM — Pareigos“. Metus ir pareigas galima praleisti. „Tik bandomieji“ — gimtadieniai (kalendorius, botas) imami tik iš jų, tikri nariai neskaičiuojami.',
+      count: 'Bandomųjų žmonių',
+      only: 'Tik bandomieji žmonės',
+      ministry: 'Tarnystė',
+      placeholder: 'Ona Petraitė — 14.05.2001 — Lyderė\nJonas Jonaitis — 03.11',
+      parsed: (n: number) => `Atpažinta: ${n}`,
+      badLines: (lines: string) => `nesupratau eilučių ${lines}`,
+      add: 'Pridėti',
+      added: (n: number) => `Pridėta: ${n}`,
+      removeAll: 'Pašalinti visus bandomuosius',
+      removeConfirm: (n: number) =>
+        `Pašalinti ${n} bandomųjų žmonių? Tikri nariai vėl bus skaičiuojami.`,
+      removed: (n: number) => `Pašalinta: ${n}`,
+    },
     guideTitle: 'Instrukcijos',
     guideEntry: 'Kūrėjui: kaip pridėti, keisti ir šalinti viską',
     guideSearch: 'Paieška',

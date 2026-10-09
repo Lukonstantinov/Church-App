@@ -720,6 +720,7 @@ meetingRoutes.patch('/:id', async (c) => {
     'leaderUserId',
     'budgetCents',
     'audience',
+    'counts',
   ] as const;
   if (!a.manage && managerOnly.some((k) => input[k] !== undefined))
     throw new HTTPException(403, { message: 'forbidden' });

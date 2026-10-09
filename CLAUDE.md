@@ -83,7 +83,12 @@ look (colour, pattern, logo, photo), background, default place, Telegram chat; a
 
 **People** — invite link/QR via the bot, join approval, offline members with claim codes,
 positions with rights (ordered with ↑/↓, `positions.sort`; member lists follow that order or A–Z),
-labels, contacts (members' own attendance hidden unless `groups.members_see_attendance`), profile photos (`users.photo_media_id`, set on the person
+labels, contacts (members' own attendance hidden unless `groups.members_see_attendance`; 📊 opens a person's
+profile for admins / `people.manage`), birthdays (`users.birthday` "MM-DD" + `birth_year`, set on the person screen;
+🎂 in the ministry calendar for people managers, `CalendarData.birthdays`; weekly bot list + day-of note to church admins,
+`church_settings.birthday_report`, hourly `sendBirthdayReports`; `/birthdays [month]` in the bot; `lib/birthdays.ts`),
+counted meetings (statistics count only `groups.stat_kinds` — 'regular' + meeting kinds, null = all — unless a meeting
+or schedule says `counts` true/false; `lib/statsRule.ts`), profile photos (`users.photo_media_id`, set on the person
 screen via `PUT /api/users/:id/photo`; used on meeting cards and as speakers' photos on posters —
 speakers can be picked from people, `speaker.userId`; missing photos give a warning; their look on
 posters and meeting cards — style photo/side/background, nine spots, edge, shape, size, opacity, on
@@ -208,7 +213,8 @@ logo. Phone notifications = bot messages (Telegram push).
 
 **Developer** — Telemetry screen (with app errors reported by `CrashGuard` → `client_errors`; a second guard
 wraps the whole app, index.html shows a Reload note if the script never starts, and a start that crashed makes
-the next one run Still once — safe start in `lib/perf.ts`), «🧪 open as another role» (`/testas` in the bot or the
+the next one run Still once — safe start in `lib/perf.ts`), 🧪 test people (pasted names + birthdays,
+`users.is_mock`, `/api/dev/mock-people`; `church_settings.mock_only` = birthdays use only them), «🧪 open as another role» (`/testas` in the bot or the
 main page: the app works as the developer's test person `users.test_of` (same name and photo) with a chosen position / pending / newcomer /
 admin, swapped in the auth middleware — `lib/testing.ts`, `realUser` stays the developer; amber bar to change or leave)
 and the Instructions screen (`screens/Guide.tsx`,

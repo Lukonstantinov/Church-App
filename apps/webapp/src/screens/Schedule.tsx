@@ -3,6 +3,7 @@ import type { ScheduleRow } from '@church/shared';
 import { MeetingFields, WeekdayPicker, type MeetingFormValue } from '../components/MeetingForm';
 import { IconRepeat, IconTrash } from '../components/icons';
 import { Sheet } from '../components/Sheet';
+import { StatChoice } from '../components/StatChoice';
 import { useToast } from '../components/Toast';
 import {
   Button,
@@ -46,6 +47,8 @@ export function Schedule({ groupId }: { groupId: number }) {
   };
   const [editing, setEditing] = useState<ScheduleRow | 'new' | null>(null);
   const [form, setForm] = useState<MeetingFormValue & { weekday: number }>(defaults);
+  // Whether its meetings count in statistics (null = the ministry's rule).
+  const [counts, setCounts] = useState<boolean | null>(null);
 
   if (schedules.isPending) return <Loading />;
   if (schedules.isError) return <ErrorState onRetry={() => void schedules.refetch()} />;
@@ -61,14 +64,21 @@ export function Schedule({ groupId }: { groupId: number }) {
             durationMin: target.durationMin,
           },
     );
+    setCounts(target === 'new' ? null : target.counts);
     setEditing(target);
   }
 
   async function save() {
     if (!form.title.trim() || !form.startTime) return;
     try {
-      if (editing === 'new') await create.mutateAsync(form);
-      else if (editing) await update.mutateAsync({ id: editing.id, ...form });
+      if (editing === 'new') await create.mutateAsync({ ...form, counts });
+      else if (editing)
+        // Sent only when changed: it is copied onto the schedule's meetings.
+        await update.mutateAsync({
+          id: editing.id,
+          ...form,
+          ...(counts !== editing.counts ? { counts } : {}),
+        });
       haptic.success();
       toast(editing === 'new' ? t.schedule.added : t.common.saved);
       setEditing(null);
@@ -157,6 +167,7 @@ export function Schedule({ groupId }: { groupId: number }) {
             onChange={(weekday) => setForm({ ...form, weekday })}
           />
           <MeetingFields value={form} onChange={(patch) => setForm({ ...form, ...patch })} />
+          <StatChoice value={counts} onChange={setCounts} />
           <Button
             onClick={() => void save()}
             disabled={!form.title.trim() || create.isPending || update.isPending}

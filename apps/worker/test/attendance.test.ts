@@ -144,6 +144,7 @@ describe('schedules → meetings', () => {
       user: ADMIN,
       json: { weekday: 4, startTime: '19:00', durationMin: 120, title: 'Пятница' },
     });
+    const before = new Date().toISOString();
     await apiJson(`/api/schedules/${schedule.id}`, {
       method: 'PATCH',
       user: ADMIN,
@@ -151,7 +152,8 @@ describe('schedules → meetings', () => {
     });
     const upcoming = await apiJson<MeetingRow[]>(`/api/groups/${group}/meetings`, { user: ADMIN });
     expect(upcoming.length).toBeGreaterThanOrEqual(4);
-    for (const m of upcoming) {
+    // A meeting already under way (a Friday evening run) keeps its time on purpose.
+    for (const m of upcoming.filter((x) => x.startsAt > before)) {
       expect(new Date(m.startsAt).getUTCHours()).toBeGreaterThanOrEqual(17); // 20:00 Riga = 17:00/18:00 UTC
     }
   });
