@@ -63,6 +63,15 @@ export const MEETING_MOTIONS = [
   'grunge',
   'tiltshift',
   'motionblur',
+  // Drawn by the graphics chip (PixiJS filters, components/GpuEffect.tsx).
+  'heatwave',
+  'shockwave',
+  'bloom',
+  'zoomburst',
+  'swirl',
+  'bulge',
+  'godrays',
+  'reflection',
 ] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
 
@@ -78,7 +87,8 @@ export const MOTION_GROUPS: {
     | 'retro'
     | 'stage'
     | 'icons'
-    | 'seasons';
+    | 'seasons'
+    | 'gpu';
   items: MeetingMotion[];
 }[] = [
   { key: 'light', items: ['calm', 'lively', 'mesh', 'aurora', 'silk', 'rays'] },
@@ -121,6 +131,31 @@ export const MOTION_GROUPS: {
   { key: 'stage', items: ['spotlight', 'disco', 'sparkle', 'hearts'] },
   { key: 'icons', items: ['iconfloat', 'iconrain', 'iconorbit'] },
   { key: 'seasons', items: ['leaves', 'snowfall', 'petals'] },
+  {
+    key: 'gpu',
+    items: [
+      'heatwave',
+      'shockwave',
+      'bloom',
+      'zoomburst',
+      'swirl',
+      'bulge',
+      'godrays',
+      'reflection',
+    ],
+  },
+];
+
+/** The animations the graphics chip draws (a photo bent, lit or blurred; one canvas each). */
+export const GPU_MOTIONS: readonly MeetingMotion[] = [
+  'heatwave',
+  'shockwave',
+  'bloom',
+  'zoomburst',
+  'swirl',
+  'bulge',
+  'godrays',
+  'reflection',
 ];
 
 /**
@@ -199,6 +234,14 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   grunge: ['weight'],
   tiltshift: ['weight'],
   motionblur: ['weight'],
+  heatwave: ['weight'],
+  shockwave: ['weight'],
+  bloom: ['weight'],
+  zoomburst: ['weight'],
+  swirl: ['weight'],
+  bulge: ['weight'],
+  godrays: ['density'],
+  reflection: ['weight'],
 };
 
 /** Settings per animation (an item's own, over its template's): {kind: MotionTune}. */

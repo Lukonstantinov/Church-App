@@ -19,6 +19,8 @@
     "html-to-image": "^1.11.13",
     "mp4-muxer": "5.2.2",
     "pdfmake": "^0.3.11",
+    "pixi-filters": "6.1.5",
+    "pixi.js": "8.21.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "uqr": "^0.1.3"

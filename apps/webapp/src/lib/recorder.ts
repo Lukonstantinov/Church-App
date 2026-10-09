@@ -1,4 +1,5 @@
 import type { ArrayBufferTarget, Muxer } from 'mp4-muxer';
+import { holdGpu, seekGpu } from '../components/GpuEffect';
 import { holdParticles, seekParticles } from '../components/ParticleCanvas';
 import { boxIn, drawShot, freeCanvas, picturesReady } from './poster';
 
@@ -450,10 +451,14 @@ async function drawEffects(
     let pic: HTMLCanvasElement;
     if (fx.canvas) {
       seekParticles(fx.el, t);
+      seekGpu(fx.el, t);
       pic = fx.canvas;
     } else {
       for (const a of fx.anims) a.currentTime = t * 1000;
-      if (fx.el.querySelector('canvas')) seekParticles(fx.el, t);
+      if (fx.el.querySelector('canvas')) {
+        seekParticles(fx.el, t);
+        seekGpu(fx.el, t);
+      }
       pic = await toCanvas(fx.el, {
         pixelRatio: k,
         skipFonts: true,
@@ -725,6 +730,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
   const motion = html.dataset.motion;
   if (motion === 'off') html.dataset.motion = 'lively';
   holdParticles(node, true);
+  holdGpu(node, true);
   await picturesReady(node);
   await document.fonts?.ready;
   await nextFrame();
@@ -863,6 +869,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     maskScratch = null;
     restoreTextures?.();
     holdParticles(node, false);
+    holdGpu(node, false);
     for (const a of node.getAnimations({ subtree: true })) a.play();
     if (motion === 'off') html.dataset.motion = motion;
   }

@@ -140,7 +140,9 @@ off by default; checked every 5 min) plus manual reminders. Meeting reminders
 (`groups.meeting_reminders`: minutes list, null = [120, 60], [] = off; claimed per time in
 `job_runs` as `meeting_remind`) with who serves; meeting animation (`MEETING_MOTIONS`: off / calm / lively / stars / waves / bokeh / rays /
 aurora / silk / mesh / embers / bubbles / snow / lines / grid / grain / glitch / crt / static / matrix / spotlight /
-disco / sparkle / hearts …, listed in `shared/motions.ts`; `LivingLayer` + `.living-*` CSS)
+disco / sparkle / hearts …, listed in `shared/motions.ts`; GPU ones — heat haze, shockwave, bloom, zoom burst, swirl,
+bulge, god rays, reflection: `GPU_MOTIONS`, PixiJS filters lazy-loaded in `components/GpuEffect.tsx`, max 6 live WebGL
+canvases, recorder steps them via `seekGpu`; `LivingLayer` + `.living-*` CSS)
 (`groups.meeting_motion`, per meeting `meetings.motion`; the home tile and the poster can have their
 own: `tile_motion` / `poster_motion` on meetings and design templates);
 a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).

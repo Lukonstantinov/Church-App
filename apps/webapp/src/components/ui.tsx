@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react';
 import {
+  GPU_MOTIONS,
   resolveBrand,
   type MeetingMotion,
   type MotionIcon,
@@ -10,6 +11,7 @@ import { useEnv } from '../lib/env';
 import { useEffectQuality, watchOffscreen } from '../lib/perf';
 import { useT } from '../lib/i18n';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
+import { GpuEffect } from './GpuEffect';
 import { PHOTO_EFFECTS, PhotoEffect } from './PhotoEffects';
 import { PARTICLES, SEASON_ITEMS, particleSpots, type Particle } from './particleData';
 import { PARTICLE_KINDS, ParticleCanvas } from './ParticleCanvas';
@@ -506,8 +508,10 @@ export function LivingLayer({
   const sharp = tune?.sharp ?? null;
   const spots = (base: readonly Particle[] = PARTICLES) => few(particleSpots(base, density));
   const beams = [...Array(Math.min(6, Math.max(1, Math.round(3 * density)))).keys()];
-  const size = tune?.size ?? 1;
-  const angle = tune?.angle ?? 0;
+  // The graphics-chip effects draw the photo themselves: never turned or resized here.
+  const gpu = GPU_MOTIONS.includes(kind);
+  const size = gpu ? 1 : (tune?.size ?? 1);
+  const angle = gpu ? 0 : (tune?.angle ?? 0);
   // Turned or shrunk, the layer grows so it still covers the card.
   const grow = angle % 180 !== 0 || size < 1 ? '-40%' : angle ? '-10%' : undefined;
   const c = tune?.color;
@@ -541,7 +545,11 @@ export function LivingLayer({
       ref={clip}
       aria-hidden="true"
       className="living-clip"
-      style={behind ? { zIndex: -1 } : undefined}
+      style={{
+        ...(behind ? { zIndex: -1 } : {}),
+        // Light rays without a photo are drawn on black: mixed in as light.
+        ...(kind === 'godrays' && !image ? { mixBlendMode: 'screen' } : {}),
+      }}
     >
       <span
         ref={ref}
@@ -669,6 +677,7 @@ export function LivingLayer({
           />
         )}
         {kind === 'glitch' && <Glitch image={image} density={density} weight={weight} />}
+        {gpu && <GpuEffect kind={kind} tune={tune} image={image} preview={preview} />}
         {kind === 'crt' && (
           <>
             <i className="living-scan" />
