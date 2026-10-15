@@ -4258,3 +4258,27 @@ html[data-sheet] #root *::after {
   -webkit-mask-image: -webkit-radial-gradient(white, black);
   mask-image: radial-gradient(white, black);
 }
+
+/* ---------- Shader effects (components/ShaderEffect.tsx) ---------- */
+/* A small picture stretched over its block: the effects are soft, so it looks the same. */
+.shader-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+/*
+ * Inside a poster one mask clips everything (on the poster itself) instead of one per
+ * effect: each .living-clip mask is a full-size picture of its own on an iPhone, and inside
+ * the letters it came on top of the letters' own mask.
+ */
+.layered-poster {
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(white, black);
+}
+.layered-poster .living-clip {
+  -webkit-mask-image: none;
+  mask-image: none;
+}

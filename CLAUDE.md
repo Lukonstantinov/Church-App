@@ -69,6 +69,9 @@ Deploy → Run workflow → production.
   stack several animations with `LivingLayers` so a block's particle effects share that canvas.
   An open sheet pauses and hides the page's animation layers (`html[data-sheet]`); long lists of live
   previews mount only near the screen (`useNearScreen`).
+  Smooth effects (silk, mesh, liquid, marble, gradient fill motion) are drawn by the shader engine
+  (`ShaderEffect.tsx`: one shared WebGL context, low-res canvases, `seekShaders`); thumbnail grids use
+  `StillMotion` (no effect layers at all — paused layers still cost memory).
   Long decorative animations are capped at 30 changes a second (`capAnimations` in `lib/perf.ts`);
   backdrop blur is redone whenever anything behind or inside it moves — keep moving things
   out from under glass (the page background steps 4×/s; glass with a living layer skips blur).
@@ -87,7 +90,8 @@ labels, contacts (members' own attendance hidden unless `groups.members_see_atte
 profile for admins / `people.manage`), birthdays (`users.birthday` "MM-DD" + `birth_year`, set on the person screen;
 🎂 in the ministry calendar for people managers, `CalendarData.birthdays`; weekly bot list + day-of note to church admins,
 `church_settings.birthday_report`, hourly `sendBirthdayReports`; `/birthdays [month]` in the bot; `lib/birthdays.ts`),
-counted meetings (statistics count only `groups.stat_kinds` — 'regular' + meeting kinds, null = all — unless a meeting
+who marked each attendance mark (`attendance.marked_by`, kept per changed mark), meeting comments
+(`meeting_comments`, folded on the meeting screen), counted meetings (statistics count only `groups.stat_kinds` — 'regular' + meeting kinds, null = all — unless a meeting
 or schedule says `counts` true/false; `lib/statsRule.ts`), profile photos (`users.photo_media_id`, set on the person
 screen via `PUT /api/users/:id/photo`; used on meeting cards and as speakers' photos on posters —
 speakers can be picked from people, `speaker.userId`; missing photos give a warning; their look on
@@ -191,7 +195,8 @@ layers (`type: fill`, a gradient can flow / turn / breathe), shapes with soft ed
 `dist/mediapipe` at build, model relayed by `/media/model/:name`) as two layers (people + the photo without them, hole filled; both keep `source`; or text/drawings split
 from a smooth background by colour, `splitGraphics`; layers carry `cut`), an eraser
 (`EraserSheet.tsx`, brings back from the source photo); layers move with fingers on the preview (`PosterGestures.tsx`,
-`data-layer-id`; effect layers have optional x/y/w/h); unfinished work is kept as a draft on the phone (`lib/drafts.ts`,
+`data-layer-id`; effect layers have optional x/y/w/h); unfinished work is kept as a draft on the phone (`lib/drafts.ts`; a draft open when the app crashed is set
+aside — DraftAside card, Design → drafts list —,
 fresh picture links via POST `/api/poster-templates/links`); the animated poster maker can use the same layer editor
 («Свои слои», `PosterLayersEditor`); Telegram's swipe-to-close is off (`disableVerticalSwipes`); the recorder keeps the still parts in bands between effects and cuts effects to their masks; editor previews are mockups of the real event/meeting shapes; place in % / container units, opacity, blend mode, layer styles); chosen per event or
 meeting (`poster_template_id`, rows carry `poster`) and drawn by `LayeredPoster` on covers, screens,

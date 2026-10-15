@@ -125,6 +125,11 @@ export const posterLayerSchema = z.discriminatedUnion('type', [
     /** Effects on the words only: inside the letters, or in a soft cloud around them. */
     effects: layerEffects,
     fxIn: z.enum(['letters', 'around']).nullish(),
+    /**
+     * Effects in the letters: a thin border of the letters' own colour left round them
+     * (default), none (the effect fills the whole letter), or over the outline too.
+     */
+    fxEdge: z.enum(['line', 'none', 'cover']).nullish(),
   }),
   z.object({
     type: z.literal('fill'),

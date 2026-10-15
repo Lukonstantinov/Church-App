@@ -86,7 +86,8 @@ export function MotionTuneControls({
   const set = (patch: Partial<MotionTune>) => onChange({ ...tune, ...patch });
   const knobs = MOTION_KNOBS[kind] ?? [];
   const lined = kind === 'lines' || kind === 'grid';
-  const label: Record<MotionKnob, string> = {
+  const shader = kind === 'silk' || kind === 'liquid' || kind === 'marble' || kind === 'mesh';
+  const label: Record<'density' | 'weight' | 'sharp', string> = {
     density:
       kind === 'lines'
         ? k.gap
@@ -94,14 +95,24 @@ export function MotionTuneControls({
           ? k.cells
           : kind === 'flames'
             ? k.tongues
-            : k.count,
+            : kind === 'silk'
+              ? k.folds
+              : kind === 'marble'
+                ? k.veins
+                : shader
+                  ? k.bands
+                  : k.count,
     weight: lined
       ? k.thick
       : kind === 'flames'
         ? k.height
-        : kind.startsWith('icon')
-          ? k.iconSize
-          : k.particle,
+        : kind === 'marble'
+          ? k.veinWidth
+          : shader
+            ? k.gloss
+            : kind.startsWith('icon')
+              ? k.iconSize
+              : k.particle,
     sharp: kind === 'flames' ? k.edges : k.clarity,
   };
   const knob: Record<MotionKnob, ReactNode> = {
@@ -140,6 +151,55 @@ export function MotionTuneControls({
         show={percent}
         onChange={(sharp) => set({ sharp })}
       />
+    ),
+    chaos: (
+      <Knob
+        key="chaos"
+        label={k.chaos}
+        value={tune.chaos ?? (kind === 'liquid' ? 0.45 : kind === 'marble' ? 0.35 : 0.3)}
+        min={0}
+        max={1}
+        step={0.05}
+        show={percent}
+        onChange={(chaos) => set({ chaos })}
+      />
+    ),
+    seed: (
+      <div key="seed" className="flex items-center justify-between gap-3">
+        <span className="text-[14px]">
+          {k.seed} <span className="font-semibold tabular-nums text-hint">#{tune.seed ?? 0}</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            haptic.tap();
+            set({ seed: Math.floor(Math.random() * 10000) });
+          }}
+          className="rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold active:scale-95"
+        >
+          {k.shuffle}
+        </button>
+      </div>
+    ),
+    colors: (
+      <ColorsRow
+        key="colors"
+        value={tune.colors ?? []}
+        onChange={(colors) => set({ colors: colors.length ? colors : null })}
+      />
+    ),
+    symbols: (
+      <label key="symbols" className="flex flex-col gap-1">
+        <span className="text-[14px]">{k.symbols}</span>
+        <input
+          value={tune.symbols ?? ''}
+          maxLength={60}
+          onChange={(e) => set({ symbols: e.target.value || null })}
+          placeholder="ｱ1ｶ0ﾀ7 …"
+          className="rounded-xl bg-hairline px-3 py-2 text-[16px] outline-none placeholder:text-hint"
+        />
+        <span className="text-[12px] text-hint">{k.symbolsHint}</span>
+      </label>
     ),
   };
   return (
@@ -193,7 +253,9 @@ export function MotionTuneControls({
           ))}
         </div>
       </div>
-      <ColorRow value={tune.color ?? null} onChange={(color) => set({ color })} />
+      {!knobs.includes('colors') && (
+        <ColorRow value={tune.color ?? null} onChange={(color) => set({ color })} />
+      )}
       <button
         type="button"
         onClick={() => {
@@ -204,6 +266,55 @@ export function MotionTuneControls({
       >
         {k.reset}
       </button>
+    </div>
+  );
+}
+
+/** Up to four colours of one's own for the shader effects (empty = the ministry's). */
+function ColorsRow({ value, onChange }: { value: string[]; onChange: (c: string[]) => void }) {
+  const t = useT();
+  const k = t.studio.knob;
+  return (
+    <div>
+      <div className="mb-1 text-[14px]">{k.colors}</div>
+      <div className="mb-2 text-[12px] text-hint">{k.colorsHint}</div>
+      <div className="flex flex-wrap items-center gap-2">
+        {value.map((c, i) => (
+          <span key={i} className="relative">
+            <label
+              className="block h-9 w-9 cursor-pointer overflow-hidden rounded-full ring-1 ring-black/10"
+              style={{ background: c }}
+            >
+              <input
+                type="color"
+                value={c}
+                onChange={(e) => onChange(value.map((x, j) => (j === i ? e.target.value : x)))}
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
+            </label>
+            <button
+              type="button"
+              aria-label="×"
+              onClick={() => onChange(value.filter((_, j) => j !== i))}
+              className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-text)] text-[10px] leading-none text-[var(--color-bg)]"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {value.length < 4 && (
+          <button
+            type="button"
+            onClick={() => {
+              haptic.tap();
+              onChange([...value, PALETTE[(value.length * 3 + 6) % PALETTE.length]!]);
+            }}
+            className="rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold active:scale-95"
+          >
+            {k.addColor}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

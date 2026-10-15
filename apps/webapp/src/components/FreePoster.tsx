@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import type { GroupSummary, PosterLayer, PosterTexts } from '@church/shared';
-import { readDraft, useDraft, writeDraft } from '../lib/drafts';
+import {
+  clearSuspect,
+  dropDraft,
+  isSuspectDraft,
+  readDraft,
+  useDraft,
+  useOpeningMark,
+  writeDraft,
+} from '../lib/drafts';
 import { useT } from '../lib/i18n';
 import { preparePhoto } from '../lib/image';
 import { usePosterTemplates } from '../lib/queries';
@@ -8,7 +16,7 @@ import { haptic } from '../lib/telegram';
 import { CoverEffects, effectLayers, initEffects, type EffectsState } from './CoverEffects';
 import { LayeredPoster } from './LayeredPoster';
 import { PosterGestures } from './PosterGestures';
-import { PosterLayersEditor, starterDoc, usePosterDraft } from './PosterStudio';
+import { DraftAside, PosterLayersEditor, starterDoc, usePosterDraft } from './PosterStudio';
 import { LookTop } from './LookTop';
 import { groupLook } from './MeetingPoster';
 import { MotionExport } from './MotionExport';
@@ -55,21 +63,56 @@ function textsOf(words: PosterTextValue): PosterTexts {
  * sent to one's own chat with the bot, to forward anywhere.
  */
 export function FreePoster({ g }: { g: GroupSummary }) {
+  // The app closed itself while this was open last time: the draft is set aside, and the
+  // maker opens fresh until the person brings it back or deletes it.
+  const [aside, setAside] = useState(
+    () =>
+      (isSuspectDraft('free') || isSuspectDraft('free.layers')) &&
+      !!(readDraft('free') ?? readDraft('free.layers')),
+  );
+  const [gen, setGen] = useState(0);
+  const settle = () => {
+    clearSuspect('free');
+    clearSuspect('free.layers');
+    setAside(false);
+    setGen((n) => n + 1);
+  };
+  return (
+    <>
+      {aside && (
+        <div className="mb-3">
+          <DraftAside
+            at={readDraft('free')?.at ?? readDraft('free.layers')?.at ?? null}
+            onDelete={() => {
+              dropDraft('free');
+              settle();
+            }}
+            onRestore={settle}
+          />
+        </div>
+      )}
+      <FreePosterMaker key={gen} g={g} fresh={aside} />
+    </>
+  );
+}
+
+function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
   const t = useT();
   const tf = t.freePoster;
   const templates = usePosterTemplates();
   // Everything chosen here is kept as a draft: leaving or closing the app loses nothing.
-  const [kept] = useState(() => readDraft<Kept>('free')?.data);
+  const [kept] = useState(() => (fresh ? undefined : readDraft<Kept>('free')?.data));
   const [source, setSource] = useState<Source>(kept?.source ?? 'colours');
-  const [photo, setPhoto] = useState<string | null>(
-    () => readDraft<string>('free.photo')?.data ?? null,
+  const [photo, setPhoto] = useState<string | null>(() =>
+    fresh ? null : (readDraft<string>('free.photo')?.data ?? null),
   );
   const [tplId, setTplId] = useState<number | null>(kept?.tplId ?? null);
   const [shape, setShape] = useState<Shape>(kept?.shape ?? '4:5');
   const [effects, setEffects] = useState<EffectsState>(
     () => kept?.effects ?? initEffects({ motion: 'aurora', motionTune: null, motionLayers: [] }),
   );
-  useDraft('free', { source, tplId, shape, effects } satisfies Kept);
+  useDraft('free', { source, tplId, shape, effects } satisfies Kept, fresh);
+  useOpeningMark('free', !fresh);
   // Own layers, as in the poster editor (pictures, cut-outs, texts, colours, effects).
   const layered = usePosterDraft('free.layers', starterDoc);
   const [selected, setSelected] = useState<string | null>(null);
@@ -82,7 +125,7 @@ export function FreePoster({ g }: { g: GroupSummary }) {
     const blob = await preparePhoto(f, 1400).catch(() => f);
     const url = await asDataUrl(blob);
     setPhoto(url);
-    writeDraft('free.photo', url);
+    if (!fresh) writeDraft('free.photo', url);
     setSource('photo');
   };
   const patch = (id: string, p: Partial<PosterLayer>) =>

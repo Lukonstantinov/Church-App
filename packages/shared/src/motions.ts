@@ -81,6 +81,9 @@ export const MEETING_MOTIONS = [
   'fireworks',
   'notes',
   'crosses',
+  // Drawn by the shared shader engine (components/ShaderEffect.tsx): smooth, low-res, light.
+  'liquid',
+  'marble',
 ] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
 
@@ -116,7 +119,7 @@ export const MOTION_GROUPS: {
       'warp',
     ],
   },
-  { key: 'liquid', items: ['waves', 'goo', 'ripples'] },
+  { key: 'liquid', items: ['liquid', 'marble', 'waves', 'goo', 'ripples'] },
   { key: 'texture', items: ['lines', 'grid', 'grain'] },
   {
     key: 'photo',
@@ -197,19 +200,34 @@ export const motionTuneSchema = z.object({
   weight: z.number().min(0.3).max(3).nullish(),
   /** Flames: 0 soft … 1 crisp, sharp tongues; glows (aurora, silk, mesh…): 0 dreamy … 1 clear. */
   sharp: z.number().min(0).max(1).nullish(),
+  /** Shader effects (silk, liquid, marble, colour flow): 0 calm and even … 1 wild, turbulent. */
+  chaos: z.number().min(0).max(1).nullish(),
+  /** Shader effects: which of endless variations of the pattern (🎲 picks another). */
+  seed: z.number().int().min(0).max(9999).nullish(),
+  /** Shader effects: up to 4 colours of one's own, instead of the ministry's. */
+  colors: z
+    .array(z.string().regex(/^#[0-9a-fA-F]{6}$/))
+    .max(4)
+    .nullish(),
+  /** Digital rain: the letters and symbols that fall (empty = the classic ones). */
+  symbols: z.string().max(60).nullish(),
 });
 export type MotionTune = z.output<typeof motionTuneSchema>;
 
 /** What an animation can be tuned in besides speed, size, direction, colour and strength. */
-export type MotionKnob = 'density' | 'weight' | 'sharp';
+export type MotionKnob = 'density' | 'weight' | 'sharp' | 'chaos' | 'seed' | 'colors' | 'symbols';
 const PARTICLE_KNOBS: MotionKnob[] = ['density', 'weight'];
 const GLOW_KNOBS: MotionKnob[] = ['sharp'];
+/** The shader effects: how many folds/veins/bands, how wild, which variation, own colours. */
+const SHADER_KNOBS: MotionKnob[] = ['density', 'chaos', 'sharp', 'seed', 'colors'];
 export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   calm: GLOW_KNOBS,
   lively: GLOW_KNOBS,
-  mesh: GLOW_KNOBS,
+  mesh: SHADER_KNOBS,
   aurora: GLOW_KNOBS,
-  silk: GLOW_KNOBS,
+  silk: [...SHADER_KNOBS, 'weight'],
+  liquid: [...SHADER_KNOBS, 'weight'],
+  marble: [...SHADER_KNOBS, 'weight'],
   bokeh: ['sharp', 'weight'],
   flames: ['sharp', 'weight', 'density'],
   embers: PARTICLE_KNOBS,
@@ -229,7 +247,7 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   glitch: ['density', 'weight'],
   crt: ['density'],
   static: ['weight'],
-  matrix: PARTICLE_KNOBS,
+  matrix: [...PARTICLE_KNOBS, 'symbols'],
   spotlight: ['density', 'weight'],
   disco: PARTICLE_KNOBS,
   hearts: PARTICLE_KNOBS,

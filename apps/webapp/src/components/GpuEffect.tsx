@@ -100,12 +100,26 @@ export function GpuEffect({
   preview?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const weight = tune?.weight ?? 1;
-  const density = tune?.density ?? 1;
-  const color = tune?.color ?? null;
-  const angle = tune?.angle ?? 0;
-  const speed = tune?.speed ?? 1;
   const blank = NEEDS_PHOTO.has(kind) && !image;
+  // The settings are read on every drawing: moving a slider changes the running effect
+  // instead of throwing its WebGL canvas away and making a new one for every step (phones
+  // handle that churn badly — it was one of the causes of lag while editing).
+  const settings = useRef({
+    weight: 1,
+    density: 1,
+    color: null as string | null,
+    angle: 0,
+    speed: 1,
+  });
+  useEffect(() => {
+    settings.current = {
+      weight: tune?.weight ?? 1,
+      density: tune?.density ?? 1,
+      color: tune?.color ?? null,
+      angle: tune?.angle ?? 0,
+      speed: tune?.speed ?? 1,
+    };
+  }, [tune?.weight, tune?.density, tune?.color, tune?.angle, tune?.speed]);
 
   useEffect(() => {
     const el = ref.current;
@@ -166,6 +180,7 @@ export function GpuEffect({
       let { W, H } = layout();
 
       let noise: InstanceType<typeof PIXI.Sprite> | null = null;
+      const { weight, density, angle } = settings.current;
       const filter = (() => {
         switch (kind) {
           case 'heatwave': {
@@ -229,15 +244,18 @@ export function GpuEffect({
         }
       })();
       if (filter) stage.filters = [filter];
-      if (color && kind === 'godrays') stage.tint = color;
 
       // One moment of the effect (seconds since its start, at its speed).
       const draw = (seconds: number) => {
+        const { weight, density, color, angle, speed } = settings.current;
+        if (kind === 'godrays') stage.tint = color ?? 0xffffff;
         const t = seconds * speed;
         const wave = 0.5 + 0.5 * Math.sin(t * 1.6);
         if (filter instanceof PIXI.DisplacementFilter && noise) {
           noise.position.set(t * 30, t * 18);
+          filter.scale.x = filter.scale.y = 6 * weight;
         } else if (filter instanceof F.ShockwaveFilter) {
+          filter.amplitude = 16 * weight;
           filter.time = t % 2.6;
         } else if (filter instanceof F.AdvancedBloomFilter) {
           // Only the brightest parts glow, breathing gently.
@@ -249,8 +267,11 @@ export function GpuEffect({
         } else if (filter instanceof F.BulgePinchFilter) {
           filter.strength = 0.55 * Math.max(-1, Math.min(1, weight * Math.sin(t * 1.1)));
         } else if (filter instanceof F.GodrayFilter) {
+          filter.angle = 30 + angle;
+          filter.gain = 0.45 + 0.1 * density;
           filter.time = t * 0.6;
         } else if (filter instanceof F.ReflectionFilter) {
+          filter.amplitude = [0, 18 * weight];
           filter.time = t * 1.4;
         }
         app.render();
@@ -300,7 +321,7 @@ export function GpuEffect({
       cancelAnimationFrame(frame);
       cleanup?.();
     };
-  }, [kind, image, preview, blank, weight, density, color, angle, speed]);
+  }, [kind, image, preview, blank]);
 
   if (preview)
     return (
@@ -310,11 +331,5 @@ export function GpuEffect({
     );
   if (blank) return null;
   // A new canvas for each set-up: a WebGL canvas can't start again once given back.
-  return (
-    <canvas
-      key={`${kind}|${image}|${weight}|${density}|${color}|${angle}|${speed}`}
-      ref={ref}
-      className="gpu-canvas"
-    />
-  );
+  return <canvas key={`${kind}|${image}`} ref={ref} className="gpu-canvas" />;
 }

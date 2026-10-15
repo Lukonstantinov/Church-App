@@ -28,9 +28,16 @@ import {
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { cutOutPeople, splitGraphics } from '../lib/cutout';
-import { dropDraft, readDraft, useDraft } from '../lib/drafts';
+import {
+  clearSuspect,
+  dropDraft,
+  isSuspectDraft,
+  readDraft,
+  useDraft,
+  useOpeningMark,
+} from '../lib/drafts';
 import { prepareCutout } from '../lib/image';
-import { FullMotion } from '../lib/perf';
+import { FullMotion, StillMotion, isSafeStart } from '../lib/perf';
 import {
   posterLinks,
   useDeletePosterTemplate,
@@ -178,31 +185,33 @@ export function PosterStudio({ g }: { g: GroupSummary }) {
   const [editing, setEditing] = useState<PosterTemplate | 'new' | null>(null);
   return (
     <section>
-      <div className="motion-still grid grid-cols-3 gap-2.5">
-        {(list.data ?? []).map((tpl) => (
+      <StillMotion.Provider value>
+        <div className="motion-still grid grid-cols-3 gap-2.5">
+          {(list.data ?? []).map((tpl) => (
+            <button
+              key={tpl.id}
+              type="button"
+              onClick={() => setEditing(tpl)}
+              className="flex flex-col gap-1 text-left active:scale-95"
+            >
+              <LayeredPoster
+                tpl={tpl}
+                texts={texts}
+                className="aspect-[4/5] w-full rounded-2xl shadow-card"
+              />
+              <span className="truncate px-1 text-[12px] font-semibold">{tpl.name}</span>
+            </button>
+          ))}
           <button
-            key={tpl.id}
             type="button"
-            onClick={() => setEditing(tpl)}
-            className="flex flex-col gap-1 text-left active:scale-95"
+            onClick={() => setEditing('new')}
+            className="glass flex aspect-[4/5] flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-hint/30 text-hint active:scale-95"
           >
-            <LayeredPoster
-              tpl={tpl}
-              texts={texts}
-              className="aspect-[4/5] w-full rounded-2xl shadow-card"
-            />
-            <span className="truncate px-1 text-[12px] font-semibold">{tpl.name}</span>
+            <IconPlus size={24} />
+            <span className="text-[12px] font-semibold">{t.posters.new}</span>
           </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setEditing('new')}
-          className="glass flex aspect-[4/5] flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-hint/30 text-hint active:scale-95"
-        >
-          <IconPlus size={24} />
-          <span className="text-[12px] font-semibold">{t.posters.new}</span>
-        </button>
-      </div>
+        </div>
+      </StillMotion.Provider>
       {editing && (
         <PosterEditor
           tpl={editing === 'new' ? null : editing}
@@ -289,25 +298,88 @@ export async function freshLinks(doc: PosterDoc): Promise<PosterDoc> {
   };
 }
 
-/** Keeps a design as a draft on this phone and brings it back (with fresh picture links). */
+/**
+ * Keeps a design as a draft on this phone and brings it back (with fresh picture links).
+ * A draft that was on screen when the app closed itself is set aside (`aside`) instead of
+ * opened: opening it again would most likely close the app again. The person can then
+ * bring it back anyway or delete it (DraftAside).
+ */
 export function usePosterDraft(key: string, initial: () => PosterDoc) {
   const [kept] = useState(() => readDraft<PosterDoc>(key));
-  const [doc, setDoc] = useState<PosterDoc>(() => kept?.data ?? initial());
-  const [restored, setRestored] = useState(!!kept);
+  const [aside, setAside] = useState(() => !!kept && isSuspectDraft(key));
+  const [doc, setDoc] = useState<PosterDoc>(() => (kept && !aside ? kept.data : initial()));
+  const [restored, setRestored] = useState(!!kept && !aside);
   useEffect(() => {
-    if (!kept) return;
+    if (!kept || aside) return;
     let stop = false;
     void freshLinks(kept.data).then((d) => !stop && setDoc(d));
     return () => {
       stop = true;
     };
-  }, [kept]);
-  useDraft(key, doc);
+  }, [kept, aside]);
+  // While set aside the old draft stays as it is (nothing new overwrites it).
+  useDraft(key, doc, aside);
+  useOpeningMark(key, !aside);
   const forget = () => {
     dropDraft(key);
+    clearSuspect(key);
+    setAside(false);
     setRestored(false);
   };
-  return { doc, setDoc, restored, forget };
+  const restoreAnyway = () => {
+    clearSuspect(key);
+    setAside(false);
+    setRestored(true);
+  };
+  return { doc, setDoc, restored, forget, aside, restoreAnyway, keptAt: kept?.at ?? null };
+}
+
+/** The card shown instead of a draft that was open when the app closed itself. */
+export function DraftAside({
+  at,
+  onRestore,
+  onDelete,
+}: {
+  at: number | null;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
+  const t = useT();
+  const f = useFmt();
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-[13px]">
+      <div className="font-semibold">⚠️ {t.posters.draftAside}</div>
+      <div className="text-hint">
+        {t.posters.draftAsideHint}
+        {at
+          ? ` · ${f.weekdayDayMonth(new Date(at).toISOString())} ${f.time(new Date(at).toISOString())}`
+          : ''}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="rounded-full bg-[var(--color-destructive,#ef4444)] px-3 py-1.5 font-semibold text-white active:scale-95"
+          onClick={async () => {
+            if (!(await confirmDialog(t.posters.draftDeleteConfirm))) return;
+            haptic.tap();
+            onDelete();
+          }}
+        >
+          🗑 {t.posters.draftDelete}
+        </button>
+        <button
+          type="button"
+          className="rounded-full bg-hairline px-3 py-1.5 font-semibold active:scale-95"
+          onClick={async () => {
+            if (!(await confirmDialog(t.posters.draftRestoreConfirm))) return;
+            onRestore();
+          }}
+        >
+          {t.posters.draftRestoreAnyway}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -690,13 +762,18 @@ function PosterEditor({
   const save = useSavePosterTemplate();
   const remove = useDeletePosterTemplate();
   const draftKey = `poster.${tpl?.id ?? 'new'}`;
-  const { doc, setDoc, restored, forget } = usePosterDraft(draftKey, () =>
-    tpl ? { background: tpl.background, layers: tpl.layers, frame: tpl.frame } : starterDoc(),
+  const { doc, setDoc, restored, forget, aside, restoreAnyway, keptAt } = usePosterDraft(
+    draftKey,
+    () =>
+      tpl ? { background: tpl.background, layers: tpl.layers, frame: tpl.frame } : starterDoc(),
   );
   const [name, setName] = useState(
-    () => readDraft<string>(`${draftKey}.name`)?.data ?? tpl?.name ?? t.posters.defaultName,
+    () =>
+      (aside ? null : readDraft<string>(`${draftKey}.name`)?.data) ??
+      tpl?.name ??
+      t.posters.defaultName,
   );
-  useDraft(`${draftKey}.name`, name);
+  useDraft(`${draftKey}.name`, name, aside);
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<View>('poster');
   const [kind, setKind] = useState<Kind>('event');
@@ -773,8 +850,9 @@ function PosterEditor({
             onPatch={patch}
             outline
           >
-            {/* What is being designed always moves, whatever the phone's graphics setting. */}
-            <FullMotion.Provider value>
+            {/* What is being designed always moves, whatever the phone's graphics setting —
+                except right after the app closed itself (that start stays still). */}
+            <FullMotion.Provider value={!isSafeStart()}>
               <div className="flex h-[262px] items-center justify-center">
                 <Mockup view={view} kind={kind} tpl={doc} g={g} />
               </div>
@@ -783,6 +861,20 @@ function PosterEditor({
           <p className="mt-1.5 text-center text-[11px] text-hint">{t.posters.dragHint}</p>
         </div>
 
+        {aside && (
+          <DraftAside
+            at={keptAt}
+            onDelete={() => {
+              forget();
+              dropDraft(`${draftKey}.name`);
+            }}
+            onRestore={() => {
+              restoreAnyway();
+              const n = readDraft<string>(`${draftKey}.name`)?.data;
+              if (n) setName(n);
+            }}
+          />
+        )}
         {restored && (
           <div className="flex items-center gap-2 rounded-xl bg-hairline px-3 py-2 text-[13px]">
             <span className="flex-1">💾 {t.posters.draftRestored}</span>
@@ -1680,6 +1772,21 @@ function TextSettings({
             />
           ))}
         </div>
+        {(layer.fxIn ?? 'letters') === 'letters' && (layer.effects?.length ?? 0) > 0 && (
+          <div className="mb-3">
+            <div className="mb-1.5 text-[13px] text-hint">{t.posters.fxEdgeLabel}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {(['line', 'none', 'cover'] as const).map((m) => (
+                <Pill
+                  key={m}
+                  on={(layer.fxEdge ?? 'line') === m}
+                  onClick={() => onChange({ fxEdge: m === 'line' ? null : m })}
+                  label={t.posters.fxEdge[m]}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </LayerEffects>
     </>
   );
@@ -1779,32 +1886,34 @@ export function PosterPicker({
   const { texts: sample } = useSample();
   if (!list.data?.length) return <p className="text-[13px] text-hint">{t.posters.noneYet}</p>;
   return (
-    <div className="motion-still grid grid-cols-4 gap-2">
-      <button
-        type="button"
-        onClick={() => onChange(null)}
-        className={`flex aspect-[4/5] items-center justify-center rounded-xl bg-hairline p-1 text-center text-[11px] font-semibold text-hint ${value === null ? 'ring-2 ring-[var(--brand)]' : ''}`}
-      >
-        {t.posters.pickNone}
-      </button>
-      {list.data.map((tpl) => (
+    <StillMotion.Provider value>
+      <div className="motion-still grid grid-cols-4 gap-2">
         <button
-          key={tpl.id}
           type="button"
-          onClick={() => {
-            haptic.tap();
-            onChange(value === tpl.id ? null : tpl.id);
-          }}
-          className={`rounded-xl ${value === tpl.id ? 'ring-2 ring-[var(--brand)] ring-offset-2' : ''}`}
+          onClick={() => onChange(null)}
+          className={`flex aspect-[4/5] items-center justify-center rounded-xl bg-hairline p-1 text-center text-[11px] font-semibold text-hint ${value === null ? 'ring-2 ring-[var(--brand)]' : ''}`}
         >
-          <LayeredPoster
-            tpl={tpl}
-            texts={texts ?? sample}
-            coverUrl={coverUrl}
-            className="aspect-[4/5] w-full rounded-xl"
-          />
+          {t.posters.pickNone}
         </button>
-      ))}
-    </div>
+        {list.data.map((tpl) => (
+          <button
+            key={tpl.id}
+            type="button"
+            onClick={() => {
+              haptic.tap();
+              onChange(value === tpl.id ? null : tpl.id);
+            }}
+            className={`rounded-xl ${value === tpl.id ? 'ring-2 ring-[var(--brand)] ring-offset-2' : ''}`}
+          >
+            <LayeredPoster
+              tpl={tpl}
+              texts={texts ?? sample}
+              coverUrl={coverUrl}
+              className="aspect-[4/5] w-full rounded-xl"
+            />
+          </button>
+        ))}
+      </div>
+    </StillMotion.Provider>
   );
 }

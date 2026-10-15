@@ -119,11 +119,20 @@ export const FullMotion = createContext(false);
  */
 export const useUnlimited = () => useContext(FullMotion);
 
-/** The quality the animation layers use here: full inside a recorded copy. */
+/**
+ * A small copy shown only to be recognised (a grid of poster thumbnails): its animation
+ * layers aren't drawn at all. Paused is not enough — measured, 24 paused thumbnails still
+ * kept 940 graphics layers (about 400 MB on an iPhone), because a paused animation keeps
+ * its layer.
+ */
+export const StillMotion = createContext(false);
+
+/** The quality the animation layers use here: full inside a recorded copy, none in a still one. */
 export function useEffectQuality(): Quality {
   const forced = useContext(FullMotion);
+  const still = useContext(StillMotion);
   const q = useQuality();
-  return forced ? 'full' : q;
+  return forced ? 'full' : still ? 'still' : q;
 }
 
 export const useQualityChoice = () =>

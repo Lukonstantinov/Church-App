@@ -15,6 +15,15 @@ import { GpuEffect } from './GpuEffect';
 import { PHOTO_EFFECTS, PhotoEffect } from './PhotoEffects';
 import { PARTICLES, SEASON_ITEMS, particleSpots, type Particle } from './particleData';
 import { PARTICLE_KINDS, ParticleCanvas } from './ParticleCanvas';
+import { ShaderEffect, shaderParams, type ShaderKind } from './ShaderEffect';
+
+/** The animations drawn by the shared shader engine (small and light, see ShaderEffect). */
+const SHADER_KINDS: ReadonlySet<MeetingMotion> = new Set<MeetingMotion>([
+  'silk',
+  'mesh',
+  'liquid',
+  'marble',
+]);
 
 /** Page container. `tabs` leaves room for the floating tab bar. */
 export function Screen({ children, tabs }: { children: ReactNode; tabs?: boolean }) {
@@ -502,6 +511,15 @@ export function LivingLayer({
     return (
       <ParticleCanvas layers={[{ kind, tune }]} icon={icon} behind={behind} preview={preview} />
     );
+  // Smooth colour effects are drawn small by the shader engine (no huge blurred layers).
+  if (SHADER_KINDS.has(kind))
+    return (
+      <ShaderEffect
+        params={shaderParams(kind as ShaderKind, tune)}
+        preview={preview}
+        behind={behind}
+      />
+    );
   // Weaker phones draw every other particle.
   const few = <T,>(list: readonly T[]): readonly T[] =>
     quality === 'lite' ? list.filter((_, i) => i % 2 === 0) : list;
@@ -542,6 +560,7 @@ export function LivingLayer({
   } as CSSProperties;
   const iconUrl = icon?.url ?? (icon?.emoji ? null : (env?.logoUrl ?? null));
   const iconEmoji = icon?.emoji ?? '✨';
+  const code = kind === 'matrix' ? rainColumns(tune?.symbols) : CODE;
   return (
     // The frame clips the animation to its block even when it is enlarged or turned
     // (iPhones don't always clip moving layers to rounded corners on their own).
@@ -602,13 +621,6 @@ export function LivingLayer({
             <i className="living-aurora a2" />
           </>
         )}
-        {kind === 'silk' && (
-          <>
-            <i className="living-silk s1" />
-            <i className="living-silk s2" />
-          </>
-        )}
-        {kind === 'mesh' && <i className="living-mesh" />}
         {(kind === 'embers' ||
           kind === 'bubbles' ||
           kind === 'snow' ||
@@ -706,7 +718,7 @@ export function LivingLayer({
                 } as CSSProperties
               }
             >
-              {CODE[i % CODE.length]}
+              {code[i % code.length]}
             </i>
           ))}
         {kind === 'spotlight' &&
@@ -812,6 +824,23 @@ export function LivingLayer({
 }
 
 /** Columns of the digital rain: a fixed jumble of digits and katakana each. */
+/**
+ * The falling columns of the digital rain: the classic code, or columns made of the
+ * person's own letters and symbols (emoji count as one), each column shuffled differently.
+ */
+export function rainColumns(symbols: string | null | undefined): readonly string[] {
+  const text = (symbols ?? '').replace(/\s+/g, '');
+  const own =
+    typeof Intl.Segmenter === 'function'
+      ? [...new Intl.Segmenter().segment(text)].map((x) => x.segment)
+      : Array.from(text);
+  if (own.length === 0) return CODE;
+  return CODE.map((_, c) => {
+    let out = '';
+    for (let i = 0; i < 10; i++) out += own[(i * 7 + c * 3 + ((i * c) % 5)) % own.length];
+    return out;
+  });
+}
 const CODE = ['1ｱ0ｶ7ﾀ3ﾅ9ｻ', 'ﾊ8ﾏ2ﾔ5ﾗ0ﾜ1', '0ｲ4ｷ1ﾁ6ﾆ3ｼ', 'ﾋ7ﾐ0ﾕ9ﾘ2ｦ5', '3ｳ8ｸ5ﾂ0ﾇ7ｽ', 'ﾌ1ﾑ6ﾖ4ﾙ8ﾝ0'];
 
 /** Where the torn strips of a TV glitch sit (top and height, % of the block). */

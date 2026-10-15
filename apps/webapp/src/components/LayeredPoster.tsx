@@ -10,8 +10,9 @@ import {
   type PosterTexts,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
-import { useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
+import { useEffectQuality } from '../lib/perf';
 import { freeCanvas } from '../lib/poster';
+import { ShaderEffect, shaderParams, type ShaderParams } from './ShaderEffect';
 import { LivingLayer, LivingLayers } from './ui';
 
 /**
@@ -211,6 +212,8 @@ function Layer({
   texts: PosterTexts;
   picture: string | null | undefined;
 }) {
+  // A still copy (thumbnails): no effect layers, and no picture of the letters for them.
+  const still = useEffectQuality() === 'still';
   const look: CSSProperties = {
     ...(layer.opacity != null && layer.opacity < 1 ? { opacity: layer.opacity } : {}),
     ...(layer.blend && layer.blend !== 'normal' ? { mixBlendMode: layer.blend } : {}),
@@ -254,7 +257,7 @@ function Layer({
     textTransform: layer.upper ? 'uppercase' : undefined,
     ...textEffects(layer.style),
   };
-  const effects = (layer.effects ?? []).filter((e) => e.kind !== 'off');
+  const effects = still ? [] : (layer.effects ?? []).filter((e) => e.kind !== 'off');
   if (effects.length === 0)
     return (
       <span
@@ -289,6 +292,7 @@ function Layer({
       at={{ ...at, ...look }}
       type={type}
       id={layer.id}
+      edge={layer.fxEdge ?? 'line'}
     />
   );
 }
@@ -361,6 +365,7 @@ function LetterEffects({
   at,
   type,
   id,
+  edge,
 }: {
   words: string;
   upper: boolean;
@@ -368,10 +373,13 @@ function LetterEffects({
   at: CSSProperties;
   type: CSSProperties;
   id: string;
+  edge: 'line' | 'none' | 'cover';
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [lines, setLines] = useState<string[] | null>(null);
-  const [mask, setMask] = useState<string | null>(null);
+  // The picture of the letters, and how far it reaches past the text box on every side:
+  // tails of g/y/j, accents and outlines stick out of the box, and were left without effect.
+  const [mask, setMask] = useState<{ url: string; pad: number } | null>(null);
   const text = upper ? words.toUpperCase() : words;
   const fontKey = `${String(type.fontFamily)}|${String(type.fontWeight)}|${String(type.fontSize)}`;
   const stroke = String(type.WebkitTextStroke ?? '');
@@ -419,16 +427,19 @@ function LetterEffects({
       const px = Number.parseFloat(cs.fontSize);
       const lh = Number.parseFloat(cs.lineHeight) || px * 1.05;
       const k = 2;
+      const outlineW = Number.parseFloat(cs.getPropertyValue('-webkit-text-stroke-width')) || 0;
+      const pad = Math.ceil(px * 0.35 + outlineW * 2);
       const c = document.createElement('canvas');
-      c.width = Math.ceil(w * k);
-      c.height = Math.ceil(h * k);
+      c.width = Math.ceil((w + pad * 2) * k);
+      c.height = Math.ceil((h + pad * 2) * k);
       const ctx = c.getContext('2d')!;
       ctx.scale(k, k);
+      ctx.translate(pad, pad);
       ctx.font = font;
       ctx.fillStyle = '#fff';
       ctx.strokeStyle = '#fff';
       ctx.lineJoin = 'round';
-      const outline = Number.parseFloat(cs.getPropertyValue('-webkit-text-stroke-width')) || 0;
+      const outline = outlineW;
       ctx.lineWidth = outline;
       const m = ctx.measureText('Hg');
       const ascent = m.fontBoundingBoxAscent || px * 0.8;
@@ -458,25 +469,34 @@ function LetterEffects({
           // The page puts each line's letters in the middle of its line height.
           ctx.translate(x, i * lh + (lh - (ascent + descent)) / 2 + ascent);
         }
-        if (outline) ctx.strokeText(line, 0, 0);
-        ctx.fillText(line, 0, 0);
-        // The letters' own edge stays as a thin border round the effect: the mask is
-        // eaten away along the outline (half of this line width lands inside the letters).
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.lineWidth = Math.max(1, px * 0.05) + outline * 2;
-        ctx.strokeText(line, 0, 0);
-        ctx.globalCompositeOperation = 'source-over';
+        if (edge === 'line') {
+          if (outline) ctx.strokeText(line, 0, 0);
+          ctx.fillText(line, 0, 0);
+          // The letters' own edge stays as a thin border round the effect: the mask is
+          // eaten away along the outline (half of this line width lands inside the letters).
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.lineWidth = Math.max(1, px * 0.05) + outline * 2;
+          ctx.strokeText(line, 0, 0);
+          ctx.globalCompositeOperation = 'source-over';
+        } else {
+          ctx.fillText(line, 0, 0);
+          // No border: the mask reaches a hair past the letters, so their soft edge pixels
+          // are covered too; "cover" also takes in the outline (and a little more).
+          ctx.lineWidth =
+            edge === 'cover' ? outline * 2 + Math.max(2, px * 0.05) : Math.max(1.2, px * 0.012);
+          ctx.strokeText(line, 0, 0);
+        }
         ctx.lineWidth = outline;
         ctx.restore();
       });
       const url = c.toDataURL('image/png');
       freeCanvas(c);
-      if (!stop) setMask(url);
+      if (!stop) setMask({ url, pad });
     })();
     return () => {
       stop = true;
     };
-  }, [lines, fontKey, stroke]);
+  }, [lines, fontKey, stroke, edge]);
 
   return (
     // No width limit here: the lines are already broken to fit, and a word too long for the
@@ -490,7 +510,7 @@ function LetterEffects({
         {lines ? lines.join('\n') : words}
       </span>
       {mask && (
-        <span className="absolute inset-0" style={maskOf(`url("${mask}")`)}>
+        <span className="absolute" style={{ inset: -mask.pad, ...maskOf(`url("${mask.url}")`) }}>
           <LivingLayers layers={effects} />
         </span>
       )}
@@ -557,62 +577,18 @@ function Fill({
   );
 }
 
-/** Base times of the colour movements (seconds), divided by the layer's speed. */
-const FILL_SECONDS = { flow: 8, spin: 14, pulse: 5 } as const;
-
 function FillMotion({ layer }: { layer: Extract<PosterLayer, { type: 'fill' }> }) {
-  const clip = useRef<HTMLSpanElement>(null);
-  const quality = useEffectQuality();
-  const unlimited = useUnlimited();
-  useEffect(
-    () => (clip.current ? watchOffscreen(clip.current, !unlimited) : undefined),
-    [quality, unlimited],
-  );
-  if (quality === 'still' || !layer.move || layer.move === 'none') return null;
-  const time = {
-    animationDuration: `${(FILL_SECONDS[layer.move] / (layer.speed ?? 1)).toFixed(2)}s`,
+  if (!layer.move || layer.move === 'none') return null;
+  // Drawn small by the shader engine: the old CSS strip was ~4× the box (56 MB on an iPhone).
+  const params: ShaderParams = {
+    ...shaderParams('fill'),
+    colors: layer.colors,
+    speed: layer.speed ?? 1,
+    angle: layer.angle,
+    mode: layer.move === 'flow' ? 0 : layer.move === 'spin' ? 1 : 2,
+    paint: layer.paint === 'radial' ? 1 : 0,
   };
-  const list = layer.colors;
-  return (
-    <span ref={clip} aria-hidden="true" className="living-clip">
-      {layer.move === 'flow' ? (
-        // A strip of the colours twice over slides by one round: seamless. Turned to the
-        // gradient's angle and larger than the box so no corner shows.
-        <span className="absolute" style={{ inset: '-60%', rotate: `${layer.angle - 90}deg` }}>
-          <i
-            className="fill-flow"
-            style={{
-              ...time,
-              backgroundImage: `linear-gradient(90deg, ${[...list, list[0]].join(', ')})`,
-              backgroundSize: '50% 100%',
-            }}
-          />
-        </span>
-      ) : layer.move === 'spin' ? (
-        <i
-          className="fill-spin"
-          style={{
-            ...time,
-            inset: '-60%',
-            background: paintOf(layer.paint === 'radial' ? 'conic' : 'linear', list, layer.angle),
-          }}
-        />
-      ) : (
-        // Breathing: the colours the other way round fade in and out.
-        <i
-          className="fill-pulse"
-          style={{
-            ...time,
-            background: paintOf(
-              layer.paint === 'color' ? 'linear' : layer.paint,
-              [...list].reverse(),
-              layer.angle,
-            ),
-          }}
-        />
-      )}
-    </span>
-  );
+  return <ShaderEffect params={params} />;
 }
 
 /** The poster's frame: a line (or two) round it, with rounded corners and a glow. */

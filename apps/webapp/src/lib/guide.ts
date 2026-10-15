@@ -554,6 +554,33 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
+        title: 'Shader engine and phone memory',
+        steps: [
+          'Smooth effects — silk, colour flow (mesh), liquid gradient, marble and the moving gradient fills of poster colour layers — are drawn by components/ShaderEffect.tsx: ONE shared WebGL context draws each block small (RES per kind) and copies it onto the block’s own 2D canvas; one 24 fps clock; recordings step them with seekShaders / holdShaders.',
+          'Why: measured at an iPhone’s 3× pixels, the old blurred CSS layers were 2–4× their box; one poster held ~260 MB of graphics memory (now ~75), the poster picker with 24 thumbnails ~400 MB (now none).',
+          'Thumbnail grids wrap posters in StillMotion (lib/perf.ts): no effect layers at all — a paused animation still keeps its layer.',
+          'Inside .layered-poster one rounded-corner mask sits on the poster itself; its .living-clip layers have none.',
+          'GPU (Pixi) effects keep their canvas while sliders move; settings are read on every frame.',
+          'New tune options (shared motions.ts): chaos, seed (🎲), colors (up to 4), symbols (digital rain). New effects: liquid, marble.',
+          'Text effects in the letters: fxEdge line (thin border, default) / none / cover (over the outline too); the letter mask reaches past the text box so tails of g/y are covered.',
+        ],
+      },
+      {
+        title: 'Drafts that close the app',
+        steps: [
+          'lib/drafts.ts marks a draft while its screen is open (useOpeningMark); a normal close/hide removes the mark, a crash doesn’t.',
+          'Next start: that draft is set aside (DraftAside card: delete / open anyway) and Design → «Черновики на телефоне» lists every draft, shown open at the top after a crash.',
+          'Right after a crash (safe start) the poster editor preview stays still too.',
+        ],
+      },
+      {
+        title: 'Who marked attendance, meeting comments',
+        steps: [
+          'attendance.marked_by changes only for marks whose status changed on a save; RollEntry/MeetingDetail carry markedBy/markedAt, RollResponse.takenBy, MeetingDetail.rollTakenBy.',
+          'meeting_comments (migration 0059): GET/POST /api/meetings/:id/comments, DELETE …/:commentId (author, managers, roll takers). Shown folded on the meeting screen (MeetingComments.tsx), MeetingDetail.commentCount on the fold.',
+        ],
+      },
+      {
         title: 'Test people (birthdays, statistics)',
         steps: [
           'Телеметрия → 🧪 Test people: pick a ministry, paste one person a line — “Anna Petrova — 14.05.2001 — Leader” (year and position optional) → Add.',

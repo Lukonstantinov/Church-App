@@ -21,6 +21,7 @@ import {
   initEffects,
   type EffectsState,
 } from '../components/CoverEffects';
+import { DraftsOnPhone } from '../components/DraftsOnPhone';
 import { Fold } from '../components/Fold';
 import { FreePoster } from '../components/FreePoster';
 import { DesignStudio } from '../components/DesignStudio';
@@ -132,6 +133,9 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
           ⚠️ {t.design.phoneStill}
         </p>
       )}
+
+      {/* First, before anything heavy is drawn: drafts that closed the app can go here. */}
+      <DraftsOnPhone />
 
       <Fold
         id="design.free"
