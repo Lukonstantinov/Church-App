@@ -1,7 +1,20 @@
 import { birthdayRows } from '../lib/birthdays';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { and, asc, desc, eq, gte, inArray, isNull, lt, or, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import {
   addHelperSchema,
   sendRosterSchema,
@@ -27,6 +40,8 @@ import {
   updateScheduleSchema,
   zonedToUtc,
   type AssignmentRow,
+  type MeetingComment,
+  meetingCommentSchema,
   type MeetingDetail,
   type MessageTemplateRow,
   type MeetingRow,
@@ -44,6 +59,7 @@ import {
   calendarNotes,
   groups,
   meetingAudience,
+  meetingComments,
   meetingHelpers,
   meetingRsvps,
   messageTemplates,
@@ -365,6 +381,7 @@ async function removeMeetings(db: AuthVariables['db'], where: SQL) {
     const chunk = ids.slice(i, i + 90);
     await db.delete(meetingHelpers).where(inArray(meetingHelpers.meetingId, chunk));
     await db.delete(attendance).where(inArray(attendance.meetingId, chunk));
+    await db.delete(meetingComments).where(inArray(meetingComments.meetingId, chunk));
     // Money stays in the books, just no longer tied to the meeting.
     await db
       .update(transactions)
@@ -597,26 +614,14 @@ meetingRoutes.get('/:id', async (c) => {
       going: rsvp.going,
       notGoing: rsvp.notGoing,
     },
-    attendance: seeRoll
-      ? (
-          await db
-            .select({
-              userId: users.id,
-              firstName: users.firstName,
-              lastName: users.lastName,
-              status: attendance.status,
-            })
-            .from(attendance)
-            .innerJoin(users, eq(users.id, attendance.userId))
-            .where(eq(attendance.meetingId, meeting.id))
-            .orderBy(asc(users.firstName))
-        ).map((x) => ({
-          userId: x.userId,
-          firstName: x.firstName,
-          lastName: x.lastName,
-          present: x.status === 'present' || x.status === 'late',
-        }))
-      : null,
+    attendance: seeRoll ? await attendanceWithMarkers(db, meeting.id) : null,
+    rollTakenBy: seeRoll && meeting.rollTakenBy ? await personRef(db, meeting.rollTakenBy) : null,
+    commentCount: (
+      await db
+        .select({ n: count() })
+        .from(meetingComments)
+        .where(eq(meetingComments.meetingId, meeting.id))
+    )[0]!.n,
     expenses:
       a.money || a.edit
         ? (
@@ -654,6 +659,52 @@ meetingRoutes.get('/:id', async (c) => {
   return c.json(detail);
 });
 
+/** A person's id and name (or null when they are gone). */
+async function personRef(db: AuthVariables['db'], id: number) {
+  return (
+    (await db.query.users.findFirst({
+      columns: { id: true, firstName: true, lastName: true },
+      where: eq(users.id, id),
+    })) ?? null
+  );
+}
+
+/** A meeting's marks by name, each with who set it and when. */
+async function attendanceWithMarkers(db: AuthVariables['db'], meetingId: number) {
+  const rows = await db
+    .select({
+      userId: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      status: attendance.status,
+      markedBy: attendance.markedBy,
+      markedAt: attendance.markedAt,
+    })
+    .from(attendance)
+    .innerJoin(users, eq(users.id, attendance.userId))
+    .where(eq(attendance.meetingId, meetingId))
+    .orderBy(asc(users.firstName));
+  const ids = [...new Set(rows.map((r) => r.markedBy).filter((x): x is number => !!x))];
+  const markers = new Map(
+    (ids.length
+      ? await db
+          .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+          .from(users)
+          .where(inArray(users.id, ids))
+      : []
+    ).map((u) => [u.id, u]),
+  );
+  return rows.map((x) => ({
+    userId: x.userId,
+    firstName: x.firstName,
+    lastName: x.lastName,
+    present: x.status === 'present' || x.status === 'late',
+    status: x.status,
+    markedBy: (x.markedBy && markers.get(x.markedBy)) || null,
+    markedAt: x.markedAt,
+  }));
+}
+
 /** Active members to choose a leader or snack person from (for people who may edit). */
 meetingRoutes.get('/:id/people', async (c) => {
   const db = c.get('db');
@@ -674,6 +725,79 @@ meetingRoutes.get('/:id/people', async (c) => {
     .where(and(eq(memberships.groupId, meeting.groupId), eq(memberships.status, 'active')))
     .orderBy(asc(users.firstName));
   return c.json(rows);
+});
+
+// ---------- Comments ----------
+
+/** Whoever sees the meeting reads and writes its comments; its managers may remove any. */
+async function commentAccess(c: { get: (k: 'db' | 'user') => unknown }, id: number) {
+  const db = c.get('db') as AuthVariables['db'];
+  const user = c.get('user') as AuthVariables['user'];
+  const meeting = await db.query.meetings.findFirst({ where: eq(meetings.id, id) });
+  if (!meeting) throw new HTTPException(404, { message: 'not_found' });
+  const a = await meetingAccess(db, user, meeting);
+  if (!a.member) throw new HTTPException(404, { message: 'not_found' });
+  // A meeting for chosen people: only they (and whoever prepares it) see its comments.
+  if (
+    !a.edit &&
+    !(await mayPublish(db, user, meeting.groupId, 'meeting')) &&
+    !(await designRights(db, user, meeting.groupId)).designer &&
+    !meetingIsFor(await audienceOf(db, [meeting.id]), meeting.id, user.id)
+  )
+    throw new HTTPException(404, { message: 'not_found' });
+  return { db, user, meeting, canManage: a.edit || a.roll };
+}
+
+meetingRoutes.get('/:id/comments', async (c) => {
+  const { db, user, meeting, canManage } = await commentAccess(c, idParam(c));
+  const rows = await db
+    .select({ m: meetingComments, firstName: users.firstName, lastName: users.lastName })
+    .from(meetingComments)
+    .innerJoin(users, eq(users.id, meetingComments.userId))
+    .where(eq(meetingComments.meetingId, meeting.id))
+    .orderBy(desc(meetingComments.id))
+    .limit(200);
+  const out: MeetingComment[] = rows.reverse().map(({ m, firstName, lastName }) => ({
+    id: m.id,
+    user: { id: m.userId, firstName, lastName },
+    text: m.text,
+    createdAt: m.createdAt,
+    mine: m.userId === user.id,
+    canDelete: m.userId === user.id || canManage,
+  }));
+  return c.json(out);
+});
+
+meetingRoutes.post('/:id/comments', async (c) => {
+  const { db, user, meeting } = await commentAccess(c, idParam(c));
+  const { text } = await parseBody(c, meetingCommentSchema);
+  const [m] = await db
+    .insert(meetingComments)
+    .values({ meetingId: meeting.id, userId: user.id, text })
+    .returning();
+  const out: MeetingComment = {
+    id: m!.id,
+    user: { id: user.id, firstName: user.firstName, lastName: user.lastName },
+    text: m!.text,
+    createdAt: m!.createdAt,
+    mine: true,
+    canDelete: true,
+  };
+  return c.json(out, 201);
+});
+
+meetingRoutes.delete('/:id/comments/:commentId', async (c) => {
+  const { db, user, meeting, canManage } = await commentAccess(c, idParam(c));
+  const m = await db.query.meetingComments.findFirst({
+    where: and(
+      eq(meetingComments.id, idParam(c, 'commentId')),
+      eq(meetingComments.meetingId, meeting.id),
+    ),
+  });
+  if (!m) throw new HTTPException(404, { message: 'not_found' });
+  if (m.userId !== user.id && !canManage) throw new HTTPException(403, { message: 'forbidden' });
+  await db.delete(meetingComments).where(eq(meetingComments.id, m.id));
+  return c.json({ ok: true });
 });
 
 meetingRoutes.patch('/:id', async (c) => {
@@ -1156,6 +1280,7 @@ meetingRoutes.get('/:id/roll', async (c) => {
   const body: RollResponse = {
     meeting: (await toMeetingRows(db, [meeting], c.env.WEBHOOK_SECRET))[0]!,
     roster: await rosterFor(db, meeting, timezone),
+    takenBy: meeting.rollTakenBy ? await personRef(db, meeting.rollTakenBy) : null,
     editable:
       meeting.status !== 'cancelled' && (meeting.status !== 'done' || win.open || user.isAdmin),
     editableUntil: meeting.status === 'done' ? win.editableUntil : null,
@@ -1196,9 +1321,11 @@ meetingRoutes.put('/:id/roll', async (c) => {
         markedBy: user.id,
         markedAt,
       })
+      // Saving the roll again changes only the marks that changed: each keeps who set it.
       .onConflictDoUpdate({
         target: [attendance.meetingId, attendance.userId],
         set: { status: chosen.get(r.userId) ?? 'absent', markedBy: user.id, markedAt },
+        setWhere: sql`${attendance.status} <> excluded.status`,
       }),
   );
   const finish = db

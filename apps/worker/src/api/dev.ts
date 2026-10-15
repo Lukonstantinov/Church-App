@@ -22,6 +22,7 @@ import {
   outbox,
   positions,
   users,
+  meetingComments,
 } from '../db/schema';
 import { defaultPositionId } from '../lib/positions';
 import { startTesting, stopTesting, testOptions } from '../lib/testing';
@@ -317,6 +318,7 @@ devRoutes.delete('/mock-people', async (c) => {
   for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90);
     await db.delete(attendance).where(inArray(attendance.userId, chunk));
+    await db.delete(meetingComments).where(inArray(meetingComments.userId, chunk));
     await db.delete(memberships).where(inArray(memberships.userId, chunk));
     await db.delete(users).where(inArray(users.id, chunk));
   }

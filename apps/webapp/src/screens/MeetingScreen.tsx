@@ -1,3 +1,4 @@
+import { MeetingComments } from '../components/MeetingComments';
 import { useState } from 'react';
 import {
   MEETING_KINDS,
@@ -362,32 +363,51 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
               </p>
             )
           ) : (
-            (['present', 'absent'] as const).map((k) => {
-              const list = m.attendance!.filter((a) => a.present === (k === 'present'));
-              if (list.length === 0) return null;
-              return (
-                <div key={k} className="border-b border-hairline px-4 py-3 last:border-b-0">
-                  <div
-                    className={`mb-2 text-[13px] font-semibold ${k === 'present' ? 'text-present' : 'text-absent'}`}
-                  >
-                    {k === 'present' ? t.meetings.wasThere : t.meetings.wasNotThere} · {list.length}
+            <>
+              {m.rollTakenBy && m.rollTakenAt && (
+                <p className="border-b border-hairline px-4 py-2.5 text-[13px] text-hint">
+                  {t.meetings.rollSavedBy(
+                    displayName(m.rollTakenBy),
+                    `${f.weekdayDayMonth(m.rollTakenAt)} ${f.time(m.rollTakenAt)}`,
+                  )}
+                </p>
+              )}
+              {(['present', 'absent'] as const).map((k) => {
+                const list = m.attendance!.filter((a) => a.present === (k === 'present'));
+                if (list.length === 0) return null;
+                return (
+                  <div key={k} className="border-b border-hairline px-4 py-3 last:border-b-0">
+                    <div
+                      className={`mb-2 text-[13px] font-semibold ${k === 'present' ? 'text-present' : 'text-absent'}`}
+                    >
+                      {k === 'present' ? t.meetings.wasThere : t.meetings.wasNotThere} ·{' '}
+                      {list.length}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {list.map((a) => (
+                        <span
+                          key={a.userId}
+                          className="rounded-full bg-hairline px-2.5 py-1 text-[13px]"
+                        >
+                          {displayName(a)}
+                          {/* Someone other than the last saver set this mark: say who. */}
+                          {a.markedBy && a.markedBy.id !== m.rollTakenBy?.id && (
+                            <span className="ml-1 text-[11px] text-hint">
+                              {t.meetings.markedByShort(displayName(a.markedBy))}
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {list.map((a) => (
-                      <span
-                        key={a.userId}
-                        className="rounded-full bg-hairline px-2.5 py-1 text-[13px]"
-                      >
-                        {displayName(a)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })
+                );
+              })}
+            </>
           )}
         </Section>
       )}
+
+      <MeetingComments meetingId={m.id} count={m.commentCount ?? 0} />
 
       {m.canManage && (
         <Button

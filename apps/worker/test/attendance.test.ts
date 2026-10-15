@@ -5,6 +5,8 @@ import {
   localDate,
   type GroupDetail,
   type GroupStats,
+  type MeetingComment,
+  type MeetingDetail,
   type MeetingRow,
   type MemberDetail,
   type MyAttendanceResponse,
@@ -432,5 +434,81 @@ describe('stats', () => {
     const open = await apiJson<MyAttendanceResponse>('/api/me/attendance', { user: member });
     expect(open.groups[0]!.visible).toBe(true);
     void ({} as GroupDetail);
+  });
+});
+
+describe('who marked, and comments', () => {
+  it('keeps who set each mark: saving again changes only the marks that changed', async () => {
+    const group = await newGroup('Кто отметил');
+    const [anna, boris] = await addMembers(group, ['Анна', 'Борис']);
+    const m = await pastMeeting(group);
+    const save = (entries: { userId: number; status: string }[]) =>
+      api(`/api/meetings/${m.id}/roll`, {
+        method: 'PUT',
+        user: ADMIN,
+        json: { entries, guestCount: 0 },
+      });
+    expect(
+      (
+        await save([
+          { userId: anna!, status: 'present' },
+          { userId: boris!, status: 'absent' },
+        ])
+      ).status,
+    ).toBe(200);
+    let r = await roll(m.id);
+    expect(r.takenBy?.firstName).toBe('Админ');
+    expect(r.roster.find((x) => x.userId === anna)?.markedBy?.firstName).toBe('Админ');
+
+    // Pretend Anna's mark was set by Boris; saving the same marks again keeps that.
+    await env.DB.prepare('UPDATE attendance SET marked_by = ? WHERE meeting_id = ? AND user_id = ?')
+      .bind(boris, m.id, anna)
+      .run();
+    await save([
+      { userId: anna!, status: 'present' },
+      { userId: boris!, status: 'absent' },
+    ]);
+    r = await roll(m.id);
+    expect(r.roster.find((x) => x.userId === anna)?.markedBy?.id).toBe(boris);
+    // A changed mark is the saver's again.
+    await save([
+      { userId: anna!, status: 'late' },
+      { userId: boris!, status: 'absent' },
+    ]);
+    r = await roll(m.id);
+    expect(r.roster.find((x) => x.userId === anna)?.markedBy?.firstName).toBe('Админ');
+
+    const detail = await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: ADMIN });
+    expect(detail.rollTakenBy?.firstName).toBe('Админ');
+    expect(detail.attendance?.find((x) => x.userId === anna)?.status).toBe('late');
+  });
+
+  it('comments: written, counted, listed and deleted; outsiders see none', async () => {
+    const group = await newGroup('Комментарии');
+    const m = await pastMeeting(group);
+    const posted = await apiJson<MeetingComment>(`/api/meetings/${m.id}/comments`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { text: '  Принесите гитару  ' },
+    });
+    expect(posted.text).toBe('Принесите гитару');
+    const list = await apiJson<MeetingComment[]>(`/api/meetings/${m.id}/comments`, {
+      user: ADMIN,
+    });
+    expect(list.map((c) => c.text)).toEqual(['Принесите гитару']);
+    expect(list[0]!.canDelete).toBe(true);
+    const detail = await apiJson<MeetingDetail>(`/api/meetings/${m.id}`, { user: ADMIN });
+    expect(detail.commentCount).toBe(1);
+
+    const outsider = fakeUser('Чужой');
+    expect((await api(`/api/meetings/${m.id}/comments`, { user: outsider })).status).toBe(404);
+
+    expect(
+      (await api(`/api/meetings/${m.id}/comments/${posted.id}`, { method: 'DELETE', user: ADMIN }))
+        .status,
+    ).toBe(200);
+    expect(
+      await apiJson<MeetingComment[]>(`/api/meetings/${m.id}/comments`, { user: ADMIN }),
+    ).toEqual([]);
   });
 });

@@ -175,6 +175,15 @@ function RollEditor({
         {interactive && meeting.status === 'done' && editableUntil && (
           <p className="px-1 text-[13px] text-hint">{t.roll.alreadySaved}</p>
         )}
+        {data.takenBy && meeting.rollTakenAt && (
+          <p className="px-1 text-[13px] text-hint">
+            ✍️{' '}
+            {t.roll.savedBy(
+              displayName(data.takenBy),
+              `${f.weekdayDayMonth(meeting.rollTakenAt)} ${f.time(meeting.rollTakenAt)}`,
+            )}
+          </p>
+        )}
 
         {total > 0 && !cancelled && (
           <div className="flex flex-col gap-2 px-1">
@@ -328,6 +337,7 @@ const MemberLine = memo(function MemberLine({
   onMenu: (e: RollEntry) => void;
 }) {
   const t = useT();
+  const f = useFmt();
   const label = useStatusLabel();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
@@ -389,6 +399,14 @@ const MemberLine = memo(function MemberLine({
               entry.recent.map((s, i) => <StatusDot key={i} status={s} />)
             )}
           </div>
+          {entry.markedBy && entry.markedAt && (
+            <div className="mt-0.5 truncate text-[11px] text-hint">
+              {t.roll.markedBy(
+                displayName(entry.markedBy),
+                `${f.weekdayDayMonth(entry.markedAt)} ${f.time(entry.markedAt)}`,
+              )}
+            </div>
+          )}
         </div>
         <StatusMark status={status} />
       </div>

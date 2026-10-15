@@ -1087,3 +1087,20 @@ export const publishRequests = sqliteTable(
   },
   (t) => [index('publish_requests_ref').on(t.kind, t.refId, t.status)],
 );
+
+/** Comments under a meeting (folded away on its screen): anyone who sees the meeting writes. */
+export const meetingComments = sqliteTable(
+  'meeting_comments',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    meetingId: integer('meeting_id')
+      .notNull()
+      .references(() => meetings.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    text: text('text').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('meeting_comments_meeting').on(t.meetingId, t.id)],
+);

@@ -777,7 +777,21 @@ export interface MeetingDetail extends MeetingRow {
   canDesign: boolean;
   /** Attendance (names) for people who take the roll; null otherwise. */
   attendance:
-    { userId: number; firstName: string; lastName: string | null; present: boolean }[] | null;
+    | {
+        userId: number;
+        firstName: string;
+        lastName: string | null;
+        present: boolean;
+        status: AttendanceStatus;
+        /** Who set this mark, and when (null for marks from before this was kept). */
+        markedBy: { id: number; firstName: string; lastName: string | null } | null;
+        markedAt: string | null;
+      }[]
+    | null;
+  /** Who saved the roll call last, for people who see the attendance. */
+  rollTakenBy: { id: number; firstName: string; lastName: string | null } | null;
+  /** How many comments the meeting has (they open folded on its screen). */
+  commentCount: number;
   /** Expenses linked to this meeting, for people who see the money; null otherwise. */
   expenses:
     | {
@@ -806,6 +820,18 @@ export interface MeetingDetail extends MeetingRow {
     notGoing: MeetingPerson[];
   };
 }
+
+/** A comment under a meeting (same shape as an event's in-app chat message). */
+export interface MeetingComment {
+  id: number;
+  user: { id: number; firstName: string; lastName: string | null };
+  text: string;
+  createdAt: string;
+  mine: boolean;
+  /** The author, or someone who manages the meeting or takes its roll, may delete it. */
+  canDelete: boolean;
+}
+export const meetingCommentSchema = z.object({ text: z.string().trim().min(1).max(1000) });
 
 export type MeetingRsvpStatus = 'going' | 'not_going';
 export const meetingRsvpSchema = z.object({ status: z.enum(['going', 'not_going']) });
@@ -959,6 +985,9 @@ export interface RollEntry {
   offline: boolean;
   /** null = not marked yet in this roll call. */
   status: AttendanceStatus | null;
+  /** Who set the saved mark, and when (null = not saved yet, or from before this was kept). */
+  markedBy: { id: number; firstName: string; lastName: string | null } | null;
+  markedAt: string | null;
   /** Statuses at the last few earlier meetings, oldest → newest (null = no record). */
   recent: (AttendanceStatus | null)[];
 }
@@ -966,6 +995,8 @@ export interface RollEntry {
 export interface RollResponse {
   meeting: MeetingRow;
   roster: RollEntry[];
+  /** Who saved the roll call last (null = not taken yet). */
+  takenBy: { id: number; firstName: string; lastName: string | null } | null;
   /** False when the edit window (14 days after the meeting) has passed. */
   editable: boolean;
   editableUntil: string | null;

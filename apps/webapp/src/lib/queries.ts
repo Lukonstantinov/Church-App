@@ -9,6 +9,7 @@ import type {
   DutiesNotice,
   NotifyDutiesInput,
   EventChatMessage,
+  MeetingComment,
   LabelInput,
   LabelRef,
   SetMemberLabelsInput,
@@ -350,6 +351,36 @@ export function useMeeting(id: number) {
   return useQuery({
     queryKey: ['meeting', id],
     queryFn: () => apiFetch<MeetingDetail>(`/meetings/${id}`),
+  });
+}
+
+/** A meeting's comments (fetched only once the fold is opened). */
+export function useMeetingComments(meetingId: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['meeting', meetingId, 'comments'],
+    queryFn: () => apiFetch<MeetingComment[]>(`/meetings/${meetingId}/comments`),
+    enabled,
+    refetchInterval: enabled ? 15000 : false,
+    staleTime: 0,
+  });
+}
+
+export function usePostMeetingComment(meetingId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (text: string) =>
+      apiFetch<MeetingComment>(`/meetings/${meetingId}/comments`, send('POST', { text })),
+    // The meeting's own count changes too.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['meeting', meetingId] }),
+  });
+}
+
+export function useDeleteMeetingComment(meetingId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (commentId: number) =>
+      apiFetch(`/meetings/${meetingId}/comments/${commentId}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['meeting', meetingId] }),
   });
 }
 

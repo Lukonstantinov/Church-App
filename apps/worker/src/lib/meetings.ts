@@ -560,7 +560,18 @@ export async function rosterFor(db: Db, meeting: Meeting, timezone: string): Pro
       .where(and(eq(memberships.groupId, meeting.groupId), eq(memberships.status, 'active'))),
     db.select().from(attendance).where(eq(attendance.meetingId, meeting.id)),
   ]);
-  const markBy = new Map(marks.map((m) => [m.userId, m.status]));
+  const markBy = new Map(marks.map((m) => [m.userId, m]));
+  // Who set each mark (by name).
+  const markerIds = [...new Set(marks.map((m) => m.markedBy).filter((x): x is number => !!x))];
+  const markers = new Map(
+    (markerIds.length
+      ? await db
+          .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+          .from(users)
+          .where(inArray(users.id, markerIds))
+      : []
+    ).map((u) => [u.id, u]),
+  );
 
   // A meeting for chosen people has only them on its roll call.
   const chosen = (await audienceOf(db, [meeting.id])).get(meeting.id);
@@ -600,7 +611,9 @@ export async function rosterFor(db: Db, meeting: Meeting, timezone: string): Pro
     firstName: u.firstName,
     lastName: u.lastName,
     offline: u.telegramId === null,
-    status: markBy.get(u.id) ?? null,
+    status: markBy.get(u.id)?.status ?? null,
+    markedBy: markers.get(markBy.get(u.id)?.markedBy ?? 0) ?? null,
+    markedAt: markBy.get(u.id)?.markedAt ?? null,
     recent: [...prevIds].reverse().map((id) => prevBy.get(`${id}:${u.id}`) ?? null),
   }));
   roster.sort(
