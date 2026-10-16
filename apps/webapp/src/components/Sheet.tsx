@@ -14,11 +14,17 @@ export function Sheet({
   onClose,
   title,
   children,
+  wide,
 }: {
   open: boolean;
   onClose: () => void;
   title?: ReactNode;
   children: ReactNode;
+  /**
+   * A design editor: on a big screen (a computer) it opens almost the whole window, so
+   * the preview and the settings fit side by side; on a phone nothing changes.
+   */
+  wide?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -54,7 +60,9 @@ export function Sheet({
         className="absolute inset-0 animate-fade-in bg-black/35 backdrop-blur-[2px]"
         onClick={onClose}
       />
-      <div className="glass-strong relative max-h-[88dvh] w-full max-w-xl animate-sheet-in overflow-y-auto rounded-t-[28px] pb-[max(16px,env(safe-area-inset-bottom))] shadow-sheet">
+      <div
+        className={`glass-strong relative max-h-[88dvh] w-full max-w-xl animate-sheet-in overflow-y-auto rounded-t-[28px] pb-[max(16px,env(safe-area-inset-bottom))] shadow-sheet ${wide ? 'lg:max-h-[94dvh] lg:max-w-[min(1400px,96vw)]' : ''}`}
+      >
         <div className="mx-auto mb-1 mt-2 h-1 w-9 rounded-full bg-hairline" />
         {title && <h2 className="px-5 pb-2 pt-2 text-[19px] font-semibold">{title}</h2>}
         {children}

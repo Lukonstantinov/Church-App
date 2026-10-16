@@ -16,8 +16,9 @@ import { idParam, parseBody } from './util';
 type App = { Bindings: Env; Variables: AuthVariables };
 
 /**
- * /api/effect-templates — saved sets of effects, shared church-wide. Anyone who may put
- * effects on things saves one; the maker or a church admin renames or deletes it.
+ * /api/effect-templates — saved sets of effects ("own effects"), shared church-wide.
+ * Anyone who may put effects on things saves one; the maker or a church admin changes or
+ * deletes it — a change shows everywhere the own effect is used.
  */
 export const effectTemplateRoutes = new Hono<App>();
 
@@ -45,10 +46,13 @@ const columns = (input: EffectTemplateInput) => ({
 });
 
 /**
- * Whoever may put effects on something uses the sets: designers, and those who make
- * events or meetings (their forms have the effects picker too).
+ * Whoever may put effects on something makes and changes the sets: designers, and those
+ * who make events or meetings (their forms have the effects picker too). Everyone may READ
+ * them: a set is also an "own effect" (Design → Effect studio) that meetings, events and
+ * posts use by reference, so every member's phone must be able to draw it.
  */
 effectTemplateRoutes.use('*', async (c, next) => {
+  if (c.req.method === 'GET') return next();
   const db = c.get('db');
   const user = c.get('user');
   if (!(await canDesign(c))) {

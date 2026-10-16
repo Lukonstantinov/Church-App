@@ -1,5 +1,6 @@
 import {
   MOTION_GROUPS,
+  type EffectTemplate,
   type MeetingMotion,
   type MotionIcon,
   type MotionTune,
@@ -11,6 +12,7 @@ import { MotionTuneControls, TunePanel } from './MotionTune';
 import { useRef } from 'react';
 import { useNearScreen } from '../lib/perf';
 import { LivingLayer } from './ui';
+import { useEffectTemplates } from '../lib/queries';
 
 /** A preview's animation, drawn only while its tile is on or near the screen. */
 function LivePreview(props: {
@@ -100,9 +102,64 @@ export function MotionPicker({
       </button>
     );
   };
+  // The church's own effects (Effect studio): one item each, used by reference.
+  const owned = useEffectTemplates(!!onTune);
+  const ownOn = many ? many.values.includes('custom') : value === 'custom';
+  const ownRef = tuneOf?.('custom')?.ref ?? null;
+  const ownTile = (fx: EffectTemplate) => {
+    const on = ownOn && ownRef === fx.id;
+    return (
+      <button
+        key={`own${fx.id}`}
+        type="button"
+        onClick={() => {
+          haptic.tap();
+          if (on) {
+            if (many) many.toggle('custom');
+            else onChange(allowInherit ? null : 'off');
+            return;
+          }
+          onTune?.('custom', { ...(tuneOf?.('custom') ?? {}), ref: fx.id });
+          if (many) {
+            if (!ownOn) many.toggle('custom');
+          } else onChange('custom');
+        }}
+        className={`flex flex-col items-center gap-1 rounded-2xl p-1 transition active:scale-95 ${
+          on ? 'ring-2 ring-[var(--brand)]' : ''
+        }`}
+      >
+        <span className="brand-gradient relative block aspect-[4/3] w-full overflow-hidden rounded-xl">
+          <LivePreview kind="custom" icon={icon} tune={{ ref: fx.id }} />
+        </span>
+        <span
+          className={`text-center text-[12px] leading-tight ${on ? 'font-bold text-accent' : 'text-hint'}`}
+        >
+          {fx.name}
+        </span>
+      </button>
+    );
+  };
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-3 gap-2">{first.map(tile)}</div>
+      {onTune && (owned.data?.length ?? 0) > 0 && (
+        <Group title={t.meetings.motionGroups.own}>
+          <div className="grid grid-cols-3 gap-2">{owned.data!.map(ownTile)}</div>
+          {ownOn && ownRef && (
+            <div className="mt-3">
+              <TunePanel
+                title={`${t.studio.knob.settings}: ${owned.data!.find((x) => x.id === ownRef)?.name ?? ''}`}
+              >
+                <MotionTuneControls
+                  kind="custom"
+                  tune={tuneOf?.('custom') ?? {}}
+                  onChange={(tune) => onTune('custom', { ...tune, ref: ownRef })}
+                />
+              </TunePanel>
+            </div>
+          )}
+        </Group>
+      )}
       {MOTION_GROUPS.map((g) => (
         <Group key={g.key} title={t.meetings.motionGroups[g.key]}>
           <div className="grid grid-cols-3 gap-2">{g.items.map(tile)}</div>

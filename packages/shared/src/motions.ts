@@ -98,6 +98,18 @@ export const MEETING_MOTIONS = [
   'halo',
   // Words of one's own, repeated in rows that slide (drawn as text, any font).
   'wordwall',
+  // Lines and shapes in motion (shader engine).
+  'wavelines',
+  'tunnel',
+  'dunes',
+  'lightfall',
+  'risers',
+  'synthgrid',
+  'spiral',
+  'stripes',
+  // One of the church's own effects (Design → Effect studio), by `tune.ref`: drawn as its
+  // layers, so changing it there changes it everywhere it is used.
+  'custom',
 ] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
 
@@ -123,7 +135,25 @@ export const MOTION_GROUPS: {
   { key: 'light', items: ['calm', 'lively', 'mesh', 'aurora', 'silk', 'rays'] },
   {
     key: 'abstract',
-    items: ['topo', 'fur', 'streaks', 'ribbons', 'plasma', 'kaleido', 'cells', 'holo', 'wordwall'],
+    items: [
+      'wavelines',
+      'tunnel',
+      'risers',
+      'lightfall',
+      'dunes',
+      'stripes',
+      'synthgrid',
+      'spiral',
+      'topo',
+      'fur',
+      'streaks',
+      'ribbons',
+      'plasma',
+      'kaleido',
+      'cells',
+      'holo',
+      'wordwall',
+    ],
   },
   { key: 'sunlight', items: ['sun', 'sunburst', 'halo'] },
   {
@@ -196,6 +226,21 @@ export const GPU_MOTIONS: readonly MeetingMotion[] = [
   'reflection',
 ];
 
+/** How a layer of an own effect mixes with what is under it. */
+export const MOTION_BLENDS = [
+  'normal',
+  'screen',
+  'overlay',
+  'soft-light',
+  'multiply',
+  'color-dodge',
+  'lighten',
+  'difference',
+  'hue',
+  'color',
+] as const;
+export type MotionBlend = (typeof MOTION_BLENDS)[number];
+
 /**
  * Fine-tuning of one animation: speed, size, direction, colour and strength for all, plus
  * what only some animations have (see MOTION_KNOBS): how many / how far apart, how thick
@@ -246,6 +291,23 @@ export const motionTuneSchema = z.object({
   y: z.number().min(0).max(1).nullish(),
   /** Sun and halo: drift slowly around where it is placed (true) or stay put. */
   drift: z.boolean().nullish(),
+  /** Word wall: every row filled, every row an outline, or by turns. */
+  wordStyle: z.enum(['fill', 'outline', 'mix']).nullish(),
+  /** Word wall: rows slide by turns both ways, all one way, or stand still. */
+  wordFlow: z.enum(['alt', 'same', 'still']).nullish(),
+  /** Own effect (`custom`): which one (an effect template id). */
+  ref: z.number().int().positive().nullish(),
+  /** A layer of an own effect: how it mixes with the layers under it. */
+  blend: z.enum(MOTION_BLENDS).nullish(),
+  /** A layer of an own effect: only this part of the block (%, from the top left). */
+  box: z
+    .object({
+      x: z.number().min(-50).max(150),
+      y: z.number().min(-50).max(150),
+      w: z.number().min(5).max(200),
+      h: z.number().min(5).max(200),
+    })
+    .nullish(),
 });
 export type MotionTune = z.output<typeof motionTuneSchema>;
 
@@ -261,7 +323,8 @@ export type MotionKnob =
   | 'words'
   | 'font'
   | 'glow'
-  | 'place';
+  | 'place'
+  | 'wordStyle';
 const PARTICLE_KNOBS: MotionKnob[] = ['density', 'weight'];
 const GLOW_KNOBS: MotionKnob[] = ['sharp'];
 /** The shader effects: how many folds/veins/bands, how wild, which variation, own colours. */
@@ -287,7 +350,16 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   sun: ['place', 'weight', 'density', 'glow', 'colors'],
   sunburst: ['place', 'density', 'sharp', 'colors'],
   halo: ['place', 'weight', 'glow', 'colors'],
-  wordwall: ['words', 'font', 'density', 'weight', 'glow', 'colors'],
+  wordwall: ['words', 'font', 'wordStyle', 'density', 'weight', 'glow', 'colors'],
+  wavelines: [...SHADER_KNOBS, 'weight', 'glow'],
+  tunnel: [...SHADER_KNOBS, 'weight', 'glow', 'place'],
+  dunes: [...SHADER_KNOBS, 'weight'],
+  lightfall: [...SHADER_KNOBS, 'weight', 'glow'],
+  risers: [...SHADER_KNOBS, 'weight', 'glow'],
+  synthgrid: ['density', 'weight', 'glow', 'colors'],
+  spiral: SHADER_KNOBS,
+  stripes: [...SHADER_KNOBS, 'weight'],
+  custom: [],
   embers: PARTICLE_KNOBS,
   fireflies: PARTICLE_KNOBS,
   bubbles: PARTICLE_KNOBS,

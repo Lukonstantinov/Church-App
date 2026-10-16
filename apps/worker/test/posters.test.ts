@@ -163,11 +163,28 @@ describe('effect templates', () => {
       json: { name: 'x', effects: Array.from({ length: 9 }, () => ({ kind: 'snow' })) },
     });
     expect(many.status).toBe(400);
-    // Someone without design rights sees none of it.
+    // Someone without design rights reads them (own effects are drawn on their phone too)
+    // but can't make, change or delete one.
     const g = await createEnv('Эффекты');
     const m = fakeUser('Мила');
     await join(m, g);
-    expect((await api('/api/effect-templates', { user: m })).status).toBe(403);
+    expect((await api('/api/effect-templates', { user: m })).status).toBe(200);
+    expect(
+      (await api('/api/effect-templates', { method: 'POST', user: m, json: set })).status,
+    ).toBe(403);
+    expect(
+      (await api(`/api/effect-templates/${made.id}`, { method: 'DELETE', user: m })).status,
+    ).toBe(403);
+    // An own effect can't hold another own effect (it would loop).
+    expect(
+      (
+        await api('/api/effect-templates', {
+          method: 'POST',
+          user: ADMIN,
+          json: { name: 'loop', effects: [{ kind: 'custom', tune: { ref: made.id } }] },
+        })
+      ).status,
+    ).toBe(400);
     await apiJson(`/api/effect-templates/${made.id}`, { method: 'DELETE', user: ADMIN });
     const after = await apiJson<{ id: number }[]>('/api/effect-templates', { user: ADMIN });
     expect(after.some((x) => x.id === made.id)).toBe(false);

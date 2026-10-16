@@ -88,6 +88,31 @@ export function MotionTuneControls({
   const t = useT();
   const k = t.studio.knob;
   const set = (patch: Partial<MotionTune>) => onChange({ ...tune, ...patch });
+  // An own effect: only how fast and how strong here; its layers change in the Effect studio.
+  if (kind === 'custom')
+    return (
+      <div className="flex flex-col gap-4">
+        <Knob
+          label={t.studio.speed}
+          value={tune.speed ?? 1}
+          min={0.25}
+          max={3}
+          step={0.25}
+          show={times}
+          onChange={(speed) => set({ speed })}
+        />
+        <Knob
+          label={k.strength}
+          value={tune.strength ?? 1}
+          min={0.2}
+          max={1}
+          step={0.05}
+          show={percent}
+          onChange={(strength) => set({ strength })}
+        />
+        <p className="text-[12px] text-hint">{t.effectStudio.editInStudio}</p>
+      </div>
+    );
   const knobs = MOTION_KNOBS[kind] ?? [];
   const lined = kind === 'lines' || kind === 'grid';
   const shader = SHADER_KINDS.has(kind);
@@ -112,19 +137,21 @@ export function MotionTuneControls({
                     : k.count,
     weight: lined
       ? k.thick
-      : kind === 'sun' || kind === 'halo' || kind === 'wordwall'
-        ? k.size
-        : kind === 'flames'
-          ? k.strength
-          : lineKinds.includes(kind) || kind === 'marble'
-            ? kind === 'marble'
-              ? k.veinWidth
-              : k.thick
-            : shader
-              ? k.gloss
-              : kind.startsWith('icon')
-                ? k.iconSize
-                : k.particle,
+      : kind === 'sun' || kind === 'halo'
+        ? k.discSize
+        : kind === 'wordwall'
+          ? k.letterSize
+          : kind === 'flames'
+            ? k.strength
+            : lineKinds.includes(kind) || kind === 'marble'
+              ? kind === 'marble'
+                ? k.veinWidth
+                : k.thick
+              : shader
+                ? k.gloss
+                : kind.startsWith('icon')
+                  ? k.iconSize
+                  : k.particle,
     sharp: k.clarity,
   };
   const knob: Record<MotionKnob, ReactNode> = {
@@ -274,6 +301,36 @@ export function MotionTuneControls({
         value={isFontKey(tune.font) ? tune.font : null}
         onChange={(font) => set({ font })}
       />
+    ),
+    wordStyle: (
+      <div key="wordStyle" className="flex flex-col gap-3">
+        <div>
+          <div className="mb-1.5 text-[14px]">{k.wordStyle}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {(['fill', 'outline', 'mix'] as const).map((v) => (
+              <Pill
+                key={v}
+                on={(tune.wordStyle ?? 'fill') === v}
+                onClick={() => set({ wordStyle: v })}
+                label={k.wordStyles[v]}
+              />
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="mb-1.5 text-[14px]">{k.wordFlow}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {(['alt', 'same', 'still'] as const).map((v) => (
+              <Pill
+                key={v}
+                on={(tune.wordFlow ?? 'alt') === v}
+                onClick={() => set({ wordFlow: v })}
+                label={k.wordFlows[v]}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
     ),
     symbols: (
       <label key="symbols" className="flex flex-col gap-1">

@@ -70,7 +70,8 @@ Deploy → Run workflow → production.
   An open sheet pauses and hides the page's animation layers (`html[data-sheet]`); long lists of live
   previews mount only near the screen (`useNearScreen`).
   Smooth effects (silk, mesh, liquid, marble, fiery `flames`, topo, fur, streaks, ribbons, plasma, kaleido,
-  cells, holo, sun, sunburst, halo, gradient fill motion) are drawn by the shader engine
+  cells, holo, sun, sunburst, halo, wavelines, tunnel, dunes, lightfall, risers, synthgrid, spiral, stripes,
+  gradient fill motion) are drawn by the shader engine
   (`ShaderEffect.tsx`: one shared WebGL context, low-res canvases, `seekShaders`); thumbnail grids use
   `StillMotion` (no effect layers at all — paused layers still cost memory).
   Long decorative animations are capped at 30 changes a second (`capAnimations` in `lib/perf.ts`);
@@ -176,6 +177,11 @@ screen); the `announce` right = publish (posts, announcements, reminders, approv
 Church setting `designLock`: when on, only designers (and admins) change looks — enforced in the
 meeting/event/post PATCH routes via `designRights` / `assertMayDesign` / `lookDiffers`
 (`lib/access.ts`; unchanged values resent by forms don't count); rows carry `canDesign`.
+Effect studio (`components/EffectStudio.tsx`): own effects = `effect_templates` built from layers of built-in effects,
+each with a blend mode (`tune.blend`) and a place in the frame (`tune.box`); used by reference (kind `custom`,
+`tune.ref`, drawn live by `CustomEffect` in ui.tsx — edit once, changes everywhere; «⭐ Мои эффекты» in every
+picker; GET open to all members). Design editors open wide on a computer (`Sheet wide`) and can go full screen
+(`FullscreenButton`, Telegram 8.0+); the poster editor previews an Instagram post and Story.
 Screen studio (`components/DesignStudio.tsx`): tap a part on a live copy of the ministry page or
 the church main page (its parts: header, pinned events — their animations replace the events' own
 cover effects there —, ministry cards, profile and menu); per part (`ScreenLook` in `shared/screenLook.ts`, stored in

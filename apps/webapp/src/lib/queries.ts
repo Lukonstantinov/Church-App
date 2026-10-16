@@ -1008,8 +1008,11 @@ export function useEffectTemplates(enabled = true) {
 export function useSaveEffectTemplate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: EffectTemplateInput) =>
-      apiFetch<EffectTemplate>('/effect-templates', send('POST', input)),
+    // With an id: that own effect changes (everywhere it is used); without: a new one.
+    mutationFn: ({ id, ...input }: EffectTemplateInput & { id?: number }) =>
+      id
+        ? apiFetch<EffectTemplate>(`/effect-templates/${id}`, send('PUT', input))
+        : apiFetch<EffectTemplate>('/effect-templates', send('POST', input)),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['effectTemplates'] }),
   });
 }

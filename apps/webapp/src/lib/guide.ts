@@ -575,6 +575,17 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
+        title: 'Effect studio (own effects), more effects, full screen, Instagram view',
+        steps: [
+          'Own effects = effect templates (effect_templates). Design → «Студия эффектов» (EffectStudio.tsx): up to 8 layers of built-in effects, each with all its settings plus a blend mode (`tune.blend`, MOTION_BLENDS) and a place in the frame (`tune.box` x/y/w/h %, dragged on the preview). Pickers show them under «⭐ Мои эффекты»; picking one stores kind `custom` with `tune.ref` = the template id, drawn LIVE by CustomEffect (ui.tsx) — editing the template changes it everywhere. An own effect can’t contain another (schema refine + builtIn()).',
+          'GET /api/effect-templates is open to every member (their phones draw own effects); POST/PUT/DELETE need design or manage rights; PUT/DELETE only the maker or an admin (others save a copy).',
+          'placeStyle(tune) puts a layer’s box and blend on its own .living-clip (LivingLayer, ShaderEffect, ParticleCanvas `place`), so the recorder sees them; particle layers with a place don’t share the block’s canvas.',
+          'New shader effects: wavelines, tunnel (speed lines, placeable centre), dunes (fluid folds), lightfall (falling light), risers (rising lines), synthgrid, spiral, stripes. Word wall: one gradient across all rows (along()), wordStyle fill/outline/mix, wordFlow alt/same/still, default font Oswald.',
+          'Full screen: FullscreenButton (Telegram 8.0+ requestFullscreen; phones and the desktop app), `html[data-fullscreen]` pads the page below Telegram’s buttons (--tg-safe-area-inset-top + --tg-content-safe-area-inset-top). Sheet `wide`: design editors open nearly full-window on a computer, preview left, settings right (lg:).',
+          'Poster editor views «Instagram» (feed post 4:5 with the IG frame) and «Сторис» (9:16 with story bars and reply field — the design reflows into the taller shape).',
+        ],
+      },
+      {
         title: 'Background removal: tap what to keep',
         steps: [
           'lib/cutout.ts: people are found by MediaPipe selfie-multiclass as before; «👆 Tap what to keep» (TapKeepSheet.tsx) uses MediaPipe magic touch (InteractiveSegmenterLegacy, 6 MB, relayed as /media/model/magic-touch) — any object, pet or person under the taps, live preview, then the same tidy-up steps.',

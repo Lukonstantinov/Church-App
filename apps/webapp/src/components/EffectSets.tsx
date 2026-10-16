@@ -10,6 +10,13 @@ import {
 import { confirmDialog, haptic } from '../lib/telegram';
 import { useToast } from './Toast';
 
+/** The built-in effects of a list (own effects can't go inside another own effect). */
+export function builtIn(list: MotionLayer[]) {
+  return list.filter(
+    (l): l is MotionLayer & { kind: Exclude<MotionLayer['kind'], 'custom'> } => l.kind !== 'custom',
+  );
+}
+
 /**
  * Saved sets of effects: tap one to put its effects (with their settings) on what is being
  * designed, or save the effects now on it as a new set under a name. Sets are shared by
@@ -42,7 +49,8 @@ export function EffectSets({
     try {
       await save.mutateAsync({
         name,
-        effects: current.map((l) => ({ kind: l.kind, tune: l.tune ?? null })),
+        // An own effect inside a set would loop: only built-in effects are stored.
+        effects: builtIn(current).map((l) => ({ kind: l.kind, tune: l.tune ?? null })),
       });
       haptic.success();
       toast(ts.saved);

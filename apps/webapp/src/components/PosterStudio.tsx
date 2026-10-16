@@ -60,18 +60,18 @@ import { PosterGestures } from './PosterGestures';
 import { Knob, PALETTE } from './MotionTune';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
-import { Button, DateBadge, Toggle } from './ui';
+import { Button, DateBadge, FullscreenButton, Toggle } from './ui';
 
 /**
  * Where a poster is shown, in the app's real shapes: the poster sent by the bot (4:5), a
  * home tile (16:10), the event or meeting screen (4:3) and, for events, the pinned card on
  * the main page.
  */
-type View = 'poster' | 'tile' | 'screen' | 'pinned';
+type View = 'poster' | 'tile' | 'screen' | 'pinned' | 'insta' | 'story';
 type Kind = 'event' | 'meeting';
 const VIEWS: Record<Kind, View[]> = {
-  event: ['poster', 'tile', 'screen', 'pinned'],
-  meeting: ['poster', 'tile', 'screen'],
+  event: ['poster', 'tile', 'screen', 'pinned', 'insta', 'story'],
+  meeting: ['poster', 'tile', 'screen', 'insta', 'story'],
 };
 
 const newId = () => `l${Date.now().toString(36)}${Math.floor(Math.random() * 99)}`;
@@ -118,6 +118,63 @@ function Mockup({
     <LayeredPoster tpl={tpl} texts={texts} className={className} />
   );
   if (view === 'poster') return poster('aspect-[4/5] h-full rounded-2xl shadow-card');
+  // As a post in the Instagram feed (4:5, the shape Instagram shows in full).
+  if (view === 'insta')
+    return (
+      <div className="flex aspect-[4/6.2] h-full flex-col overflow-hidden rounded-[16px] bg-white text-black shadow-card">
+        <div className="flex shrink-0 items-center gap-2 px-2.5 py-2">
+          <span className="rounded-full bg-[conic-gradient(#f58529,#dd2a7b,#8134af,#515bd4,#f58529)] p-[2px]">
+            <span className="block h-6 w-6 rounded-full border-2 border-white bg-[var(--brand)]" />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
+            {g.name.toLowerCase().replace(/\s+/g, '_')}
+          </span>
+          <span className="text-[14px] leading-none">•••</span>
+        </div>
+        {poster('aspect-[4/5] w-full shrink-0')}
+        <div className="flex shrink-0 items-center gap-3 px-2.5 pt-2 text-[17px] leading-none">
+          <span>♡</span>
+          <span>💬</span>
+          <span>➤</span>
+          <span className="ml-auto">🔖</span>
+        </div>
+        <div className="min-h-0 px-2.5 pt-1 text-[11px] leading-snug">
+          <div className="font-semibold">{t.posters.igLikes}</div>
+          <div className="truncate">
+            <span className="font-semibold">{g.name.toLowerCase().replace(/\s+/g, '_')}</span>{' '}
+            {texts.title} · {texts.date}
+          </div>
+        </div>
+      </div>
+    );
+  // As an Instagram Story (9:16): the design fills the taller shape, with the story's own
+  // bars, name and reply field over it — keep important text away from the top and bottom.
+  if (view === 'story')
+    return (
+      <div className="relative aspect-[9/16] h-full overflow-hidden rounded-[16px] bg-black shadow-card">
+        <LayeredPoster fill tpl={tpl} texts={texts} />
+        <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/45 to-transparent px-2 pb-6 pt-2">
+          <div className="flex gap-1">
+            <span className="h-[2px] flex-1 rounded bg-white" />
+            <span className="h-[2px] flex-1 rounded bg-white/40" />
+          </div>
+          <div className="mt-2 flex items-center gap-1.5 text-white">
+            <span className="h-5 w-5 rounded-full border border-white bg-[var(--brand)]" />
+            <span className="text-[11px] font-semibold">
+              {g.name.toLowerCase().replace(/\s+/g, '_')}
+            </span>
+            <span className="text-[10px] opacity-75">2h</span>
+          </div>
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/45 to-transparent px-2 pb-2 pt-6 text-white">
+          <span className="flex-1 truncate rounded-full border border-white/70 px-3 py-1.5 text-[11px]">
+            {t.posters.igReply}
+          </span>
+          <span className="text-[15px]">♡</span>
+          <span className="text-[15px]">➤</span>
+        </div>
+      </div>
+    );
   if (view === 'pinned')
     return (
       <div className="flex flex-col gap-1.5">
@@ -830,10 +887,14 @@ function PosterEditor({
   }
 
   return (
-    <Sheet open onClose={onClose} title={tpl ? `🖼 ${tpl.name}` : `🖼 ${t.posters.new}`}>
-      <div className="flex flex-col gap-4 px-4 pb-4">
-        {/* The poster in the chosen shape, pinned while the settings scroll. */}
-        <div className="sticky top-0 z-20 -mx-4 rounded-b-[22px] bg-[var(--color-section)] px-4 pb-3 pt-1 shadow-card">
+    <Sheet wide open onClose={onClose} title={tpl ? `🖼 ${tpl.name}` : `🖼 ${t.posters.new}`}>
+      <div className="flex flex-col gap-4 px-4 pb-4 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-6">
+        {/* The poster in the chosen shape, pinned while the settings scroll (on a computer
+            it stands on the left, big, with the settings beside it). */}
+        <div className="sticky top-0 z-20 -mx-4 rounded-b-[22px] bg-[var(--color-section)] px-4 pb-3 pt-1 shadow-card lg:mx-0 lg:rounded-[22px] lg:pt-3">
+          <div className="mb-1.5 flex justify-end lg:mb-0">
+            <FullscreenButton />
+          </div>
           <div className="mb-1.5 flex justify-center gap-1.5">
             {(['event', 'meeting'] as const).map((k) => (
               <button
@@ -853,7 +914,7 @@ function PosterEditor({
               </button>
             ))}
           </div>
-          <div className="mb-2 flex justify-center gap-1.5">
+          <div className="mb-2 flex flex-wrap justify-center gap-1.5">
             {VIEWS[kind].map((v) => (
               <button
                 key={v}
@@ -877,7 +938,7 @@ function PosterEditor({
             {/* What is being designed always moves, whatever the phone's graphics setting —
                 except right after the app closed itself (that start stays still). */}
             <FullMotion.Provider value={!isSafeStart()}>
-              <div className="flex h-[262px] items-center justify-center">
+              <div className="flex h-[262px] items-center justify-center lg:h-[68vh]">
                 <Mockup view={view} kind={kind} tpl={doc} g={g} />
               </div>
             </FullMotion.Provider>
@@ -885,76 +946,78 @@ function PosterEditor({
           <p className="mt-1.5 text-center text-[11px] text-hint">{t.posters.dragHint}</p>
         </div>
 
-        {aside && (
-          <DraftAside
-            at={keptAt}
-            onDelete={() => {
-              forget();
-              dropDraft(`${draftKey}.name`);
-            }}
-            onRestore={() => {
-              restoreAnyway();
-              const n = readDraft<string>(`${draftKey}.name`)?.data;
-              if (n) setName(n);
-            }}
-          />
-        )}
-        {restored && (
-          <div className="flex items-center gap-2 rounded-xl bg-hairline px-3 py-2 text-[13px]">
-            <span className="flex-1">💾 {t.posters.draftRestored}</span>
-            <button
-              type="button"
-              className="font-semibold text-link"
-              onClick={async () => {
-                if (!(await confirmDialog(t.posters.draftDiscardConfirm))) return;
+        <div className="flex flex-col gap-4">
+          {aside && (
+            <DraftAside
+              at={keptAt}
+              onDelete={() => {
                 forget();
                 dropDraft(`${draftKey}.name`);
-                setDoc(
-                  tpl
-                    ? { background: tpl.background, layers: tpl.layers, frame: tpl.frame }
-                    : starterDoc(),
-                );
-                setName(tpl?.name ?? t.posters.defaultName);
+              }}
+              onRestore={() => {
+                restoreAnyway();
+                const n = readDraft<string>(`${draftKey}.name`)?.data;
+                if (n) setName(n);
+              }}
+            />
+          )}
+          {restored && (
+            <div className="flex items-center gap-2 rounded-xl bg-hairline px-3 py-2 text-[13px]">
+              <span className="flex-1">💾 {t.posters.draftRestored}</span>
+              <button
+                type="button"
+                className="font-semibold text-link"
+                onClick={async () => {
+                  if (!(await confirmDialog(t.posters.draftDiscardConfirm))) return;
+                  forget();
+                  dropDraft(`${draftKey}.name`);
+                  setDoc(
+                    tpl
+                      ? { background: tpl.background, layers: tpl.layers, frame: tpl.frame }
+                      : starterDoc(),
+                  );
+                  setName(tpl?.name ?? t.posters.defaultName);
+                }}
+              >
+                {t.posters.draftDiscard}
+              </button>
+            </div>
+          )}
+
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={40}
+            placeholder={t.posters.name}
+            className="rounded-xl bg-hairline px-3 py-2.5 text-[16px] outline-none placeholder:text-hint"
+          />
+
+          <PosterLayersEditor
+            doc={doc}
+            setDoc={setDoc}
+            g={g}
+            selected={selected}
+            setSelected={setSelected}
+          />
+
+          <Button disabled={save.isPending} onClick={() => void submit()}>
+            {save.isPending ? t.common.saving : t.common.save}
+          </Button>
+          {tpl?.mine !== false && tpl && (
+            <Button
+              variant="secondary"
+              disabled={remove.isPending}
+              onClick={async () => {
+                if (!(await confirmDialog(t.posters.deleteConfirm))) return;
+                await remove.mutateAsync(tpl.id).catch(() => toast(t.common.actionFailed, 'error'));
+                forget();
+                onClose();
               }}
             >
-              {t.posters.draftDiscard}
-            </button>
-          </div>
-        )}
-
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={40}
-          placeholder={t.posters.name}
-          className="rounded-xl bg-hairline px-3 py-2.5 text-[16px] outline-none placeholder:text-hint"
-        />
-
-        <PosterLayersEditor
-          doc={doc}
-          setDoc={setDoc}
-          g={g}
-          selected={selected}
-          setSelected={setSelected}
-        />
-
-        <Button disabled={save.isPending} onClick={() => void submit()}>
-          {save.isPending ? t.common.saving : t.common.save}
-        </Button>
-        {tpl?.mine !== false && tpl && (
-          <Button
-            variant="secondary"
-            disabled={remove.isPending}
-            onClick={async () => {
-              if (!(await confirmDialog(t.posters.deleteConfirm))) return;
-              await remove.mutateAsync(tpl.id).catch(() => toast(t.common.actionFailed, 'error'));
-              forget();
-              onClose();
-            }}
-          >
-            {t.posters.delete}
-          </Button>
-        )}
+              {t.posters.delete}
+            </Button>
+          )}
+        </div>
       </div>
     </Sheet>
   );

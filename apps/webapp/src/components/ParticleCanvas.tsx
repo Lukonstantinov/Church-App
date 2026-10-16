@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import type { MeetingMotion, MotionIcon, MotionTune } from '@church/shared';
 import { useEnv } from '../lib/env';
 import { getMotion } from '../lib/motion';
@@ -907,11 +907,14 @@ export function ParticleCanvas({
   icon,
   behind,
   preview,
+  place,
 }: {
   layers: ParticleLayer[];
   icon?: MotionIcon | null;
   behind?: boolean;
   preview?: boolean;
+  /** A box and blend of its own (a layer of an own effect, see placeStyle). */
+  place?: CSSProperties;
 }) {
   const clip = useRef<HTMLSpanElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -972,7 +975,7 @@ export function ParticleCanvas({
       ref={clip}
       aria-hidden="true"
       className="living-clip living-canvas"
-      style={behind ? { zIndex: -1 } : undefined}
+      style={{ ...(behind ? { zIndex: -1 } : {}), ...place }}
     >
       <canvas ref={canvas} className="absolute inset-0 h-full w-full" />
     </span>

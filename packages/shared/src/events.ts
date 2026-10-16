@@ -52,7 +52,13 @@ export type MotionLayer = { kind: MeetingMotion; tune?: MotionTune | null };
 export const effectTemplateInputSchema = z.object({
   name: z.string().trim().min(1).max(40),
   effects: z
-    .array(z.object({ kind: z.enum(MEETING_MOTIONS), tune: motionTuneSchema.nullish() }))
+    .array(
+      z.object({
+        // An own effect is made of the built-in ones, never of another own effect (no loops).
+        kind: z.enum(MEETING_MOTIONS).refine((k) => k !== 'custom'),
+        tune: motionTuneSchema.nullish(),
+      }),
+    )
     .min(1)
     .max(MAX_EFFECTS),
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import type { MotionTune } from '@church/shared';
 import { getMotion } from '../lib/motion';
 import { getQuality, useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
@@ -40,7 +40,15 @@ export type ShaderKind =
   | 'holo'
   | 'sun'
   | 'sunburst'
-  | 'halo';
+  | 'halo'
+  | 'wavelines'
+  | 'tunnel'
+  | 'dunes'
+  | 'lightfall'
+  | 'risers'
+  | 'synthgrid'
+  | 'spiral'
+  | 'stripes';
 
 /** The animations drawn by this engine. */
 export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
@@ -60,6 +68,14 @@ export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
   'sun',
   'sunburst',
   'halo',
+  'wavelines',
+  'tunnel',
+  'dunes',
+  'lightfall',
+  'risers',
+  'synthgrid',
+  'spiral',
+  'stripes',
 ]);
 
 /** How much of the screen's pixels each kind is drawn at (soft ones less, thin lines more). */
@@ -81,6 +97,14 @@ const RES: Record<ShaderKind, number> = {
   sun: 0.4,
   sunburst: 0.5,
   halo: 0.25,
+  wavelines: 1,
+  tunnel: 1,
+  dunes: 0.6,
+  lightfall: 0.6,
+  risers: 0.75,
+  synthgrid: 0.75,
+  spiral: 0.35,
+  stripes: 0.35,
 };
 /** The biggest picture the shared context draws (a side, in pixels). */
 const MAX_SIDE = 512;
@@ -533,6 +557,180 @@ void main() {
   float a = clamp(spot + ring, 0.0, 1.0) * u_strength;
   gl_FragColor = vec4(col * u_strength, a);
 }`,
+  // Wave lines: many glowing lines riding one big slow wave, bunching and spreading.
+  wavelines: `
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.25;
+  float n = 5.0 + u_density * 9.0;
+  // Big slow waves bend the whole sheet; lines further down are squeezed and spread
+  // differently, which gives the sheet its depth.
+  float wave = sin(p.x * 2.2 + t + p.y * 2.0);
+  float y = p.y + (0.26 + 0.14 * u_chaos) * wave + 0.09 * sin(p.x * 1.1 - t * 0.7 + p.y * 4.0)
+    + u_chaos * 0.12 * (fbm3(vec2(p.x * 0.9 + t * 0.2, p.y * 2.0)) - 0.5);
+  float g = y * n;
+  float d = abs(fract(g) - 0.5);
+  vec2 lg = lineGlow(0.5 - d, 0.035 + 0.05 * u_weight);
+  float crest = 0.45 + 0.55 * (0.5 + 0.5 * wave);
+  vec3 col = palette(clamp(v_uv.x * 0.75 + v_uv.y * 0.3, 0.0, 1.0), false);
+  float a = clamp(lg.x * crest + lg.y * 0.7, 0.0, 1.0) * u_strength;
+  col *= 1.0 + lg.y * 0.5;
+  gl_FragColor = vec4(col * a, a);
+}`,
+  // Speed tunnel: streaks of light rushing out from a point (place it anywhere).
+  tunnel: `
+void main() {
+  vec2 p = plane() - centre(u_pos);
+  float r = length(p) + 0.0001;
+  float turn = atan(p.y, p.x) / 6.2831853 + 0.5;
+  float n = 50.0 + u_density * 110.0;
+  float id = floor(turn * n);
+  float h = hash1(id);
+  float across = abs(fract(turn * n) - 0.5) * 2.0;
+  float thin = 1.0 - smoothstep(0.15 + 0.35 * u_weight * h, 0.45 + 0.4 * u_weight, across);
+  float speed = 0.6 + h * 1.4 + u_chaos * hash1(id + 3.0) * 2.0;
+  float f = fract(log(r) * 1.4 - u_t * speed * 0.5 + h * 10.0);
+  float lenf = 0.3 + 0.5 * hash1(id + 5.0);
+  float dash = smoothstep(0.0, 0.04, f) * (1.0 - smoothstep(lenf * 0.7, lenf, f));
+  float far = smoothstep(0.02, 0.45, r);
+  float k = thin * dash * far * (0.35 + 0.65 * hash1(id + 7.0));
+  float core = exp(-r * 5.0) * (0.25 + 0.5 * u_glow);
+  vec3 col = palette(1.0 - v_uv.y, false);
+  float a = clamp(k * (1.0 + u_glow) + core, 0.0, 1.0) * u_strength;
+  gl_FragColor = vec4((col * a + u_c[0] * core * 0.2) * u_strength, a);
+}`,
+  // Fluid folds: soft ridges of colour, lit from the top left, slowly shifting.
+  dunes: `
+float ridge(vec2 p, float t) {
+  float w = fbm3(p * 0.6 + vec2(t, -t * 0.6) + seedShift()) * (2.5 + u_chaos * 4.0);
+  return sin(p.x * (2.0 + u_density * 2.0) + p.y * 3.5 + w);
+}
+void main() {
+  vec2 p = place() * (2.0 / u_size);
+  float t = u_t * 0.05;
+  float e = 0.012;
+  float h = ridge(p, t);
+  float hx = (ridge(p + vec2(e, 0.0), t) - h) / e;
+  float hy = (ridge(p + vec2(0.0, e), t) - h) / e;
+  float bump = 0.35 * (0.5 + u_weight);
+  vec3 nrm = normalize(vec3(-hx * bump, -hy * bump, 1.0));
+  float light = dot(nrm, normalize(vec3(-0.5, 0.6, 0.75)));
+  vec3 col = palette(clamp(v_uv.x * 0.6 + (1.0 - v_uv.y) * 0.4 + h * 0.06, 0.0, 1.0), false);
+  col *= 0.5 + 0.65 * light;
+  col += pow(max(light, 0.0), 24.0) * (0.3 - 0.2 * u_sharp);
+  gl_FragColor = vec4(col * u_strength, u_strength);
+}`,
+  // Falling light: glowing streaks pouring down, bright heads and fading tails.
+  lightfall: `
+void main() {
+  vec2 p = place() / u_size;
+  float cols = 26.0 + u_density * 50.0;
+  float x = p.x * cols;
+  float id = floor(x);
+  float h = hash1(id);
+  vec2 lg = lineGlow(abs(fract(x) - 0.5), 0.06 + 0.12 * u_weight);
+  float speed = 0.5 + h * 1.2 + u_chaos * hash1(id + 2.0) * 1.5;
+  float len = 0.4 + hash1(id + 4.0) * 0.9;
+  float f = fract(p.y / len + u_t * speed * 0.45 + h * 7.0);
+  float part = 0.35 + 0.5 * hash1(id + 6.0);
+  float b = f < part ? pow(1.0 - f / part, 1.6) : 0.0;
+  vec3 col = palette(hash1(id + 1.0), true);
+  float a = clamp((lg.x + lg.y * 0.8) * b, 0.0, 1.0) * u_strength;
+  gl_FragColor = vec4(col * a * (1.0 + lg.y * 0.5), a);
+}`,
+  // Rising lines: lines of light sweep in along the floor, bend upward and rise, with
+  // pulses of light running up them.
+  risers: `
+void main() {
+  vec2 P = plane() / u_size;
+  float aspect = u_res.x / u_res.y;
+  float y0 = -0.32;
+  float n = 10.0 + floor(u_density * 14.0);
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 26; i++) {
+    float fi = float(i);
+    if (fi >= n) break;
+    float h = hash1(fi);
+    float xi = (h * 2.0 - 1.0) * 0.32 * aspect;
+    float s = xi < 0.0 ? -1.0 : 1.0;
+    float R = 0.06 + abs(xi) * 0.9 + 0.08 * hash1(fi + 1.0);
+    vec2 c = vec2(xi + s * R, y0 + R);
+    float d;
+    float L;
+    if (P.y >= c.y) {
+      d = abs(P.x - xi);
+      L = R * 1.5708 + (P.y - c.y);
+    } else if ((P.x - c.x) * s >= 0.0) {
+      d = abs(P.y - y0);
+      L = -abs(P.x - c.x);
+    } else {
+      vec2 q = P - c;
+      d = abs(length(q) - R);
+      L = R * atan(abs(q.x), -q.y);
+    }
+    float top = 0.05 + 0.45 * hash1(fi + 2.0);
+    float fade = 1.0 - smoothstep(top, top + 0.25, P.y);
+    vec2 lg = lineGlow(d, 0.002 + 0.004 * u_weight);
+    float f = fract(L * (2.0 + u_chaos * 3.0) - u_t * (0.3 + h * 0.5) + h * 9.0);
+    float pulse = 0.35 + 0.65 * smoothstep(0.6, 1.0, f);
+    float k = clamp(lg.x + lg.y * 0.7, 0.0, 1.0) * fade * pulse;
+    col += palette(hash1(fi + 3.0), true) * k;
+    a = max(a, k);
+  }
+  gl_FragColor = vec4(col * u_strength, a * u_strength);
+}`,
+  // Neon grid: a glowing floor racing toward a bright horizon (synthwave).
+  synthgrid: `
+void main() {
+  vec2 p = plane();
+  float hz = 0.05;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  if (p.y < hz) {
+    float depth = hz - p.y;
+    float z = 1.0 / (depth + 0.02);
+    float gx = p.x * z * (0.8 + u_density * 0.6);
+    float gz = z * (0.35 + u_density * 0.25) + u_t * 0.5;
+    float w = 0.02 + 0.04 * u_weight;
+    vec2 g1 = lineGlow(0.5 - abs(fract(gx) - 0.5), w);
+    vec2 g2 = lineGlow(0.5 - abs(fract(gz) - 0.5), w);
+    float k = max(g1.x, g2.x) + (g1.y + g2.y) * 0.5;
+    a = clamp(k * smoothstep(0.0, 0.2, depth), 0.0, 1.0);
+    col = mix(u_c[1], u_c[0], smoothstep(0.0, 0.45, depth)) * a;
+  }
+  float glow = exp(-abs(p.y - hz) * 16.0) * (0.3 + 0.5 * u_glow);
+  col += u_c[2] * glow;
+  a = clamp(a + glow, 0.0, 1.0);
+  gl_FragColor = vec4(col * u_strength, a * u_strength);
+}`,
+  // Spiral: arms of colour turning inward, hypnotic.
+  spiral: `
+void main() {
+  vec2 p = place() / u_size;
+  float r = length(p) + 0.0001;
+  float arms = 2.0 + floor(u_density * 3.0);
+  float x = atan(p.y, p.x) / 6.2831853 * arms + log(r) * (1.2 + u_chaos * 2.0) - u_t * 0.15
+    + (fbm3(p * 2.0 + seedShift()) - 0.5) * u_chaos;
+  float edge = mix(0.5, 0.04, u_sharp);
+  float st = floor(x * 2.0) / 2.0 + smoothstep(0.5 - edge, 0.5 + edge, fract(x * 2.0)) / 2.0;
+  vec3 col = palette(mix(x, st, u_sharp), true);
+  gl_FragColor = vec4(col * u_strength, u_strength);
+}`,
+  // Gradient stripes: bold diagonal bands sliding along, gently waving.
+  stripes: `
+void main() {
+  vec2 p = place() / u_size;
+  float n = 1.0 + u_density * 2.2;
+  float wv = sin(p.y * 3.0 + u_t * 0.4) * (0.04 + 0.25 * u_chaos);
+  float f = fract((p.x + p.y * 0.6 + wv) * n - u_t * 0.3);
+  float edge = mix(0.2, 0.01, u_sharp);
+  float band = smoothstep(0.0, edge, f) * (1.0 - smoothstep(0.5, 0.5 + edge, f));
+  vec3 base = palette(clamp(v_uv.x * 0.7 + v_uv.y * 0.3, 0.0, 1.0), false);
+  vec3 col = mix(base * 0.5, base * (1.0 + 0.12 * u_weight), band);
+  col += pow(max(0.0, 1.0 - abs(f - 0.25) * 4.0), 6.0) * 0.15 * u_weight;
+  gl_FragColor = vec4(col * u_strength, u_strength);
+}`,
   // A poster colour layer that moves: its gradient flows along its angle, turns, or
   // breathes into its colours the other way round.
   fill: `
@@ -697,6 +895,14 @@ const OWN_DEFAULTS: Partial<Record<ShaderKind, string[]>> = {
   sun: ['#fffbe8', '#ffd166', '#ff9f43'],
   sunburst: ['#ffcf66', '#ff8a3d'],
   halo: ['#fff6d8', '#ffd38a'],
+  // Electric blue → violet → cyan, as glowing data waves.
+  wavelines: ['#2563eb', '#7c3aed', '#22d3ee'],
+  // Blue at the top, violet, red at the bottom: the speed-lines look.
+  tunnel: ['#2563eb', '#8b5cf6', '#ff2d55'],
+  lightfall: ['#ff4fd8', '#8b5cf6', '#3b82f6'],
+  risers: ['#22d3ee', '#a855f7', '#ff4f7b', '#60a5fa'],
+  // Grid near, grid far, horizon glow.
+  synthgrid: ['#ff2bd6', '#7c3aed', '#22d3ee'],
 };
 
 // ---------- One block ----------
@@ -883,12 +1089,15 @@ export function ShaderEffect({
   preview,
   bare,
   behind,
+  place,
 }: {
   params: ShaderParams;
   preview?: boolean;
   bare?: boolean;
   /** Under the content of a block that doesn't position its children (see `skin-host`). */
   behind?: boolean;
+  /** A box and blend of its own (a layer of an own effect, see placeStyle). */
+  place?: CSSProperties;
 }) {
   const clip = useRef<HTMLSpanElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -941,7 +1150,7 @@ export function ShaderEffect({
       ref={clip}
       aria-hidden="true"
       className="living-clip living-canvas"
-      style={behind ? { zIndex: -1 } : undefined}
+      style={{ ...(behind ? { zIndex: -1 } : {}), ...place }}
     >
       {picture}
     </span>

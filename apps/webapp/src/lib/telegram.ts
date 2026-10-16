@@ -54,12 +54,47 @@ export function initTelegram(): void {
   }
   applyColorScheme();
   tg.onEvent?.('themeChanged', applyColorScheme);
+  markFullscreen();
+  try {
+    tg.onEvent?.('fullscreenChanged', markFullscreen);
+  } catch {
+    // Older clients have no full screen.
+  }
   try {
     tg.setHeaderColor('secondary_bg_color');
     tg.setBackgroundColor('secondary_bg_color');
   } catch {
     // Older clients don't support these; harmless.
   }
+}
+
+// ---------- Full screen ----------
+
+/** Telegram 8.0+ (phones and the desktop app) can show the app on the whole screen. */
+export function canFullscreen(): boolean {
+  const tg = webApp();
+  try {
+    return !!tg?.requestFullscreen && !!tg.isVersionAtLeast?.('8.0');
+  } catch {
+    return false;
+  }
+}
+
+/** Full screen on or off; `html[data-fullscreen]` lets the CSS keep clear of Telegram's buttons. */
+export function setFullscreen(on: boolean): void {
+  const tg = webApp();
+  try {
+    if (on) tg?.requestFullscreen();
+    else tg?.exitFullscreen();
+  } catch {
+    // An older client or a refusal: the app simply stays as it is.
+  }
+}
+
+function markFullscreen() {
+  const html = document.documentElement;
+  if (webApp()?.isFullscreen) html.dataset.fullscreen = 'true';
+  else delete html.dataset.fullscreen;
 }
 
 export const haptic = {

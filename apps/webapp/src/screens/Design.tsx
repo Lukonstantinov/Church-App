@@ -22,6 +22,7 @@ import {
   type EffectsState,
 } from '../components/CoverEffects';
 import { DraftsOnPhone } from '../components/DraftsOnPhone';
+import { EffectStudio } from '../components/EffectStudio';
 import { Fold } from '../components/Fold';
 import { FreePoster } from '../components/FreePoster';
 import { DesignStudio } from '../components/DesignStudio';
@@ -41,6 +42,7 @@ import { ThemePicker } from '../components/ThemePicker';
 import { useToast } from '../components/Toast';
 import { IconPlus } from '../components/icons';
 import {
+  FullscreenButton,
   Button,
   DateBadge,
   HeroCard,
@@ -126,6 +128,10 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
   return (
     <Screen tabs>
       <GroupSwitcher groups={groups} active={active} subtitle={t.design.subtitle} />
+      {/* Designing is easier on the whole screen (and on a computer, in a big window). */}
+      <div className="-mt-2 flex justify-end">
+        <FullscreenButton />
+      </div>
 
       {/* This phone shows no animations: say so, or designs look broken while testing. */}
       {(motionPref === 'off' || quality === 'still') && (
@@ -153,6 +159,10 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
 
       <Fold id="design.posters" icon="🪧" title={t.posters.title} hint={t.posters.hint}>
         <PosterStudio g={active} />
+      </Fold>
+
+      <Fold id="design.effects" icon="✨" title={t.effectStudio.title} hint={t.effectStudio.hint}>
+        <EffectStudio />
       </Fold>
 
       <Fold

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import {
   fontFamily,
   GPU_MOTIONS,
@@ -11,11 +11,14 @@ import {
 import { useEnv } from '../lib/env';
 import { useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
 import { useT } from '../lib/i18n';
+import { canFullscreen, setFullscreen, webApp } from '../lib/telegram';
 import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { GpuEffect } from './GpuEffect';
 import { PHOTO_EFFECTS, PhotoEffect } from './PhotoEffects';
 import { PARTICLES, SEASON_ITEMS, particleSpots, type Particle } from './particleData';
 import { PARTICLE_KINDS, ParticleCanvas } from './ParticleCanvas';
+import { builtIn } from './EffectSets';
+import { useEffectTemplates } from '../lib/queries';
 import { SHADER_KINDS, ShaderEffect, shaderParams, type ShaderKind } from './ShaderEffect';
 
 /** Page container. `tabs` leaves room for the floating tab bar. */
@@ -411,6 +414,72 @@ export function Card({
  * and colour. Nothing for "off". Parent: relative + overflow-hidden.
  */
 /**
+ * Where a layer of an own effect is drawn and how it mixes (Effect studio): its box in % of
+ * the block, and its blend mode — set on the layer's own clip, so a recording sees both.
+ */
+export function placeStyle(tune: MotionTune | null | undefined): CSSProperties | undefined {
+  const box = tune?.box;
+  const blend = tune?.blend && tune.blend !== 'normal' ? tune.blend : null;
+  if (!box && !blend) return undefined;
+  return {
+    ...(box
+      ? {
+          inset: 'auto',
+          left: `${box.x}%`,
+          top: `${box.y}%`,
+          width: `${box.w}%`,
+          height: `${box.h}%`,
+        }
+      : {}),
+    ...(blend ? { mixBlendMode: blend } : {}),
+  };
+}
+
+/**
+ * An own effect (`custom`, by `tune.ref`): the church's saved layers, read live — so a
+ * change in the Effect studio shows wherever the effect is used. Its own speed and strength
+ * scale the whole thing; its own box and blend place the whole thing. Gone (deleted, or
+ * not loaded yet): nothing is drawn.
+ */
+function CustomEffect({
+  tune,
+  behind,
+  icon,
+  image,
+  preview,
+}: {
+  tune?: MotionTune | null;
+  behind?: boolean;
+  icon?: MotionIcon | null;
+  image?: string | null;
+  preview?: boolean;
+}) {
+  const list = useEffectTemplates();
+  const own = list.data?.find((x) => x.id === tune?.ref);
+  if (!own) return null;
+  const speed = tune?.speed ?? 1;
+  const layers = builtIn(own.effects).map((l) => ({
+    kind: l.kind,
+    tune: speed === 1 ? l.tune : { ...l.tune, speed: Math.min(3, (l.tune?.speed ?? 1) * speed) },
+  }));
+  const strength = tune?.strength ?? 1;
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0"
+      style={{
+        ...(behind ? { zIndex: -1 } : {}),
+        ...(strength < 1 ? { opacity: strength } : {}),
+        ...placeStyle(tune),
+        borderRadius: 'inherit',
+      }}
+    >
+      <LivingLayers layers={layers} icon={icon} image={image} preview={preview} />
+    </span>
+  );
+}
+
+/**
  * Several animations over one block: the particle ones share one canvas (one picture drawn
  * by one clock instead of a layer each), the others are drawn as layers of their own.
  */
@@ -430,11 +499,15 @@ export function LivingLayers({
   const quality = useEffectQuality();
   if (quality === 'still') return null;
   const shown = layers.filter((l) => l.kind !== 'off');
-  const particles = shown.filter((l) => PARTICLE_KINDS.has(l.kind));
+  // Particles share one canvas — unless a layer has its own place or blend (own effects):
+  // then it is drawn on a canvas of its own.
+  const shared = (l: (typeof shown)[number]) =>
+    PARTICLE_KINDS.has(l.kind) && !l.tune?.box && !l.tune?.blend;
+  const particles = shown.filter(shared);
   return (
     <>
       {shown
-        .filter((l) => !PARTICLE_KINDS.has(l.kind))
+        .filter((l) => !shared(l))
         .map((l, i) => (
           <LivingLayer
             key={`${l.kind}${i}`}
@@ -500,9 +573,19 @@ export function LivingLayer({
   // On "still" phones the animation layers aren't drawn at all.
   if (kind === 'off' || quality === 'still') return null;
   // Particles are drawn on one canvas instead of one moving element each.
+  // One of the church's own effects: its layers, as saved in the Effect studio.
+  if (kind === 'custom')
+    return <CustomEffect tune={tune} behind={behind} icon={icon} image={image} preview={preview} />;
+  const place = placeStyle(tune);
   if (PARTICLE_KINDS.has(kind))
     return (
-      <ParticleCanvas layers={[{ kind, tune }]} icon={icon} behind={behind} preview={preview} />
+      <ParticleCanvas
+        layers={[{ kind, tune }]}
+        icon={icon}
+        behind={behind}
+        preview={preview}
+        place={place}
+      />
     );
   // Smooth colour effects are drawn small by the shader engine (no huge blurred layers).
   if (SHADER_KINDS.has(kind))
@@ -511,6 +594,7 @@ export function LivingLayer({
         params={shaderParams(kind as ShaderKind, tune)}
         preview={preview}
         behind={behind}
+        place={place}
       />
     );
   // Weaker phones draw every other particle.
@@ -565,6 +649,7 @@ export function LivingLayer({
         ...(behind ? { zIndex: -1 } : {}),
         // Light rays without a photo are drawn on black: mixed in as light.
         ...(kind === 'godrays' && !image ? { mixBlendMode: 'screen' } : {}),
+        ...place,
       }}
     >
       <span
@@ -701,6 +786,8 @@ export function LivingLayer({
             size={weight}
             glow={tune?.glow ?? 0}
             colors={tune?.colors?.length ? tune.colors : c ? [c] : null}
+            style={tune?.wordStyle ?? 'fill'}
+            flow={tune?.wordFlow ?? 'alt'}
           />
         )}
         {kind === 'static' && (
@@ -850,10 +937,21 @@ export function rainColumns(
   });
 }
 
+/** A colour `at` (0…1) along a list of CSS colours, mixed by the browser (vars work too). */
+function along(colors: string[], at: number): string {
+  if (colors.length === 1) return colors[0]!;
+  const f = Math.min(0.9999, Math.max(0, at)) * (colors.length - 1);
+  const i = Math.floor(f);
+  const k = Math.round((f - i) * 100);
+  return `color-mix(in srgb, ${colors[i]!} ${100 - k}%, ${colors[i + 1]!})`;
+}
+
 /**
- * The word wall: the person's words repeated in rows that slide, every other row the other
- * way and as an outline, in a font of their choice. Each row is its text twice over moving
- * by one copy, so it loops without a seam; the speed differs a little row to row.
+ * The word wall (the "LOOP LOOP LOOP" background): the person's words repeated in packed
+ * rows, one gradient running across the whole wall, filled, outlined or by turns, in a
+ * font of their choice — tilt it with the angle setting. Rows slide by turns both ways,
+ * all one way, or stand still. Each row is its text twice over moving by one copy, so it
+ * loops without a seam; the speed differs a little row to row.
  */
 function WordWall({
   words,
@@ -862,6 +960,8 @@ function WordWall({
   size,
   glow,
   colors,
+  style,
+  flow,
 }: {
   words: string[];
   font: string | null | undefined;
@@ -869,30 +969,37 @@ function WordWall({
   size: number;
   glow: number;
   colors: string[] | null;
+  style: 'fill' | 'outline' | 'mix';
+  flow: 'alt' | 'same' | 'still';
 }) {
-  const line = `${words.join(' • ')} • `.repeat(Math.max(2, Math.ceil(24 / words.join('').length)));
-  const palette = colors ?? ['var(--live-a)', 'var(--live-b)', 'var(--live-c)'];
+  const one = words.join('\u2002');
+  const line = `${one}\u2002`.repeat(Math.max(2, Math.ceil(30 / Math.max(1, one.length))));
+  const palette = colors ?? ['var(--live-a)', 'var(--live-c)', 'var(--live-b)'];
+  // Rows reach past the edges, so a tilted wall still covers the block.
+  const count = rows + 2;
   return (
     <span
       className="living-words"
-      style={{ fontFamily: fontFamily(font) ?? undefined, '--rows': rows } as CSSProperties}
+      style={{ fontFamily: fontFamily(font ?? 'oswald') ?? undefined } as CSSProperties}
     >
-      {[...Array(rows).keys()].map((r) => {
-        const color = palette[r % palette.length]!;
-        const outline = r % 2 === 1;
+      {[...Array(count).keys()].map((r) => {
+        const color = along(palette, r / Math.max(1, count - 1));
+        const outline = style === 'outline' || (style === 'mix' && r % 2 === 1);
         return (
           <span
             key={r}
-            className={`living-words-row${r % 2 ? ' rev' : ''}`}
+            className={`living-words-row${flow === 'alt' && r % 2 ? ' rev' : ''}${flow === 'still' ? ' still' : ''}`}
             style={
               {
-                fontSize: `calc(${(100 / rows) * 0.72 * size}cqh)`,
+                fontSize: `calc(${(100 / rows) * 0.9 * size}cqh)`,
                 color: outline ? 'transparent' : color,
-                WebkitTextStroke: outline ? `0.04em ${color}` : undefined,
+                WebkitTextStroke: outline ? `0.035em ${color}` : undefined,
                 textShadow: glow
-                  ? `0 0 ${(0.15 * glow).toFixed(2)}em ${color}, 0 0 ${(0.45 * glow).toFixed(2)}em ${color}`
+                  ? `0 0 ${(0.12 * glow).toFixed(2)}em ${color}, 0 0 ${(0.4 * glow).toFixed(2)}em ${color}`
                   : undefined,
-                animationDuration: `${18 + ((r * 7) % 5) * 3}s`,
+                animationDuration: `${16 + ((r * 7) % 5) * 3}s`,
+                // Each row starts a little further along, so the words don't line up in columns.
+                marginLeft: `-${((r * 37) % 100) / 10}em`,
               } as CSSProperties
             }
           >
@@ -959,6 +1066,42 @@ function Glitch({
       <i className="gl-scan" />
       <i className="gl-tear" />
     </span>
+  );
+}
+
+/**
+ * ⛶ Full screen: the app on the whole screen of the phone or the computer (Telegram 8.0+),
+ * handy while designing. Nothing is shown where Telegram can't do it.
+ */
+export function FullscreenButton() {
+  const t = useT();
+  const on = useSyncExternalStore(
+    (cb) => {
+      const tg = webApp();
+      try {
+        tg?.onEvent?.('fullscreenChanged', cb);
+      } catch {
+        // nothing to follow
+      }
+      return () => {
+        try {
+          tg?.offEvent?.('fullscreenChanged', cb);
+        } catch {
+          // ignore
+        }
+      };
+    },
+    () => !!webApp()?.isFullscreen,
+  );
+  if (!canFullscreen()) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => setFullscreen(!on)}
+      className="rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold active:scale-95"
+    >
+      {on ? `⤡ ${t.common.fullscreenOff}` : `⛶ ${t.common.fullscreenOn}`}
+    </button>
   );
 }
 

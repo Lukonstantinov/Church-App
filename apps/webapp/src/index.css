@@ -4289,7 +4289,7 @@ html[data-sheet] #root *::after {
   inset: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
+  justify-content: center;
   overflow: hidden;
   container-type: size;
 }
@@ -4297,14 +4297,18 @@ html[data-sheet] #root *::after {
   display: flex;
   width: max-content;
   white-space: nowrap;
+  flex-shrink: 0;
   font-weight: 900;
-  line-height: 1;
+  line-height: 0.98;
   text-transform: uppercase;
   animation: living-words 20s linear infinite;
   will-change: transform;
 }
 .living-words-row > span {
-  padding-right: 0.3em;
+  padding-right: 0.5em;
+}
+.living-words-row.still {
+  animation: none;
 }
 .living-words-row.rev {
   animation-direction: reverse;
@@ -4321,4 +4325,14 @@ html[data-sheet] #root *::after {
   .living-words-row {
     animation: none;
   }
+}
+
+/*
+ * Full screen (Telegram 8.0+): Telegram draws its own close and menu buttons over the top
+ * of the app, so the page starts below them (Telegram fills these variables).
+ */
+html[data-fullscreen] body {
+  padding-top: calc(
+    var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px)
+  );
 }
