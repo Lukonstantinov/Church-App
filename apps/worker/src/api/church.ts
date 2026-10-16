@@ -194,6 +194,9 @@ mediaRoutes.get('/logo', async (c) => {
 const MODELS: Record<string, string> = {
   'selfie-multiclass':
     'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite',
+  // "Tap what to keep": finds the whole thing under a tap (any object, not only people).
+  'magic-touch':
+    'https://storage.googleapis.com/mediapipe-models/interactive_segmenter/magic_touch/float32/1/magic_touch.tflite',
 };
 
 /** GET /media/model/:name — a model file for the phone (background removal). */

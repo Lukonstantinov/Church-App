@@ -8,6 +8,7 @@ import {
   type PosterLayer,
   type PosterTemplate,
   type PosterTexts,
+  type TextWarp,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useEffectQuality } from '../lib/perf';
@@ -258,6 +259,23 @@ function Layer({
     ...textEffects(layer.style),
   };
   const effects = still ? [] : (layer.effects ?? []).filter((e) => e.kind !== 'off');
+  // Bent words are drawn letter by letter (WarpedText), with their effects in them.
+  if (layer.warp && layer.warp.amount !== 0)
+    return (
+      <WarpedText
+        words={layer.upper ? words.toUpperCase() : words}
+        effects={layer.fxIn === 'around' ? [] : effects}
+        around={layer.fxIn === 'around' ? effects : []}
+        at={{ ...at, ...look }}
+        type={type}
+        id={layer.id}
+        edge={layer.fxEdge ?? 'line'}
+        warp={layer.warp}
+        style={layer.style}
+        color={layer.color ?? '#ffffff'}
+        size={layer.size}
+      />
+    );
   if (effects.length === 0)
     return (
       <span
@@ -512,6 +530,288 @@ function LetterEffects({
       {mask && (
         <span className="absolute" style={{ inset: -mask.pad, ...maskOf(`url("${mask.url}")`) }}>
           <LivingLayers layers={effects} />
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Where one letter of a bent line goes: its offset from its straight place, turn and scale. */
+interface Bend {
+  dx: number;
+  dy: number;
+  rot: number;
+  sx: number;
+  sy: number;
+}
+
+/**
+ * The bend of a letter whose middle is at `u` along its line (−1 the left end … 1 the right
+ * end) on a line `w` pixels wide in a font `px` pixels tall.
+ */
+export function bendAt(kind: TextWarp, amount: number, u: number, w: number, px: number): Bend {
+  const flat = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1 };
+  switch (kind) {
+    case 'arc': {
+      // Along a circle: plus arches up, minus sags like a smile.
+      const max = Math.abs(amount) * 1.25;
+      if (max < 1e-3) return flat;
+      const r = w / 2 / max;
+      const phi = u * max;
+      const s = Math.sign(amount);
+      return {
+        dx: r * Math.sin(phi) - (u * w) / 2,
+        dy: s * (r - r * Math.cos(phi)),
+        rot: s * phi,
+        sx: 1,
+        sy: 1,
+      };
+    }
+    case 'bulge': {
+      const k = 1 - u * u;
+      return { dx: 0, dy: 0, rot: 0, sx: 1 + amount * 0.06 * k, sy: 1 + amount * 0.75 * k };
+    }
+    case 'wave': {
+      const a = amount * 0.38 * px;
+      const f = Math.PI * 1.5;
+      const slope = (a * Math.cos(u * f) * f) / (w / 2 || 1);
+      return { dx: 0, dy: a * Math.sin(u * f), rot: Math.atan(slope), sx: 1, sy: 1 };
+    }
+    case 'flag': {
+      const a = amount * 0.26 * px;
+      const f = Math.PI;
+      const g = (u + 1) * f;
+      const slope = (a * Math.cos(g) * f) / (w / 2 || 1);
+      return {
+        dx: 0,
+        dy: a * Math.sin(g),
+        rot: Math.atan(slope),
+        sx: 1,
+        sy: 1 + amount * 0.18 * Math.cos(g),
+      };
+    }
+    case 'rise': {
+      const a = amount * 0.5 * px;
+      return {
+        dx: 0,
+        dy: -a * u,
+        rot: Math.atan(-a / (w / 2 || 1)),
+        sx: 1,
+        sy: 1 + amount * 0.35 * u,
+      };
+    }
+  }
+}
+
+/**
+ * Bent words: drawn letter by letter on a picture of the words' own place (with room round
+ * it for the bend), in their font, colour and outline; shadow, glow and bevel are the same
+ * styles pictures get. Effects in the letters use the very same drawing as their mask, so
+ * they always sit exactly in the bent letters.
+ */
+function WarpedText({
+  words,
+  effects,
+  around,
+  at,
+  type,
+  id,
+  edge,
+  warp,
+  style,
+  color,
+  size,
+}: {
+  words: string;
+  effects: MotionLayer[];
+  around: MotionLayer[];
+  at: CSSProperties;
+  type: CSSProperties;
+  id: string;
+  edge: 'line' | 'none' | 'cover';
+  warp: { kind: TextWarp; amount: number };
+  style: LayerStyle | null | undefined;
+  color: string;
+  size: number;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [lines, setLines] = useState<string[] | null>(null);
+  const [pad, setPad] = useState(0);
+  const [mask, setMask] = useState<string | null>(null);
+  const fontKey = `${String(type.fontFamily)}|${String(type.fontWeight)}|${String(type.fontSize)}`;
+  const look = JSON.stringify([warp, style, color, edge, effects.length > 0]);
+
+  // Where the lines break, for the poster's width (again when it changes size).
+  useEffect(() => {
+    const el = ref.current;
+    const box = el?.offsetParent?.parentElement ?? el?.parentElement?.parentElement;
+    if (!el || !box) return;
+    let stop = false;
+    const measure = async () => {
+      const cs = getComputedStyle(el);
+      const font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      await document.fonts?.load(font).catch(() => undefined);
+      if (stop) return;
+      const c = document.createElement('canvas');
+      const ctx = c.getContext('2d')!;
+      ctx.font = font;
+      const next = wrapLines(ctx, words, box.clientWidth * 0.92);
+      freeCanvas(c);
+      setLines((prev) => (prev && prev.join('\n') === next.join('\n') ? prev : next));
+    };
+    void measure();
+    const ro = new ResizeObserver(() => void measure());
+    ro.observe(box);
+    return () => {
+      stop = true;
+      ro.disconnect();
+    };
+  }, [words, fontKey]);
+
+  // The letters drawn bent: once in colour (what is seen), once white (the effects' mask).
+  useEffect(() => {
+    const el = ref.current;
+    const pic = canvas.current;
+    if (!el || !pic || !lines) return;
+    let stop = false;
+    void (async () => {
+      const cs = getComputedStyle(el);
+      const font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      await document.fonts?.load(font).catch(() => undefined);
+      if (stop) return;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      if (!w || !h) return;
+      const px = Number.parseFloat(cs.fontSize);
+      const lh = Number.parseFloat(cs.lineHeight) || px * 1.05;
+      const align = cs.textAlign;
+      // One cqmin in pixels, for the outline's width (set in poster units).
+      const unit = px / (size / 4);
+      const outline = style?.stroke && style.strokeWidth ? style.strokeWidth * 0.12 * unit : 0;
+      const room = Math.ceil(
+        px * 0.8 +
+          outline * 2 +
+          (warp.kind === 'arc' ? w * 0.35 : px * 0.7) * Math.abs(warp.amount),
+      );
+      const k = Math.min(2, window.devicePixelRatio || 1);
+      const W = w + room * 2;
+      const H = h + room * 2;
+
+      const draw = (ctx: CanvasRenderingContext2D, ink: 'paint' | 'mask') => {
+        ctx.setTransform(k, 0, 0, k, 0, 0);
+        ctx.clearRect(0, 0, W, H);
+        ctx.font = font;
+        ctx.textBaseline = 'alphabetic';
+        ctx.lineJoin = 'round';
+        const m = ctx.measureText('Hg');
+        const ascent = m.fontBoundingBoxAscent || px * 0.8;
+        const descent = m.fontBoundingBoxDescent || px * 0.2;
+        lines.forEach((line, li) => {
+          if (!line.trim()) return;
+          const chars = Array.from(line);
+          const lw = ctx.measureText(line).width || 1;
+          const left =
+            align === 'left' || align === 'start' ? 0 : align === 'right' ? w - lw : (w - lw) / 2;
+          const base = li * lh + (lh - (ascent + descent)) / 2 + ascent;
+          let before = '';
+          for (const ch of chars) {
+            const x0 = ctx.measureText(before).width;
+            const cw = ctx.measureText(before + ch).width - x0;
+            before += ch;
+            if (!ch.trim()) continue;
+            const mid = x0 + cw / 2;
+            const b = bendAt(warp.kind, warp.amount, (mid / lw) * 2 - 1, lw, px);
+            ctx.save();
+            ctx.translate(room + left + mid + b.dx, room + base + b.dy - ascent / 2);
+            ctx.rotate(b.rot);
+            ctx.scale(b.sx, b.sy);
+            ctx.translate(-cw / 2, ascent / 2);
+            if (ink === 'paint') {
+              if (outline) {
+                ctx.strokeStyle = style!.stroke!;
+                ctx.lineWidth = outline * 2;
+                ctx.strokeText(ch, 0, 0);
+              }
+              ctx.fillStyle = color;
+              ctx.fillText(ch, 0, 0);
+            } else {
+              ctx.fillStyle = '#fff';
+              ctx.strokeStyle = '#fff';
+              ctx.fillText(ch, 0, 0);
+              if (edge === 'line') {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.lineWidth = Math.max(1, px * 0.05);
+                ctx.strokeText(ch, 0, 0);
+                ctx.globalCompositeOperation = 'source-over';
+              } else {
+                ctx.lineWidth =
+                  edge === 'cover'
+                    ? outline * 2 + Math.max(2, px * 0.05)
+                    : Math.max(1.2, px * 0.012);
+                ctx.strokeText(ch, 0, 0);
+              }
+            }
+            ctx.restore();
+          }
+        });
+      };
+
+      pic.width = Math.ceil(W * k);
+      pic.height = Math.ceil(H * k);
+      draw(pic.getContext('2d')!, 'paint');
+      setPad(room);
+      if (effects.length) {
+        const c = document.createElement('canvas');
+        c.width = pic.width;
+        c.height = pic.height;
+        draw(c.getContext('2d')!, 'mask');
+        const url = c.toDataURL('image/png');
+        freeCanvas(c);
+        if (!stop) setMask(url);
+      } else setMask(null);
+    })();
+    return () => {
+      stop = true;
+    };
+    // `look` stands for the warp, style, colour and edge (compared by value, not by object).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, fontKey, look, size]);
+
+  const filter = pictureFilter(style ? { ...style, stroke: null, strokeWidth: null } : null);
+  return (
+    <span className="absolute w-max" style={at} data-layer-id={id}>
+      {/* The straight words keep the place (and size) of the layer; only the picture shows. */}
+      <span
+        ref={ref}
+        aria-hidden="true"
+        className={`relative block w-max leading-[1.05] ${lines ? 'whitespace-pre' : 'max-w-[92cqw] whitespace-pre-line'}`}
+        style={{ ...type, color: 'transparent', textShadow: 'none', WebkitTextStroke: '0' }}
+      >
+        {lines ? lines.join('\n') : words}
+      </span>
+      <canvas
+        ref={canvas}
+        className="pointer-events-none absolute"
+        style={{
+          inset: -pad,
+          width: `calc(100% + ${pad * 2}px)`,
+          height: `calc(100% + ${pad * 2}px)`,
+          ...(filter ? { filter } : {}),
+        }}
+      />
+      {mask && effects.length > 0 && (
+        <span className="absolute" style={{ inset: -pad, ...maskOf(`url("${mask}")`) }}>
+          <LivingLayers layers={effects} />
+        </span>
+      )}
+      {around.length > 0 && (
+        <span
+          className="absolute"
+          style={{ inset: '-45% -15%', ...edgeLook('oval', 0.6, '') }}
+          {...edgeMark('oval', 0.6)}
+        >
+          <LivingLayers layers={around} />
         </span>
       )}
     </span>

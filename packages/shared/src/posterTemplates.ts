@@ -76,6 +76,10 @@ export const FILL_MOVES = ['none', 'flow', 'spin', 'pulse'] as const;
 export type FillMove = (typeof FILL_MOVES)[number];
 
 export const TEXT_SOURCES = ['title', 'date', 'time', 'place', 'topic', 'custom'] as const;
+
+/** How text can be bent (TextWarp in the poster editor). */
+export const TEXT_WARPS = ['arc', 'bulge', 'wave', 'flag', 'rise'] as const;
+export type TextWarp = (typeof TEXT_WARPS)[number];
 export type TextSource = (typeof TEXT_SOURCES)[number];
 
 export const posterLayerSchema = z.discriminatedUnion('type', [
@@ -130,6 +134,11 @@ export const posterLayerSchema = z.discriminatedUnion('type', [
      * (default), none (the effect fills the whole letter), or over the outline too.
      */
     fxEdge: z.enum(['line', 'none', 'cover']).nullish(),
+    /**
+     * The words bent, as in a design program: along an arc, swelling in the middle, in a
+     * wave, a waving flag, or rising; amount −1 … 1 (minus bends the other way).
+     */
+    warp: z.object({ kind: z.enum(TEXT_WARPS), amount: z.number().min(-1).max(1) }).nullish(),
   }),
   z.object({
     type: z.literal('fill'),

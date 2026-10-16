@@ -84,6 +84,20 @@ export const MEETING_MOTIONS = [
   // Drawn by the shared shader engine (components/ShaderEffect.tsx): smooth, low-res, light.
   'liquid',
   'marble',
+  // More of the shader engine: abstract moving backgrounds and light.
+  'topo',
+  'fur',
+  'streaks',
+  'ribbons',
+  'plasma',
+  'kaleido',
+  'cells',
+  'holo',
+  'sun',
+  'sunburst',
+  'halo',
+  // Words of one's own, repeated in rows that slide (drawn as text, any font).
+  'wordwall',
 ] as const;
 export type MeetingMotion = (typeof MEETING_MOTIONS)[number];
 
@@ -101,10 +115,17 @@ export const MOTION_GROUPS: {
     | 'icons'
     | 'seasons'
     | 'colour'
+    | 'abstract'
+    | 'sunlight'
     | 'gpu';
   items: MeetingMotion[];
 }[] = [
   { key: 'light', items: ['calm', 'lively', 'mesh', 'aurora', 'silk', 'rays'] },
+  {
+    key: 'abstract',
+    items: ['topo', 'fur', 'streaks', 'ribbons', 'plasma', 'kaleido', 'cells', 'holo', 'wordwall'],
+  },
+  { key: 'sunlight', items: ['sun', 'sunburst', 'halo'] },
   {
     key: 'particles',
     items: [
@@ -211,11 +232,36 @@ export const motionTuneSchema = z.object({
     .nullish(),
   /** Digital rain: the letters and symbols that fall (empty = the classic ones). */
   symbols: z.string().max(60).nullish(),
+  /**
+   * Digital rain: whole words falling one after another (up to 10), instead of symbols;
+   * the word wall: the words repeated in its rows.
+   */
+  words: z.array(z.string().trim().min(1).max(30)).max(10).nullish(),
+  /** The word wall: its font (a FONTS key; unknown = the app's own). */
+  font: z.string().max(40).nullish(),
+  /** Lines and light (topography, line wall, ribbons, word wall…): 0 plain … 1 bright neon glow. */
+  glow: z.number().min(0).max(1).nullish(),
+  /** Sun, sunburst, halo: where its centre is (share of the width / height, 0…1). */
+  x: z.number().min(0).max(1).nullish(),
+  y: z.number().min(0).max(1).nullish(),
+  /** Sun and halo: drift slowly around where it is placed (true) or stay put. */
+  drift: z.boolean().nullish(),
 });
 export type MotionTune = z.output<typeof motionTuneSchema>;
 
 /** What an animation can be tuned in besides speed, size, direction, colour and strength. */
-export type MotionKnob = 'density' | 'weight' | 'sharp' | 'chaos' | 'seed' | 'colors' | 'symbols';
+export type MotionKnob =
+  | 'density'
+  | 'weight'
+  | 'sharp'
+  | 'chaos'
+  | 'seed'
+  | 'colors'
+  | 'symbols'
+  | 'words'
+  | 'font'
+  | 'glow'
+  | 'place';
 const PARTICLE_KNOBS: MotionKnob[] = ['density', 'weight'];
 const GLOW_KNOBS: MotionKnob[] = ['sharp'];
 /** The shader effects: how many folds/veins/bands, how wild, which variation, own colours. */
@@ -229,7 +275,19 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   liquid: [...SHADER_KNOBS, 'weight'],
   marble: [...SHADER_KNOBS, 'weight'],
   bokeh: ['sharp', 'weight'],
-  flames: ['sharp', 'weight', 'density'],
+  flames: [...SHADER_KNOBS, 'weight'],
+  topo: [...SHADER_KNOBS, 'weight', 'glow'],
+  fur: [...SHADER_KNOBS, 'weight', 'place'],
+  streaks: [...SHADER_KNOBS, 'weight', 'glow'],
+  ribbons: [...SHADER_KNOBS, 'weight', 'glow'],
+  plasma: SHADER_KNOBS,
+  kaleido: SHADER_KNOBS,
+  cells: [...SHADER_KNOBS, 'glow'],
+  holo: SHADER_KNOBS,
+  sun: ['place', 'weight', 'density', 'glow', 'colors'],
+  sunburst: ['place', 'density', 'sharp', 'colors'],
+  halo: ['place', 'weight', 'glow', 'colors'],
+  wordwall: ['words', 'font', 'density', 'weight', 'glow', 'colors'],
   embers: PARTICLE_KNOBS,
   fireflies: PARTICLE_KNOBS,
   bubbles: PARTICLE_KNOBS,
@@ -247,7 +305,7 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   glitch: ['density', 'weight'],
   crt: ['density'],
   static: ['weight'],
-  matrix: [...PARTICLE_KNOBS, 'symbols'],
+  matrix: [...PARTICLE_KNOBS, 'symbols', 'words'],
   spotlight: ['density', 'weight'],
   disco: PARTICLE_KNOBS,
   hearts: PARTICLE_KNOBS,

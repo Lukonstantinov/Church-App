@@ -566,6 +566,22 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
+        title: 'More shader effects, words, sun, text bend',
+        steps: [
+          'Shader kinds (ShaderEffect.tsx, SHADER_KINDS): flames is now a fiery glow (burning clouds; the old CSS flames are gone), topo (contour lines; glow = neon), fur (brush-stroke swirl round x/y), streaks (motion-lines wall), ribbons, plasma, kaleido, cells, holo, sun (disc + rays + lens flares, x/y, drift), sunburst, halo. Shader keywords: never name a GLSL function flat / sample / etc. — one reserved word breaks every effect.',
+          'New tune fields (shared motions.ts): glow, x / y (place: 9 quick spots + sliders), drift, words (up to 10), font. MOTION_KNOBS lists which knobs each effect shows.',
+          'Digital rain with `words`: whole words fall, one word a column, in their order (rainColumns in ui.tsx). Word wall (`wordwall`): rows of the words sliding both ways, every other row an outline, in the chosen font (WordWall in ui.tsx, `.living-words` CSS).',
+          'Text bend (`warp` on a poster text layer: arc / bulge / wave / flag / rise, amount −1…1): WarpedText in LayeredPoster.tsx draws the letters bent onto a canvas (outline in the canvas, shadow/glow/bevel as picture filters); effects in the letters use the same drawing as their mask (bendAt).',
+        ],
+      },
+      {
+        title: 'Background removal: tap what to keep',
+        steps: [
+          'lib/cutout.ts: people are found by MediaPipe selfie-multiclass as before; «👆 Tap what to keep» (TapKeepSheet.tsx) uses MediaPipe magic touch (InteractiveSegmenterLegacy, 6 MB, relayed as /media/model/magic-touch) — any object, pet or person under the taps, live preview, then the same tidy-up steps.',
+          'defringe() takes the background’s tint out of the soft edge (subject colours from the solid inside).',
+        ],
+      },
+      {
         title: 'Drafts that close the app',
         steps: [
           'lib/drafts.ts marks a draft while its screen is open (useOpeningMark); a normal close/hide removes the mark, a crash doesn’t.',

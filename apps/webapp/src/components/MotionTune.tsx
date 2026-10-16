@@ -1,14 +1,18 @@
 import {
+  isFontKey,
   MOTION_KNOBS,
   type MeetingMotion,
   type MotionKnob,
   type MotionTune,
   type ShineTune,
 } from '@church/shared';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
+import { SHADER_KINDS } from './ShaderEffect';
+import { FontPicker } from './FontPicker';
 import { Pill } from './LookControls';
+import { Toggle } from './ui';
 
 export const PALETTE = [
   '#ef4444',
@@ -86,34 +90,42 @@ export function MotionTuneControls({
   const set = (patch: Partial<MotionTune>) => onChange({ ...tune, ...patch });
   const knobs = MOTION_KNOBS[kind] ?? [];
   const lined = kind === 'lines' || kind === 'grid';
-  const shader = kind === 'silk' || kind === 'liquid' || kind === 'marble' || kind === 'mesh';
+  const shader = SHADER_KINDS.has(kind);
+  // What "how many" and "how thick" mean for this animation.
+  const lineKinds = ['topo', 'streaks', 'ribbons', 'wordwall'];
   const label: Record<'density' | 'weight' | 'sharp', string> = {
     density:
       kind === 'lines'
         ? k.gap
         : kind === 'grid'
           ? k.cells
-          : kind === 'flames'
-            ? k.tongues
-            : kind === 'silk'
-              ? k.folds
-              : kind === 'marble'
-                ? k.veins
-                : shader
-                  ? k.bands
-                  : k.count,
+          : kind === 'sun' || kind === 'sunburst'
+            ? k.rays
+            : lineKinds.includes(kind)
+              ? k.lines
+              : kind === 'silk'
+                ? k.folds
+                : kind === 'marble'
+                  ? k.veins
+                  : shader
+                    ? k.bands
+                    : k.count,
     weight: lined
       ? k.thick
-      : kind === 'flames'
-        ? k.height
-        : kind === 'marble'
-          ? k.veinWidth
-          : shader
-            ? k.gloss
-            : kind.startsWith('icon')
-              ? k.iconSize
-              : k.particle,
-    sharp: kind === 'flames' ? k.edges : k.clarity,
+      : kind === 'sun' || kind === 'halo' || kind === 'wordwall'
+        ? k.size
+        : kind === 'flames'
+          ? k.strength
+          : lineKinds.includes(kind) || kind === 'marble'
+            ? kind === 'marble'
+              ? k.veinWidth
+              : k.thick
+            : shader
+              ? k.gloss
+              : kind.startsWith('icon')
+                ? k.iconSize
+                : k.particle,
+    sharp: k.clarity,
   };
   const knob: Record<MotionKnob, ReactNode> = {
     density: (
@@ -144,7 +156,7 @@ export function MotionTuneControls({
       <Knob
         key="sharp"
         label={label.sharp}
-        value={tune.sharp ?? (kind === 'flames' ? 0.7 : 0)}
+        value={tune.sharp ?? (kind === 'marble' ? 0.45 : 0)}
         min={0}
         max={1}
         step={0.05}
@@ -186,6 +198,81 @@ export function MotionTuneControls({
         key="colors"
         value={tune.colors ?? []}
         onChange={(colors) => set({ colors: colors.length ? colors : null })}
+      />
+    ),
+    glow: (
+      <Knob
+        key="glow"
+        label={k.glow}
+        value={tune.glow ?? 0}
+        min={0}
+        max={1}
+        step={0.05}
+        show={percent}
+        onChange={(glow) => set({ glow })}
+      />
+    ),
+    place: (
+      <div key="place" className="flex flex-col gap-2">
+        <div className="text-[14px]">{k.place}</div>
+        {/* Nine quick spots, then fine sliders. */}
+        <div className="grid w-[132px] grid-cols-3 gap-1">
+          {[0.15, 0.5, 0.85].flatMap((y) =>
+            [0.15, 0.5, 0.85].map((x) => {
+              const on =
+                Math.abs((tune.x ?? 0.72) - x) < 0.05 && Math.abs((tune.y ?? 0.28) - y) < 0.05;
+              return (
+                <button
+                  key={`${x}${y}`}
+                  type="button"
+                  aria-label={`${Math.round(x * 100)}% ${Math.round(y * 100)}%`}
+                  onClick={() => {
+                    haptic.tap();
+                    set({ x, y });
+                  }}
+                  className={`h-9 rounded-lg ${on ? 'bg-[var(--brand)]' : 'bg-hairline'}`}
+                />
+              );
+            }),
+          )}
+        </div>
+        <Knob
+          label={k.placeX}
+          value={tune.x ?? (kind === 'fur' ? 0.8 : 0.72)}
+          min={0}
+          max={1}
+          step={0.01}
+          show={percent}
+          onChange={(x) => set({ x })}
+        />
+        <Knob
+          label={k.placeY}
+          value={tune.y ?? (kind === 'fur' ? 0.15 : 0.28)}
+          min={0}
+          max={1}
+          step={0.01}
+          show={percent}
+          onChange={(y) => set({ y })}
+        />
+        {(kind === 'sun' || kind === 'halo') && (
+          <Toggle label={k.drift} checked={!!tune.drift} onChange={(drift) => set({ drift })} />
+        )}
+      </div>
+    ),
+    words: (
+      <WordsRow
+        key="words"
+        hint={kind === 'matrix' ? k.wordsHintRain : k.wordsHintWall}
+        value={tune.words ?? []}
+        onChange={(words) => set({ words: words.length ? words : null })}
+      />
+    ),
+    font: (
+      <FontPicker
+        key="font"
+        label={k.font}
+        value={isFontKey(tune.font) ? tune.font : null}
+        onChange={(font) => set({ font })}
       />
     ),
     symbols: (
@@ -266,6 +353,62 @@ export function MotionTuneControls({
       >
         {k.reset}
       </button>
+    </div>
+  );
+}
+
+/** Up to 10 words of one's own (digital rain, word wall), each in its own field. */
+function WordsRow({
+  value,
+  hint,
+  onChange,
+}: {
+  value: string[];
+  hint: string;
+  onChange: (w: string[]) => void;
+}) {
+  const t = useT();
+  const k = t.studio.knob;
+  // While typing an empty field stays (the stored list drops empty words).
+  const [list, setList] = useState<string[]>(() => (value.length ? value : ['']));
+  const put = (next: string[]) => {
+    setList(next);
+    onChange(next.map((w) => w.trim()).filter(Boolean));
+  };
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[14px]">{k.words}</span>
+      {list.map((w, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input
+            value={w}
+            maxLength={30}
+            placeholder={`${k.wordPlaceholder} ${i + 1}`}
+            onChange={(e) => put(list.map((x, j) => (j === i ? e.target.value : x)))}
+            className="min-w-0 flex-1 rounded-xl bg-hairline px-3 py-2 text-[16px] outline-none placeholder:text-hint"
+          />
+          {list.length > 1 && (
+            <button
+              type="button"
+              aria-label="×"
+              onClick={() => put(list.filter((_, j) => j !== i))}
+              className="h-9 w-9 shrink-0 rounded-full bg-hairline text-hint"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+      {list.length < 10 && (
+        <button
+          type="button"
+          onClick={() => setList([...list, ''])}
+          className="self-start rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold active:scale-95"
+        >
+          {k.addWord}
+        </button>
+      )}
+      <span className="text-[12px] text-hint">{hint}</span>
     </div>
   );
 }

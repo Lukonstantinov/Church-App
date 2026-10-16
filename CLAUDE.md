@@ -69,7 +69,8 @@ Deploy → Run workflow → production.
   stack several animations with `LivingLayers` so a block's particle effects share that canvas.
   An open sheet pauses and hides the page's animation layers (`html[data-sheet]`); long lists of live
   previews mount only near the screen (`useNearScreen`).
-  Smooth effects (silk, mesh, liquid, marble, gradient fill motion) are drawn by the shader engine
+  Smooth effects (silk, mesh, liquid, marble, fiery `flames`, topo, fur, streaks, ribbons, plasma, kaleido,
+  cells, holo, sun, sunburst, halo, gradient fill motion) are drawn by the shader engine
   (`ShaderEffect.tsx`: one shared WebGL context, low-res canvases, `seekShaders`); thumbnail grids use
   `StillMotion` (no effect layers at all — paused layers still cost memory).
   Long decorative animations are capped at 30 changes a second (`capAnimations` in `lib/perf.ts`);
@@ -149,7 +150,8 @@ off by default; checked every 5 min) plus manual reminders. Meeting reminders
 (`groups.meeting_reminders`: minutes list, null = [120, 60], [] = off; claimed per time in
 `job_runs` as `meeting_remind`) with who serves; meeting animation (`MEETING_MOTIONS`: off / calm / lively / stars / waves / bokeh / rays /
 aurora / silk / mesh / embers / bubbles / snow / lines / grid / grain / glitch / crt / static / matrix / spotlight /
-disco / sparkle / hearts …, listed in `shared/motions.ts`; GPU ones — heat haze, shockwave, bloom, zoom burst, swirl,
+disco / sparkle / hearts / word wall (own words + font) …, listed in `shared/motions.ts`; digital rain can drop
+own words (`tune.words`); GPU ones — heat haze, shockwave, bloom, zoom burst, swirl,
 bulge, god rays, reflection: `GPU_MOTIONS`; colour-your-own particles — rain, stardust, orbs, meteors, glitter,
 fireworks, notes, crosses (group `colour`), PixiJS filters lazy-loaded in `components/GpuEffect.tsx`, max 6 live WebGL
 canvases, recorder steps them via `seekGpu`; `LivingLayer` + `.living-*` CSS)
@@ -194,7 +196,8 @@ layers (`type: fill`, a gradient can flow / turn / breathe), shapes with soft ed
 (`frame`), «✂️ background removal» on the phone (MediaPipe selfie model, `lib/cutout.ts`; engine copied into
 `dist/mediapipe` at build, model relayed by `/media/model/:name`) as two layers (people + the photo without them, hole filled; both keep `source`; or text/drawings split
 from a smooth background by colour, `splitGraphics`; layers carry `cut`), an eraser
-(`EraserSheet.tsx`, brings back from the source photo); layers move with fingers on the preview (`PosterGestures.tsx`,
+(`EraserSheet.tsx`, brings back from the source photo); «👆 tap what to keep» cuts any object (MediaPipe magic touch,
+`TapKeepSheet.tsx`); text layers can bend (`warp`: arc / bulge / wave / flag / rise, `WarpedText`); layers move with fingers on the preview (`PosterGestures.tsx`,
 `data-layer-id`; effect layers have optional x/y/w/h); unfinished work is kept as a draft on the phone (`lib/drafts.ts`; a draft open when the app crashed is set
 aside — DraftAside card, Design → drafts list —,
 fresh picture links via POST `/api/poster-templates/links`); the animated poster maker can use the same layer editor

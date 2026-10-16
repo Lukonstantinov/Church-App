@@ -4282,3 +4282,43 @@ html[data-sheet] #root *::after {
   -webkit-mask-image: none;
   mask-image: none;
 }
+
+/* ---------- Word wall: rows of the person's words sliding (WordWall in ui.tsx) ---------- */
+.living-words {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  overflow: hidden;
+  container-type: size;
+}
+.living-words-row {
+  display: flex;
+  width: max-content;
+  white-space: nowrap;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  animation: living-words 20s linear infinite;
+  will-change: transform;
+}
+.living-words-row > span {
+  padding-right: 0.3em;
+}
+.living-words-row.rev {
+  animation-direction: reverse;
+}
+@keyframes living-words {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .living-words-row {
+    animation: none;
+  }
+}

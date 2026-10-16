@@ -23,15 +23,64 @@ import { getQuality, useEffectQuality, useUnlimited, watchOffscreen } from '../l
  * - Without WebGL nothing is drawn: the still paint under the effect stays.
  */
 
-export type ShaderKind = 'silk' | 'mesh' | 'liquid' | 'marble' | 'fill';
+export type ShaderKind =
+  | 'silk'
+  | 'mesh'
+  | 'liquid'
+  | 'marble'
+  | 'fill'
+  | 'flames'
+  | 'topo'
+  | 'fur'
+  | 'streaks'
+  | 'ribbons'
+  | 'plasma'
+  | 'kaleido'
+  | 'cells'
+  | 'holo'
+  | 'sun'
+  | 'sunburst'
+  | 'halo';
 
-/** How much of the screen's pixels each kind is drawn at (they're all soft). */
+/** The animations drawn by this engine. */
+export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
+  'silk',
+  'mesh',
+  'liquid',
+  'marble',
+  'flames',
+  'topo',
+  'fur',
+  'streaks',
+  'ribbons',
+  'plasma',
+  'kaleido',
+  'cells',
+  'holo',
+  'sun',
+  'sunburst',
+  'halo',
+]);
+
+/** How much of the screen's pixels each kind is drawn at (soft ones less, thin lines more). */
 const RES: Record<ShaderKind, number> = {
   liquid: 0.4,
   mesh: 0.25,
   silk: 0.5,
   marble: 1,
   fill: 0.25,
+  flames: 0.4,
+  topo: 0.75,
+  fur: 0.75,
+  streaks: 0.6,
+  ribbons: 0.6,
+  plasma: 0.3,
+  kaleido: 0.45,
+  cells: 0.6,
+  holo: 0.3,
+  sun: 0.4,
+  sunburst: 0.5,
+  halo: 0.25,
 };
 /** The biggest picture the shared context draws (a side, in pixels). */
 const MAX_SIDE = 512;
@@ -54,6 +103,12 @@ export interface ShaderParams {
   /** Fills: 0 flowing, 1 turning, 2 breathing; paint 0 linear, 1 radial. */
   mode: number;
   paint: number;
+  /** Neon glow round lines and light (0 … 1). */
+  glow: number;
+  /** Where a sun / halo / swirl centre is (0…1 of width and height, from the top left). */
+  x: number;
+  y: number;
+  drift: boolean;
 }
 
 /** A tune turned into shader settings (with the defaults each kind is designed at). */
@@ -72,6 +127,10 @@ export function shaderParams(kind: ShaderKind, tune?: MotionTune | null): Shader
     seed: tune?.seed ?? 0,
     mode: 0,
     paint: 0,
+    glow: tune?.glow ?? 0,
+    x: tune?.x ?? (kind === 'fur' ? 0.8 : kind === 'sun' || kind === 'halo' ? 0.72 : 0.5),
+    y: tune?.y ?? (kind === 'fur' ? 0.15 : kind === 'sun' || kind === 'halo' ? 0.28 : 0.5),
+    drift: tune?.drift ?? false,
   };
 }
 
@@ -92,6 +151,13 @@ uniform vec3 u_c[4];
 uniform float u_n;
 uniform float u_strength, u_density, u_weight, u_sharp, u_chaos, u_seed, u_angle, u_size;
 uniform float u_mode, u_paint;
+uniform float u_glow;
+uniform vec2 u_pos;
+
+/** The placed centre (sun, halo, swirl) in the same space as place(), unturned. */
+vec2 centre(vec2 at) {
+  return (at - 0.5) * vec2(u_res.x / u_res.y, 1.0);
+}
 
 vec3 hash3(vec3 p) {
   p = fract(p * vec3(0.1031, 0.1030, 0.0973));
@@ -142,6 +208,16 @@ vec2 place() {
   return mat2(c, -s, s, c) * p;
 }
 vec2 seedShift() { return hash3(vec3(u_seed, u_seed * 0.37, 1.0)).xy * 100.0; }
+float hash1(float n) { return fract(sin(n * 91.345 + u_seed * 7.13) * 47453.5453); }
+/** The point in the box without the turn (for things placed by x / y). */
+vec2 plane() { return (v_uv - 0.5) * vec2(u_res.x / u_res.y, 1.0); }
+/** A soft line of half-width w round distance d, plus its neon halo. */
+vec2 lineGlow(float d, float w) {
+  float soft = mix(0.6, 0.12, u_sharp) * w + 0.004;
+  float core = 1.0 - smoothstep(w, w + soft, d);
+  float halo = exp(-d / (w * 6.0 + 0.01)) * u_glow;
+  return vec2(core, halo);
+}
 `;
 
 const FRAGMENTS: Record<ShaderKind, string> = {
@@ -237,6 +313,226 @@ void main() {
   float al = 0.55 * u_strength;
   gl_FragColor = vec4(col * al, al);
 }`,
+  // Fiery glow (it replaces the old flames): burning clouds lit from inside — a domain-warped
+  // field with bright ridged filaments. Dark parts stay see-through.
+  flames: `
+void main() {
+  vec2 p = place() * (1.5 / u_size) + seedShift();
+  float t = u_t * 0.12;
+  vec2 q = vec2(fbm(p + vec2(0.0, t)), fbm(p + vec2(5.2, 1.3) - t));
+  float f = fbm(p * 1.4 + (1.4 + u_chaos * 3.0) * q + vec2(t * 0.4, -t * 0.7));
+  float ridge = 1.0 - abs(2.0 * fbm(p * 2.6 + q * 2.0 - vec2(0.0, t * 1.3)) - 1.0);
+  ridge = pow(ridge, mix(2.0, 9.0, u_sharp));
+  float heat = smoothstep(0.42 - u_density * 0.08, 0.86, f) + ridge * 0.45 * f;
+  heat = clamp(heat * (0.7 + 0.45 * u_weight), 0.0, 1.0);
+  vec3 col = palette(heat, false);
+  float a = clamp(heat * 1.25, 0.0, 1.0) * u_strength;
+  gl_FragColor = vec4(col * a, a);
+}`,
+  // Topography: contour lines of a slowly shifting landscape; with glow, neon.
+  topo: `
+void main() {
+  vec2 p = place() * (1.6 / u_size) + seedShift();
+  float t = u_t * 0.035;
+  float h = fbm3(p * 0.8 + vec2(t, -t * 0.7)) + (0.15 + 0.5 * u_chaos) * fbm3(p * 2.1 - vec2(t * 1.3, 0.0));
+  float levels = 5.0 + u_density * 9.0;
+  float lv = h * levels;
+  float d = abs(fract(lv) - 0.5);
+  vec2 lg = lineGlow(0.5 - d, 0.025 + 0.05 * u_weight);
+  vec3 col = palette(floor(lv) / levels * 1.7 + v_uv.x * 0.25, true);
+  float a = clamp(lg.x + lg.y * 0.8, 0.0, 1.0) * u_strength;
+  col = col * (1.0 + lg.y * 0.6) + lg.x * u_glow * 0.35;
+  gl_FragColor = vec4(col * a, a);
+}`,
+  // Brush strokes: fine strands swirling round a centre, like a painted fur background.
+  fur: `
+float strandsAt(float flow, float r, float k) {
+  float strands = fbm(vec2(flow * k, r * (70.0 + u_density * 50.0)) + seedShift());
+  float fine = noise(vec2(flow * k * 2.0, r * 260.0));
+  return strands * 0.85 + fine * 0.15;
+}
+void main() {
+  vec2 p = (plane() - centre(u_pos)) / u_size;
+  float r = length(p) + 0.0001;
+  float a = atan(p.y, p.x);
+  float t = u_t * 0.05;
+  float wob = (fbm3(p * 1.5 + seedShift()) - 0.5) * (0.4 + u_chaos * 2.0);
+  float rest = r * (1.6 + u_chaos * 2.5) + wob - t;
+  float k = 2.0 + u_density * 2.5;
+  // The angle jumps where it goes round: the strands there are blended with the other
+  // side's, so no seam shows.
+  float s2 = mix(
+    strandsAt(a + rest, r, k),
+    strandsAt(a - sign(a) * 6.2831853 + rest, r, k),
+    0.5 * smoothstep(2.2, 3.1416, abs(a))
+  );
+  vec3 col = palette(clamp(v_uv.x * 0.45 + (1.0 - v_uv.y) * 0.55 + (s2 - 0.5) * 0.3, 0.0, 1.0), false);
+  col *= 0.78 + 0.5 * pow(s2, mix(1.0, 2.2, u_sharp));
+  col += pow(s2, 6.0) * 0.35 * u_weight;
+  gl_FragColor = vec4(col * u_strength, u_strength);
+}`,
+  // A wall of motion lines: rows of streaks racing by at their own speeds, heads bright.
+  streaks: `
+void main() {
+  vec2 p = place() / u_size;
+  float rows = 14.0 + u_density * 26.0;
+  float y = p.y * rows;
+  float row = floor(y);
+  float speed = 0.25 + hash1(row) * 0.9 + u_chaos * hash1(row + 3.1) * 1.4;
+  float dir = hash1(row + 9.7) > 0.5 - u_chaos * 0.5 ? 1.0 : -1.0;
+  float len = 0.6 + hash1(row + 1.7) * 1.8;
+  float s = p.x * (2.0 / len) + u_t * speed * 0.35 * dir + hash1(row + 4.4) * 10.0;
+  float duty = 0.25 + hash1(row + 7.3) * 0.5;
+  float f = fract(s);
+  float on = step(f, duty);
+  float tail = dir > 0.0 ? 1.0 - f / duty : f / duty;
+  vec2 lg = lineGlow(abs(fract(y) - 0.5), 0.08 + 0.14 * u_weight);
+  float b = on * mix(0.25, 1.0, pow(tail, 1.5));
+  vec3 col = palette(hash1(row + 2.2), true);
+  float a = clamp((lg.x + lg.y * 0.7) * b, 0.0, 1.0) * u_strength;
+  col = col * (1.0 + lg.y * 0.5);
+  gl_FragColor = vec4(col * a, a);
+}`,
+  // Ribbon waves: several smooth lines riding over each other.
+  ribbons: `
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.25;
+  float n = 3.0 + floor(u_density * 4.0);
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 9; i++) {
+    float fi = float(i);
+    if (fi >= n) break;
+    float off = (fi / n - 0.5) * 0.9;
+    float y = off + 0.12 * sin(p.x * (2.0 + hash1(fi) * 2.0) + t * (0.6 + hash1(fi + 1.0)) + fi)
+      + u_chaos * 0.25 * (fbm3(vec2(p.x * 1.3 + t * 0.3, fi * 3.1)) - 0.5);
+    vec2 lg = lineGlow(abs(p.y - y), 0.006 + 0.012 * u_weight);
+    float k = clamp(lg.x + lg.y * 0.6, 0.0, 1.0);
+    col += palette(fi / n, true) * k;
+    a = max(a, k);
+  }
+  a *= u_strength;
+  gl_FragColor = vec4(col * u_strength, a);
+}`,
+  // Plasma: the classic flowing colour field.
+  plasma: `
+void main() {
+  vec2 p = place() * (3.0 / u_size);
+  float t = u_t * 0.35;
+  float v = sin(p.x + t) + sin(p.y * 1.3 - t * 0.8) + sin((p.x + p.y) * 0.8 + t * 0.6)
+    + sin(length(p + vec2(sin(t * 0.3), cos(t * 0.4)) * 2.0) * 1.6);
+  v += u_chaos * 3.0 * (fbm3(p * 0.6 + seedShift() + t * 0.1) - 0.5);
+  float x = v * 0.2 * (0.6 + u_density * 0.6);
+  float edge = mix(0.5, 0.04, u_sharp);
+  float st = floor(x * 4.0) / 4.0 + smoothstep(0.5 - edge, 0.5 + edge, fract(x * 4.0)) / 4.0;
+  vec3 col = palette(mix(x, st, u_sharp), true);
+  gl_FragColor = vec4(col * u_strength, u_strength);
+}`,
+  // Kaleidoscope: a slowly turning pattern folded into mirrored slices.
+  kaleido: `
+void main() {
+  vec2 p = place() / u_size;
+  float r = length(p);
+  float seg = 6.2831853 / (6.0 + floor(u_density * 4.0) * 2.0);
+  float a = mod(atan(p.y, p.x) + u_t * 0.05, seg);
+  a = abs(a - seg * 0.5);
+  vec2 q = vec2(cos(a), sin(a)) * r * 2.5 + seedShift();
+  float f = fbm3(q + vec2(u_t * 0.08, -u_t * 0.05)) + u_chaos * 0.6 * fbm3(q * 2.3);
+  float x = f * 1.6 + r * 0.35 - u_t * 0.03;
+  float edge = mix(0.5, 0.04, u_sharp);
+  float st = floor(x * 3.0) / 3.0 + smoothstep(0.5 - edge, 0.5 + edge, fract(x * 3.0)) / 3.0;
+  vec3 col = palette(mix(x, st, u_sharp), true);
+  gl_FragColor = vec4(col * u_strength, u_strength);
+}`,
+  // Cells: drifting points with glowing borders between them.
+  cells: `
+void main() {
+  vec2 p = place() * (2.5 + u_density * 3.0) / u_size;
+  vec2 g = floor(p), f = fract(p);
+  float d1 = 9.0, d2 = 9.0;
+  float id = 0.0;
+  for (int j = -1; j <= 1; j++)
+    for (int i = -1; i <= 1; i++) {
+      vec2 c = vec2(float(i), float(j));
+      vec3 h = hash3(vec3(g + c, u_seed));
+      vec2 o = 0.5 + 0.45 * sin(u_t * (0.25 + u_chaos * 0.8) + 6.2831 * h.xy);
+      float d = length(c + o - f);
+      if (d < d1) { d2 = d1; d1 = d; id = h.z; }
+      else if (d < d2) d2 = d;
+    }
+  vec2 lg = lineGlow(d2 - d1, 0.03);
+  vec3 col = palette(id, true);
+  float a = clamp(lg.x + lg.y * 0.8 + 0.12, 0.0, 1.0) * u_strength;
+  col = mix(col * 0.35, col * (1.0 + lg.y * 0.5), clamp(lg.x + lg.y, 0.0, 1.0));
+  gl_FragColor = vec4(col * a, a);
+}`,
+  // Hologram: an iridescent foil shifting its colours.
+  holo: `
+void main() {
+  vec2 p = place() / u_size;
+  float v = p.x * 0.8 + p.y * 0.4 + 0.35 * fbm3(p * 2.0 + seedShift() + u_t * 0.06)
+    + sin(length(p) * 7.0 - u_t * 0.6) * (0.04 + 0.12 * u_chaos);
+  v *= 0.8 + u_density * 0.8;
+  vec3 col = u_paint > 0.5 ? palette(v, true) : 0.62 + 0.38 * cos(6.2831 * (v + vec3(0.0, 0.33, 0.67)));
+  float sheen = pow(max(0.0, sin(v * 9.0 + u_t * 0.8)), mix(4.0, 30.0, u_sharp));
+  col += sheen * 0.25;
+  float a = 0.85 * u_strength;
+  gl_FragColor = vec4(col * a, a);
+}`,
+  // The sun: a bright disc, a wide glow and turning rays; with glow, lens flares toward
+  // the middle. Placed anywhere (x / y), it can drift slowly.
+  sun: `
+void main() {
+  vec2 c = centre(u_pos);
+  if (u_mode > 0.5) c += 0.05 * vec2(sin(u_t * 0.11), cos(u_t * 0.083));
+  vec2 p = plane() - c;
+  float d = length(p) / u_size;
+  float R = 0.045 + 0.05 * u_weight;
+  float disc = 1.0 - smoothstep(R * 0.85, R, d);
+  float glow = exp(-d / (R * 3.2)) * 0.9 + exp(-d / (R * 9.0)) * 0.35;
+  float rays = pow(abs(cos(atan(p.y, p.x) * (4.0 + floor(u_density * 6.0)) + u_t * 0.06)), 18.0);
+  rays *= exp(-d / (R * 8.0)) * 0.6;
+  float flare = 0.0;
+  vec2 axis = -c;
+  for (int i = 1; i <= 3; i++) {
+    float k = float(i) * 0.55;
+    float q = length(plane() - (c + axis * k));
+    flare += (1.0 - smoothstep(0.02 * float(i), 0.03 * float(i) + 0.01, q)) * 0.18;
+  }
+  flare *= u_glow;
+  vec3 col = u_c[0] * disc + u_c[1] * glow + u_c[2] * rays + u_c[1] * flare;
+  float a = clamp(disc + glow + rays + flare, 0.0, 1.0) * u_strength;
+  gl_FragColor = vec4(col * u_strength, a);
+}`,
+  // Sunburst: stripes of light turning round a point, as on a retro poster.
+  sunburst: `
+void main() {
+  vec2 p = plane() - centre(u_pos);
+  float n = 8.0 + floor(u_density * 10.0);
+  float a = atan(p.y, p.x) + u_t * 0.04;
+  float s = sin(a * n);
+  float edge = mix(0.6, 0.02, u_sharp);
+  float stripe = smoothstep(-edge, edge, s);
+  vec3 col = mix(u_c[0], u_c[1], stripe);
+  float fade = 1.0 - smoothstep(0.0, 1.4, length(p));
+  float al = u_strength * (0.55 + 0.45 * fade);
+  gl_FragColor = vec4(col * al, al);
+}`,
+  // A halo: a soft spot of light with a faint ring, breathing.
+  halo: `
+void main() {
+  vec2 c = centre(u_pos);
+  if (u_mode > 0.5) c += 0.06 * vec2(sin(u_t * 0.13), cos(u_t * 0.09));
+  float d = length(plane() - c) / u_size;
+  float R = 0.12 + 0.12 * u_weight;
+  float breathe = 0.9 + 0.1 * sin(u_t * 0.7);
+  float spot = exp(-(d * d) / (R * R * 0.6)) * breathe;
+  float ring = exp(-pow((d - R * 1.25) / (0.015 + 0.02 * u_glow), 2.0)) * (0.25 + 0.5 * u_glow);
+  vec3 col = u_c[0] * spot + u_c[1] * ring;
+  float a = clamp(spot + ring, 0.0, 1.0) * u_strength;
+  gl_FragColor = vec4(col * u_strength, a);
+}`,
   // A poster colour layer that moves: its gradient flows along its angle, turns, or
   // breathes into its colours the other way round.
   fill: `
@@ -327,6 +623,8 @@ const UNIFORMS = [
   'u_size',
   'u_mode',
   'u_paint',
+  'u_glow',
+  'u_pos',
 ];
 
 function program(g: Gl, kind: ShaderKind) {
@@ -387,6 +685,19 @@ function ownColors(el: Element): [number, number, number][] {
 
 /** The colours each kind uses when the block gives none of its own. */
 const MARBLE = ['#f3f0ea', '#d8d2c8', '#6f6a64', '#c9a24a'];
+const OWN_DEFAULTS: Partial<Record<ShaderKind, string[]>> = {
+  marble: MARBLE,
+  // Dark ember → orange → gold → white heat.
+  flames: ['#3b0a00', '#b45309', '#f59e0b', '#fff3c4'],
+  // Violet → red → orange → yellow, as a painted fur background.
+  fur: ['#6d28d9', '#e11d48', '#f97316', '#facc15'],
+  // Neon violet, magenta, cyan.
+  topo: ['#a855f7', '#ec4899', '#22d3ee', '#6366f1'],
+  // Core, glow, rays.
+  sun: ['#fffbe8', '#ffd166', '#ff9f43'],
+  sunburst: ['#ffcf66', '#ff8a3d'],
+  halo: ['#fff6d8', '#ffd38a'],
+};
 
 // ---------- One block ----------
 
@@ -412,14 +723,16 @@ class Painter {
   setParams(p: ShaderParams) {
     this.params = p;
     const list = p.colors.map(parseColor).filter((c): c is [number, number, number] => !!c);
-    this.colors = list.length
-      ? list
-      : p.kind === 'marble'
-        ? MARBLE.map((c) => parseColor(c)!)
-        : ownColors(this.clip);
-    // Marble always needs four (base, cloud, veins, accent): the rest from its own set.
-    if (p.kind === 'marble')
-      while (this.colors.length < 4) this.colors.push(parseColor(MARBLE[this.colors.length]!)!);
+    const own = OWN_DEFAULTS[p.kind];
+    this.colors = list.length ? list : own ? own.map((c) => parseColor(c)!) : ownColors(this.clip);
+    // Kinds that use their colours by place (marble's veins, the sun's core and rays) take
+    // the missing ones from their own set.
+    if (
+      own &&
+      (p.kind === 'marble' || p.kind === 'sun' || p.kind === 'sunburst' || p.kind === 'halo')
+    )
+      while (this.colors.length < own.length)
+        this.colors.push(parseColor(own[this.colors.length]!)!);
     this.last = -1;
   }
 
@@ -449,7 +762,8 @@ class Painter {
     let p;
     try {
       p = program(g, this.params.kind);
-    } catch {
+    } catch (e) {
+      if (import.meta.env.DEV) console.error('shader', this.params.kind, e);
       return;
     }
     const q = this.params;
@@ -475,9 +789,15 @@ class Painter {
     gl.uniform1f(p.loc.u_seed!, q.seed);
     gl.uniform1f(p.loc.u_angle!, (q.angle * Math.PI) / 180);
     gl.uniform1f(p.loc.u_size!, q.size);
-    gl.uniform1f(p.loc.u_mode!, q.mode);
-    // Silk: a whole cloth when it has colours of its own.
-    gl.uniform1f(p.loc.u_paint!, q.kind === 'silk' ? (q.colors.length ? 1 : 0) : q.paint);
+    // Sun and halo: mode 1 = drifting.
+    gl.uniform1f(p.loc.u_mode!, q.kind === 'sun' || q.kind === 'halo' ? (q.drift ? 1 : 0) : q.mode);
+    // Silk and hologram: own colours change how they paint.
+    gl.uniform1f(
+      p.loc.u_paint!,
+      q.kind === 'silk' || q.kind === 'holo' ? (q.colors.length ? 1 : 0) : q.paint,
+    );
+    gl.uniform1f(p.loc.u_glow!, q.glow);
+    gl.uniform2f(p.loc.u_pos!, q.x, 1 - q.y);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

@@ -14,6 +14,7 @@ import {
   FILL_MOVES,
   LAYER_SHAPES,
   TEXT_SOURCES,
+  TEXT_WARPS,
   type BlendMode,
   type FontKey,
   type GroupSummary,
@@ -27,7 +28,7 @@ import {
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
-import { cutOutPeople, splitGraphics } from '../lib/cutout';
+import { cutOutPeople, splitGraphics, type KeepPoint } from '../lib/cutout';
 import {
   clearSuspect,
   dropDraft,
@@ -48,6 +49,7 @@ import {
 import { askBeforeClosing, confirmDialog, haptic } from '../lib/telegram';
 import { EffectSets } from './EffectSets';
 import { EraserSheet } from './EraserSheet';
+import { TapKeepSheet } from './TapKeepSheet';
 import { FontPicker } from './FontPicker';
 import { IconChevronDown, IconPlus, IconX } from './icons';
 import { LayeredPoster } from './LayeredPoster';
@@ -409,6 +411,11 @@ export function PosterLayersEditor({
   const [cutNew, setCutNew] = useState(false);
   const [cutting, setCutting] = useState<'loading' | 'working' | null>(null);
   const [erasing, setErasing] = useState<Extract<PosterLayer, { type: 'image' }> | null>(null);
+  // «Tap what to keep» open for this picture.
+  const [tapFor, setTapFor] = useState<{
+    layer: Extract<PosterLayer, { type: 'image' }>;
+    src: string;
+  } | null>(null);
   const { background, layers, frame } = doc;
 
   const setLayers = (f: (all: PosterLayer[]) => PosterLayer[]) =>
@@ -450,12 +457,14 @@ export function PosterLayersEditor({
     from: Extract<PosterLayer, { type: 'image' }>,
     src: Blob | string,
     how: 'people' | 'graphics' | 'auto' = 'auto',
+    /** Tapped points: keep whatever is there (any object), not only people. */
+    points?: KeepPoint[],
   ) {
     try {
       let kind: 'people' | 'graphics' = how === 'graphics' ? 'graphics' : 'people';
       let cut =
         kind === 'people'
-          ? await cutOutPeople(src, setCutting).then((c) => ({ ...c, front: c.people }))
+          ? await cutOutPeople(src, setCutting, points).then((c) => ({ ...c, front: c.people }))
           : (setCutting('working'), await splitGraphics(src));
       if (!cut.found && how === 'auto') {
         kind = 'graphics';
@@ -704,7 +713,11 @@ export function PosterLayersEditor({
               onPicture={() => choosePicture(l.id)}
               onCut={
                 l.type === 'image' && l.url && !cutting
-                  ? (how) => void cutOut(l, l.sourceUrl && !l.cutout ? l.sourceUrl : l.url!, how)
+                  ? (how) => {
+                      const src = l.sourceUrl && !l.cutout ? l.sourceUrl : l.url!;
+                      if (how === 'tap') setTapFor({ layer: l, src });
+                      else void cutOut(l, src, how);
+                    }
                   : undefined
               }
               onErase={l.type === 'image' && l.url ? () => setErasing(l) : undefined}
@@ -727,6 +740,17 @@ export function PosterLayersEditor({
           />
         </LayerRow>
       </div>
+      {tapFor && (
+        <TapKeepSheet
+          src={tapFor.src}
+          onClose={() => setTapFor(null)}
+          onCut={(points) => {
+            const job = tapFor;
+            setTapFor(null);
+            void cutOut(job.layer, job.src, 'people', points);
+          }}
+        />
+      )}
       {erasing?.url && (
         <EraserSheet
           url={erasing.url}
@@ -1561,7 +1585,7 @@ function LayerSettings({
   onChange: (p: Partial<PosterLayer>) => void;
   onPicture: () => void;
   /** Cut the people, or the text and drawings, out onto a new layer above (pictures). */
-  onCut?: (how: 'people' | 'graphics') => void;
+  onCut?: (how: 'people' | 'graphics' | 'tap') => void;
   /** Open the eraser (pictures). */
   onErase?: () => void;
   cutting: 'loading' | 'working' | null;
@@ -1631,7 +1655,7 @@ function ImageSettings({
   layer: Extract<PosterLayer, { type: 'image' }>;
   onChange: (p: Partial<PosterLayer>) => void;
   onPicture: () => void;
-  onCut?: (how: 'people' | 'graphics') => void;
+  onCut?: (how: 'people' | 'graphics' | 'tap') => void;
   onErase?: () => void;
   cutting: 'loading' | 'working' | null;
 }) {
@@ -1651,6 +1675,9 @@ function ImageSettings({
                 ? t.posters.cutLoading
                 : t.posters.cutWorking
               : t.posters.cutPeople}
+          </Button>
+          <Button variant="secondary" disabled={!onCut} onClick={() => onCut?.('tap')}>
+            👆 {t.posters.tapKeep.open}
           </Button>
           <Button variant="secondary" disabled={!onCut} onClick={() => onCut?.('graphics')}>
             🔤 {cutting ? t.posters.cutWorking : t.posters.splitGraphics}
@@ -1755,6 +1782,7 @@ function TextSettings({
         onChange={(upper) => onChange({ upper })}
       />
       <PlaceAndLook layer={layer} onChange={onChange} />
+      <WarpControls layer={layer} onChange={onChange} />
       <StyleControls value={layer.style} onChange={(style) => onChange({ style })} />
       <LayerEffects
         title={t.posters.textEffects}
@@ -1789,6 +1817,47 @@ function TextSettings({
         )}
       </LayerEffects>
     </>
+  );
+}
+
+/** Bending the words: none, arc, bulge, wave, flag or rise, and how much (either way). */
+function WarpControls({
+  layer,
+  onChange,
+}: {
+  layer: Extract<PosterLayer, { type: 'text' }>;
+  onChange: (p: Partial<PosterLayer>) => void;
+}) {
+  const t = useT();
+  const tw = t.posters.warp;
+  const warp = layer.warp ?? null;
+  return (
+    <div>
+      <div className="mb-1.5 text-[14px] font-semibold">{tw.title}</div>
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        <Pill on={!warp} onClick={() => onChange({ warp: null })} label={tw.none} />
+        {TEXT_WARPS.map((k) => (
+          <Pill
+            key={k}
+            on={warp?.kind === k}
+            onClick={() => onChange({ warp: { kind: k, amount: warp?.amount || 0.5 } })}
+            label={tw.kinds[k]}
+          />
+        ))}
+      </div>
+      {warp && (
+        <Knob
+          label={tw.amount}
+          value={warp.amount}
+          min={-1}
+          max={1}
+          step={0.05}
+          show={(v) => `${Math.round(v * 100)}%`}
+          onChange={(amount) => onChange({ warp: { kind: warp.kind, amount } })}
+        />
+      )}
+      <p className="mt-1 px-1 text-[12px] text-hint">{tw.hint}</p>
+    </div>
   );
 }
 

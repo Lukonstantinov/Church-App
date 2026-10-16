@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import {
+  fontFamily,
   GPU_MOTIONS,
   resolveBrand,
   type MeetingMotion,
@@ -15,15 +16,7 @@ import { GpuEffect } from './GpuEffect';
 import { PHOTO_EFFECTS, PhotoEffect } from './PhotoEffects';
 import { PARTICLES, SEASON_ITEMS, particleSpots, type Particle } from './particleData';
 import { PARTICLE_KINDS, ParticleCanvas } from './ParticleCanvas';
-import { ShaderEffect, shaderParams, type ShaderKind } from './ShaderEffect';
-
-/** The animations drawn by the shared shader engine (small and light, see ShaderEffect). */
-const SHADER_KINDS: ReadonlySet<MeetingMotion> = new Set<MeetingMotion>([
-  'silk',
-  'mesh',
-  'liquid',
-  'marble',
-]);
+import { SHADER_KINDS, ShaderEffect, shaderParams, type ShaderKind } from './ShaderEffect';
 
 /** Page container. `tabs` leaves room for the floating tab bar. */
 export function Screen({ children, tabs }: { children: ReactNode; tabs?: boolean }) {
@@ -560,7 +553,7 @@ export function LivingLayer({
   } as CSSProperties;
   const iconUrl = icon?.url ?? (icon?.emoji ? null : (env?.logoUrl ?? null));
   const iconEmoji = icon?.emoji ?? '✨';
-  const code = kind === 'matrix' ? rainColumns(tune?.symbols) : CODE;
+  const code = kind === 'matrix' ? rainColumns(tune?.symbols, tune?.words) : CODE;
   return (
     // The frame clips the animation to its block even when it is enlarged or turned
     // (iPhones don't always clip moving layers to rounded corners on their own).
@@ -681,7 +674,6 @@ export function LivingLayer({
             <i className="living-sweep" />
           </>
         )}
-        {kind === 'flames' && <Flames sharp={sharp ?? 0.7} weight={weight} density={density} />}
         {PHOTO_EFFECTS.includes(kind) && (
           <PhotoEffect
             kind={kind}
@@ -700,6 +692,16 @@ export function LivingLayer({
             <i className="living-roll" />
             <i className="living-vignette" />
           </>
+        )}
+        {kind === 'wordwall' && (
+          <WordWall
+            words={tune?.words?.length ? tune.words : [env?.name ?? 'JESUS']}
+            font={tune?.font}
+            rows={Math.round(4 + density * 4)}
+            size={weight}
+            glow={tune?.glow ?? 0}
+            colors={tune?.colors?.length ? tune.colors : c ? [c] : null}
+          />
         )}
         {kind === 'static' && (
           <i className="living-static" style={weight !== 1 ? { scale: weight } : undefined} />
@@ -825,10 +827,16 @@ export function LivingLayer({
 
 /** Columns of the digital rain: a fixed jumble of digits and katakana each. */
 /**
- * The falling columns of the digital rain: the classic code, or columns made of the
- * person's own letters and symbols (emoji count as one), each column shuffled differently.
+ * The falling columns of the digital rain: the classic code, columns made of the person's
+ * own letters and symbols (emoji count as one), or whole words — one word a column, the
+ * words in their order across the columns, so they fall one after another.
  */
-export function rainColumns(symbols: string | null | undefined): readonly string[] {
+export function rainColumns(
+  symbols: string | null | undefined,
+  words?: string[] | null,
+): readonly string[] {
+  const list = (words ?? []).map((w) => w.trim()).filter(Boolean);
+  if (list.length) return list;
   const text = (symbols ?? '').replace(/\s+/g, '');
   const own =
     typeof Intl.Segmenter === 'function'
@@ -841,6 +849,62 @@ export function rainColumns(symbols: string | null | undefined): readonly string
     return out;
   });
 }
+
+/**
+ * The word wall: the person's words repeated in rows that slide, every other row the other
+ * way and as an outline, in a font of their choice. Each row is its text twice over moving
+ * by one copy, so it loops without a seam; the speed differs a little row to row.
+ */
+function WordWall({
+  words,
+  font,
+  rows,
+  size,
+  glow,
+  colors,
+}: {
+  words: string[];
+  font: string | null | undefined;
+  rows: number;
+  size: number;
+  glow: number;
+  colors: string[] | null;
+}) {
+  const line = `${words.join(' • ')} • `.repeat(Math.max(2, Math.ceil(24 / words.join('').length)));
+  const palette = colors ?? ['var(--live-a)', 'var(--live-b)', 'var(--live-c)'];
+  return (
+    <span
+      className="living-words"
+      style={{ fontFamily: fontFamily(font) ?? undefined, '--rows': rows } as CSSProperties}
+    >
+      {[...Array(rows).keys()].map((r) => {
+        const color = palette[r % palette.length]!;
+        const outline = r % 2 === 1;
+        return (
+          <span
+            key={r}
+            className={`living-words-row${r % 2 ? ' rev' : ''}`}
+            style={
+              {
+                fontSize: `calc(${(100 / rows) * 0.72 * size}cqh)`,
+                color: outline ? 'transparent' : color,
+                WebkitTextStroke: outline ? `0.04em ${color}` : undefined,
+                textShadow: glow
+                  ? `0 0 ${(0.15 * glow).toFixed(2)}em ${color}, 0 0 ${(0.45 * glow).toFixed(2)}em ${color}`
+                  : undefined,
+                animationDuration: `${18 + ((r * 7) % 5) * 3}s`,
+              } as CSSProperties
+            }
+          >
+            <span>{line}</span>
+            <span>{line}</span>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 const CODE = ['1ｱ0ｶ7ﾀ3ﾅ9ｻ', 'ﾊ8ﾏ2ﾔ5ﾗ0ﾜ1', '0ｲ4ｷ1ﾁ6ﾆ3ｼ', 'ﾋ7ﾐ0ﾕ9ﾘ2ｦ5', '3ｳ8ｸ5ﾂ0ﾇ7ｽ', 'ﾌ1ﾑ6ﾖ4ﾙ8ﾝ0'];
 
 /** Where the torn strips of a TV glitch sit (top and height, % of the block). */
@@ -894,74 +958,6 @@ function Glitch({
       })}
       <i className="gl-scan" />
       <i className="gl-tear" />
-    </span>
-  );
-}
-
-/** How tall each tongue of fire is, in turn, and how long one flicker takes. */
-const TONGUES = [
-  { h: 0.62, d: 1.3 },
-  { h: 0.9, d: 1.7 },
-  { h: 0.74, d: 1.2 },
-  { h: 1, d: 1.9 },
-  { h: 0.8, d: 1.4 },
-  { h: 0.94, d: 1.6 },
-  { h: 0.66, d: 1.25 },
-];
-
-/**
- * Fire: two rows of pointed tongues (red-orange outside, yellow-white inside) bent by noise
- * and then cut sharp (blur + an alpha threshold), so the edges are crisp and ragged like
- * real flames and neighbouring tongues melt together. `sharp` 0 = soft and smoky … 1 =
- * crisp; `weight` = how high; `density` = how many tongues.
- */
-function Flames({ sharp, weight, density }: { sharp: number; weight: number; density: number }) {
-  const id = `fire${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
-  const n = Math.min(14, Math.max(3, Math.round(7 * density)));
-  const row = (inner: boolean) => {
-    const count = inner ? Math.max(2, n - 2) : n;
-    const step = 108 / count;
-    return Array.from({ length: count }, (_, i) => {
-      const t = TONGUES[(i + (inner ? 3 : 0)) % TONGUES.length]!;
-      return (
-        <i
-          key={i}
-          style={{
-            left: `${-6 + i * step + (inner ? step * 0.3 : 0)}%`,
-            width: `${step * (inner ? 0.9 : 1.6)}%`,
-            height: `${t.h * (inner ? 70 : 100)}%`,
-            // Delays on the shared 64 ms beat, so every tongue changes at the same moment.
-            animationDelay: `${-((i * 7 + (inner ? 3 : 0)) % 25) * 0.064}s`,
-          }}
-        />
-      );
-    });
-  };
-  return (
-    <span className="living-fire" style={{ height: `${62 * weight}%` }}>
-      <svg width="0" height="0" className="absolute">
-        <filter id={id} x="-25%" y="-25%" width="150%" height="150%">
-          {/* Ragged edges from noise; the tongues move through it, so the edges waver. */}
-          <feTurbulence type="fractalNoise" baseFrequency="0.02 0.06" numOctaves="2" seed="4" />
-          <feDisplacementMap in="SourceGraphic" scale={5 + (1 - sharp) * 9} />
-          {/* Melt, then cut at half: the steeper the cut, the crisper the edge. */}
-          <feGaussianBlur stdDeviation={0.6 + (1 - sharp) * 2.6} />
-          <feComponentTransfer>
-            <feFuncA
-              type="linear"
-              slope={2 + sharp * 18}
-              intercept={0.5 - 0.5 * (2 + sharp * 18)}
-            />
-          </feComponentTransfer>
-        </filter>
-      </svg>
-      <i className="living-fire-bed" />
-      <span className="living-flames" style={{ filter: `url(#${id})` }}>
-        {row(false)}
-      </span>
-      <span className="living-flames inner" style={{ filter: `url(#${id})` }}>
-        {row(true)}
-      </span>
     </span>
   );
 }

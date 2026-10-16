@@ -1,4 +1,4 @@
-import type { ImageSegmenter } from '@mediapipe/tasks-vision';
+import type { ImageSegmenter, InteractiveSegmenterLegacy } from '@mediapipe/tasks-vision';
 import { MEDIA_MAX_BYTES } from '@church/shared';
 import { reportError } from '../components/CrashGuard';
 import { canvasToBlob } from './image';
@@ -19,7 +19,10 @@ import { freeCanvas } from './poster';
  *    where the colours really change — hair, shoulders, fingers);
  * 5. the background is made without the people: the hole they leave is filled from the
  *    colours around it (blurred like a shallow-focus photo), for its own layer.
- * Made for people — objects without people in front aren't found.
+ * Made for people — objects without people in front aren't found. For anything else the
+ * person taps what to keep (cutOutPeople with `points`): a second model, "magic touch",
+ * finds the whole thing under each tap and the same steps tidy it up. The soft edge also
+ * loses the background's tint (defringe).
  */
 
 let loading: Promise<ImageSegmenter> | null = null;
@@ -45,6 +48,33 @@ function segmenter(): Promise<ImageSegmenter> {
 /** Whether the model is already in this phone's memory (no download wait). */
 export const cutoutReady = () => loading !== null;
 
+let touchLoading: Promise<InteractiveSegmenterLegacy> | null = null;
+
+/**
+ * The second model: Google's MediaPipe "magic touch" (free, Apache 2.0, 6 MB). Given a
+ * point the person tapped, it finds the whole thing there — a person, a dog, a cup, a
+ * logo — so it also works where the people model finds nothing (objects, animals, text).
+ */
+function touchSegmenter(): Promise<InteractiveSegmenterLegacy> {
+  touchLoading ??= (async () => {
+    const { FilesetResolver, InteractiveSegmenterLegacy } = await import('@mediapipe/tasks-vision');
+    const files = await FilesetResolver.forVisionTasks('/mediapipe');
+    return InteractiveSegmenterLegacy.createFromOptions(files, {
+      baseOptions: { modelAssetPath: '/media/model/magic-touch', delegate: 'CPU' },
+      outputCategoryMask: false,
+      outputConfidenceMasks: true,
+    });
+  })();
+  touchLoading.catch(() => (touchLoading = null));
+  return touchLoading;
+}
+
+/** A point on the photo to keep, as a share of its width and height (0…1). */
+export interface KeepPoint {
+  x: number;
+  y: number;
+}
+
 export async function imageOf(src: Blob | string): Promise<HTMLImageElement> {
   const url = typeof src === 'string' ? src : URL.createObjectURL(src);
   try {
@@ -63,13 +93,17 @@ const SIDE = 512;
 let square: HTMLCanvasElement | null = null;
 
 /**
- * How sure the model is that each pixel of a part of `src` (sx, sy, sw × sh) is a person
+ * How sure a model is that each pixel of a part of `src` (sx, sy, sw × sh) is wanted
  * (0…1), at w × h. The part is always handed over fitted into the same 512 × 512 square:
  * on iPhones the model stopped finding anyone after it had been given pictures of
- * different sizes (a whole photo, then a close-up of it).
+ * different sizes (a whole photo, then a close-up of it). `run` asks the model about the
+ * square (`at` turns a point of the part into the square's 0…1, for the tap model).
  */
-function personMask(
-  model: ImageSegmenter,
+function maskOf(
+  run: (
+    square: HTMLCanvasElement,
+    at: (p: KeepPoint) => KeepPoint,
+  ) => { values: Float32Array; width: number; height: number; wanted: boolean; close: () => void },
   src: HTMLCanvasElement,
   sx: number,
   sy: number,
@@ -90,17 +124,17 @@ function personMask(
   const ox = (SIDE - dw) / 2;
   const oy = (SIDE - dh) / 2;
   sq.drawImage(src, sx, sy, sw, sh, ox, oy, dw, dh);
-  const result = model.segment(square);
-  const back = result.confidenceMasks?.[0];
-  if (!back) {
-    result.close();
-    throw new Error('no mask');
-  }
-  const raw = back.getAsFloat32Array();
-  const mw = back.width;
-  const mh = back.height;
+  // A point of the whole photo (0…1) → the same point in the square (0…1).
+  const at = (p: KeepPoint) => ({
+    x: (ox + (p.x * src.width - sx) * k) / SIDE,
+    y: (oy + (p.y * src.height - sy) * k) / SIDE,
+  });
+  const got = run(square, at);
+  const raw = got.values;
+  const mw = got.width;
+  const mh = got.height;
   const out = new Float32Array(w * h);
-  // Category 0 is the background; read smoothly (bilinear) from the part's place.
+  // Read smoothly (bilinear) from the part's place.
   for (let y = 0; y < h; y++) {
     const fy = Math.min(mh - 1, Math.max(0, ((oy + ((y + 0.5) * dh) / h) * mh) / SIDE - 0.5));
     const y0 = Math.floor(fy);
@@ -114,11 +148,134 @@ function personMask(
       const b =
         (raw[y0 * mw + x0]! * (1 - tx) + raw[y0 * mw + x1]! * tx) * (1 - ty) +
         (raw[y1 * mw + x0]! * (1 - tx) + raw[y1 * mw + x1]! * tx) * ty;
-      const v = 1 - b;
+      const v = got.wanted ? b : 1 - b;
       out[y * w + x] = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
     }
   }
-  result.close();
+  got.close();
+  return out;
+}
+
+/** The people model's answer: its category 0 is the background. */
+function personMask(
+  model: ImageSegmenter,
+  src: HTMLCanvasElement,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  w: number,
+  h: number,
+) {
+  return maskOf(
+    (sq) => {
+      const result = model.segment(sq);
+      const back = result.confidenceMasks?.[0];
+      if (!back) {
+        result.close();
+        throw new Error('no mask');
+      }
+      return {
+        values: back.getAsFloat32Array(),
+        width: back.width,
+        height: back.height,
+        wanted: false,
+        close: () => result.close(),
+      };
+    },
+    src,
+    sx,
+    sy,
+    sw,
+    sh,
+    w,
+    h,
+  );
+}
+
+/**
+ * The tap model's answer for every point (inside the part), joined: whatever any tap
+ * picked is kept.
+ */
+function touchMask(
+  model: InteractiveSegmenterLegacy,
+  points: KeepPoint[],
+  src: HTMLCanvasElement,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  w: number,
+  h: number,
+) {
+  const out = new Float32Array(w * h);
+  for (const p of points) {
+    // A tap outside this part (a close-up of another thing) has nothing to say here.
+    const px = p.x * src.width;
+    const py = p.y * src.height;
+    if (px < sx || py < sy || px > sx + sw || py > sy + sh) continue;
+    const one = maskOf(
+      (sq, at) => {
+        const result = model.segment(sq, { keypoint: at(p) });
+        const m = result.confidenceMasks?.[result.confidenceMasks.length - 1];
+        if (!m) {
+          result.close();
+          throw new Error('no mask');
+        }
+        return {
+          values: m.getAsFloat32Array(),
+          width: m.width,
+          height: m.height,
+          wanted: true,
+          close: () => result.close(),
+        };
+      },
+      src,
+      sx,
+      sy,
+      sw,
+      sh,
+      w,
+      h,
+    );
+    for (let i = 0; i < out.length; i++) if (one[i]! > out[i]!) out[i] = one[i]!;
+  }
+  return out;
+}
+
+/**
+ * A quick look at what the taps pick, for the picker to show while the person taps: a
+ * small picture, white where it is kept (the photo at most `side` pixels across).
+ */
+export async function previewKeep(
+  src: Blob | string,
+  points: KeepPoint[],
+  side = 360,
+  onStage?: (stage: 'loading' | 'working') => void,
+): Promise<HTMLCanvasElement> {
+  onStage?.(touchLoading ? 'working' : 'loading');
+  const model = await touchSegmenter();
+  onStage?.('working');
+  const img = await imageOf(src);
+  const scale = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+  const mask = points.length ? touchMask(model, points, canvas, 0, 0, w, h, w, h) : null;
+  const out = document.createElement('canvas');
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext('2d')!;
+  const data = ctx.createImageData(w, h);
+  for (let i = 0; i < w * h; i++) {
+    data.data[i * 4] = data.data[i * 4 + 1] = data.data[i * 4 + 2] = 255;
+    data.data[i * 4 + 3] = mask ? Math.round(255 * edge(mask[i]!)) : 0;
+  }
+  ctx.putImageData(data, 0, 0);
+  freeCanvas(canvas);
   return out;
 }
 
@@ -322,6 +479,36 @@ function guided(p: Float32Array, guide: Float32Array, w: number, h: number, r: n
   return out;
 }
 
+/**
+ * Takes the background's colour out of the soft edge (a pink wall's tint on a cat's fur, a
+ * green screen's on hair): a see-through edge pixel takes the colour of the solid subject
+ * right next to it — its transparency already says how much shows through.
+ */
+function defringe(rgba: Uint8ClampedArray, alpha: Float32Array, w: number, h: number) {
+  const r = Math.max(2, Math.round(Math.min(w, h) / 150));
+  // The subject's inside (solid all round), whose colours the edge borrows.
+  const solid = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) solid[i] = alpha[i]! > 0.92 ? 1 : 0;
+  const around = boxMean(solid, w, h, r);
+  const core = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) core[i] = around[i]! > 0.97 ? 1 : 0;
+  const R = r * 2;
+  const mc = boxMean(core, w, h, R);
+  const ch = [0, 1, 2].map((k) => {
+    const c = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) c[i] = rgba[i * 4 + k]! * core[i]!;
+    return boxMean(c, w, h, R);
+  });
+  for (let i = 0; i < w * h; i++) {
+    const a = alpha[i]!;
+    // The edge band: see-through pixels and the outer ring of solid ones.
+    if (a <= 0.01 || core[i]! > 0 || mc[i]! < 0.02) continue;
+    const t = a > 0.92 ? 0.55 : Math.min(1, (1 - a) * 1.6 + 0.4);
+    for (let k = 0; k < 3; k++)
+      rgba[i * 4 + k] = rgba[i * 4 + k]! * (1 - t) + (ch[k]![i]! / mc[i]!) * t;
+  }
+}
+
 /** Sharpens the soft guess into a clean edge that still fades over a pixel or two. */
 const edge = (p: number) => {
   const x = Math.min(1, Math.max(0, (p - 0.3) / 0.4));
@@ -427,9 +614,26 @@ async function encode(canvas: HTMLCanvasElement, see: boolean) {
 export async function cutOutPeople(
   src: Blob | string,
   onStage?: (stage: 'loading' | 'working') => void,
+  /** Tapped points: keep whatever is there (any object) instead of finding people. */
+  points?: KeepPoint[],
 ): Promise<{ people: Blob; background: Blob; ratio: number; found: boolean }> {
-  onStage?.(cutoutReady() ? 'working' : 'loading');
-  const model = await segmenter();
+  const tapped = !!points?.length;
+  onStage?.((tapped ? touchLoading : cutoutReady()) ? 'working' : 'loading');
+  const touch = tapped ? await touchSegmenter() : null;
+  const model = tapped ? null : await segmenter();
+  // One look at a part of the photo, with whichever model is in use.
+  const look = (
+    c: HTMLCanvasElement,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    w: number,
+    h: number,
+  ) =>
+    touch
+      ? touchMask(touch, points!, c, sx, sy, sw, sh, w, h)
+      : personMask(model!, c, sx, sy, sw, sh, w, h);
   onStage?.('working');
   const img = await imageOf(src);
   let side = 1400;
@@ -444,9 +648,9 @@ export async function cutOutPeople(
     ctx.drawImage(img, 0, 0, w, h);
 
     // 1–2: the whole photo, then a closer look at where the people are.
-    let mask = personMask(model, canvas, 0, 0, w, h, w, h);
+    let mask = look(canvas, 0, 0, w, h, w, h);
     // Nobody at all: the model may have got stuck — a fresh one tries once more.
-    if (share(mask) < 0.002) {
+    if (!tapped && share(mask) < 0.002) {
       const old = await segmenter();
       old.close();
       loading = null;
@@ -464,7 +668,9 @@ export async function cutOutPeople(
       const cw = cx1 - cx0;
       const ch = cy1 - cy0;
       if (cw * ch < w * h * 0.7 && cw > 16 && ch > 16) {
-        const near = personMask(await segmenter(), canvas, cx0, cy0, cw, ch, cw, ch);
+        const near = tapped
+          ? look(canvas, cx0, cy0, cw, ch, cw, ch)
+          : personMask(await segmenter(), canvas, cx0, cy0, cw, ch, cw, ch);
         // A close-up that lost most of the people is not trusted (kept: the first look).
         let nearShare = 0;
         for (let i = 0; i < near.length; i++) if (near[i]! > 0.5) nearShare++;
@@ -512,13 +718,14 @@ export async function cutOutPeople(
     // For the developer (Telemetry): what each step saw when nobody was found.
     if (!found)
       reportError(
-        new Error('cut-out: no people found'),
+        new Error(tapped ? 'cut-out: nothing at the taps' : 'cut-out: no people found'),
         'cutout',
         JSON.stringify({ w, h, first, kept: kept / (w * h) }),
       );
 
     // The people.
     const people = new ImageData(new Uint8ClampedArray(pixels.data), w, h);
+    defringe(people.data, alpha, w, h);
     for (let i = 0; i < w * h; i++) people.data[i * 4 + 3] = Math.round(255 * alpha[i]!);
     ctx.putImageData(people, 0, 0);
     const peopleBlob = await encode(canvas, true);
