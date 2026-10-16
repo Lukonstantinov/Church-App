@@ -213,6 +213,9 @@ documentRoutes.post('/', async (c) => {
   return c.json({ ok: true });
 });
 
+/** A recorded poster loop: up to ~30 MB for a large GIF (Telegram takes 50 MB). */
+const ANIMATION_MAX_BYTES = 45_000_000;
+
 /**
  * The person's own picture (an event poster, built on the phone) to their chat with the
  * bot: as a photo (easy to forward) or as a file (full quality). PNG or JPEG only.
@@ -222,15 +225,17 @@ export const photoRoutes = new Hono<App>();
 photoRoutes.post('/', async (c) => {
   const user = c.get('user');
   if (!user.telegramId) throw new HTTPException(400, { message: 'no_telegram' });
+  const asFile = c.req.query('as') === 'file';
+  // A photo is squeezed by Telegram (10 MB at most); a file keeps a big own-size poster whole.
+  const max = asFile ? ANIMATION_MAX_BYTES : IMAGE_SEND_MAX_BYTES;
   const declared = Number(c.req.header('content-length') ?? 0);
-  if (declared > IMAGE_SEND_MAX_BYTES) throw new HTTPException(413, { message: 'too_large' });
+  if (declared > max) throw new HTTPException(413, { message: 'too_large' });
   const bytes = new Uint8Array(await c.req.arrayBuffer());
   if (bytes.length === 0) throw new HTTPException(400, { message: 'empty' });
-  if (bytes.length > IMAGE_SEND_MAX_BYTES) throw new HTTPException(413, { message: 'too_large' });
+  if (bytes.length > max) throw new HTTPException(413, { message: 'too_large' });
   const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
   const jpg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
   if (!png && !jpg) throw new HTTPException(415, { message: 'unsupported_file' });
-  const asFile = c.req.query('as') === 'file';
   const raw = (c.req.query('name') ?? 'poster').replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 60);
   const file = new InputFile(bytes, `${raw || 'poster'}.${png ? 'png' : 'jpg'}`);
   const caption = (c.req.query('caption') ?? '').slice(0, 200) || undefined;
@@ -244,13 +249,11 @@ photoRoutes.post('/', async (c) => {
   return c.json({ ok: true });
 });
 
-/** A recorded poster loop: up to ~30 MB for a large GIF (Telegram takes 50 MB). */
-const ANIMATION_MAX_BYTES = 45_000_000;
-
 /**
  * A moving poster recorded on the phone (lib/recorder.ts) to the person's own chat, with
  * what / when / where under it: an MP4 or a GIF, both sent as an animation so they play in
- * the chat (long-press to save to the phone or forward to WhatsApp).
+ * the chat (long-press to save to the phone or forward to WhatsApp). `?as=file` sends it
+ * as a file instead (the exact file, any size the poster was made in, to download).
  *
  * `?to=` sends it on to others as well (`people` with `users=1,2`, `group`, `church`,
  * `serving`) for the event or meeting `kind` + `id`: those who may publish there (church
@@ -277,6 +280,9 @@ animationRoutes.post('/', async (c) => {
   const db = c.get('db');
   const to = (c.req.query('to') ?? 'me') as PosterAudience;
   if (!POSTER_AUDIENCES.includes(to)) throw new HTTPException(400, { message: 'audience' });
+  // A file to save goes only to the person themself.
+  if (c.req.query('as') === 'file' && to !== 'me')
+    throw new HTTPException(400, { message: 'audience' });
   // Others too: check first, so nothing is sent when it isn't allowed.
   let target: { kind: 'event' | 'meeting'; item: EventRow | Meeting } | null = null;
   if (to !== 'me') {
@@ -291,6 +297,17 @@ animationRoutes.post('/', async (c) => {
     if (!(await mayPublish(db, user, item.groupId, kind)) || (to === 'church' && !user.isAdmin))
       throw new HTTPException(403, { message: 'forbidden' });
     target = { kind, item };
+  }
+  // «As a file»: the very file made on the phone, to save (Telegram plays an animation
+  // smaller and may turn it into its own video). Only to the person themself.
+  if (c.req.query('as') === 'file') {
+    try {
+      await botApi(c.env).sendDocument(user.telegramId, file, { caption });
+    } catch (err) {
+      if (isUnreachableError(err)) throw new HTTPException(409, { message: 'bot_blocked' });
+      throw err;
+    }
+    return c.json({ ok: true, sent: 0 });
   }
   let sent;
   try {

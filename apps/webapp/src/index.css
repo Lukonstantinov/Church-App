@@ -4086,6 +4086,22 @@ html[data-lite='true'] .living-mesh {
   backdrop-filter: none;
   background: color-mix(in srgb, var(--color-section) 92%, transparent);
 }
+/* The dim behind a sheet softly blurs the page. Only while nothing moves in front of it:
+   any blur on screen makes the browser redraw the whole window every frame something
+   animates, and with a design editor's moving preview on a large computer screen that
+   was what made editing lag (the editor ran at 9 frames a second, without it at 60).
+   A sheet over another sheet also skips it — the editor underneath keeps moving. */
+.sheet-dim {
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.sheet-root:has(.living-clip, canvas, video) > .sheet-dim,
+html:not([data-sheet='1']) .sheet-dim,
+html[data-lite='true'] .sheet-dim {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgb(0 0 0 / 0.45);
+}
 /* Lite: glass is a plain, slightly see-through colour — no blur to redo at all. */
 html[data-lite='true'] .glass,
 html[data-lite='true'] .glass-strong {
@@ -4281,50 +4297,6 @@ html[data-sheet] #root *::after {
 .layered-poster .living-clip {
   -webkit-mask-image: none;
   mask-image: none;
-}
-
-/* ---------- Word wall: rows of the person's words sliding (WordWall in ui.tsx) ---------- */
-.living-words {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  overflow: hidden;
-  container-type: size;
-}
-.living-words-row {
-  display: flex;
-  width: max-content;
-  white-space: nowrap;
-  flex-shrink: 0;
-  font-weight: 900;
-  line-height: 0.98;
-  text-transform: uppercase;
-  animation: living-words 20s linear infinite;
-  will-change: transform;
-}
-.living-words-row > span {
-  padding-right: 0.5em;
-}
-.living-words-row.still {
-  animation: none;
-}
-.living-words-row.rev {
-  animation-direction: reverse;
-}
-@keyframes living-words {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .living-words-row {
-    animation: none;
-  }
 }
 
 /*

@@ -5,8 +5,14 @@ import { readDraft, useDraft } from '../lib/drafts';
 import { FullMotion } from '../lib/perf';
 import { CoverPicture } from './CoverSlideshow';
 import { useT } from '../lib/i18n';
-import { sendAnimationToChat, useContacts, useCoverLoop, useMe } from '../lib/queries';
-import { confirmDialog, haptic } from '../lib/telegram';
+import {
+  sendAnimationToChat,
+  sendPictureToChat,
+  useContacts,
+  useCoverLoop,
+  useMe,
+} from '../lib/queries';
+import { confirmDialog, haptic, isInsideTelegram } from '../lib/telegram';
 import { EventCover, useEventWhen } from './EventCard';
 import {
   PosterTextControls,
@@ -38,6 +44,37 @@ const GIF_MAX_BYTES = 9_000_000;
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
 /**
+ * The largest picture a recording may be: every frame is a canvas this big, and a few
+ * dozen of them are held at once. A phone gets Full HD; a computer up to 4K.
+ */
+const pixelBudget = () =>
+  typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
+    ? 1920 * 1088
+    : 3840 * 2160;
+
+/** An own size made to fit the budget, keeping its shape (even numbers, for the video). */
+export function fitSize(size: { w: number; h: number }) {
+  const k = Math.min(
+    1,
+    Math.sqrt(pixelBudget() / (size.w * size.h)),
+    4096 / Math.max(size.w, size.h),
+  );
+  return { w: even(size.w * k), h: even(size.h * k) };
+}
+
+/** Saves the file on this device (a computer's browser outside Telegram). */
+function saveHere(file: Blob, name: string) {
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+/**
  * «Send me the animation»: records the poster with its moving effects (lib/recorder.ts)
  * and the bot sends it to the person's own chat with `caption` (what, when, where) under it
  * — as a short video or a GIF, both playing in the chat (long-press to save or forward).
@@ -53,6 +90,7 @@ export function MotionExport({
   share,
   extra,
   draftKey,
+  size,
 }: {
   /** The poster to record, drawn by the caller (no preview here). */
   node?: RefObject<HTMLElement | null>;
@@ -80,6 +118,11 @@ export function MotionExport({
   extra?: ReactNode;
   /** Keeps the words and the message on this phone under this name until changed again. */
   draftKey?: string;
+  /**
+   * An own size in pixels (the poster maker's «Own size»): the video and the picture come
+   * out exactly this big (within what the device can record), whatever the quality.
+   */
+  size?: { w: number; h: number };
 }) {
   const t = useT();
   const toast = useToast();
@@ -110,11 +153,51 @@ export function MotionExport({
   const audiences: PosterAudience[] = share
     ? ['me', 'people', 'group', ...(me.data?.user.isAdmin ? (['church'] as const) : []), 'serving']
     : ['me'];
-  const [busy, setBusy] = useState<'video' | 'gif' | null>(null);
+  const [busy, setBusy] = useState<'video' | 'gif' | 'picture' | null>(null);
+  // Plays in the chat (an animation) or comes as a file to save, full size and untouched.
+  const [asFile, setAsFile] = useState(false);
+  const out = size ? fitSize(size) : null;
   const [quality, setQuality] = useState<keyof typeof QUALITY>('standard');
   const [progress, setProgress] = useState(0);
   const [sending, setSending] = useState(false);
   const [shrinking, setShrinking] = useState(false);
+
+  const fileName = () => name.replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 50) || 'poster';
+
+  /** A still of the poster with its effects, at the own size (or the quality's width). */
+  async function picture() {
+    if (busy) return;
+    setBusy('picture');
+    setProgress(0);
+    onRecording?.(true);
+    try {
+      await new Promise((r) => setTimeout(r, 400));
+      const el = node.current;
+      if (!el) throw new Error('no_poster');
+      const { recordLoop } = await import('../lib/recorder');
+      const rec = await recordLoop(el, {
+        width: out?.w ?? Math.max(1080, QUALITY[quality].video),
+        height: out?.h,
+        still: 1.5,
+        onProgress: setProgress,
+      });
+      if (!rec.png) throw new Error('no_file');
+      setSending(true);
+      if (!isInsideTelegram()) saveHere(rec.png, `${fileName()}.png`);
+      // A photo is squeezed by Telegram (and refused over 9 MB): big ones go as a file.
+      else await sendPictureToChat(rec.png, fileName(), asFile || rec.png.size > 9_000_000);
+      haptic.success();
+      toast(isInsideTelegram() ? t.motionExport.sent : t.motionExport.saved);
+    } catch (err) {
+      console.warn('picture failed', err);
+      haptic.error();
+      toast(t.motionExport.failed, 'error');
+    } finally {
+      onRecording?.(false);
+      setSending(false);
+      setBusy(null);
+    }
+  }
 
   async function run(kind: 'video' | 'gif') {
     if (busy) return;
@@ -143,9 +226,18 @@ export function MotionExport({
           gif: kind === 'gif',
           // A GIF only: no video is made alongside (quicker).
           video: kind === 'video',
-          // The picture is drawn at least as wide as the file that is made from it.
-          width: kind === 'gif' ? Math.max(720, q.gif) : q.video,
-          gifWidth,
+          // The picture is drawn at least as wide as the file that is made from it; an
+          // own size is the video's exact size.
+          width: out
+            ? kind === 'gif'
+              ? Math.min(out.w, Math.max(720, gifWidth))
+              : out.w
+            : kind === 'gif'
+              ? Math.max(720, q.gif)
+              : q.video,
+          gifWidth: out ? Math.min(out.w, gifWidth) : gifWidth,
+          // The video exactly the own size (the GIF follows its shape).
+          height: out && kind === 'video' ? out.h : undefined,
           fps: q.fps,
           quality: q.bitrate,
           onProgress: setProgress,
@@ -153,7 +245,12 @@ export function MotionExport({
       let rec = await record(q.gif);
       // Too big for Telegram to play: again, narrower by about as much as needed.
       let width: number = q.gif;
-      for (let tries = 0; rec.gif && rec.gif.size > GIF_MAX_BYTES && tries < 3; tries++) {
+      // (A file to save may stay big: it isn't played in the chat.)
+      for (
+        let tries = 0;
+        rec.gif && rec.gif.size > GIF_MAX_BYTES && !(asFile && to === 'me') && tries < 3;
+        tries++
+      ) {
         width = even(width * Math.sqrt(GIF_MAX_BYTES / rec.gif.size) * 0.92);
         if (width < 300) break;
         setShrinking(true);
@@ -164,12 +261,20 @@ export function MotionExport({
       if (!file) throw new Error('no_file');
       if (kind === 'video' && !rec.mp4) toast(t.motionExport.noVideo);
       setSending(true);
-      const safe = name.replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 50) || 'poster';
+      const safe = fileName();
+      // On a computer's browser (outside Telegram) the file is simply saved here.
+      if (to === 'me' && !isInsideTelegram()) {
+        saveHere(file, `${safe}.${file.type === 'image/gif' ? 'gif' : 'mp4'}`);
+        haptic.success();
+        toast(t.motionExport.saved);
+        return;
+      }
       const res = await sendAnimationToChat(
         file,
         safe,
         text.trim() || undefined,
         share && to !== 'me' ? { to, kind: share.kind, id: share.id, users: chosen } : undefined,
+        asFile && to === 'me',
       );
       haptic.success();
       toast(to === 'me' ? t.motionExport.sent : t.motionExport.sentTo(res.sent));
@@ -240,7 +345,12 @@ export function MotionExport({
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-hint">{t.motionExport.qualityHint[quality]}</p>
+          <p className="text-[11px] text-hint">
+            {out ? t.motionExport.sizeHint(out.w, out.h) : t.motionExport.qualityHint[quality]}
+          </p>
+          {out && size && (out.w !== even(size.w) || out.h !== even(size.h)) && (
+            <p className="text-[11px] text-hint">{t.motionExport.sizeLimited}</p>
+          )}
           <div className="text-[12px] font-semibold text-hint">{t.motionExport.textLabel}</div>
           <TextArea value={text} onChange={setOwnText} maxLength={1024} rows={3} />
           {audiences.length > 1 && (
@@ -291,13 +401,53 @@ export function MotionExport({
               )}
             </>
           )}
-          <div className="flex gap-2">
+          {to === 'me' && isInsideTelegram() && (
+            <>
+              <div className="text-[12px] font-semibold text-hint">
+                {t.motionExport.deliverLabel}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {([false, true] as const).map((f) => (
+                  <button
+                    key={String(f)}
+                    type="button"
+                    onClick={() => {
+                      haptic.tap();
+                      setAsFile(f);
+                    }}
+                    className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                      asFile === f ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                    }`}
+                  >
+                    {f ? t.motionExport.deliver.file : t.motionExport.deliver.play}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] leading-snug text-hint">
+                {asFile ? t.motionExport.deliverHint.file : t.motionExport.deliverHint.play}
+              </p>
+            </>
+          )}
+          <div className="flex flex-wrap gap-2">
             <Button small onClick={() => void run('video')}>
-              {to === 'me' ? t.motionExport.video : t.motionExport.sendVideo}
+              {to !== 'me'
+                ? t.motionExport.sendVideo
+                : !isInsideTelegram()
+                  ? t.motionExport.saveVideo
+                  : t.motionExport.video}
             </Button>
             <Button small variant="secondary" onClick={() => void run('gif')}>
-              {to === 'me' ? t.motionExport.gif : t.motionExport.sendGif}
+              {to !== 'me'
+                ? t.motionExport.sendGif
+                : !isInsideTelegram()
+                  ? t.motionExport.saveGif
+                  : t.motionExport.gif}
             </Button>
+            {to === 'me' && (
+              <Button small variant="secondary" onClick={() => void picture()}>
+                {isInsideTelegram() ? t.motionExport.picture : t.motionExport.savePicture}
+              </Button>
+            )}
           </div>
         </>
       )}

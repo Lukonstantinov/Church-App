@@ -1973,10 +1973,43 @@ export const en: Messages = {
     layersHint:
       'As in the poster editor: photos, cut-out people, text, colour, gradient, effects — move each layer with a finger right on the preview.',
     shape: 'Shape',
-    shapes: { '4:3': 'Chat 4:3', '1:1': 'Square', '4:5': 'Post 4:5', '9:16': 'Story 9:16' },
+    shapes: {
+      '4:3': 'Chat 4:3',
+      '1:1': 'Square',
+      '4:5': 'Post 4:5',
+      '9:16': 'Story 9:16',
+      custom: '📐 Own size',
+    },
+    ownSize: 'Own size, in pixels',
+    ownWidth: 'Width',
+    ownHeight: 'Height',
+    ownSizeHint:
+      'Any size from 200 to 4096 px a side. The video and the picture come out exactly this big (a phone records up to Full HD, a computer up to 4K).',
+    sizePresets: {
+      hd: 'Wide 1920×1080',
+      vertical: 'Tall 1080×1920',
+      square: 'Square 1080×1080',
+      post: 'Post 1080×1350',
+      banner: 'Banner 1500×500',
+      a4: 'A4 2480×3508',
+    },
     fileName: 'Poster',
   },
   motionExport: {
+    saved: 'Saved on this device',
+    sizeHint: (w: number, h: number) => `Own size: the video and picture come out ${w}×${h} px`,
+    sizeLimited:
+      'Made a little smaller to fit what this device can record — the shape stays the same.',
+    deliverLabel: 'How it comes',
+    deliver: { play: '▶️ Plays in the chat', file: '📎 As a file to save' },
+    deliverHint: {
+      play: 'Plays right in the chat like a GIF; Telegram may make it a bit smaller.',
+      file: 'The exact file in full size and quality — tap it in the chat to download it to the phone or the computer.',
+    },
+    saveVideo: '⬇️ Save video',
+    saveGif: '⬇️ Save GIF',
+    picture: '🖼 Picture to me',
+    savePicture: '⬇️ Save picture',
     noMotionDesigner:
       'The poster doesn’t move yet — add effects and the animated poster appears here.',
     noMotionAsk: 'The poster doesn’t move yet. A designer can add an animation.',

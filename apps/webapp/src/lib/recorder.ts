@@ -23,6 +23,8 @@ export interface RecordOptions {
   fps?: number;
   /** Width of the video in pixels (the height follows the block's shape). */
   width?: number;
+  /** Exact height in pixels (an own size); otherwise from the block's shape. */
+  height?: number;
   /** Also make a GIF (fewer frames and colours). */
   gif?: boolean;
   /** Make the video too (default); off when only the GIF is wanted, which is quicker. */
@@ -31,6 +33,11 @@ export interface RecordOptions {
   gifWidth?: number;
   /** Video quality: bits per pixel per frame (0.12 for posters; less for backgrounds). */
   quality?: number;
+  /**
+   * Just one picture (a PNG at `width`), the effects as they are this many seconds in —
+   * a still of the moving poster, no video or GIF.
+   */
+  still?: number;
   onProgress?: (done: number) => void;
 }
 
@@ -40,6 +47,8 @@ export interface Recording {
   gif: Blob | null;
   /** How frames went to the video encoder here (pickFeed); null = no video. */
   feed: string | null;
+  /** The still picture, when one was asked for (`still`). */
+  png?: Blob | null;
 }
 
 /** Whether the block has anything moving to record. */
@@ -698,7 +707,10 @@ function dither(data: Uint8ClampedArray, width: number) {
 /** The best H.264 setting this phone can encode at this size, or null. */
 async function videoConfig(width: number, height: number, fps: number, bpp: number) {
   if (typeof VideoEncoder === 'undefined') return null;
-  for (const codec of ['avc1.640028', 'avc1.4d0028', 'avc1.42e028', 'avc1.42e01f']) {
+  // Level 4.0 first (plays everywhere, up to Full HD); bigger own sizes need level 5.1.
+  const codecs = ['avc1.640028', 'avc1.4d0028', 'avc1.42e028', 'avc1.42e01f'];
+  if (width * height > 1920 * 1088) codecs.unshift('avc1.640033', 'avc1.4d0033', 'avc1.42e033');
+  for (const codec of codecs) {
     const config: VideoEncoderConfig = {
       codec,
       width,
@@ -727,7 +739,8 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
   const H = node.offsetHeight;
   const k = (opts.width ?? 720) / W;
   const outW = even(W * k);
-  const outH = even(H * k);
+  // An own size is kept to the pixel: the laid-out block is a pixel or so off its shape.
+  const outH = opts.height ? even(opts.height) : even(H * k);
   const html = document.documentElement;
   // Animations switched off on this phone are switched on for the recording.
   const motion = html.dataset.motion;
@@ -752,6 +765,16 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     // iPhones may leave pictures out of the library's very first drawing of a layer: one
     // drawing of each, thrown away, before the frames that count.
     await drawEffects(scratch.getContext('2d')!, node, list, 0, k);
+    if (opts.still !== undefined) {
+      const pic = canvasOf(outW, outH);
+      used.push(pic);
+      const p = pic.getContext('2d')!;
+      p.drawImage(below, 0, 0);
+      await drawEffects(p, node, list, opts.still, k, over);
+      const png = await new Promise<Blob | null>((r) => pic.toBlob(r, 'image/png'));
+      opts.onProgress?.(1);
+      return { mp4: null, gif: null, feed: null, png };
+    }
     const total = Math.round(seconds * fps);
     const fade = Math.round(fps * 0.75);
 

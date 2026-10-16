@@ -71,12 +71,16 @@ Deploy → Run workflow → production.
   previews mount only near the screen (`useNearScreen`).
   Smooth effects (silk, mesh, liquid, marble, fiery `flames`, topo, fur, streaks, ribbons, plasma, kaleido,
   cells, holo, sun, sunburst, halo, wavelines, tunnel, dunes, lightfall, risers, synthgrid, spiral, stripes,
-  gradient fill motion) are drawn by the shader engine
-  (`ShaderEffect.tsx`: one shared WebGL context, low-res canvases, `seekShaders`); thumbnail grids use
+  aurora, goo, gradient fill motion) are drawn by the shader engine
+  (`ShaderEffect.tsx`: one shared WebGL context handing pictures over without a copy, low-res canvases that
+  shrink when the device can't keep up — `church.fx-scale` —, `seekShaders`); the word wall is drawn on the
+  ParticleCanvas (cached strips, very slow by default); thumbnail grids use
   `StillMotion` (no effect layers at all — paused layers still cost memory).
   Long decorative animations are capped at 30 changes a second (`capAnimations` in `lib/perf.ts`);
   backdrop blur is redone whenever anything behind or inside it moves — keep moving things
-  out from under glass (the page background steps 4×/s; glass with a living layer skips blur).
+  out from under glass (the page background steps 4×/s; glass with a living layer skips blur; the sheet dim
+  `.sheet-dim` drops its blur when the sheet holds anything moving — with it a full-screen editor on a
+  computer ran at 9 fps).
 - New public worker paths outside `/api`, `/bot`, `/media` must be added to
   `assets.run_worker_first` in `apps/worker/wrangler.jsonc`.
 
@@ -161,7 +165,9 @@ own: `tile_motion` / `poster_motion` on meetings and design templates);
 a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).
 
 **Design** — the `design` right ("designer") gives a Design tab (`screens/Design.tsx`, folding sections `Fold.tsx`;
-an animated poster maker without an event, `FreePoster.tsx`): church-wide
+an animated poster maker without an event, `FreePoster.tsx`, also in an own size in pixels —
+the video/picture come out exactly that size, `MotionExport size`; videos and pictures can come as a file to
+save, `?as=file`, or straight to the device outside Telegram): church-wide
 templates (`design_templates`, with `motion` = the meeting animation; PUT to change) with live
 previews (meeting hero, home tile, poster) and restyling of upcoming meetings/events and posts.
 Design precedence, one rule everywhere: own → template → ministry default → app default. Defaults live in

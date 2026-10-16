@@ -1,5 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
-import type { MeetingMotion, MotionIcon, MotionTune } from '@church/shared';
+import { fontFamily, type MeetingMotion, type MotionIcon, type MotionTune } from '@church/shared';
 import { useEnv } from '../lib/env';
 import { getMotion } from '../lib/motion';
 import { getQuality, useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
@@ -35,6 +35,10 @@ export const PARTICLE_KINDS: ReadonlySet<MeetingMotion> = new Set<MeetingMotion>
   'fireworks',
   'notes',
   'crosses',
+  // Text, not particles — but it moves the same way and is far lighter drawn on the canvas
+  // than as rows of huge moving text (measured: 10 frames a second instead of 60 on a
+  // computer drawing without its graphics chip).
+  'wordwall',
 ]);
 
 export interface ParticleLayer {
@@ -228,7 +232,25 @@ interface LayerPlan {
   scale: number;
   color: string | null;
   items: Item[];
+  /** The word wall's own settings (the tune it was made from). */
+  words?: WordsPlan;
 }
+
+/** The word wall: its words, look and motion, and its rows drawn once (redrawn on resize). */
+interface WordsPlan {
+  words: string[];
+  font: string;
+  rows: number;
+  size: number;
+  glow: number;
+  colors: string[] | null;
+  style: 'fill' | 'outline' | 'mix';
+  flow: 'alt' | 'same' | 'still';
+  cache?: { key: string; strips: HTMLCanvasElement[]; px: number; copy: number };
+}
+
+/** How fast the words slide, in letter heights a second (at speed ×1): slow and steady. */
+const WORDS_EM_PER_SECOND = 0.18;
 
 /** The particles of a layer — the same spots, sizes and timings as the CSS version. */
 function plan(layer: ParticleLayer, lite: boolean, small: boolean): LayerPlan {
@@ -355,8 +377,48 @@ function plan(layer: ParticleLayer, lite: boolean, small: boolean): LayerPlan {
     angle: tune?.angle ?? 0,
     scale: tune?.size ?? 1,
     color: tune?.color ?? null,
-    items,
+    items: kind === 'wordwall' ? [] : items,
+    ...(kind === 'wordwall'
+      ? {
+          words: {
+            words: tune?.words?.length ? tune.words : [],
+            // A canvas font can't hold CSS variables: the family alone, with plain fallbacks.
+            font: `${(fontFamily(tune?.font ?? 'oswald') ?? '').split(', var(')[0] || 'system-ui'}, system-ui, sans-serif`,
+            rows: Math.round(4 + density * 4),
+            size: weight,
+            glow: tune?.glow ?? 0,
+            colors: tune?.colors?.length ? tune.colors : tune?.color ? [tune.color] : null,
+            style: tune?.wordStyle ?? 'fill',
+            flow: tune?.wordFlow ?? 'alt',
+          },
+        }
+      : {}),
   };
+}
+
+/** A colour `at` (0…1) along a list of colours (#rrggbb or rgb()), mixed in plain RGB. */
+function colourAlong(list: [number, number, number][], at: number): string {
+  if (list.length === 1) return `rgb(${list[0]!.join(',')})`;
+  const f = Math.min(0.9999, Math.max(0, at)) * (list.length - 1);
+  const i = Math.floor(f);
+  const k = f - i;
+  const a = list[i]!;
+  const b = list[i + 1]!;
+  return `rgb(${[0, 1, 2].map((j) => Math.round(a[j]! + (b[j]! - a[j]!) * k)).join(',')})`;
+}
+
+/** '#rrggbb' or a computed 'rgb(…)' / 'color(srgb …)' to 0…255 red, green, blue. */
+function rgbOf(c: string): [number, number, number] | null {
+  const hex = /^#([0-9a-f]{6})$/i.exec(c.trim());
+  if (hex) {
+    const n = Number.parseInt(hex[1]!, 16);
+    return [n >> 16, (n >> 8) & 255, n & 255];
+  }
+  const rgb = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/.exec(c);
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  const srgb = /color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(c);
+  if (srgb) return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255];
+  return null;
 }
 
 // ---------- One canvas ----------
@@ -370,7 +432,29 @@ class Engine {
   last = -1;
   /** Being recorded: drawn only when the recorder asks (seekParticles), not by the clock. */
   held = false;
+  /** The word wall's word when none is given (the ministry's name). */
+  fallbackWord = 'JESUS';
+  /** Bumped when web fonts finish loading, so the word wall's rows are drawn again in them. */
+  fontsReady = 0;
   private ctx: CanvasRenderingContext2D | null;
+  private colours: string[] | null = null;
+
+  /** The block's own colours (the ministry's --live-a/c/b), read once through a probe. */
+  ownColours(): string[] {
+    if (this.colours) return this.colours;
+    const probe = document.createElement('i');
+    probe.className = 'living-bg';
+    probe.style.display = 'none';
+    this.clip.appendChild(probe);
+    const out: string[] = [];
+    for (const v of ['--live-a', '--live-c', '--live-b']) {
+      probe.style.color = `var(${v}, #fff)`;
+      out.push(getComputedStyle(probe).color);
+    }
+    probe.remove();
+    this.colours = out;
+    return out;
+  }
 
   constructor(
     readonly canvas: HTMLCanvasElement,
@@ -413,8 +497,84 @@ class Engine {
       H *= 1 + grow * 2;
       ctx.translate(-W / 2, -H / 2);
     }
+    if (plan.words) this.drawWords(ctx, plan, plan.words, time, W, H);
     for (const it of plan.items) this.drawItem(ctx, plan, it, time, W, H);
     ctx.restore();
+  }
+
+  /**
+   * The word wall: each row's text is drawn once onto a strip (in its colour along the
+   * wall's gradient, filled or outlined, with its glow); every frame only places the strips,
+   * each row sliding by its own steady amount.
+   */
+  private drawWords(
+    ctx: CanvasRenderingContext2D,
+    plan: LayerPlan,
+    w: WordsPlan,
+    time: number,
+    W: number,
+    H: number,
+  ) {
+    const words = w.words.length ? w.words : [this.fallbackWord];
+    const count = w.rows + 2;
+    const px = (H / w.rows) * 0.9 * w.size;
+    const key = `${Math.round(W)}x${Math.round(H)}|${this.ratio}|${words.join('|')}|${w.font}|${w.rows}|${w.size}|${w.glow}|${w.style}|${(w.colors ?? []).join()}|${this.fontsReady}`;
+    if (w.cache?.key !== key) {
+      const palette = (w.colors ?? this.ownColours())
+        .map((c) => rgbOf(c))
+        .filter((c): c is [number, number, number] => !!c);
+      const font = `900 ${px}px ${w.font}`;
+      const text = `${words.map((x) => x.toUpperCase()).join('\u2002')}\u2002`;
+      const probe = ctx.font;
+      ctx.font = font;
+      const copy = Math.max(1, ctx.measureText(text).width);
+      ctx.font = probe;
+      const pad = Math.ceil(px * (0.15 + w.glow * 0.5));
+      const strips: HTMLCanvasElement[] = [];
+      for (let r = 0; r < count; r++) {
+        const c = document.createElement('canvas');
+        c.width = Math.ceil((copy + pad * 2) * this.ratio);
+        c.height = Math.ceil((px * 1.05 + pad * 2) * this.ratio);
+        const g = c.getContext('2d')!;
+        g.scale(this.ratio, this.ratio);
+        g.font = font;
+        g.textBaseline = 'middle';
+        const colour = palette.length ? colourAlong(palette, r / Math.max(1, count - 1)) : '#fff';
+        const outline = w.style === 'outline' || (w.style === 'mix' && r % 2 === 1);
+        if (w.glow) {
+          g.shadowColor = colour;
+          g.shadowBlur = px * 0.35 * w.glow;
+        }
+        if (outline) {
+          g.strokeStyle = colour;
+          g.lineWidth = px * 0.035;
+          g.strokeText(text, pad, pad + px * 0.52);
+        } else {
+          g.fillStyle = colour;
+          g.fillText(text, pad, pad + px * 0.52);
+        }
+        strips.push(c);
+      }
+      w.cache = { key, strips, px, copy };
+    }
+    const { strips, copy } = w.cache!;
+    const pad = Math.ceil(px * (0.15 + w.glow * 0.5));
+    ctx.globalAlpha = plan.alpha;
+    const lineH = px * 0.98;
+    const top = (H - lineH * count) / 2;
+    for (let r = 0; r < count; r++) {
+      const strip = strips[r]!;
+      // Each row a little faster or slower than the next, and starting further along.
+      const pace = 0.85 + ((r * 37) % 10) / 33;
+      const dir = w.flow === 'alt' && r % 2 ? -1 : 1;
+      const moved = w.flow === 'still' ? 0 : time * px * WORDS_EM_PER_SECOND * pace * dir;
+      let x = -((((moved + r * px * 1.7) % copy) + copy) % copy) - pad;
+      const y = top + r * lineH - pad;
+      const sw = strip.width / this.ratio;
+      const sh = strip.height / this.ratio;
+      for (; x < W; x += copy) ctx.drawImage(strip, x, y, sw, sh);
+    }
+    ctx.globalAlpha = 1;
   }
 
   private drawItem(
@@ -957,6 +1117,17 @@ export function ParticleCanvas({
     // Small blocks (chips, the tab bar) draw a third of the particles, as the CSS does.
     const small = (clip.current?.offsetHeight ?? 999) <= 110;
     e.plans = (JSON.parse(key) as ParticleLayer[]).map((l) => plan(l, lite, small));
+    e.fallbackWord = env?.name ?? 'JESUS';
+    // The word wall's font may still be loading: draw its rows again once it is there.
+    for (const p of e.plans)
+      if (p.words)
+        void document.fonts
+          ?.load(`900 32px ${p.words.font}`)
+          .then(() => {
+            e.fontsReady++;
+            e.last = -1;
+          })
+          .catch(() => undefined);
     if (iconUrl) {
       const img = new Image();
       img.decoding = 'async';
@@ -967,7 +1138,7 @@ export function ParticleCanvas({
       e.icon = { img, emoji: iconEmoji };
     } else e.icon = { img: null, emoji: iconEmoji };
     e.last = -1;
-  }, [key, iconUrl, iconEmoji, quality]);
+  }, [key, iconUrl, iconEmoji, quality, env?.name]);
 
   if (quality === 'still' || !layers.length) return null;
   return (

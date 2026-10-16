@@ -1416,9 +1416,11 @@ export const sendAnimationToChat = (
   caption?: string,
   /** Also to others (the bot sends it to the person first, then to them). */
   share?: { to: PosterAudience; kind: 'event' | 'meeting'; id: number; users?: number[] },
+  /** As a file to save (the exact file, full size) instead of a playing animation. */
+  asFile = false,
 ) =>
   apiFetch<{ ok: true; sent: number }>(
-    `/me/animation?name=${encodeURIComponent(name)}${
+    `/me/animation?name=${encodeURIComponent(name)}${asFile ? '&as=file' : ''}${
       caption ? `&caption=${encodeURIComponent(caption.slice(0, 1024))}` : ''
     }${
       share && share.to !== 'me'

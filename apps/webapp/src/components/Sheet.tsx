@@ -52,14 +52,11 @@ export function Sheet({
   // create their own stacking context, which would trap the sheet under the tab bar.
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="sheet-root fixed inset-0 z-50 flex items-end justify-center"
       role="dialog"
       aria-modal="true"
     >
-      <div
-        className="absolute inset-0 animate-fade-in bg-black/35 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
+      <div className="sheet-dim absolute inset-0 animate-fade-in bg-black/35" onClick={onClose} />
       <div
         className={`glass-strong relative max-h-[88dvh] w-full max-w-xl animate-sheet-in overflow-y-auto rounded-t-[28px] pb-[max(16px,env(safe-area-inset-bottom))] shadow-sheet ${wide ? 'lg:max-h-[94dvh] lg:max-w-[min(1400px,96vw)]' : ''}`}
       >

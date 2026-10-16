@@ -1,6 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import {
-  fontFamily,
   GPU_MOTIONS,
   resolveBrand,
   type MeetingMotion,
@@ -693,12 +692,6 @@ export function LivingLayer({
             />
           ))}
         {kind === 'rays' && <i className="living-rays solo" />}
-        {kind === 'aurora' && (
-          <>
-            <i className="living-aurora a1" />
-            <i className="living-aurora a2" />
-          </>
-        )}
         {(kind === 'embers' ||
           kind === 'bubbles' ||
           kind === 'snow' ||
@@ -735,20 +728,6 @@ export function LivingLayer({
               }
             />
           ))}
-        {kind === 'goo' && (
-          <span className="living-goo">
-            {/* Blur, then a sharp alpha cut: touching drops melt into one ("metaballs"). */}
-            <svg width="0" height="0" className="absolute">
-              <filter id="living-goo">
-                <feGaussianBlur stdDeviation="7" />
-                <feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8" />
-              </filter>
-            </svg>
-            {[0, 1, 2, 3, 4].map((i) => (
-              <i key={i} className={`g${i}`} />
-            ))}
-          </span>
-        )}
         {kind === 'ripples' &&
           [0, 1, 2, 3].map((i) => <i key={i} className={`living-ripple r${i}`} />)}
         {kind === 'lines' && <i className="living-lines" />}
@@ -777,18 +756,6 @@ export function LivingLayer({
             <i className="living-roll" />
             <i className="living-vignette" />
           </>
-        )}
-        {kind === 'wordwall' && (
-          <WordWall
-            words={tune?.words?.length ? tune.words : [env?.name ?? 'JESUS']}
-            font={tune?.font}
-            rows={Math.round(4 + density * 4)}
-            size={weight}
-            glow={tune?.glow ?? 0}
-            colors={tune?.colors?.length ? tune.colors : c ? [c] : null}
-            style={tune?.wordStyle ?? 'fill'}
-            flow={tune?.wordFlow ?? 'alt'}
-          />
         )}
         {kind === 'static' && (
           <i className="living-static" style={weight !== 1 ? { scale: weight } : undefined} />
@@ -935,81 +902,6 @@ export function rainColumns(
     for (let i = 0; i < 10; i++) out += own[(i * 7 + c * 3 + ((i * c) % 5)) % own.length];
     return out;
   });
-}
-
-/** A colour `at` (0…1) along a list of CSS colours, mixed by the browser (vars work too). */
-function along(colors: string[], at: number): string {
-  if (colors.length === 1) return colors[0]!;
-  const f = Math.min(0.9999, Math.max(0, at)) * (colors.length - 1);
-  const i = Math.floor(f);
-  const k = Math.round((f - i) * 100);
-  return `color-mix(in srgb, ${colors[i]!} ${100 - k}%, ${colors[i + 1]!})`;
-}
-
-/**
- * The word wall (the "LOOP LOOP LOOP" background): the person's words repeated in packed
- * rows, one gradient running across the whole wall, filled, outlined or by turns, in a
- * font of their choice — tilt it with the angle setting. Rows slide by turns both ways,
- * all one way, or stand still. Each row is its text twice over moving by one copy, so it
- * loops without a seam; the speed differs a little row to row.
- */
-function WordWall({
-  words,
-  font,
-  rows,
-  size,
-  glow,
-  colors,
-  style,
-  flow,
-}: {
-  words: string[];
-  font: string | null | undefined;
-  rows: number;
-  size: number;
-  glow: number;
-  colors: string[] | null;
-  style: 'fill' | 'outline' | 'mix';
-  flow: 'alt' | 'same' | 'still';
-}) {
-  const one = words.join('\u2002');
-  const line = `${one}\u2002`.repeat(Math.max(2, Math.ceil(30 / Math.max(1, one.length))));
-  const palette = colors ?? ['var(--live-a)', 'var(--live-c)', 'var(--live-b)'];
-  // Rows reach past the edges, so a tilted wall still covers the block.
-  const count = rows + 2;
-  return (
-    <span
-      className="living-words"
-      style={{ fontFamily: fontFamily(font ?? 'oswald') ?? undefined } as CSSProperties}
-    >
-      {[...Array(count).keys()].map((r) => {
-        const color = along(palette, r / Math.max(1, count - 1));
-        const outline = style === 'outline' || (style === 'mix' && r % 2 === 1);
-        return (
-          <span
-            key={r}
-            className={`living-words-row${flow === 'alt' && r % 2 ? ' rev' : ''}${flow === 'still' ? ' still' : ''}`}
-            style={
-              {
-                fontSize: `calc(${(100 / rows) * 0.9 * size}cqh)`,
-                color: outline ? 'transparent' : color,
-                WebkitTextStroke: outline ? `0.035em ${color}` : undefined,
-                textShadow: glow
-                  ? `0 0 ${(0.12 * glow).toFixed(2)}em ${color}, 0 0 ${(0.4 * glow).toFixed(2)}em ${color}`
-                  : undefined,
-                animationDuration: `${16 + ((r * 7) % 5) * 3}s`,
-                // Each row starts a little further along, so the words don't line up in columns.
-                marginLeft: `-${((r * 37) % 100) / 10}em`,
-              } as CSSProperties
-            }
-          >
-            <span>{line}</span>
-            <span>{line}</span>
-          </span>
-        );
-      })}
-    </span>
-  );
 }
 
 const CODE = ['1ｱ0ｶ7ﾀ3ﾅ9ｻ', 'ﾊ8ﾏ2ﾔ5ﾗ0ﾜ1', '0ｲ4ｷ1ﾁ6ﾆ3ｼ', 'ﾋ7ﾐ0ﾕ9ﾘ2ｦ5', '3ｳ8ｸ5ﾂ0ﾇ7ｽ', 'ﾌ1ﾑ6ﾖ4ﾙ8ﾝ0'];

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import type { MotionTune } from '@church/shared';
 import { getMotion } from '../lib/motion';
+import { storage } from '../lib/storage';
 import { getQuality, useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
 
 /**
@@ -41,6 +42,8 @@ export type ShaderKind =
   | 'sun'
   | 'sunburst'
   | 'halo'
+  | 'aurora'
+  | 'goo'
   | 'wavelines'
   | 'tunnel'
   | 'dunes'
@@ -68,6 +71,8 @@ export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
   'sun',
   'sunburst',
   'halo',
+  'aurora',
+  'goo',
   'wavelines',
   'tunnel',
   'dunes',
@@ -97,6 +102,8 @@ const RES: Record<ShaderKind, number> = {
   sun: 0.4,
   sunburst: 0.5,
   halo: 0.25,
+  aurora: 0.3,
+  goo: 0.5,
   wavelines: 1,
   tunnel: 1,
   dunes: 0.6,
@@ -731,6 +738,58 @@ void main() {
   col += pow(max(0.0, 1.0 - abs(f - 0.25) * 4.0), 6.0) * 0.15 * u_weight;
   gl_FragColor = vec4(col * u_strength, u_strength);
 }`,
+  // Aurora: two soft curtains of the colours drifting and slowly changing hue, with faint
+  // rays in them. (The CSS one animated a blur filter: repainted in full every frame.)
+  aurora: `
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.1;
+  float soft = mix(1.0, 0.4, u_sharp);
+  float reach = u_res.x / u_res.y * 0.5 + 0.2;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 2; i++) {
+    float fi = float(i);
+    float y0 = fi < 0.5 ? 0.3 : -0.33;
+    float yc = y0 + 0.1 * sin(p.x * 1.7 + t * (1.0 + fi * 0.3) + fi * 2.0) + 0.05 * sin(p.x * 3.1 - t * 0.7);
+    float d = (p.y - yc) / (0.2 * soft);
+    float band = exp(-d * d);
+    float rays = 0.6 + 0.4 * fbm3(vec2(p.x * 7.0 + t * 0.8 + fi * 7.0, p.y * 0.5));
+    float ends = smoothstep(-reach, -reach * 0.3, p.x) * (1.0 - smoothstep(reach * 0.3, reach, p.x));
+    float k = band * rays * ends * 0.6;
+    col += palette(p.x * 0.35 + fi * 0.4 + t * 0.35, true) * k;
+    a = max(a, k);
+  }
+  gl_FragColor = vec4(col * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
+  // Goo: drops of the colours drifting and melting into each other where they touch.
+  goo: `
+void main() {
+  vec2 p = plane() / u_size;
+  float aspect = u_res.x / u_res.y;
+  float t = u_t * 0.35;
+  float field = 0.0;
+  vec3 col = vec3(0.0);
+  float wsum = 0.0;
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    vec2 c = vec2(
+      (hash1(fi) - 0.5) * aspect * 0.8 + 0.18 * sin(t * (0.6 + hash1(fi + 1.0) * 0.6) + fi * 2.1),
+      (hash1(fi + 2.0) - 0.5) * 0.8 + 0.2 * cos(t * (0.5 + hash1(fi + 3.0) * 0.6) + fi * 1.3)
+    );
+    float r = 0.1 + 0.08 * hash1(fi + 4.0);
+    float d = length(p - c);
+    float w = r * r / (d * d + 0.0004);
+    field += w;
+    float m = mod(fi, 3.0);
+    vec3 cc = m < 0.5 ? u_c[0] : m < 1.5 ? u_c[1] : u_c[2];
+    col += cc * w;
+    wsum += w;
+  }
+  float a = smoothstep(0.9, 1.15, field) * 0.55 * u_strength;
+  col = col / max(wsum, 0.0001);
+  gl_FragColor = vec4(col * a, a);
+}`,
   // A poster colour layer that moves: its gradient flows along its angle, turns, or
   // breathes into its colours the other way round.
   fill: `
@@ -763,7 +822,15 @@ void main() {
 
 interface Gl {
   gl: WebGLRenderingContext;
-  canvas: HTMLCanvasElement;
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  /**
+   * Hand-over: the finished picture is passed to the block's canvas without copying
+   * (OffscreenCanvas → ImageBitmap → a "bitmaprenderer" canvas). Copying it with drawImage
+   * made the browser wait for the graphics chip on every frame — measured on a big
+   * full-screen window it took 85% of the time and the editor stuttered. Phones without
+   * OffscreenCanvas WebGL (iOS before 17) still copy.
+   */
+  handover: boolean;
   programs: Partial<
     Record<ShaderKind, { prog: WebGLProgram; loc: Record<string, WebGLUniformLocation | null> }>
   >;
@@ -773,32 +840,53 @@ let broken = false;
 
 function context(): Gl | null {
   if (shared || broken) return shared;
+  const opts: WebGLContextAttributes = {
+    alpha: true,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    premultipliedAlpha: true,
+    powerPreference: 'low-power',
+  };
   try {
-    const canvas = document.createElement('canvas');
-    canvas.width = MAX_SIDE;
-    canvas.height = MAX_SIDE;
-    const gl = canvas.getContext('webgl', {
-      alpha: true,
-      antialias: false,
-      depth: false,
-      stencil: false,
-      premultipliedAlpha: true,
-      preserveDrawingBuffer: true,
-      powerPreference: 'low-power',
-    });
+    let canvas: HTMLCanvasElement | OffscreenCanvas | null = null;
+    let gl: WebGLRenderingContext | null = null;
+    let handover = false;
+    if (
+      typeof OffscreenCanvas !== 'undefined' &&
+      typeof ImageBitmapRenderingContext !== 'undefined'
+    ) {
+      try {
+        const off = new OffscreenCanvas(1, 1);
+        gl = off.getContext('webgl', opts) as WebGLRenderingContext | null;
+        if (gl) {
+          canvas = off;
+          handover = true;
+        }
+      } catch {
+        gl = null;
+      }
+    }
     if (!gl) {
+      const el = document.createElement('canvas');
+      el.width = MAX_SIDE;
+      el.height = MAX_SIDE;
+      gl = el.getContext('webgl', { ...opts, preserveDrawingBuffer: true });
+      canvas = el;
+    }
+    if (!gl || !canvas) {
       broken = true;
       return null;
     }
     // The phone may take the context back (memory, background): start again next frame.
-    canvas.addEventListener('webglcontextlost', (e) => {
+    (canvas as HTMLCanvasElement).addEventListener('webglcontextlost', (e: Event) => {
       e.preventDefault();
       shared = null;
     });
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-    shared = { gl, canvas, programs: {} };
+    shared = { gl, canvas, programs: {}, handover };
     return shared;
   } catch {
     broken = true;
@@ -825,9 +913,13 @@ const UNIFORMS = [
   'u_pos',
 ];
 
+/** Kinds whose shader didn't compile here: not tried again every frame (that alone lags). */
+const failed = new Set<ShaderKind>();
+
 function program(g: Gl, kind: ShaderKind) {
   const have = g.programs[kind];
   if (have) return have;
+  if (failed.has(kind)) throw new Error('shader failed before');
   const { gl } = g;
   const compile = (type: number, src: string) => {
     const s = gl.createShader(type)!;
@@ -838,11 +930,16 @@ function program(g: Gl, kind: ShaderKind) {
     return s;
   };
   const prog = gl.createProgram()!;
-  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERTEX));
-  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, COMMON + FRAGMENTS[kind]));
-  gl.bindAttribLocation(prog, 0, 'a');
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link');
+  try {
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERTEX));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, COMMON + FRAGMENTS[kind]));
+    gl.bindAttribLocation(prog, 0, 'a');
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link');
+  } catch (e) {
+    failed.add(kind);
+    throw e;
+  }
   const loc: Record<string, WebGLUniformLocation | null> = {};
   for (const u of UNIFORMS) loc[u] = gl.getUniformLocation(prog, u);
   const p = { prog, loc };
@@ -912,7 +1009,8 @@ class Painter {
   colors: [number, number, number][] = [];
   last = -1;
   held = false;
-  private ctx: CanvasRenderingContext2D | null;
+  private ctx: CanvasRenderingContext2D | null = null;
+  private bitmap: ImageBitmapRenderingContext | null = null;
   width = 0;
   height = 0;
 
@@ -921,7 +1019,9 @@ class Painter {
     readonly clip: HTMLElement,
     params: ShaderParams,
   ) {
-    this.ctx = canvas.getContext('2d');
+    // The block's canvas takes the finished picture as it is (hand-over), or copies it.
+    if (context()?.handover) this.bitmap = canvas.getContext('bitmaprenderer');
+    else this.ctx = canvas.getContext('2d');
     this.params = params;
     this.setParams(params);
   }
@@ -948,7 +1048,7 @@ class Painter {
     if (!w || !h) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const lite = getQuality() === 'lite' ? 0.75 : 1;
-    let k = RES[this.params.kind] * dpr * lite;
+    let k = RES[this.params.kind] * dpr * lite * adapt;
     k = Math.min(k, MAX_SIDE / w, MAX_SIDE / h);
     this.width = Math.max(1, Math.round(w * k));
     this.height = Math.max(1, Math.round(h * k));
@@ -958,7 +1058,7 @@ class Painter {
   }
 
   draw(seconds: number) {
-    if (!this.ctx) return;
+    if (!this.ctx && !this.bitmap) return;
     if (!this.width) this.resize();
     if (!this.width) return;
     const g = context();
@@ -973,6 +1073,11 @@ class Painter {
       return;
     }
     const q = this.params;
+    // Hand-over: the off-screen picture is exactly this block's size.
+    if (g.handover && (g.canvas.width !== this.width || g.canvas.height !== this.height)) {
+      g.canvas.width = this.width;
+      g.canvas.height = this.height;
+    }
     gl.viewport(0, 0, this.width, this.height);
     gl.useProgram(p.prog);
     gl.enableVertexAttribArray(0);
@@ -1007,6 +1112,11 @@ class Painter {
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    if (g.handover && this.bitmap) {
+      this.bitmap.transferFromImageBitmap((g.canvas as OffscreenCanvas).transferToImageBitmap());
+      return;
+    }
+    if (!this.ctx) return;
     // The drawing sits at the bottom left of the shared canvas.
     this.ctx.clearRect(0, 0, this.width, this.height);
     this.ctx.drawImage(
@@ -1033,14 +1143,68 @@ const standing = () =>
   getQuality() === 'still' ||
   (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
+// ---------- Keeping up with the machine ----------
+
+/**
+ * How much of each kind's resolution is drawn now (1 = as designed), and how much longer
+ * between frames (1 = 24 a second). The engine times its own drawing: a machine that can't
+ * keep up — a computer whose Telegram draws without the graphics chip ("software"
+ * graphics: old or blocked drivers, remote desktop), or a weak phone — gets smaller
+ * pictures first (soft effects look the same), then fewer frames, so editing stays smooth.
+ * A machine that keeps up easily climbs back to full quality.
+ */
+// Remembered on this device: the editor opens at the level that ran smoothly last time.
+const ADAPT_KEY = 'church.fx-scale';
+let adapt = (() => {
+  const v = Number(storage.get(ADAPT_KEY));
+  return Number.isFinite(v) && v >= 0.3 && v <= 1 ? v : 1;
+})();
+let slowGap = 1;
+let slowTicks = 0;
+let easyTicks = 0;
+const ADAPT_MIN = 0.3;
+/** Drawing time a tick may take (ms) before it counts as slow: the rest is for the page. */
+const BUDGET_MS = 10;
+
+function resizeAll() {
+  for (const p of painters) p.resize();
+}
+
+function judge(spent: number) {
+  if (spent > BUDGET_MS) {
+    easyTicks = 0;
+    // Two slow ticks in a row (one alone may be a shader being compiled).
+    if (++slowTicks < 2) return;
+    slowTicks = 0;
+    if (adapt > ADAPT_MIN) {
+      adapt = Math.max(ADAPT_MIN, adapt * 0.6);
+      storage.set(ADAPT_KEY, String(adapt));
+      resizeAll();
+    } else slowGap = Math.min(2.5, slowGap * 1.3);
+  } else if (spent < BUDGET_MS * 0.35) {
+    slowTicks = 0;
+    // About ten seconds of easy drawing before trying more again.
+    if (++easyTicks < 240) return;
+    easyTicks = 0;
+    if (slowGap > 1) slowGap = Math.max(1, slowGap / 1.3);
+    else if (adapt < 1) {
+      adapt = Math.min(1, adapt * 1.2);
+      storage.set(ADAPT_KEY, String(adapt));
+      resizeAll();
+    }
+  } else slowTicks = 0;
+}
+
 function tick(now: number) {
   frame = 0;
   if (!painters.size) return;
   const lite = getQuality() === 'lite';
-  const gap = 1000 / (lite ? 20 : 24);
+  const gap = (1000 / (lite ? 20 : 24)) * slowGap;
   const html = document.documentElement;
   if (!document.hidden && !(lite && html.dataset.scrolling)) {
     const still = standing();
+    const t0 = performance.now();
+    let drew = false;
     for (const p of painters) {
       if (p.held) continue;
       if (p.clip.hasAttribute('data-off') && p.last >= 0) continue;
@@ -1054,7 +1218,9 @@ function tick(now: number) {
       if (now - p.last < gap) continue;
       p.last = now;
       p.draw(now / 1000);
+      drew = true;
     }
+    if (drew) judge(performance.now() - t0);
   }
   frame = requestAnimationFrame(tick);
 }

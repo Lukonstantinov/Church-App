@@ -570,7 +570,7 @@ export const GUIDE: GuideSection[] = [
         steps: [
           'Shader kinds (ShaderEffect.tsx, SHADER_KINDS): flames is now a fiery glow (burning clouds; the old CSS flames are gone), topo (contour lines; glow = neon), fur (brush-stroke swirl round x/y), streaks (motion-lines wall), ribbons, plasma, kaleido, cells, holo, sun (disc + rays + lens flares, x/y, drift), sunburst, halo. Shader keywords: never name a GLSL function flat / sample / etc. — one reserved word breaks every effect.',
           'New tune fields (shared motions.ts): glow, x / y (place: 9 quick spots + sliders), drift, words (up to 10), font. MOTION_KNOBS lists which knobs each effect shows.',
-          'Digital rain with `words`: whole words fall, one word a column, in their order (rainColumns in ui.tsx). Word wall (`wordwall`): rows of the words sliding both ways, every other row an outline, in the chosen font (WordWall in ui.tsx, `.living-words` CSS).',
+          "Digital rain with `words`: whole words fall, one word a column, in their order (rainColumns in ui.tsx). Word wall (`wordwall`): rows of the words sliding both ways, every other row an outline, in the chosen font (drawn on the block's ParticleCanvas — drawWords, one cached strip per row).",
           'Text bend (`warp` on a poster text layer: arc / bulge / wave / flag / rise, amount −1…1): WarpedText in LayeredPoster.tsx draws the letters bent onto a canvas (outline in the canvas, shadow/glow/bevel as picture filters); effects in the letters use the same drawing as their mask (bendAt).',
         ],
       },
@@ -583,6 +583,16 @@ export const GUIDE: GuideSection[] = [
           'New shader effects: wavelines, tunnel (speed lines, placeable centre), dunes (fluid folds), lightfall (falling light), risers (rising lines), synthgrid, spiral, stripes. Word wall: one gradient across all rows (along()), wordStyle fill/outline/mix, wordFlow alt/same/still, default font Oswald.',
           'Full screen: FullscreenButton (Telegram 8.0+ requestFullscreen; phones and the desktop app), `html[data-fullscreen]` pads the page below Telegram’s buttons (--tg-safe-area-inset-top + --tg-content-safe-area-inset-top). Sheet `wide`: design editors open nearly full-window on a computer, preview left, settings right (lg:).',
           'Poster editor views «Instagram» (feed post 4:5 with the IG frame) and «Сторис» (9:16 with story bars and reply field — the design reflows into the taller shape).',
+        ],
+      },
+      {
+        title: 'Smooth editing on a computer; own sizes; saving files',
+        steps: [
+          'Why the full-screen editor lagged on a computer: the dim behind a sheet had a 2 px backdrop blur, and any blur on screen makes the browser redraw the whole window every frame something moves — a moving preview at 1920×1080 ran at 9 fps, without the blur at 60. `.sheet-dim` (index.css) blurs only while nothing in the sheet moves (no .living-clip / canvas / video), with a single sheet open, and not in lite.',
+          'Shader engine (ShaderEffect.tsx): effect pictures are handed over without a copy (OffscreenCanvas → transferToImageBitmap → a `bitmaprenderer` canvas; a plain 2D copy where that is missing). It times its own drawing: too slow → smaller pictures first (`adapt`, 0.3–1, kept in storage `church.fx-scale`), then fewer frames; easy → back up. A shader that fails to compile is never tried again (`failed`).',
+          'Aurora and goo are shaders now (the CSS ones animated `filter` / used an SVG filter — redrawn every frame). The word wall is drawn on the ParticleCanvas (cached text strips, WORDS_EM_PER_SECOND = 0.18 — very slow by default; Speed still scales it).',
+          'Own size: the free poster maker (FreePoster.tsx) has «📐 Свой размер» — width × height 200–4096 px, ready sizes, ⇄ swap. MotionExport `size` makes the video and picture exactly that size (fitSize: up to Full HD on a phone, 4K on a computer; H.264 level 5.1 above Full HD). recordLoop `height` keeps the pixel size exact; `still` returns one PNG of the effects at that moment.',
+          'Saving: «🖼 Картинку мне» (a still with effects), and «How it comes»: plays in the chat, or as a file (`?as=file` on /api/me/animation → sendDocument, only to oneself; /api/me/photo takes files up to 45 MB). Outside Telegram (a computer browser) the buttons save the file straight to the device.',
         ],
       },
       {
