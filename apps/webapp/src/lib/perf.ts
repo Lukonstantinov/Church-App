@@ -1,3 +1,4 @@
+import { autoLevel } from './adapt';
 import {
   createContext,
   useContext,
@@ -25,7 +26,7 @@ export type QualityChoice = 'auto' | Quality;
 export const QUALITY_CHOICES: QualityChoice[] = ['auto', 'full', 'lite', 'still'];
 
 const KEY = 'church.quality';
-/** What "auto" settled on for this phone (it only ever steps down). */
+/** What "auto" settled on for this phone. It steps down at once but is forgotten after a few days, so one bad stretch never sticks. */
 const AUTO_KEY = 'church.quality.auto';
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
@@ -45,8 +46,7 @@ export function getQualityChoice(): QualityChoice {
 
 /** What "auto" uses on this phone right now. */
 export function getAutoQuality(): Quality {
-  const v = storage.get(AUTO_KEY);
-  return isQuality(v) ? v : weakPhone ? 'lite' : 'full';
+  return autoLevel(storage.get(AUTO_KEY), Date.now(), weakPhone);
 }
 
 /**
@@ -282,7 +282,7 @@ function watchFrames() {
         wait = slow ? 4000 : Math.min(wait * 1.5, 60000);
         if (slow >= 2) {
           slow = 0;
-          storage.set(AUTO_KEY, getQuality() === 'full' ? 'lite' : 'still');
+          storage.set(AUTO_KEY, `${getQuality() === 'full' ? 'lite' : 'still'}@${Date.now()}`);
           applyQuality();
           notify();
           window.dispatchEvent(new Event(QUALITY_LOWERED));

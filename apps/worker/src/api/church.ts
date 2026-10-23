@@ -12,7 +12,7 @@ import {
   updateMeSchema,
 } from '@church/shared';
 import { isDeveloper, type Env } from '../env';
-import type { AuthVariables } from '../auth/middleware';
+import { requireTelegramAuth, type AuthVariables } from '../auth/middleware';
 import { getDb } from '../db/client';
 import { churchSettings, groups, media, users } from '../db/schema';
 import { audit } from '../lib/audit';
@@ -237,11 +237,11 @@ mediaRoutes.get('/m/:id', async (c) => {
 });
 
 /**
- * GET /media/v/:id — a recorded looping video (a part's animation). Public like the logos:
- * only decorative videos are served here. iPhones play a video only from a server that
+ * GET /media/v/:id — a recorded looping video (a part's animation or a moving poster).
+ * Signed-in members only: posters can show people's photos and names. iPhones play a video only from a server that
  * answers byte ranges, so ranges are honoured.
  */
-mediaRoutes.get('/v/:id', async (c) => {
+mediaRoutes.get('/v/:id', requireTelegramAuth, async (c) => {
   const id = Number(c.req.param('id'));
   if (!Number.isSafeInteger(id) || id <= 0) return c.body(null, 404);
   const row = await getDb(c.env.DB).query.media.findFirst({

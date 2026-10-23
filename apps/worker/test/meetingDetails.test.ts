@@ -763,6 +763,43 @@ describe('event reminders and the sender line', () => {
     expect(hits).toHaveLength(1);
     expect(String(hits[0]!.body.text)).not.toContain('Отправил(а)');
   });
+
+  it('an event with its own plan is reminded once per planned time, and saving never sends late', async () => {
+    const g = await createEnv('План напоминаний');
+    const a = fakeUser('Получатель плана');
+    await join(a, g);
+    const date = addDays(localDate(new Date(), TZ), 1);
+    const event = await apiJson<EventSummary>(`/api/groups/${g.id}/events`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { title: 'Событие с планом', date, startTime: '23:00' },
+    });
+    const db = getDb(env.DB);
+    const plan = { minutes: [4320], audience: 'all', picture: 'none' };
+    // The time (3 days before) is already past: saving the plan must not send it late.
+    const saved = await apiJson<{ reminderSlots: { sent: boolean }[] }>(`/api/events/${event.id}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { reminderPlan: plan },
+    });
+    expect(saved.reminderSlots.map((s) => s.sent)).toEqual([true]);
+    await remindUpcomingEvents(db, env as never, new Date());
+    await drainOutbox(db, botApi(env as never), { limit: 100 });
+    const hits = () =>
+      calls.filter(
+        (c) => c.body.chat_id === a.id && String(c.body.text).includes('Событие с планом'),
+      );
+    expect(hits()).toHaveLength(0);
+    // A further time that is already due fires once, however often the job runs.
+    await db
+      .update(events)
+      .set({ reminderPlan: JSON.stringify({ ...plan, minutes: [4320, 2900] }) })
+      .where(eq(events.id, event.id));
+    await remindUpcomingEvents(db, env as never, new Date());
+    await remindUpcomingEvents(db, env as never, new Date());
+    await drainOutbox(db, botApi(env as never), { limit: 100 });
+    expect(hits()).toHaveLength(1);
+  });
 });
 
 describe('event duties', () => {

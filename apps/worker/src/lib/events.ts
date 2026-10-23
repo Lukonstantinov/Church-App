@@ -38,6 +38,7 @@ import { accessIn, can, designRights } from './access';
 import { posterLook, lookSources } from './looks';
 import { signedMediaUrl } from './media';
 import { mergeLooks, readMotion, speakersOf } from './meetings';
+import { planSlots, readPlan } from './eventReminderPlan';
 import { coverLoopKey, eventPictureId, freshCoverLoop, loopableCover } from './eventRoster';
 
 export { coverLoopKey, loopableCover };
@@ -587,6 +588,8 @@ export async function eventDetail(
     roles: event.hasDuties ? roleList : [],
     program: await loadProgram(db, event.id),
     finance,
+    reminderPlan: readPlan(event.reminderPlan),
+    reminderSlots: await planSlots(db, event),
     myPaidCents: paidBy.get(user.id) ?? 0,
     canManage,
     canDesign: rights.designer || (!rights.locked && canManage),

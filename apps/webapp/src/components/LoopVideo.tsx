@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { loopUrl } from '@church/shared';
 import { getMotion } from '../lib/motion';
 import { useQuality } from '../lib/perf';
+import { useAuthedSrc } from '../lib/authedSrc';
 
 /**
  * A recorded loop (a part's or a cover's effects as one video, lib/recorder.ts): muted,
@@ -11,6 +12,7 @@ import { useQuality } from '../lib/perf';
 export function LoopVideo({ mediaId }: { mediaId: number }) {
   const ref = useRef<HTMLVideoElement>(null);
   const quality = useQuality();
+  const src = useAuthedSrc(loopUrl(mediaId));
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
@@ -41,7 +43,7 @@ export function LoopVideo({ mediaId }: { mediaId: number }) {
   return (
     <video
       ref={ref}
-      src={loopUrl(mediaId)}
+      src={src}
       muted
       loop
       playsInline

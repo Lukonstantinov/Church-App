@@ -68,7 +68,8 @@ export function EventReminderSheet({
   const moves = !!detail.data && eventMoves(detail.data);
   const { push } = useNav();
   const [pic, setPic] = useState<'none' | 'still' | 'moving' | null>(null);
-  const shown = pic ?? (picture ? 'still' : 'none');
+  // An event with effects offers its moving poster first; the rest falls back to the still one.
+  const shown = pic ?? (moves ? 'moving' : picture ? 'still' : 'none');
   const movingNode = useRef<HTMLDivElement>(null);
   const modes = detail.data ? eventPosterModes(detail.data) : (['custom', 'none'] as const);
   const [style, setStyle] = useState<PosterTextValue | null>(null);
@@ -197,7 +198,7 @@ export function EventReminderSheet({
             <div className="text-[13px] font-semibold">{t.events.pictureTitle}</div>
             <div className="flex flex-wrap gap-1.5">
               {(['none', 'still', 'moving'] as const)
-                .filter((k) => (k === 'still' ? !!picture : k === 'moving' ? moves : true))
+                .filter((k) => k !== 'still' || !!picture)
                 .map((k) => (
                   <button
                     key={k}
@@ -233,7 +234,7 @@ export function EventReminderSheet({
                 />
               </>
             )}
-            {!moves && (
+            {shown === 'moving' && !moves && (
               <NoMotionPrompt
                 onDesign={
                   detail.data.canDesign

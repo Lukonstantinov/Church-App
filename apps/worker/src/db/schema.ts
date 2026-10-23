@@ -562,9 +562,11 @@ export const media = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     groupId: integer('group_id').references(() => groups.id),
-    kind: text('kind', { enum: ['receipt', 'event'] }).notNull(),
+    kind: text('kind', { enum: ['receipt', 'event', 'reminder'] }).notNull(),
     mime: text('mime').notNull(),
     data: text('data').notNull(),
+    /** Telegram's id of this file once the bot has uploaded it: later sends reuse it, not the bytes. */
+    tgFileId: text('tg_file_id'),
     bytes: integer('bytes').notNull(),
     createdBy: integer('created_by').references(() => users.id),
     createdAt: createdAt(),
@@ -662,6 +664,8 @@ export const events = sqliteTable(
     remindedAt: text('reminded_at'),
     /** When the "it's live" message went out (null = not yet). */
     liveNotifiedAt: text('live_notified_at'),
+    /** Its own reminder plan: JSON {minutes, audience, picture, mediaId}; null = the ministry's rule. */
+    reminderPlan: text('reminder_plan'),
     /** Up to four speakers shown on the poster: JSON [{name, role, mediaId}]. */
     speakers: text('speakers'),
     /** A Telegram chat of its own, managed by the bot (see lib/eventChats). */

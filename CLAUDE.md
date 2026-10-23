@@ -21,7 +21,7 @@ apps/worker     Cloudflare Worker (Hono): REST API /api, bot webhook /bot, /medi
   test/           vitest in the Workers pool (real D1, Telegram mocked)
 apps/webapp     React + Vite + Tailwind 4 Mini App (served by the Worker as static assets)
   src/screens/    one file per screen; src/components/ shared UI; src/lib/ hooks/helpers
-  src/lib/queries.ts  all API hooks (TanStack Query); src/lib/nav.tsx  routes/stack
+  src/lib/queries/  all API hooks (TanStack Query), one file per area, core.ts = keys + helpers; src/lib/nav.tsx  routes/stack
   src/lib/guide.ts    in-app developer Instructions (keep in step with this file)
 packages/shared Types, zod schemas, i18n (ru = reference, en, lt), formatting, permissions
 ```
@@ -73,7 +73,7 @@ Deploy → Run workflow → production.
   cells, holo, sun, sunburst, halo, wavelines, tunnel, dunes, lightfall, risers, synthgrid, spiral, stripes,
   aurora, goo, gradient fill motion) are drawn by the shader engine
   (`ShaderEffect.tsx`: one shared WebGL context handing pictures over without a copy, low-res canvases that
-  shrink when the device can't keep up — `church.fx-scale` —, `seekShaders`); the word wall is drawn on the
+  shrink (to 60% at most, per session) when the device can't keep up, `seekShaders`); the word wall is drawn on the
   ParticleCanvas (cached strips, very slow by default); thumbnail grids use
   `StillMotion` (no effect layers at all — paused layers still cost memory).
   Long decorative animations are capped at 30 changes a second (`capAnimations` in `lib/perf.ts`);
@@ -139,7 +139,7 @@ those serving — `?to=`, `lib/posterSend.ts`, same file_id via the outbox); a l
 (design's own / own words with font, size, place / none — `PosterText.tsx`, `LivePreview`), also for reminders and
 announcements (picture: none / poster / animated, `posterMediaId`, `lib/movingPoster.ts`); effects are `.living-clip` layers stepped through time (`seekParticles`).
 Studio parts with one block a screen (`BAKE_PARTS`) can be recorded as a looping video (`baked` on the
-part's look, `bakeKey`/`freshLoop`; `/api/groups/:id/loops`, `/api/church/loops`; public `/media/v/:id`
+part's look, `bakeKey`/`freshLoop`; `/api/groups/:id/loops`, `/api/church/loops`; members-only `/media/v/:id` (fetched with the sign-in header and played from a blob: `useAuthedSrc`, `LoopVideo`; recorded-to-send videos are `media.kind` reminder, pruned after 30 days; the bot reuses Telegram file ids, `media.tg_file_id`)
 with byte ranges): SkinLayer plays it instead of the live layers.
 Event photo covers with effects can be recorded too (`events.cover_loop`, `coverLoopKey`, POST/DELETE
 `/api/events/:id/cover-loop`; rows carry `coverLoop` while it matches; `LoopVideo` in CoverPicture;

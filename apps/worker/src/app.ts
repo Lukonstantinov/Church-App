@@ -22,7 +22,8 @@ app.get('/health', async (c) => {
     }
   }
   return c.json(
-    { ok: db !== 'error', environment: c.env.ENVIRONMENT, db, time: new Date().toISOString() },
+    // No environment name here: this answers anyone.
+    { ok: db !== 'error', db, time: new Date().toISOString() },
     db === 'error' ? 503 : 200,
   );
 });

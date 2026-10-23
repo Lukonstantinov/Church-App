@@ -1,0 +1,1 @@
+ALTER TABLE `events` ADD `reminder_plan` text;

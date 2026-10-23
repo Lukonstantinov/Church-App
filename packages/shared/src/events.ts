@@ -99,6 +99,28 @@ export const roleInputSchema = z.object({
 });
 export type RoleInput = z.input<typeof roleInputSchema>;
 
+/**
+ * When and how an event is reminded, instead of the ministry's one-number rule: minutes
+ * before the start (up to five sends), who gets it, and the picture with it. A moving
+ * picture is a video recorded in the app and kept as `mediaId`.
+ */
+export const REMINDER_PLAN_MAX = 5;
+export const reminderPlanSchema = z.object({
+  minutes: z.array(z.number().int().min(5).max(20_160)).min(1).max(REMINDER_PLAN_MAX),
+  audience: z.enum(['all', 'serving', 'going']).default('all'),
+  picture: z.enum(['none', 'still', 'moving']).default('still'),
+  mediaId: z.number().int().positive().nullish(),
+});
+export type ReminderPlan = z.output<typeof reminderPlanSchema>;
+
+/** One planned send, for the event screen. */
+export interface ReminderSlot {
+  minutes: number;
+  /** When it goes out (ISO). */
+  at: string;
+  sent: boolean;
+}
+
 const featuresSchema = z.object({
   gallery: z.boolean().default(false),
   rsvp: z.boolean().default(false),
@@ -169,6 +191,8 @@ export const updateEventSchema = z.object({
   status: z.enum(['scheduled', 'cancelled']).optional(),
   /** Show at the top of the main page for the whole church. */
   pinned: z.boolean().optional(),
+  /** This event's own reminder plan (null = follow the ministry's rule). */
+  reminderPlan: reminderPlanSchema.nullable().optional(),
 });
 export type UpdateEventInput = z.input<typeof updateEventSchema>;
 
@@ -310,6 +334,9 @@ export interface EventDetail extends EventSummary {
   finance: EventFinance | null;
   /** What the requester has paid for this event. */
   myPaidCents: number;
+  /** Its own reminder plan (null = the ministry's rule) and the sends it makes. */
+  reminderPlan: ReminderPlan | null;
+  reminderSlots: ReminderSlot[];
   canManage: boolean;
   /** May change the cover and template (designers; others unless the look is locked). */
   canDesign: boolean;

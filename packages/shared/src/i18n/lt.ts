@@ -1652,6 +1652,22 @@ export const lt: Messages = {
     remindAutoHint: 'Botas pats primins visiems tarnystėje apie artėjantį renginį.',
     remindAutoOff: 'Nepriminti automatiškai',
     remindAutoHours: (h: number) => (h % 24 === 0 ? `prieš ${h / 24} d.` : `prieš ${h} val.`),
+    planBefore: (m: number) =>
+      m % 1440 === 0
+        ? `prieš ${m / 1440} d.`
+        : m % 60 === 0
+          ? `prieš ${m / 60} val.`
+          : `prieš ${m} min.`,
+    planTitle: 'Priminimai',
+    planDefault: 'Pagal tarnystės taisyklę (tarnystės nustatymai)',
+    planEdit: 'Nustatyti',
+    planWhen: 'Kada siųsti',
+    planWho: 'Kam',
+    planSent: 'išsiųsta',
+    planUseRule: 'Grįžti prie tarnystės taisyklės',
+    planSave: 'Išsaugoti planą',
+    planMovingHint:
+      'Animacija įrašoma išsaugant. Pakeitus įvykio dizainą, išsaugokite planą iš naujo.',
     coverLook: 'Viršelis be nuotraukos',
     coverLookHint: 'Be viršelio nuotraukos rodomos spalvos, raštas ir pavadinimas — kaip įrašuose.',
     slideshow: 'Viršelio skaidrės',

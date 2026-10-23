@@ -4,6 +4,7 @@ import { Api } from 'grammy';
 import { addDays, localDate, type MeetingRow } from '@church/shared';
 import { getDb } from '../src/db/client';
 import { drainOutbox, enqueue } from '../src/lib/outbox';
+import { pruneReminderVideos } from '../src/lib/media';
 import { hourlyTick, runScheduled, CRON_HOURLY } from '../src/jobs/tick';
 import { ADMIN, apiJson, callsTo, mockTelegram, type TgCall } from './helpers';
 
@@ -183,5 +184,55 @@ describe('outbox', () => {
     }
     const row = (await outboxRows()).results.find((r) => r.dedupe_key === 'err:1');
     expect(row).toMatchObject({ status: 'dead', attempts: 5 });
+  });
+
+  it('two drains running at once send each message only once', async () => {
+    for (let i = 0; i < 3; i++)
+      await enqueue(db(), {
+        chatId: 950 + i,
+        method: 'sendMessage',
+        payload: { chat_id: 950 + i, text: 'once' },
+        dedupeKey: `race:${i}`,
+      });
+    await Promise.all([drainOutbox(db(), api()), drainOutbox(db(), api())]);
+    expect(callsTo(calls, 'sendMessage').filter((c) => c.body.text === 'once')).toHaveLength(3);
+  });
+
+  it("uploads a moving poster once and sends the others by Telegram's file id", async () => {
+    const { id } = (await env.DB.prepare(
+      "INSERT INTO media (kind, mime, data, bytes) VALUES ('reminder', 'video/mp4', 'AAAAAGZ0eXA=', 8) RETURNING id",
+    ).first<{ id: number }>())!;
+    for (const chat of [960, 961, 962])
+      await enqueue(db(), {
+        chatId: chat,
+        method: 'sendPhoto',
+        payload: { chat_id: chat, photo_media_id: id, caption: 'hi' },
+        dedupeKey: `anim:${chat}`,
+      });
+    await drainOutbox(db(), api());
+    const sent = callsTo(calls, 'sendAnimation');
+    expect(sent).toHaveLength(3);
+    expect(sent[0]!.body.animation).toEqual({ upload: true });
+    expect(sent[1]!.body.animation).toMatch(/^anim/);
+    expect(sent[2]!.body.animation).toBe(sent[1]!.body.animation);
+  });
+
+  it('old reminder videos are removed, but not ones still in use or other media', async () => {
+    const old = new Date(Date.now() - 40 * 86_400_000).toISOString();
+    const add = async (kind: string) =>
+      (await env.DB.prepare(
+        "INSERT INTO media (kind, mime, data, bytes, created_at) VALUES (?, 'video/mp4', 'AA==', 1, ?) RETURNING id",
+      )
+        .bind(kind, old)
+        .first<{ id: number }>())!.id;
+    const gone = await add('reminder');
+    const kept = await add('event');
+    await pruneReminderVideos(db());
+    const left = (
+      await env.DB.prepare('SELECT id FROM media WHERE id IN (?, ?)')
+        .bind(gone, kept)
+        .all<{ id: number }>()
+    ).results.map((r) => r.id);
+    expect(left).toEqual([kept]);
   });
 });

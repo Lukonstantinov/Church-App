@@ -1,0 +1,1 @@
+ALTER TABLE `media` ADD `tg_file_id` text;

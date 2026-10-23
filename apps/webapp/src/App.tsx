@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { messages, type MeResponse } from '@church/shared';
+import { messagesNow, type MeResponse } from '@church/shared';
 import { ToastProvider, useToast } from './components/Toast';
 import { CrashGuard } from './components/CrashGuard';
 import { TestingBanner } from './components/TestAs';
@@ -205,7 +205,7 @@ function Gate() {
 
 export function App() {
   if (!isInsideTelegram())
-    return <CenterMessage>{messages('ru').common.openInTelegram}</CenterMessage>;
+    return <CenterMessage>{messagesNow('ru').common.openInTelegram}</CenterMessage>;
   // Anything that breaks outside a screen (the background, the frame) shows a note with
   // "Reload" too, instead of leaving only the empty background.
   return (
@@ -219,7 +219,7 @@ export function App() {
 
 /** The whole app broke: what happened and a way out, in the phone's language. */
 function AppCrashed({ error }: { error: Error }) {
-  const t = messages(telegramLanguage()).common;
+  const t = messagesNow(telegramLanguage()).common;
   return (
     <CenterMessage>
       <div className="flex max-w-sm flex-col items-center gap-3 px-6 text-center">

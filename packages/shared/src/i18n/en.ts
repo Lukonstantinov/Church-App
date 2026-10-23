@@ -1609,6 +1609,22 @@ export const en: Messages = {
     remindAutoHint: 'The bot reminds everyone in the ministry about an upcoming event.',
     remindAutoOff: 'Don’t remind automatically',
     remindAutoHours: (h: number) => (h % 24 === 0 ? `${h / 24} d before` : `${h} h before`),
+    planBefore: (m: number) =>
+      m % 1440 === 0
+        ? `${m / 1440} d before`
+        : m % 60 === 0
+          ? `${m / 60} h before`
+          : `${m} min before`,
+    planTitle: 'Reminders',
+    planDefault: 'Follows the ministry’s rule (ministry settings)',
+    planEdit: 'Set up',
+    planWhen: 'When to send',
+    planWho: 'To whom',
+    planSent: 'sent',
+    planUseRule: 'Back to the ministry’s rule',
+    planSave: 'Save plan',
+    planMovingHint:
+      'The animation is recorded when you save. If you change the event’s design, save the plan again.',
     coverLook: 'Cover without a photo',
     coverLookHint:
       'Without a cover photo the event shows colours, a pattern and its title — like posts.',

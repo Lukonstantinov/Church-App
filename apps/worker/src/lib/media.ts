@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
 import { InputFile } from 'grammy';
 import type { Db } from '../db/client';
@@ -106,7 +106,7 @@ export async function storeMedia(
   input: {
     /** Null for the church's own (its main page's recorded loops). */
     groupId: number | null;
-    kind: 'receipt' | 'event';
+    kind: 'receipt' | 'event' | 'reminder';
     bytes: Uint8Array;
     mime: ImageMime | 'video/mp4';
     createdBy: number;
@@ -193,27 +193,41 @@ const EXT: Record<string, string> = {
  * link, which fails for some formats). Null when it's gone.
  */
 export async function mediaFile(db: Db, id: number): Promise<InputFile | null> {
-  return (await mediaUpload(db, id))?.file ?? null;
+  const up = await mediaUpload(db, id);
+  return up && typeof up.file !== 'string' ? up.file : null;
 }
 
 /** A stored picture or recorded loop (a moving poster) ready to upload, and which it is. */
 export async function mediaUpload(
   db: Db,
   id: number,
-): Promise<{ file: InputFile; video: boolean } | null> {
+  /** The bot's queue reuses Telegram's id of a file it sent before; others need the bytes. */
+  useCached = false,
+): Promise<{ file: InputFile | string; video: boolean; cached: boolean } | null> {
   const row = await db.query.media.findFirst({
-    columns: { data: true, mime: true },
+    columns: { mime: true, tgFileId: true },
     where: eq(media.id, id),
   });
   if (!row) return null;
   const video = row.mime === 'video/mp4';
+  // Sent before: Telegram already has the file, so only its id goes (no re-upload per person,
+  // and the stored bytes aren't even read).
+  if (useCached && row.tgFileId) return { file: row.tgFileId, video, cached: true };
+  const full = await db.query.media.findFirst({ columns: { data: true }, where: eq(media.id, id) });
+  if (!full) return null;
   return {
     file: new InputFile(
-      fromBase64(row.data),
+      fromBase64(full.data),
       `${video ? 'poster' : 'picture'}.${EXT[row.mime] ?? 'jpg'}`,
     ),
     video,
+    cached: false,
   };
+}
+
+/** Remembers Telegram's id of an uploaded file (null forgets a stale one). */
+export async function rememberTgFile(db: Db, id: number, tgFileId: string | null) {
+  await db.update(media).set({ tgFileId }).where(eq(media.id, id));
 }
 
 /** Every speaker photo must be one of the ministry's own pictures. */
@@ -233,4 +247,31 @@ export async function assertSpeakerPhotos(
       if (!row) throw new HTTPException(400, { message: 'invalid_speaker' });
     }
   }
+}
+
+/**
+ * Moving posters recorded to send with a reminder or announcement are kept for a month and
+ * then removed — unless something still points at them (an announcement, a pending approval,
+ * an event's poster or its reminder plan). Without this the database fills up with videos.
+ */
+export async function pruneReminderVideos(db: Db, now = new Date()): Promise<void> {
+  const cutoff = new Date(now.getTime() - 30 * 86_400_000).toISOString();
+  await db.run(sql`
+    DELETE FROM media
+    WHERE kind = 'reminder' AND created_at < ${cutoff}
+      AND id NOT IN (SELECT poster_media_id FROM announcements WHERE poster_media_id IS NOT NULL)
+      AND id NOT IN (SELECT poster_media_id FROM publish_requests WHERE poster_media_id IS NOT NULL)
+      AND id NOT IN (SELECT poster_media_id FROM events WHERE poster_media_id IS NOT NULL)
+      AND NOT EXISTS (SELECT 1 FROM events e WHERE e.reminder_plan LIKE '%"mediaId":' || media.id || '%')`);
+}
+
+/** Removes a reminder video nothing points at any more (a replaced reminder plan's). */
+export async function dropReminderVideo(db: Db, mediaId: number | null | undefined) {
+  if (!mediaId) return;
+  await db.run(sql`
+    DELETE FROM media
+    WHERE id = ${mediaId} AND kind = 'reminder'
+      AND id NOT IN (SELECT poster_media_id FROM announcements WHERE poster_media_id IS NOT NULL)
+      AND id NOT IN (SELECT poster_media_id FROM publish_requests WHERE poster_media_id IS NOT NULL)
+      AND id NOT IN (SELECT poster_media_id FROM events WHERE poster_media_id IS NOT NULL)`);
 }

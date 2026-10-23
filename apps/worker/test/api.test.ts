@@ -6,7 +6,9 @@ describe('/health', () => {
   it('reports ok with database check', async () => {
     const res = await api('/health?deep=1');
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, db: 'ok' });
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: true, db: 'ok' });
+    expect(body).not.toHaveProperty('environment');
   });
 });
 

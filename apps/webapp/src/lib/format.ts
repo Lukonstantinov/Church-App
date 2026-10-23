@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import type { Locale, Messages } from '@church/shared';
-import { INTL_LOCALE, messages } from '@church/shared';
+import { INTL_LOCALE } from '@church/shared';
 import { useI18n } from './i18n';
 import { useMe } from './queries';
 
 /** Date/time formatting in the church time zone and the user's language. */
-export function makeFormatters(locale: Locale, tz: string, t: Messages = messages(locale)) {
+export function makeFormatters(locale: Locale, tz: string, t: Messages) {
   const intl = INTL_LOCALE[locale];
   const cache = new Map<string, Intl.DateTimeFormat>();
   const fmt = (opts: Intl.DateTimeFormatOptions) => {

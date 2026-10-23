@@ -7,6 +7,7 @@ import { EventChat } from '../components/EventChat';
 import { EventExport } from '../components/EventExport';
 import { EventCover, EventHeroText } from '../components/EventCard';
 import { CoverPicture } from '../components/CoverSlideshow';
+import { EventReminderPlan } from '../components/EventReminderPlan';
 import { EventReminderSheet } from '../components/EventReminderSheet';
 import { PublishRequestCard } from '../components/PublishRequestCard';
 import { ProgramBlock } from '../components/EventProgram';
@@ -203,6 +204,8 @@ function EventBody({ e }: { e: EventDetail }) {
           onClose={() => setReminding(false)}
         />
       )}
+
+      {e.canManage && !cancelled && <EventReminderPlan e={e} />}
 
       {e.myRoles.length > 0 && (
         <Card className="flex flex-col gap-2 p-4">

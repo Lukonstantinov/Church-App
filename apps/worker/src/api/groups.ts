@@ -409,7 +409,8 @@ groupRoutes.post('/:id/loops', async (c) => {
   const bytes = await readLoopUpload(c.req, LOOP_MAX_BYTES);
   const id = await storeMedia(db, {
     groupId: group.id,
-    kind: 'event',
+    // A video recorded to send with a message is cleaned up after a month (pruneReminderVideos).
+    kind: c.req.query('for') === 'send' ? 'reminder' : 'event',
     bytes,
     mime: 'video/mp4',
     createdBy: user.id,

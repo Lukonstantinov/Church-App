@@ -14,7 +14,9 @@ import { getDb, type Db } from '../db/client';
 import { events, groups, jobRuns, meetings, outbox } from '../db/schema';
 import { adminRecipients, birthdayMessage, birthdayRows, comingBirthdays } from '../lib/birthdays';
 import { sendEventReminder } from '../lib/eventReminder';
+import { sendPlannedEventReminders } from '../lib/eventReminderPlan';
 import { sendLiveNotices, sendMeetingReminders } from '../lib/liveNotice';
+import { pruneReminderVideos } from '../lib/media';
 import { pruneNotifications } from '../lib/notifications';
 import { getAppUrl, getChurch } from '../lib/church';
 import { escapeHtml } from '../lib/html';
@@ -60,6 +62,10 @@ export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
     const cutoff = new Date(now.getTime() - 7 * DAY_MS).toISOString();
     await db.delete(outbox).where(and(eq(outbox.status, 'sent'), lt(outbox.createdAt, cutoff)));
     await pruneNotifications(db, now);
+    await pruneReminderVideos(db, now);
+    await db
+      .delete(jobRuns)
+      .where(lt(jobRuns.ranAt, new Date(now.getTime() - 60 * DAY_MS).toISOString()));
   }
 }
 
@@ -182,6 +188,8 @@ export async function remindMissingRollCalls(db: Db, env: Env, timezone: string,
  * twice at once.
  */
 export async function remindUpcomingEvents(db: Db, env: Env, now: Date) {
+  // Events with their own plan are handled by it, not by the ministry's rule below.
+  await sendPlannedEventReminders(db, env, now);
   const rules = await db
     .select({ id: groups.id, hours: groups.eventReminderHours })
     .from(groups)
@@ -197,6 +205,7 @@ export async function remindUpcomingEvents(db: Db, env: Env, now: Date) {
           eq(events.groupId, rule.id),
           eq(events.status, 'scheduled'),
           isNull(events.remindedAt),
+          isNull(events.reminderPlan),
           gte(events.startsAt, now.toISOString()),
           lte(events.startsAt, until),
           lte(events.createdAt, new Date(now.getTime() - 10 * 60_000).toISOString()),

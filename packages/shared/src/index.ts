@@ -5,6 +5,7 @@ export * from './attendance';
 export * from './time';
 export * from './i18n/index';
 export { ru } from './i18n/ru';
+export { loadMessages, messagesNow } from './i18n/lazy';
 export * from './format';
 export * from './brand';
 export * from './i18n/locales';

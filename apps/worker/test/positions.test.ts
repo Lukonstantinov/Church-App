@@ -622,7 +622,7 @@ describe('adding people and environment look', () => {
     await drain();
     expect(texts(member.id).some((x) => x.includes('Едем в лагерь'))).toBe(true);
   });
-  it('a part can be recorded as a looping video that plays from a public link', async () => {
+  it('a part can be recorded as a looping video that plays from a members-only link', async () => {
     const g = await createEnv('Видео');
     const other = await createEnv('Чужое');
     const mp4 = Uint8Array.from([
@@ -636,10 +636,12 @@ describe('adding people and environment look', () => {
     expect(mine.url).toBe(`/media/v/${mine.id}`);
 
     // iPhones play videos only with byte ranges.
-    const whole = await api(mine.url);
+    const whole = await api(mine.url, { user: ADMIN });
+    // Not public: a link without signing in is refused.
+    expect((await api(mine.url)).status).toBe(401);
     expect(whole.status).toBe(200);
     expect(whole.headers.get('accept-ranges')).toBe('bytes');
-    const part = await api(mine.url, { headers: { Range: 'bytes=4-7' } });
+    const part = await api(mine.url, { user: ADMIN, headers: { Range: 'bytes=4-7' } });
     expect(part.status).toBe(206);
     expect(part.headers.get('content-range')).toBe(`bytes 4-7/${mp4.length}`);
     expect([...new Uint8Array(await part.arrayBuffer())]).toEqual([0x66, 0x74, 0x79, 0x70]);

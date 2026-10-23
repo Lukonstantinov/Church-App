@@ -171,7 +171,7 @@ describe('rich posts', () => {
       motion: 'smoke',
       motionLayers: [{ kind: 'smoke', tune: { angle: 180 } }],
     });
-    // The moving poster plays from its public link.
+    // The moving poster plays from its members-only link.
     expect(row!.posterMoving).toBe(true);
     expect(row!.posterUrl).toBe(`/media/v/${posterMediaId}`);
   });

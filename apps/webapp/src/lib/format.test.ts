@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { messages } from '@church/shared';
 import { makeFormatters } from './format';
 
 const TZ = 'Europe/Riga';
-const ru = makeFormatters('ru', TZ);
-const en = makeFormatters('en', TZ);
-const lt = makeFormatters('lt', TZ);
+const ru = makeFormatters('ru', TZ, messages('ru'));
+const en = makeFormatters('en', TZ, messages('en'));
+const lt = makeFormatters('lt', TZ, messages('lt'));
 
 describe('formatters', () => {
   it('formats times in the church zone', () => {

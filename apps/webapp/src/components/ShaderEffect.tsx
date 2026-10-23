@@ -1,7 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
+import { SCALE_MIN, stepScale } from '../lib/adapt';
 import type { MotionTune } from '@church/shared';
 import { getMotion } from '../lib/motion';
-import { storage } from '../lib/storage';
 import { getQuality, useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
 
 /**
@@ -1048,7 +1048,7 @@ class Painter {
     if (!w || !h) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const lite = getQuality() === 'lite' ? 0.75 : 1;
-    let k = RES[this.params.kind] * dpr * lite * adapt;
+    let k = RES[this.params.kind] * dpr * lite * (recordingFull ? 1 : adapt);
     k = Math.min(k, MAX_SIDE / w, MAX_SIDE / h);
     this.width = Math.max(1, Math.round(w * k));
     this.height = Math.max(1, Math.round(h * k));
@@ -1153,16 +1153,14 @@ const standing = () =>
  * pictures first (soft effects look the same), then fewer frames, so editing stays smooth.
  * A machine that keeps up easily climbs back to full quality.
  */
-// Remembered on this device: the editor opens at the level that ran smoothly last time.
-const ADAPT_KEY = 'church.fx-scale';
-let adapt = (() => {
-  const v = Number(storage.get(ADAPT_KEY));
-  return Number.isFinite(v) && v >= 0.3 && v <= 1 ? v : 1;
-})();
+// Not remembered between sessions: one slow start (a shader compiling, a sheet opening)
+// used to leave every later session blurry. Each session starts sharp and steps down if needed.
+let adapt = 1;
+/** While a poster is recorded its shaders are drawn at full resolution. */
+let recordingFull = false;
 let slowGap = 1;
 let slowTicks = 0;
 let easyTicks = 0;
-const ADAPT_MIN = 0.3;
 /** Drawing time a tick may take (ms) before it counts as slow: the rest is for the page. */
 const BUDGET_MS = 10;
 
@@ -1176,9 +1174,8 @@ function judge(spent: number) {
     // Two slow ticks in a row (one alone may be a shader being compiled).
     if (++slowTicks < 2) return;
     slowTicks = 0;
-    if (adapt > ADAPT_MIN) {
-      adapt = Math.max(ADAPT_MIN, adapt * 0.6);
-      storage.set(ADAPT_KEY, String(adapt));
+    if (adapt > SCALE_MIN) {
+      adapt = stepScale(adapt, true);
       resizeAll();
     } else slowGap = Math.min(2.5, slowGap * 1.3);
   } else if (spent < BUDGET_MS * 0.35) {
@@ -1188,8 +1185,7 @@ function judge(spent: number) {
     easyTicks = 0;
     if (slowGap > 1) slowGap = Math.max(1, slowGap / 1.3);
     else if (adapt < 1) {
-      adapt = Math.min(1, adapt * 1.2);
-      storage.set(ADAPT_KEY, String(adapt));
+      adapt = stepScale(adapt, false);
       resizeAll();
     }
   } else slowTicks = 0;
@@ -1243,7 +1239,12 @@ export function seekShaders(root: Element, seconds: number) {
 }
 /** Recording: stops (or restarts) their clock while it steps them. */
 export function holdShaders(root: Element, hold: boolean) {
-  for (const p of painters) if (root.contains(p.clip)) p.held = hold;
+  recordingFull = hold;
+  for (const p of painters)
+    if (root.contains(p.clip)) {
+      p.held = hold;
+      p.resize();
+    }
 }
 
 /**

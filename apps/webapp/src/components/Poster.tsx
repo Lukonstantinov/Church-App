@@ -38,6 +38,7 @@ import { BackdropLayer, PatternLayer, onBrandStyle } from './PatternLayer';
 import { CoverEffectLayers } from './CoverEffects';
 import { PostBlocks } from './PostBlocks';
 import { RichText } from './RichText';
+import { AuthedVideo } from './AuthedVideo';
 import { SpeakerBackdrop, SpeakerStrip, leadPhoto } from './Speakers';
 
 const TITLE_SIZE = { s: 'text-[20px]', m: 'text-[25px]', l: 'text-[31px]', xl: 'text-[39px]' };
@@ -485,7 +486,7 @@ function ResendSheet({ post, onClose }: { post: AnnouncementRow; onClose: () => 
             {withPoster &&
               (post.posterMoving && picture === post.posterUrl ? (
                 // A moving poster (recorded loop) plays here as it will in the chat.
-                <video
+                <AuthedVideo
                   src={picture}
                   autoPlay
                   muted

@@ -2,25 +2,55 @@ import { and, eq, lte } from 'drizzle-orm';
 import { GrammyError, type Api } from 'grammy';
 import type { Db } from '../db/client';
 import { livePins, outbox, users } from '../db/schema';
-import { mediaUpload } from './media';
+import { mediaUpload, rememberTgFile } from './media';
 import { isUnreachableError } from './telegram';
 
 const MAX_ATTEMPTS = 5;
+/** How long a message being sent is kept from other drains. */
+const CLAIM_MS = 5 * 60_000;
 
 /**
  * A photo queued as `photo_media_id` (a stored picture) is uploaded by the bot when sent —
  * a recorded moving poster (an MP4) as an animation, which plays like a GIF; without the
  * picture it goes as text.
  */
-async function resolvePhoto(db: Db, method: string, payload: Record<string, unknown>) {
+async function resolvePhoto(
+  db: Db,
+  method: string,
+  payload: Record<string, unknown>,
+): Promise<{
+  method: string;
+  payload: Record<string, unknown>;
+  mediaId: number | null;
+  cached: boolean;
+}> {
   if (method !== 'sendPhoto' || typeof payload.photo_media_id !== 'number')
-    return { method, payload };
+    return { method, payload, mediaId: null, cached: false };
   const { photo_media_id: id, caption, ...rest } = payload;
-  const up = await mediaUpload(db, id as number);
-  if (!up) return { method: 'sendMessage', payload: { ...rest, text: caption ?? '' } };
+  const up = await mediaUpload(db, id as number, true);
+  if (!up)
+    return {
+      method: 'sendMessage',
+      payload: { ...rest, text: caption ?? '' },
+      mediaId: null,
+      cached: false,
+    };
+  const mediaId = id as number;
   return up.video
-    ? { method: 'sendAnimation', payload: { ...rest, caption, animation: up.file } }
-    : { method, payload: { ...rest, caption, photo: up.file } };
+    ? {
+        method: 'sendAnimation',
+        payload: { ...rest, caption, animation: up.file },
+        mediaId,
+        cached: up.cached,
+      }
+    : { method, payload: { ...rest, caption, photo: up.file }, mediaId, cached: up.cached };
+}
+
+/** Telegram's id for the file it was just given (the biggest size of a photo). */
+function sentFileId(message: unknown): string | null {
+  const m = message as
+    { animation?: { file_id?: string }; photo?: { file_id?: string }[] } | undefined;
+  return m?.animation?.file_id ?? m?.photo?.at(-1)?.file_id ?? null;
 }
 
 export interface OutboxMessage {
@@ -71,18 +101,37 @@ export async function drainOutbox(
   let sent = 0;
   let failed = 0;
   for (const row of due) {
+    // Claim the row first: another drain (cron, or a send button) may hold the same one. The
+    // claim moves its due time on; a crash mid-send leaves it to be tried again after that.
+    const claimed = await db
+      .update(outbox)
+      .set({ nextAttemptAt: new Date(now.getTime() + CLAIM_MS).toISOString() })
+      .where(
+        and(
+          eq(outbox.id, row.id),
+          eq(outbox.status, 'pending'),
+          eq(outbox.nextAttemptAt, row.nextAttemptAt),
+        ),
+      )
+      .returning({ id: outbox.id });
+    if (claimed.length === 0) continue;
     try {
       // `_live`: pin the message once sent, and remember it so it is removed at the end.
       const { _live: live, ...stored } = row.payload as Record<string, unknown> & {
         _live?: { kind: 'meeting' | 'event'; refId: number; endsAt: string };
       };
-      const { method, payload } = await resolvePhoto(db, row.method, stored);
+      const { method, payload, mediaId, cached } = await resolvePhoto(db, row.method, stored);
       const call = raw[method];
       if (!call) throw new Error(`unknown method ${method}`);
       let sentMessage: unknown;
       try {
         sentMessage = await call.call(api.raw, payload);
+        // Remember Telegram's id so the next person gets the file without a new upload.
+        const fileId = mediaId && !cached ? sentFileId(sentMessage) : null;
+        if (mediaId && fileId) await rememberTgFile(db, mediaId, fileId);
       } catch (err) {
+        // A remembered id Telegram no longer accepts: forget it so the next try uploads again.
+        if (mediaId && cached) await rememberTgFile(db, mediaId, null);
         // Telegram couldn't use the picture (bad file, unreachable link): the text still goes.
         const media = method === 'sendPhoto' || method === 'sendAnimation';
         if (!(media && err instanceof GrammyError && err.error_code === 400)) throw err;

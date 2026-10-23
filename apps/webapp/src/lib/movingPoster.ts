@@ -21,7 +21,7 @@ export async function recordPosterVideo(
   ] as const) {
     const rec = await recordLoop(node, { width, quality, onProgress });
     if (!rec.mp4) return null;
-    if (rec.mp4.size <= LOOP_MAX_BYTES) return (await uploadLoop(groupId, rec.mp4)).id;
+    if (rec.mp4.size <= LOOP_MAX_BYTES) return (await uploadLoop(groupId, rec.mp4, true)).id;
   }
   return null;
 }

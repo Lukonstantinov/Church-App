@@ -57,9 +57,16 @@ import {
   setRoles,
   setRsvp,
 } from '../lib/events';
+import { readPlan, skipPassedSlots } from '../lib/eventReminderPlan';
 import { defaultReminderText, notifyDuties, sendEventReminder } from '../lib/eventReminder';
 import { startEventChatLink, unlinkEventChat } from '../lib/eventChats';
-import { assertGroupMedia, assertSpeakerPhotos, readLoopUpload, storeMedia } from '../lib/media';
+import {
+  assertGroupMedia,
+  assertSpeakerPhotos,
+  dropReminderVideo,
+  readLoopUpload,
+  storeMedia,
+} from '../lib/media';
 import { drainOutbox } from '../lib/outbox';
 import { appUrlFor, botApi, botUsername } from '../lib/telegram';
 import { displayName } from '@church/shared';
@@ -484,6 +491,11 @@ eventRoutes.patch('/:id', async (c) => {
       patch.design = input.design ? JSON.stringify(input.design) : null;
     if (input.templateId !== undefined) patch.templateId = input.templateId;
   }
+  if (input.reminderPlan !== undefined) {
+    if (input.reminderPlan?.mediaId)
+      await assertGroupMedia(db, event.groupId, input.reminderPlan.mediaId);
+    patch.reminderPlan = input.reminderPlan ? JSON.stringify(input.reminderPlan) : null;
+  }
   if (input.countdown !== undefined) patch.countdown = input.countdown;
   if (input.motion !== undefined) patch.motion = input.motion;
   if (input.motionTune !== undefined)
@@ -538,6 +550,14 @@ eventRoutes.patch('/:id', async (c) => {
   const [row] = Object.keys(patch).length
     ? await db.update(events).set(patch).where(eq(events.id, event.id)).returning()
     : [event];
+  // A replaced plan's recorded video is no longer needed.
+  if (input.reminderPlan !== undefined) {
+    const old = readPlan(event.reminderPlan)?.mediaId;
+    if (old && old !== input.reminderPlan?.mediaId) await dropReminderVideo(db, old);
+  }
+  // Times already gone when a plan is saved or the event moved are not sent late.
+  if (patch.reminderPlan !== undefined || patch.remindedAt === null)
+    await skipPassedSlots(db, row!);
   return c.json(await eventDetail(db, c.env.WEBHOOK_SECRET, row!, user));
 });
 
