@@ -1,5 +1,6 @@
 import { inArray } from 'drizzle-orm';
 import {
+  POSTER_VARIANT_VIEWS,
   posterBackgroundSchema,
   posterFrameSchema,
   posterLayerSchema,
@@ -25,32 +26,53 @@ export async function readPosterTemplate(
       return null;
     }
   };
-  const bg = posterBackgroundSchema.safeParse(parse(row.background));
-  const background = bg.success ? bg.data : posterBackgroundSchema.parse({});
-  const rawLayers = parse(row.layers);
-  const layers: PosterLayer[] = [];
-  for (const raw of Array.isArray(rawLayers) ? rawLayers : []) {
-    const l = posterLayerSchema.safeParse(raw);
-    if (!l.success) continue;
-    layers.push(
-      l.data.type === 'image'
-        ? {
-            ...l.data,
-            url: await signedMediaUrl(secret, l.data.mediaId),
-            sourceUrl: l.data.source ? await signedMediaUrl(secret, l.data.source) : null,
-          }
-        : l.data,
-    );
+  const parts = async (raw: { background: unknown; layers: unknown; frame: unknown }) => {
+    const bg = posterBackgroundSchema.safeParse(raw.background);
+    const background = bg.success ? bg.data : posterBackgroundSchema.parse({});
+    const layers: PosterLayer[] = [];
+    for (const item of Array.isArray(raw.layers) ? raw.layers : []) {
+      const l = posterLayerSchema.safeParse(item);
+      if (!l.success) continue;
+      layers.push(
+        l.data.type === 'image'
+          ? {
+              ...l.data,
+              url: await signedMediaUrl(secret, l.data.mediaId),
+              sourceUrl: l.data.source ? await signedMediaUrl(secret, l.data.source) : null,
+            }
+          : l.data,
+      );
+    }
+    return {
+      background: {
+        ...background,
+        url: background.mediaId ? await signedMediaUrl(secret, background.mediaId) : null,
+      },
+      layers,
+      frame: raw.frame ? (posterFrameSchema.safeParse(raw.frame).data ?? null) : null,
+    };
+  };
+  const main = await parts({
+    background: parse(row.background),
+    layers: parse(row.layers),
+    frame: row.frame ? parse(row.frame) : null,
+  });
+  let variants: PosterTemplate['variants'] = null;
+  const rawVariants = row.variants ? parse(row.variants) : null;
+  if (rawVariants && typeof rawVariants === 'object') {
+    variants = {};
+    for (const view of POSTER_VARIANT_VIEWS) {
+      const v = (rawVariants as Record<string, unknown>)[view];
+      if (v && typeof v === 'object')
+        variants[view] = await parts(v as Parameters<typeof parts>[0]);
+    }
   }
   return {
     id: row.id,
     name: row.name,
-    background: {
-      ...background,
-      url: background.mediaId ? await signedMediaUrl(secret, background.mediaId) : null,
-    },
-    layers,
-    frame: row.frame ? (posterFrameSchema.safeParse(parse(row.frame)).data ?? null) : null,
+    ...main,
+    variants,
+    eventOnly: row.eventOnly,
     mine: userId !== undefined && row.createdBy === userId,
   };
 }

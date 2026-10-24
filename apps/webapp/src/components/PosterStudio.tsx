@@ -10,6 +10,7 @@ import {
 import {
   MAX_EFFECTS,
   MAX_POSTER_LAYERS,
+  POSTER_VARIANT_VIEWS,
   BLEND_MODES,
   FILL_MOVES,
   LAYER_SHAPES,
@@ -25,6 +26,8 @@ import {
   type PosterLayer,
   type PosterTemplate,
   type PosterTexts,
+  type PosterVariantView,
+  type PosterVariants,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { useT } from '../lib/i18n';
@@ -99,23 +102,41 @@ function useSample(kind: Kind = 'meeting') {
   return { texts, when };
 }
 
+/** An event's real words and photo, shown in the previews instead of made-up ones. */
+export interface RealEvent {
+  texts: PosterTexts;
+  coverUrl?: string | null;
+  when: string;
+}
+
 /** The poster as it will look in the app, with made-up details around it. */
 function Mockup({
   view,
   kind,
   tpl,
   g,
+  real,
 }: {
   view: View;
   kind: Kind;
-  tpl: Pick<PosterTemplate, 'background' | 'layers' | 'frame'>;
+  tpl: Pick<PosterTemplate, 'background' | 'layers' | 'frame'> & {
+    variants?: PosterVariants | null;
+  };
   g: GroupSummary;
+  /** The event's own words and photo instead of made-up ones. */
+  real?: RealEvent;
 }) {
   const t = useT();
   const f = useFmt();
-  const { texts, when } = useSample(kind);
+  const sample = useSample(kind);
+  const texts = real?.texts ?? sample.texts;
+  const when = real?.when ?? sample.when;
+  const coverUrl = real?.coverUrl;
+  const win = (POSTER_VARIANT_VIEWS as readonly string[]).includes(view)
+    ? (view as PosterVariantView)
+    : undefined;
   const poster = (className: string) => (
-    <LayeredPoster tpl={tpl} texts={texts} className={className} />
+    <LayeredPoster tpl={tpl} view={win} texts={texts} coverUrl={coverUrl} className={className} />
   );
   if (view === 'poster') return poster('aspect-[4/5] h-full rounded-2xl shadow-card');
   // As a post in the Instagram feed (4:5, the shape Instagram shows in full).
@@ -152,7 +173,7 @@ function Mockup({
   if (view === 'story')
     return (
       <div className="relative aspect-[9/16] h-full overflow-hidden rounded-[16px] bg-black shadow-card">
-        <LayeredPoster fill tpl={tpl} texts={texts} />
+        <LayeredPoster fill tpl={tpl} view={win} texts={texts} coverUrl={coverUrl} />
         <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/45 to-transparent px-2 pb-6 pt-2">
           <div className="flex gap-1">
             <span className="h-[2px] flex-1 rounded bg-white" />
@@ -182,7 +203,7 @@ function Mockup({
           📌 {t.posters.views.pinned}
         </span>
         <div className="relative h-[150px] w-[280px] overflow-hidden rounded-[24px] shadow-cta">
-          <LayeredPoster fill tpl={tpl} texts={texts} />
+          <LayeredPoster fill tpl={tpl} view={win} texts={texts} coverUrl={coverUrl} />
         </div>
       </div>
     );
@@ -193,7 +214,7 @@ function Mockup({
           <LookTop
             look={g}
             className="isolate flex aspect-[16/10] flex-col justify-between p-2.5"
-            under={<LayeredPoster fill tpl={tpl} texts={texts} />}
+            under={<LayeredPoster fill tpl={tpl} view={win} texts={texts} coverUrl={coverUrl} />}
           >
             <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
               {t.meetings.details}
@@ -328,6 +349,8 @@ export interface PosterDoc {
   background: PosterBackground;
   layers: PosterLayer[];
   frame: PosterFrame | null;
+  /** Windows fitted by hand (tile, event screen, pinned card); the rest follow the main design. */
+  variants?: PosterVariants | null;
 }
 
 /** A new design: a red background with the title and the date. */
@@ -829,24 +852,59 @@ export function PosterLayersEditor({
   );
 }
 
-function PosterEditor({
+/**
+ * An event's own poster, edited with its real title, date and photo in every window.
+ * Saved as a poster made for this event only (not listed church-wide); `tpl` is the
+ * event's current poster, or a template to start from.
+ */
+export function EventPosterEditor({
   tpl,
   g,
+  real,
+  onSaved,
   onClose,
 }: {
   tpl: PosterTemplate | null;
   g: GroupSummary;
+  real: RealEvent;
+  onSaved: (saved: PosterTemplate) => void;
   onClose: () => void;
 }) {
+  return <PosterEditor tpl={tpl} g={g} real={real} onSaved={onSaved} onClose={onClose} />;
+}
+
+function PosterEditor({
+  tpl,
+  g,
+  real,
+  onSaved,
+  onClose,
+}: {
+  tpl: PosterTemplate | null;
+  g: GroupSummary;
+  real?: RealEvent;
+  onSaved?: (saved: PosterTemplate) => void;
+  onClose: () => void;
+}) {
+  // Someone else's template, or a church-wide one, is copied into the event's own poster.
+  const own = !!real && !!tpl && tpl.eventOnly && tpl.mine;
+  const startId = real ? (own ? tpl!.id : undefined) : tpl?.id;
   const t = useT();
   const toast = useToast();
   const save = useSavePosterTemplate();
   const remove = useDeletePosterTemplate();
-  const draftKey = `poster.${tpl?.id ?? 'new'}`;
+  const draftKey = real ? `poster.event.${tpl?.id ?? 'new'}` : `poster.${tpl?.id ?? 'new'}`;
   const { doc, setDoc, restored, forget, aside, restoreAnyway, keptAt } = usePosterDraft(
     draftKey,
     () =>
-      tpl ? { background: tpl.background, layers: tpl.layers, frame: tpl.frame } : starterDoc(),
+      tpl
+        ? {
+            background: tpl.background,
+            layers: tpl.layers,
+            frame: tpl.frame,
+            variants: tpl.variants,
+          }
+        : starterDoc(),
   );
   const [name, setName] = useState(
     () =>
@@ -858,19 +916,61 @@ function PosterEditor({
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<View>('poster');
   const [kind, setKind] = useState<Kind>('event');
+  // The window being looked at, when it can have a version of its own.
+  const win = (POSTER_VARIANT_VIEWS as readonly string[]).includes(view)
+    ? (view as PosterVariantView)
+    : null;
+  const ownVersion = win ? doc.variants?.[win] : undefined;
+  // What the editor below changes: this window's own version, or the main design.
+  const shown: PosterDoc = ownVersion
+    ? { ...ownVersion, frame: ownVersion.frame ?? null, variants: doc.variants }
+    : doc;
+  const setShown: Dispatch<SetStateAction<PosterDoc>> = (next) => {
+    if (!win || !ownVersion) return setDoc(next);
+    setDoc((d) => {
+      const cur = d.variants?.[win];
+      if (!cur) return d;
+      const upd = typeof next === 'function' ? next({ ...cur, frame: cur.frame ?? null }) : next;
+      return {
+        ...d,
+        variants: {
+          ...d.variants,
+          [win]: { background: upd.background, layers: upd.layers, frame: upd.frame },
+        },
+      };
+    });
+  };
+  const customize = () =>
+    win &&
+    setDoc((d) => ({
+      ...d,
+      variants: {
+        ...d.variants,
+        [win]: { background: d.background, layers: d.layers, frame: d.frame },
+      },
+    }));
+  const autoFit = () =>
+    win &&
+    setDoc((d) => {
+      const rest = { ...d.variants };
+      delete rest[win];
+      return { ...d, variants: Object.keys(rest).length ? rest : null };
+    });
   // Closing Telegram by mistake asks first (the draft is kept anyway).
   useEffect(() => askBeforeClosing(), []);
 
   const patch = (id: string, p: Partial<PosterLayer>) =>
-    setDoc((d) => ({
+    setShown((d) => ({
       ...d,
       layers: d.layers.map((l) => (l.id === id ? ({ ...l, ...p } as PosterLayer) : l)),
     }));
 
   async function submit() {
     try {
-      await save.mutateAsync({
-        id: tpl?.id,
+      const saved = await save.mutateAsync({
+        id: startId,
+        eventOnly: real ? true : undefined,
+        variants: doc.variants ?? null,
         name: name.trim() || t.posters.defaultName,
         background: doc.background,
         layers: doc.layers,
@@ -880,6 +980,7 @@ function PosterEditor({
       dropDraft(`${draftKey}.name`);
       haptic.success();
       toast(t.common.saved);
+      onSaved?.(saved);
       onClose();
     } catch {
       toast(t.common.saveFailed, 'error');
@@ -896,7 +997,7 @@ function PosterEditor({
             <FullscreenButton />
           </div>
           <div className="mb-1.5 flex justify-center gap-1.5">
-            {(['event', 'meeting'] as const).map((k) => (
+            {(real ? ([] as const) : (['event', 'meeting'] as const)).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -929,7 +1030,7 @@ function PosterEditor({
             ))}
           </div>
           <PosterGestures
-            layers={doc.layers}
+            layers={shown.layers}
             selected={selected}
             onSelect={setSelected}
             onPatch={patch}
@@ -939,10 +1040,24 @@ function PosterEditor({
                 except right after the app closed itself (that start stays still). */}
             <FullMotion.Provider value={!isSafeStart()}>
               <div className="flex h-[262px] items-center justify-center lg:h-[68vh]">
-                <Mockup view={view} kind={kind} tpl={doc} g={g} />
+                <Mockup view={view} kind={kind} tpl={doc} g={g} real={real} />
               </div>
             </FullMotion.Provider>
           </PosterGestures>
+          {win && (
+            <div className="mt-1.5 flex items-center justify-center gap-2 text-[12px]">
+              <span className="text-hint">
+                {ownVersion ? t.posters.ownWindow : t.posters.autoWindow}
+              </span>
+              <button
+                type="button"
+                onClick={ownVersion ? autoFit : customize}
+                className="rounded-full bg-hairline px-3 py-1 font-semibold"
+              >
+                {ownVersion ? `↺ ${t.posters.autoFit}` : `✂️ ${t.posters.customize}`}
+              </button>
+            </div>
+          )}
           <p className="mt-1.5 text-center text-[11px] text-hint">{t.posters.dragHint}</p>
         </div>
 
@@ -993,8 +1108,8 @@ function PosterEditor({
           />
 
           <PosterLayersEditor
-            doc={doc}
-            setDoc={setDoc}
+            doc={shown}
+            setDoc={setShown}
             g={g}
             selected={selected}
             setSelected={setSelected}
@@ -1003,7 +1118,7 @@ function PosterEditor({
           <Button disabled={save.isPending} onClick={() => void submit()}>
             {save.isPending ? t.common.saving : t.common.save}
           </Button>
-          {tpl?.mine !== false && tpl && (
+          {!real && tpl?.mine !== false && tpl && (
             <Button
               variant="secondary"
               disabled={remove.isPending}

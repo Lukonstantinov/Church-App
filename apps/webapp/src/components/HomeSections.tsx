@@ -107,7 +107,7 @@ export function useHomeActions(
   can: (p: 'announce' | 'meetings.manage' | 'people.manage' | 'people.view') => boolean,
 ): HomeAction[] {
   const t = useT();
-  const { push } = useNav();
+  const { push, setTab } = useNav();
   const actions: HomeAction[] = [
     {
       key: 'feed',
@@ -118,6 +118,16 @@ export function useHomeActions(
         g.unreadPosts || g.unreadComments ? (
           <UnreadBadges g={g} fallbackTheme={fallbackTheme} />
         ) : undefined,
+    },
+    {
+      key: 'events',
+      icon: <IconCalendar size={18} />,
+      label: t.overview.quickEvents,
+      onClick: () => {
+        // The Meetings tab remembers which side (meetings / events) was last open.
+        storage.set('church.calendarKind', 'events');
+        setTab('meetings');
+      },
     },
   ];
   if (can('announce'))
@@ -570,7 +580,7 @@ function EventTile({ e, g, onToggle }: { e: EventSummary; g: GroupSummary; onTog
       <Tile onToggle={onToggle} live={live} module="meetings">
         {cover ? (
           <div className="pointer-events-none relative">
-            <EventCover e={e} className="tile-top aspect-[16/10]" compact />
+            <EventCover e={e} className="tile-top aspect-[16/10]" compact view="tile" />
             <CountdownOnCover e={e} compact />
           </div>
         ) : (
@@ -625,7 +635,7 @@ function MeetingTile({
           // goes over the look's photo and pattern — drawn behind, a photo would hide it.
           under={
             m.poster ? (
-              <LayeredPoster fill tpl={m.poster} texts={posterTexts(m)} />
+              <LayeredPoster fill tpl={m.poster} view="tile" texts={posterTexts(m)} />
             ) : (
               <>
                 <CardSpeaker m={m} />

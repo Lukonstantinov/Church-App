@@ -203,11 +203,34 @@ export type PosterFrame = z.output<typeof posterFrameSchema>;
 /** How many layers a poster can have. */
 export const MAX_POSTER_LAYERS = 20;
 
+/** The windows a poster can be fitted separately for (it auto-fits all of them until then). */
+export const POSTER_VARIANT_VIEWS = ['tile', 'screen', 'pinned'] as const;
+export type PosterVariantView = (typeof POSTER_VARIANT_VIEWS)[number];
+
+/** One window's own version of the design. */
+export const posterVariantSchema = z.object({
+  background: posterBackgroundSchema,
+  layers: z.array(posterLayerSchema).max(MAX_POSTER_LAYERS),
+  frame: posterFrameSchema.nullish(),
+});
+export type PosterVariant = z.output<typeof posterVariantSchema>;
+export type PosterVariants = Partial<Record<PosterVariantView, PosterVariant>>;
+
+export const posterVariantsSchema = z.object({
+  tile: posterVariantSchema.optional(),
+  screen: posterVariantSchema.optional(),
+  pinned: posterVariantSchema.optional(),
+});
+
 export const posterTemplateInputSchema = z.object({
   name: z.string().trim().min(1).max(40),
   background: posterBackgroundSchema,
   layers: z.array(posterLayerSchema).max(MAX_POSTER_LAYERS),
   frame: posterFrameSchema.nullish(),
+  /** Windows with a version of their own (tile, event screen, pinned card). */
+  variants: posterVariantsSchema.nullish(),
+  /** Made for one event: kept out of the church-wide list in Design. */
+  eventOnly: z.boolean().nullish(),
 });
 export type PosterTemplateInput = z.input<typeof posterTemplateInputSchema>;
 
@@ -217,6 +240,8 @@ export interface PosterTemplate {
   background: PosterBackground;
   layers: PosterLayer[];
   frame: PosterFrame | null;
+  variants: PosterVariants | null;
+  eventOnly: boolean;
   mine: boolean;
 }
 

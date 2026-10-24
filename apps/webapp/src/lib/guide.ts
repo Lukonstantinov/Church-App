@@ -182,6 +182,15 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
+        title: "Edit an event's own poster",
+        steps: [
+          'Event form → Poster → «✏️ Edit the event poster»: the editor opens with the real title, date and photo.',
+          'Switch the window (Poster / Tile / Screen / Pinned / Instagram) to see how it looks there; the design fits every window by itself.',
+          'To fix one window by hand (Tile, Screen, Pinned): «✂️ Edit separately», change it, or «↺ Auto-fit» to go back.',
+          'Saved for this event only (not in the church-wide list in Design).',
+        ],
+      },
+      {
         title: "Design a meeting's poster and add speakers",
         steps: [
           'Meeting → «🎨 Постер» on the top card (or when creating: switch on «Постер»).',

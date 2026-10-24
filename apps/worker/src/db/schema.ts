@@ -477,6 +477,10 @@ export const posterTemplates = sqliteTable('poster_templates', {
   layers: text('layers').notNull(),
   /** JSON PosterFrame, or null for none. */
   frame: text('frame'),
+  /** JSON: a window's own version of the design ({ tile, screen, pinned }), or null. */
+  variants: text('variants'),
+  /** Made inside one event's editor: not listed church-wide in Design. */
+  eventOnly: integer('event_only', { mode: 'boolean' }).notNull().default(false),
   createdBy: integer('created_by').references(() => users.id),
   createdAt: createdAt(),
 });

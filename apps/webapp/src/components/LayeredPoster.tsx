@@ -8,6 +8,8 @@ import {
   type PosterLayer,
   type PosterTemplate,
   type PosterTexts,
+  type PosterVariants,
+  type PosterVariantView,
   type TextWarp,
 } from '@church/shared';
 import { useFmt } from '../lib/format';
@@ -24,14 +26,20 @@ import { LivingLayer, LivingLayers } from './ui';
  * over everything below it and under everything above it.
  */
 export function LayeredPoster({
-  tpl,
+  tpl: whole,
+  view,
   texts,
   coverUrl,
   className = '',
   fill,
   children,
 }: {
-  tpl: Pick<PosterTemplate, 'background' | 'layers'> & { frame?: PosterFrame | null };
+  tpl: Pick<PosterTemplate, 'background' | 'layers'> & {
+    frame?: PosterFrame | null;
+    variants?: PosterVariants | null;
+  };
+  /** The window it is drawn in; a design with its own version for that window wears it. */
+  view?: PosterVariantView;
   /** Covers its (positioned) parent instead of taking its own size. */
   fill?: boolean;
   texts: PosterTexts;
@@ -40,6 +48,7 @@ export function LayeredPoster({
   className?: string;
   children?: ReactNode;
 }) {
+  const tpl = (view && whole.variants?.[view]) || whole;
   const bg = tpl.background;
   const photo = bg.type === 'photo' ? bg.url : bg.type === 'cover' ? coverUrl : null;
   const paint =

@@ -20,7 +20,8 @@ import {
 } from '../components/CoverEffects';
 import { CoverPicture } from '../components/CoverSlideshow';
 import { LayeredPoster, usePosterTexts } from '../components/LayeredPoster';
-import { PosterPicker } from '../components/PosterStudio';
+import type { PosterTemplate } from '@church/shared';
+import { EventPosterEditor, PosterPicker } from '../components/PosterStudio';
 import { PosterMedia } from '../components/Poster';
 import {
   SpeakerLookControls,
@@ -184,14 +185,21 @@ function EventFormBody({
   // A poster template (Design → Posters): the event's words fill in its texts.
   const [posterTpl, setPosterTpl] = useState<number | null>(event?.posterTemplateId ?? null);
   const posters = usePosterTemplates(mayDesign);
-  const chosenPoster = posters.data?.find((x) => x.id === posterTpl) ?? null;
+  // A poster made for this event alone isn't in the church-wide list.
+  const [ownPoster, setOwnPoster] = useState<PosterTemplate | null>(null);
+  const [editingPoster, setEditingPoster] = useState(false);
+  const chosenPoster =
+    posters.data?.find((x) => x.id === posterTpl) ??
+    (ownPoster?.id === posterTpl ? ownPoster : null) ??
+    (event?.poster?.id === posterTpl ? event.poster : null);
   const posterTexts = usePosterTexts();
+  const startsIso = Number.isNaN(Date.parse(`${date}T${startTime || '18:00'}`))
+    ? new Date().toISOString()
+    : new Date(`${date}T${startTime || '18:00'}`).toISOString();
   const posterWords = posterTexts({
     title: title.trim() || t.events.name,
     // (An unfinished date shows today rather than breaking the form.)
-    startsAt: Number.isNaN(Date.parse(`${date}T${startTime || '18:00'}`))
-      ? new Date().toISOString()
-      : new Date(`${date}T${startTime || '18:00'}`).toISOString(),
+    startsAt: startsIso,
     location: location || null,
   });
   const coverLayer = <CoverEffectLayers e={effectsPayload(effects)} image={cover?.url} />;
@@ -528,6 +536,11 @@ function EventFormBody({
                 className="mx-auto aspect-[4/5] w-[62%] rounded-2xl shadow-card"
               />
             )}
+            {group.data && (
+              <Button variant="secondary" onClick={() => setEditingPoster(true)}>
+                ✏️ {t.posters.editForEvent}
+              </Button>
+            )}
             <PosterPicker
               value={posterTpl}
               onChange={setPosterTpl}
@@ -536,6 +549,19 @@ function EventFormBody({
             />
           </div>
         </Section>
+      )}
+
+      {editingPoster && group.data && (
+        <EventPosterEditor
+          tpl={chosenPoster}
+          g={group.data}
+          real={{ texts: posterWords, coverUrl: cover?.url, when: startsIso }}
+          onSaved={(saved) => {
+            setOwnPoster(saved);
+            setPosterTpl(saved.id);
+          }}
+          onClose={() => setEditingPoster(false)}
+        />
       )}
 
       {cover && mayDesign && (

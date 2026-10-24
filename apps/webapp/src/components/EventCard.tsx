@@ -1,4 +1,4 @@
-import type { EventSummary } from '@church/shared';
+import type { EventSummary, PosterVariantView } from '@church/shared';
 import { useFmt } from '../lib/format';
 import { BurnFrame } from './Burn';
 import { LiveNow } from './Live';
@@ -33,6 +33,7 @@ export function EventCover({
   e,
   className = 'aspect-[16/7]',
   compact,
+  view = 'screen',
 }: {
   e: Pick<EventSummary, 'coverUrl' | 'design' | 'look' | 'title'> &
     Partial<
@@ -53,6 +54,8 @@ export function EventCover({
     >;
   className?: string;
   compact?: boolean;
+  /** The window it is drawn in: a poster with its own version for it wears that. */
+  view?: PosterVariantView;
 }) {
   const texts = usePosterTexts();
   // A poster template (Design → Posters) takes the cover's place, the event's effects on top.
@@ -60,6 +63,7 @@ export function EventCover({
     return (
       <LayeredPoster
         tpl={e.poster}
+        view={view}
         texts={texts({
           title: e.title,
           startsAt: e.startsAt ?? new Date().toISOString(),
@@ -121,7 +125,7 @@ export function EventCard({
       >
         {e.coverUrl || e.design?.banner || e.poster ? (
           <div className="relative">
-            <EventCover e={e} />
+            <EventCover e={e} view="tile" />
             <CountdownOnCover e={e} />
           </div>
         ) : (

@@ -394,7 +394,13 @@ export function PinnedEventCard({
             <>
               {/* A poster template (Design → Posters) takes the cover's place. */}
               {e.poster ? (
-                <LayeredPoster fill tpl={e.poster} texts={posterTexts(e)} coverUrl={e.coverUrl} />
+                <LayeredPoster
+                  fill
+                  view="pinned"
+                  tpl={e.poster}
+                  texts={posterTexts(e)}
+                  coverUrl={e.coverUrl}
+                />
               ) : partMotions.length ? (
                 <CoverPicture e={{ ...e, motion: null, motionLayers: [], coverLoop: null }} />
               ) : (

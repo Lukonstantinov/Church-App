@@ -22,10 +22,13 @@ export const posterTemplateRoutes = new Hono<App>();
 
 /** Every picture a template uses must exist. */
 async function assertPictures(db: AuthVariables['db'], input: PosterTemplateInput) {
-  const ids = [
-    input.background.mediaId,
-    ...input.layers.flatMap((l) => (l.type === 'image' ? [l.mediaId, l.source] : [])),
-  ].filter((x): x is number => !!x);
+  const all = [input, ...Object.values(input.variants ?? {})];
+  const ids = all
+    .flatMap((d) => [
+      d.background.mediaId,
+      ...d.layers.flatMap((l) => (l.type === 'image' ? [l.mediaId, l.source] : [])),
+    ])
+    .filter((x): x is number => !!x);
   if (ids.length === 0) return;
   const found = await db
     .select({ id: media.id })
@@ -36,16 +39,25 @@ async function assertPictures(db: AuthVariables['db'], input: PosterTemplateInpu
 }
 
 /** Stored without the signed links (they are made fresh on reading). */
+type Parts = Pick<ReturnType<typeof posterTemplateInputSchema.parse>, 'background' | 'layers'>;
+const plainParts = (d: Parts & { frame?: unknown }) => ({
+  background: { ...d.background, url: undefined },
+  layers: d.layers.map((l) =>
+    l.type === 'image' ? { ...l, url: undefined, sourceUrl: undefined } : l,
+  ),
+  frame: d.frame ?? null,
+});
+
 function toColumns(input: ReturnType<typeof posterTemplateInputSchema.parse>) {
+  const own = Object.entries(input.variants ?? {}).filter(([, v]) => !!v);
   return {
     name: input.name,
     background: JSON.stringify({ ...input.background, url: undefined }),
-    layers: JSON.stringify(
-      input.layers.map((l) =>
-        l.type === 'image' ? { ...l, url: undefined, sourceUrl: undefined } : l,
-      ),
-    ),
+    layers: JSON.stringify(plainParts(input).layers),
     frame: input.frame ? JSON.stringify(input.frame) : null,
+    variants: own.length
+      ? JSON.stringify(Object.fromEntries(own.map(([k, v]) => [k, plainParts(v!)])))
+      : null,
   };
 }
 
@@ -73,7 +85,11 @@ posterTemplateRoutes.get('/', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
   if (!(await canDesign(c))) throw new HTTPException(403, { message: 'forbidden' });
-  const rows = await db.select().from(posterTemplates).orderBy(posterTemplates.id);
+  const rows = await db
+    .select()
+    .from(posterTemplates)
+    .where(eq(posterTemplates.eventOnly, false))
+    .orderBy(posterTemplates.id);
   return c.json(
     await Promise.all(rows.map((r) => readPosterTemplate(r, c.env.WEBHOOK_SECRET, user.id))),
   );
@@ -87,7 +103,7 @@ posterTemplateRoutes.post('/', async (c) => {
   await assertPictures(db, input);
   const [row] = await db
     .insert(posterTemplates)
-    .values({ ...toColumns(input), createdBy: user.id })
+    .values({ ...toColumns(input), eventOnly: !!input.eventOnly, createdBy: user.id })
     .returning();
   return c.json(await readPosterTemplate(row!, c.env.WEBHOOK_SECRET, user.id), 201);
 });

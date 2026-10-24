@@ -156,6 +156,7 @@ export function MeetingView({ m }: { m: MeetingDetail }) {
       {m.poster && (
         <LayeredPoster
           tpl={m.poster}
+          view="screen"
           texts={posterTexts(m)}
           className="-mx-1 aspect-[4/3] rounded-[var(--radius-card)] shadow-card"
         />
