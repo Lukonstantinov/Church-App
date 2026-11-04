@@ -1343,7 +1343,12 @@ export const en: Messages = {
       sync: 'Fetch from Telegram',
       syncHint:
         'The bot asks Telegram for the birthday shown on each profile (if the person lets bots see it) and fills in empty ones. This also happens just before each list is sent.',
-      syncDone: (found: number, checked: number) => `Found ${found} of ${checked}`,
+      syncDone: (found: number, checked: number) =>
+        checked === 0
+          ? 'Everyone with Telegram already has a birthday'
+          : found === 0
+            ? `Telegram gave no dates: ${checked} people hide their birthday from bots`
+            : `Found ${found} of ${checked}`,
       title: 'Birthdays',
       hint: 'The bot sends church admins a list of coming birthdays with positions. Command /birthdays — a week, /birthdays month — a month.',
       weekly: 'Weekly list',

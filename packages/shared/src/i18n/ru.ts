@@ -1354,7 +1354,12 @@ export const ru = {
       sync: 'Взять из Telegram',
       syncHint:
         'Бот спрашивает у Telegram дату рождения из профиля (если человек её открыл) и заполняет пустые. Это же происходит перед отправкой списка.',
-      syncDone: (found: number, checked: number) => `Найдено: ${found} из ${checked}`,
+      syncDone: (found: number, checked: number) =>
+        checked === 0
+          ? 'Все, у кого есть Telegram, уже с днём рождения'
+          : found === 0
+            ? `Telegram не дал дат: у ${checked} чел. день рождения скрыт от ботов`
+            : `Найдено дат: ${found} из ${checked}`,
       title: 'Дни рождения',
       hint: 'Бот присылает админам церкви список ближайших дней рождения с должностями. Команда /birthdays — неделя, /birthdays month — месяц.',
       weekly: 'Еженедельный список',

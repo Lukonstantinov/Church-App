@@ -41,9 +41,9 @@ describe('birthdays', () => {
         ],
       },
     });
-    // Normally only real people count: the made-up ones are left out.
+    // The pasted people count like anyone else.
     let cal = await apiJson<CalendarData>(`/api/groups/${g}/calendar`, { user: ADMIN });
-    expect(cal.birthdays).toEqual([]);
+    expect(cal.birthdays?.map((b) => b.lastName)).toEqual(['Скоро']);
     await apiJson('/api/dev/mock-people', {
       method: 'PATCH',
       user: ADMIN,

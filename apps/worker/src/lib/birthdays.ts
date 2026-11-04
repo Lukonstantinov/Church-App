@@ -22,7 +22,7 @@ import { escapeHtml } from './html';
 /** Everyone with a birthday who is active in one of `groupIds` (all ministries when omitted). */
 export async function birthdayRows(db: Db, groupIds?: number[]): Promise<BirthdayRow[]> {
   if (groupIds && groupIds.length === 0) return [];
-  // Developer testing: only the made-up people, or (normally) only the real ones.
+  // Pasted (made-up) people count like anyone else; the developer can ask for only them.
   const mockOnly =
     (await db.query.churchSettings.findFirst({ columns: { mockOnly: true } }))?.mockOnly ?? false;
   const rows = await db
@@ -46,7 +46,7 @@ export async function birthdayRows(db: Db, groupIds?: number[]): Promise<Birthda
         isNull(users.anonymizedAt),
         // The developer's test person is not a real person.
         isNull(users.testOf),
-        eq(users.isMock, mockOnly),
+        mockOnly ? eq(users.isMock, true) : undefined,
         eq(memberships.status, 'active'),
         groupIds ? inArray(memberships.groupId, groupIds) : undefined,
       ),

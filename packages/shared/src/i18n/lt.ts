@@ -1385,7 +1385,12 @@ export const lt: Messages = {
       sync: 'Paimti iš Telegram',
       syncHint:
         'Botas paklausia Telegram apie profilyje rodomą gimimo datą (jei žmogus leidžia) ir užpildo tuščias. Tai daroma ir prieš siunčiant sąrašą.',
-      syncDone: (found: number, checked: number) => `Rasta ${found} iš ${checked}`,
+      syncDone: (found: number, checked: number) =>
+        checked === 0
+          ? 'Visi su Telegram jau turi gimtadienį'
+          : found === 0
+            ? `Telegram datų nedavė: ${checked} žmonių slepia gimtadienį nuo botų`
+            : `Rasta ${found} iš ${checked}`,
       title: 'Gimtadieniai',
       hint: 'Botas siunčia bažnyčios administratoriams artėjančių gimtadienių sąrašą su pareigomis. Komanda /birthdays — savaitė, /birthdays month — mėnuo.',
       weekly: 'Savaitinis sąrašas',
