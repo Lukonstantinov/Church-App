@@ -106,6 +106,35 @@ describe('schedules → meetings', () => {
     ]);
   });
 
+  it('a schedule that meets every 2 weeks makes every other week', async () => {
+    const group = await newGroup('Раз в две недели');
+    const schedule = await apiJson<ScheduleRow>(`/api/groups/${group}/schedules`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { weekday: 4, startTime: '19:00', title: 'Через неделю', everyWeeks: 2 },
+    });
+    expect(schedule.everyWeeks).toBe(2);
+    await env.DB.prepare(
+      "UPDATE meeting_schedules SET created_at = '2026-01-01T00:00:00.000Z' WHERE id = ?",
+    )
+      .bind(schedule.id)
+      .run();
+    await env.DB.prepare('DELETE FROM meetings WHERE group_id = ?').bind(group).run();
+    await generateMeetings(getDb(env.DB), TZ, {
+      now: new Date('2026-10-20T10:00:00Z'),
+      horizonDays: 28,
+      groupId: group,
+    });
+    const rows = await env.DB.prepare(
+      'SELECT starts_at FROM meetings WHERE group_id = ? ORDER BY starts_at',
+    )
+      .bind(group)
+      .all<{ starts_at: string }>();
+    const days = rows.results.map((r) => Date.parse(r.starts_at));
+    expect(days.length).toBe(2);
+    expect(Math.round((days[1]! - days[0]!) / 864e5)).toBe(14);
+  });
+
   it("shows new schedules' upcoming meetings straight away and removes them with the schedule", async () => {
     const group = await newGroup('Сразу');
     // Not today: a meeting already under way is kept when its schedule goes.

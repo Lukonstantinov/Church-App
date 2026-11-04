@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { displayName, type MeetingPerson } from '@church/shared';
+import { displayName, nameMatches, type MeetingPerson } from '@church/shared';
 import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
 import { Avatar } from './Avatar';
@@ -25,7 +25,7 @@ export function PersonPicker({
   const [q, setQ] = useState('');
   const needle = q.trim().toLocaleLowerCase();
   const list = (people ?? []).filter(
-    (p) => !needle || `${displayName(p)} ${p.username ?? ''}`.toLocaleLowerCase().includes(needle),
+    (p) => !needle || nameMatches(`${displayName(p)} ${p.username ?? ''}`, needle),
   );
   const pick = (id: number | null) => {
     haptic.tap();

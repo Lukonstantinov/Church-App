@@ -28,6 +28,8 @@ import {
   verifyFileSignature,
   verifyMediaSignature,
 } from '../lib/media';
+import { syncTelegramBirthdays } from '../lib/birthdays';
+import { botApi } from '../lib/telegram';
 import { loadMe } from '../lib/users';
 import { parseBody } from './util';
 
@@ -157,6 +159,17 @@ churchRoutes.put('/bot-photo', async (c) => {
     entityId: 0,
   });
   return c.json({ ok: true });
+});
+
+/**
+ * POST /api/church/birthdays/sync — looks up the birthdays people show on their Telegram
+ * profile (those without one in the app) and fills them in. Church admins; also done
+ * before each birthday list goes out.
+ */
+churchRoutes.post('/birthdays/sync', async (c) => {
+  requireAdmin(c);
+  const out = await syncTelegramBirthdays(c.get('db'), botApi(c.env));
+  return c.json(out);
 });
 
 churchRoutes.delete('/logo', async (c) => {

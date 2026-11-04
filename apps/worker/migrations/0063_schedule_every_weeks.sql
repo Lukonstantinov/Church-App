@@ -1,0 +1,1 @@
+ALTER TABLE `meeting_schedules` ADD `every_weeks` integer DEFAULT 1 NOT NULL;

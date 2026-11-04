@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   displayName,
+  nameMatches,
   type AttendanceStatus,
   type RollEntry,
   type RollResponse,
@@ -101,7 +102,7 @@ function RollEditor({
     if (filter === 'todo' && mark) return false;
     if (filter === 'present' && mark !== 'present' && mark !== 'late') return false;
     if (filter === 'absent' && mark !== 'absent' && mark !== 'excused') return false;
-    if (q && !displayName(r).toLowerCase().includes(q)) return false;
+    if (q && !nameMatches(displayName(r), q)) return false;
     return true;
   });
 

@@ -81,7 +81,7 @@ export function EventReminderPlan({ e }: { e: EventDetail }) {
   );
 }
 
-function PlanSheet({ e, onClose }: { e: EventDetail; onClose: () => void }) {
+export function PlanSheet({ e, onClose }: { e: EventDetail; onClose: () => void }) {
   const t = useT();
   const toast = useToast();
   const update = useUpdateEvent(e.id);
@@ -157,6 +157,15 @@ function PlanSheet({ e, onClose }: { e: EventDetail; onClose: () => void }) {
             </button>
           ))}
         </div>
+        <div className="text-[13px] font-semibold">{t.events.planText}</div>
+        <textarea
+          value={plan.text ?? ''}
+          onChange={(ev) => setPlan({ ...plan, text: ev.target.value })}
+          maxLength={1000}
+          rows={3}
+          className="rounded-xl bg-hairline px-3 py-2.5 text-[16px] outline-none placeholder:text-hint"
+        />
+        <p className="-mt-1.5 text-[12px] text-hint">{t.events.planTextHint}</p>
         <div className="text-[13px] font-semibold">{t.events.pictureTitle}</div>
         <div className="flex flex-wrap gap-1.5">
           {(['none', 'still', 'moving'] as const)

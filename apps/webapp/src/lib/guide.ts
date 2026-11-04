@@ -182,6 +182,15 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
+        title: 'Change reminders and regular meetings',
+        steps: [
+          'Ministry → «Напоминания»: every coming event with its reminder times; «Reminders» changes times, who gets it, the words and the picture (still or moving).',
+          'Regular meetings are listed below; tap one to change day, time and how often (every 1–4 weeks).',
+          'Names are searched in any alphabet: «anna» finds «Анна» in roll call, people lists and statistics.',
+          'Birthdays: Church settings → Birthdays → «Fetch from Telegram» fills empty ones from profiles; it also runs before each list is sent.',
+        ],
+      },
+      {
         title: "Edit an event's own poster",
         steps: [
           'Event form → Poster → «✏️ Edit the event poster»: the editor opens with the real title, date and photo.',

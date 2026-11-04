@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { displayName, type GroupSummary, type MemberRow } from '@church/shared';
+import { displayName, nameMatches, type GroupSummary, type MemberRow } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { GroupSwitcher } from '../components/GroupSwitcher';
 import { LabelPicker, PersonTags } from '../components/LabelChip';
@@ -70,9 +70,7 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
   const filtered = sorted.filter(
     (m) =>
       (only === null || m.positionId === only || (only === defaultId && m.positionId === null)) &&
-      (!q ||
-        displayName(m).toLocaleLowerCase().includes(q) ||
-        (m.username ?? '').toLocaleLowerCase().includes(q)),
+      (!q || nameMatches(displayName(m), q) || (m.username ?? '').toLocaleLowerCase().includes(q)),
   );
 
   async function decide(m: MemberRow, approve: boolean) {

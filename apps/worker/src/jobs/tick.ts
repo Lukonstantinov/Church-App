@@ -12,7 +12,13 @@ import {
 import type { Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { events, groups, jobRuns, meetings, outbox } from '../db/schema';
-import { adminRecipients, birthdayMessage, birthdayRows, comingBirthdays } from '../lib/birthdays';
+import {
+  adminRecipients,
+  birthdayMessage,
+  birthdayRows,
+  comingBirthdays,
+  syncTelegramBirthdays,
+} from '../lib/birthdays';
 import { sendEventReminder } from '../lib/eventReminder';
 import { sendPlannedEventReminders } from '../lib/eventReminderPlan';
 import { sendLiveNotices, sendMeetingReminders } from '../lib/liveNotice';
@@ -56,7 +62,7 @@ export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
   await remindMissingRollCalls(db, env, church.timezone, now);
   await remindUpcomingEvents(db, env, now);
   await sendLiveNotices(db, env, now);
-  await sendBirthdayReports(db, church, now);
+  await sendBirthdayReports(db, church, now, botApi(env));
 
   if (await claim(db, 'housekeeping', 'all', now.toISOString().slice(0, 10))) {
     const cutoff = new Date(now.getTime() - 7 * DAY_MS).toISOString();
@@ -78,6 +84,7 @@ export async function sendBirthdayReports(
   db: Db,
   church: { timezone: string; birthdayReport: BirthdayReport },
   now: Date,
+  telegram?: Parameters<typeof syncTelegramBirthdays>[1],
 ) {
   const report = church.birthdayReport;
   if (!report.on && !report.dayOf) return;
@@ -94,6 +101,8 @@ export async function sendBirthdayReports(
   const weekday = (new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7;
   const weekly = report.on && weekday === report.weekday;
   if (!weekly && !report.dayOf) return;
+  // Fresh birthdays from people's Telegram profiles go into the list that is about to be sent.
+  if (telegram) await syncTelegramBirthdays(db, telegram).catch(() => null);
   const rows = await birthdayRows(db);
   const admins = await adminRecipients(db);
   if (weekly && (await claim(db, 'birthday_week', 'all', today))) {

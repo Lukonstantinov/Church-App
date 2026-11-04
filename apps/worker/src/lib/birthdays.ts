@@ -124,6 +124,55 @@ export function birthdayMessage(locale: Locale, title: string, list: ComingBirth
   );
 }
 
+/**
+ * People who joined through Telegram have no birthday in the app unless someone typed it.
+ * Telegram gives a bot the birth date a person shows on their profile (only when their
+ * privacy lets the bot see it), so a few people at a time are looked up and the date is
+ * filled in — never over one already entered. Run just before the birthday lists go out,
+ * and on demand from church settings.
+ */
+export async function syncTelegramBirthdays(
+  db: Db,
+  api: {
+    getChat: (id: number) => Promise<{ birthdate?: { day: number; month: number; year?: number } }>;
+  },
+  limit = 200,
+): Promise<{ checked: number; found: number }> {
+  const rows = await db
+    .select({ id: users.id, telegramId: users.telegramId })
+    .from(users)
+    .where(
+      and(
+        isNotNull(users.telegramId),
+        isNull(users.birthday),
+        isNull(users.anonymizedAt),
+        isNull(users.testOf),
+        eq(users.isMock, false),
+      ),
+    )
+    .orderBy(users.id);
+  let found = 0;
+  let tried = 0;
+  for (const r of rows) {
+    if (tried >= limit) break;
+    tried++;
+    try {
+      const b = (await api.getChat(r.telegramId!)).birthdate;
+      if (!b) continue;
+      const mm = String(b.month).padStart(2, '0');
+      const dd = String(b.day).padStart(2, '0');
+      await db
+        .update(users)
+        .set({ birthday: `${mm}-${dd}`, birthYear: b.year ?? null })
+        .where(and(eq(users.id, r.id), isNull(users.birthday)));
+      found++;
+    } catch {
+      // Not reachable, or Telegram says no: leave the person as they are.
+    }
+  }
+  return { checked: tried, found };
+}
+
 /** The church admins the bot can write to. */
 export async function adminRecipients(db: Db) {
   const fallback = await churchDefaultLocale(db);

@@ -110,6 +110,8 @@ export const reminderPlanSchema = z.object({
   audience: z.enum(['all', 'serving', 'going']).default('all'),
   picture: z.enum(['none', 'still', 'moving']).default('still'),
   mediaId: z.number().int().positive().nullish(),
+  /** The reminder's own words (first line is the headline); none = the standard text. */
+  text: z.string().trim().max(1000).nullish(),
 });
 export type ReminderPlan = z.output<typeof reminderPlanSchema>;
 

@@ -26,6 +26,7 @@ import {
   useRemoveLogo,
   useRestoreGroup,
   useSetBotPhoto,
+  useSyncBirthdays,
   useUpdateChurch,
   useUploadLogo,
 } from '../lib/queries';
@@ -251,6 +252,8 @@ function BirthdayReportSection({
   const t = useT();
   const f = useFmt();
   const tb = t.settings.birthdays;
+  const toast = useToast();
+  const sync = useSyncBirthdays();
   const set = (p: Partial<BirthdayReport>) => onChange({ ...value, ...p });
   return (
     <Section title={`🎂 ${tb.title}`} footer={tb.hint}>
@@ -294,6 +297,23 @@ function BirthdayReportSection({
         </div>
       )}
       <Toggle label={tb.dayOf} checked={value.dayOf} onChange={(dayOf) => set({ dayOf })} />
+      <div className="flex flex-col gap-1.5 p-3">
+        <Button
+          variant="secondary"
+          disabled={sync.isPending}
+          onClick={async () => {
+            try {
+              const r = await sync.mutateAsync();
+              toast(tb.syncDone(r.found, r.checked));
+            } catch {
+              toast(t.common.actionFailed, 'error');
+            }
+          }}
+        >
+          {sync.isPending ? t.common.saving : `✈️ ${tb.sync}`}
+        </Button>
+        <p className="text-[12px] leading-snug text-hint">{tb.syncHint}</p>
+      </div>
     </Section>
   );
 }

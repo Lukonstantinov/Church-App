@@ -219,6 +219,16 @@ export async function generateMeetings(
     for (let i = 0; i <= horizonDays; i++) {
       const date = addDays(today, i);
       if (weekdayOf(date) !== schedule.weekday) continue;
+      // Every N weeks: only the weeks that line up with the week it was made.
+      if (schedule.everyWeeks > 1) {
+        const first = localDate(new Date(schedule.createdAt), timezone);
+        const apart = Math.round(
+          (Date.parse(`${date}T12:00:00Z`) - Date.parse(`${first}T12:00:00Z`)) / 864e5 +
+            weekdayOf(first) -
+            weekdayOf(date),
+        );
+        if (Math.floor(apart / 7) % schedule.everyWeeks !== 0) continue;
+      }
       const startsAt = zonedToUtc(date, schedule.startTime, timezone);
       const endsAt = new Date(startsAt.getTime() + schedule.durationMin * 60_000);
       if (endsAt.toISOString() <= schedule.createdAt) continue;

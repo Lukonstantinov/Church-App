@@ -256,6 +256,8 @@ export const meetingSchedules = sqliteTable(
     active: integer('active', { mode: 'boolean' }).notNull().default(true),
     /** The meetings it makes count in statistics (false = optional ones). */
     counts: integer('counts', { mode: 'boolean' }),
+    /** Meets every N weeks (counted from the week it was made). */
+    everyWeeks: integer('every_weeks').notNull().default(1),
     createdAt: createdAt(),
   },
   (t) => [

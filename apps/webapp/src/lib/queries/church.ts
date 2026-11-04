@@ -67,6 +67,16 @@ export function useUpdateChurch() {
   });
 }
 
+/** Looks up birthdays from people's Telegram profiles and fills in the empty ones. */
+export function useSyncBirthdays() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ checked: number; found: number }>('/church/birthdays/sync', { method: 'POST' }),
+    onSuccess: () => void qc.invalidateQueries(),
+  });
+}
+
 /** Sets the bot's profile photo (the phone shortcut's icon) from a square JPEG. */
 export function useSetBotPhoto() {
   return useMutation({

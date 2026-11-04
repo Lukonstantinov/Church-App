@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { displayName } from '@church/shared';
+import { displayName, nameMatches } from '@church/shared';
 import { Avatar } from '../components/Avatar';
 import { IconSearch, IconTelegram } from '../components/icons';
 import { LabelChip, PersonName } from '../components/LabelLook';
@@ -49,9 +49,7 @@ export function Contacts({ groupId }: { groupId: number }) {
     (c) =>
       (only === null || c.positionName === only) &&
       (!needle ||
-        `${displayName(c)} ${c.username ?? ''} ${c.positionName ?? ''}`
-          .toLocaleLowerCase()
-          .includes(needle)),
+        nameMatches(`${displayName(c)} ${c.username ?? ''} ${c.positionName ?? ''}`, needle)),
   );
 
   return (

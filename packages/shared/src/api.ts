@@ -483,6 +483,8 @@ export interface ScheduleRow {
   active: boolean;
   /** Its meetings count in statistics (null = the ministry's rule). */
   counts: boolean | null;
+  /** Every how many weeks it meets (1 = every week). */
+  everyWeeks: number;
 }
 
 export const createScheduleSchema = z.object({
@@ -491,6 +493,7 @@ export const createScheduleSchema = z.object({
   durationMin: duration.default(120),
   title: name,
   counts: z.boolean().nullable().optional(),
+  everyWeeks: z.number().int().min(1).max(4).optional(),
 });
 export type CreateScheduleInput = z.input<typeof createScheduleSchema>;
 
@@ -501,6 +504,7 @@ export const updateScheduleSchema = z.object({
   title: name.optional(),
   active: z.boolean().optional(),
   counts: z.boolean().nullable().optional(),
+  everyWeeks: z.number().int().min(1).max(4).optional(),
 });
 export type UpdateScheduleInput = z.input<typeof updateScheduleSchema>;
 

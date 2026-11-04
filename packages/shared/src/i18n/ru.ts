@@ -755,6 +755,9 @@ export const ru = {
     minutes: 'Минуты',
   },
   schedule: {
+    repeatTitle: 'Как часто',
+    repeatEvery: (n: number) =>
+      n === 1 ? 'Каждую неделю' : n === 4 ? 'Раз в 4 недели' : `Раз в ${n} недели`,
     title: 'Расписание',
     subtitle: 'Встречи создаются на 4 недели вперёд',
     emptyTitle: 'Расписания нет',
@@ -1341,6 +1344,10 @@ export const ru = {
   },
   settings: {
     birthdays: {
+      sync: 'Взять из Telegram',
+      syncHint:
+        'Бот спрашивает у Telegram дату рождения из профиля (если человек её открыл) и заполняет пустые. Это же происходит перед отправкой списка.',
+      syncDone: (found: number, checked: number) => `Найдено: ${found} из ${checked}`,
       title: 'Дни рождения',
       hint: 'Бот присылает админам церкви список ближайших дней рождения с должностями. Команда /birthdays — неделя, /birthdays month — месяц.',
       weekly: 'Еженедельный список',
@@ -1632,6 +1639,13 @@ export const ru = {
       m % 1440 === 0 ? `за ${m / 1440} дн.` : m % 60 === 0 ? `за ${m / 60} ч` : `за ${m} мин`,
     planTitle: 'Напоминания',
     planDefault: 'Следует правилу служения (настройки служения)',
+    planText: 'Текст напоминания',
+    planTextHint: 'Первая строка — заголовок. Пусто — обычный текст с датой и местом.',
+    planOpen: 'Напоминания',
+    remindAllTitle: 'Все события',
+    remindRegularTitle: 'Регулярные встречи',
+    remindRegularHint: 'Нажмите, чтобы изменить день, время и как часто.',
+    remindNoPlan: 'По правилу служения',
     planEdit: 'Настроить',
     planWhen: 'Когда отправлять',
     planWho: 'Кому',

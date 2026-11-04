@@ -132,6 +132,7 @@ const toScheduleRow = (s: MeetingSchedule): ScheduleRow => ({
   durationMin: s.durationMin,
   title: s.title,
   active: s.active,
+  everyWeeks: s.everyWeeks,
 });
 
 // ---------- /api/groups/:id/{schedules,meetings,stats} ----------
@@ -439,7 +440,10 @@ scheduleRoutes.patch('/:id', async (c) => {
     isNull(meetings.leaderUserId),
   );
   const timingChanged =
-    input.weekday !== undefined || input.startTime !== undefined || input.durationMin !== undefined;
+    input.weekday !== undefined ||
+    input.startTime !== undefined ||
+    input.durationMin !== undefined ||
+    input.everyWeeks !== undefined;
   if (timingChanged || input.active === false) {
     await removeMeetings(db, futureEmpty!);
   } else if (input.title !== undefined) {

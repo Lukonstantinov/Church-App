@@ -120,3 +120,26 @@ describe('which meetings count in statistics', () => {
     expect((await make({ counts: false })).countsInStats).toBe(false);
   });
 });
+
+describe('birthdays from Telegram', () => {
+  it('fills an empty birthday from the profile, never over an entered one', async () => {
+    const { syncTelegramBirthdays } = await import('../src/lib/birthdays');
+    const db = getDb(env.DB);
+    await env.DB.prepare(
+      "insert into users (telegram_id, first_name) values (777001, 'Из Телеграма'), (777002, 'Свой')",
+    ).run();
+    await env.DB.prepare("update users set birthday = '01-02' where telegram_id = 777002").run();
+    const api = {
+      getChat: async () => ({ birthdate: { day: 5, month: 3, year: 1990 } }),
+    };
+    const first = await syncTelegramBirthdays(db, api);
+    expect(first.found).toBeGreaterThan(0);
+    const mine = await env.DB.prepare(
+      'select telegram_id, birthday, birth_year from users where telegram_id in (777001, 777002) order by telegram_id',
+    ).all<{ birthday: string; birth_year: number | null }>();
+    expect(mine.results[0]).toMatchObject({ birthday: '03-05', birth_year: 1990 });
+    expect(mine.results[1]!.birthday).toBe('01-02');
+    // Nobody left without a date: a second run finds nothing more.
+    expect((await syncTelegramBirthdays(db, api)).found).toBe(0);
+  });
+});

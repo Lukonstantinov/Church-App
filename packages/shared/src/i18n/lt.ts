@@ -753,6 +753,8 @@ export const lt: Messages = {
     minutes: 'Minutės',
   },
   schedule: {
+    repeatTitle: 'Kaip dažnai',
+    repeatEvery: (n: number) => (n === 1 ? 'Kas savaitę' : `Kas ${n} savaites`),
     title: 'Tvarkaraštis',
     subtitle: 'Susitikimai sukuriami 4 savaitėms į priekį',
     emptyTitle: 'Tvarkaraščio nėra',
@@ -1373,6 +1375,10 @@ export const lt: Messages = {
   },
   settings: {
     birthdays: {
+      sync: 'Paimti iš Telegram',
+      syncHint:
+        'Botas paklausia Telegram apie profilyje rodomą gimimo datą (jei žmogus leidžia) ir užpildo tuščias. Tai daroma ir prieš siunčiant sąrašą.',
+      syncDone: (found: number, checked: number) => `Rasta ${found} iš ${checked}`,
       title: 'Gimtadieniai',
       hint: 'Botas siunčia bažnyčios administratoriams artėjančių gimtadienių sąrašą su pareigomis. Komanda /birthdays — savaitė, /birthdays month — mėnuo.',
       weekly: 'Savaitinis sąrašas',
@@ -1667,6 +1673,13 @@ export const lt: Messages = {
           : `prieš ${m} min.`,
     planTitle: 'Priminimai',
     planDefault: 'Pagal tarnystės taisyklę (tarnystės nustatymai)',
+    planText: 'Priminimo tekstas',
+    planTextHint: 'Pirma eilutė — antraštė. Tuščia: įprastas tekstas su data ir vieta.',
+    planOpen: 'Priminimai',
+    remindAllTitle: 'Visi renginiai',
+    remindRegularTitle: 'Reguliarūs susitikimai',
+    remindRegularHint: 'Palieskite, kad pakeistumėte dieną, laiką ir dažnumą.',
+    remindNoPlan: 'Tarnystės taisyklė',
     planEdit: 'Nustatyti',
     planWhen: 'Kada siųsti',
     planWho: 'Kam',

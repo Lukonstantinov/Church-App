@@ -49,6 +49,8 @@ export function Schedule({ groupId }: { groupId: number }) {
   const [form, setForm] = useState<MeetingFormValue & { weekday: number }>(defaults);
   // Whether its meetings count in statistics (null = the ministry's rule).
   const [counts, setCounts] = useState<boolean | null>(null);
+  // Meets every N weeks.
+  const [everyWeeks, setEveryWeeks] = useState(1);
 
   if (schedules.isPending) return <Loading />;
   if (schedules.isError) return <ErrorState onRetry={() => void schedules.refetch()} />;
@@ -65,19 +67,21 @@ export function Schedule({ groupId }: { groupId: number }) {
           },
     );
     setCounts(target === 'new' ? null : target.counts);
+    setEveryWeeks(target === 'new' ? 1 : target.everyWeeks);
     setEditing(target);
   }
 
   async function save() {
     if (!form.title.trim() || !form.startTime) return;
     try {
-      if (editing === 'new') await create.mutateAsync({ ...form, counts });
+      if (editing === 'new') await create.mutateAsync({ ...form, counts, everyWeeks });
       else if (editing)
         // Sent only when changed: it is copied onto the schedule's meetings.
         await update.mutateAsync({
           id: editing.id,
           ...form,
           ...(counts !== editing.counts ? { counts } : {}),
+          ...(everyWeeks !== editing.everyWeeks ? { everyWeeks } : {}),
         });
       haptic.success();
       toast(editing === 'new' ? t.schedule.added : t.common.saved);
@@ -135,7 +139,8 @@ export function Schedule({ groupId }: { groupId: number }) {
                   <span className="min-w-0">
                     <span className="block truncate text-[17px] font-semibold">{s.title}</span>
                     <span className="block text-[14px] text-hint">
-                      {f.every(s.weekday)} · {s.startTime}–{endTime(s.startTime, s.durationMin)}
+                      {s.everyWeeks > 1 ? t.schedule.repeatEvery(s.everyWeeks) : f.every(s.weekday)}{' '}
+                      · {s.startTime}–{endTime(s.startTime, s.durationMin)}
                     </span>
                   </span>
                 </button>
@@ -166,6 +171,23 @@ export function Schedule({ groupId }: { groupId: number }) {
             value={form.weekday}
             onChange={(weekday) => setForm({ ...form, weekday })}
           />
+          <div>
+            <div className="mb-1.5 text-[13px] font-semibold text-hint">
+              {t.schedule.repeatTitle}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[1, 2, 3, 4].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setEveryWeeks(n)}
+                  className={`rounded-full px-3 py-1.5 text-[13px] font-semibold ${everyWeeks === n ? 'bg-[var(--brand)] text-white' : 'bg-hairline'}`}
+                >
+                  {t.schedule.repeatEvery(n)}
+                </button>
+              ))}
+            </div>
+          </div>
           <MeetingFields value={form} onChange={(patch) => setForm({ ...form, ...patch })} />
           <StatChoice value={counts} onChange={setCounts} />
           <Button

@@ -748,6 +748,8 @@ export const en: Messages = {
     minutes: 'Minutes',
   },
   schedule: {
+    repeatTitle: 'How often',
+    repeatEvery: (n: number) => (n === 1 ? 'Every week' : `Every ${n} weeks`),
     title: 'Schedule',
     subtitle: 'Meetings are created 4 weeks ahead',
     emptyTitle: 'No schedule',
@@ -1331,6 +1333,10 @@ export const en: Messages = {
   },
   settings: {
     birthdays: {
+      sync: 'Fetch from Telegram',
+      syncHint:
+        'The bot asks Telegram for the birthday shown on each profile (if the person lets bots see it) and fills in empty ones. This also happens just before each list is sent.',
+      syncDone: (found: number, checked: number) => `Found ${found} of ${checked}`,
       title: 'Birthdays',
       hint: 'The bot sends church admins a list of coming birthdays with positions. Command /birthdays — a week, /birthdays month — a month.',
       weekly: 'Weekly list',
@@ -1624,6 +1630,13 @@ export const en: Messages = {
           : `${m} min before`,
     planTitle: 'Reminders',
     planDefault: 'Follows the ministry’s rule (ministry settings)',
+    planText: 'Reminder text',
+    planTextHint: 'The first line is the headline. Empty: the standard text with date and place.',
+    planOpen: 'Reminders',
+    remindAllTitle: 'All events',
+    remindRegularTitle: 'Regular meetings',
+    remindRegularHint: 'Tap to change the day, time and how often.',
+    remindNoPlan: 'Ministry rule',
     planEdit: 'Set up',
     planWhen: 'When to send',
     planWho: 'To whom',

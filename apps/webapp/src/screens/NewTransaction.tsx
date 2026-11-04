@@ -3,6 +3,7 @@ import {
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   displayName,
+  nameMatches,
   parseAmount,
   type MemberRow,
 } from '@church/shared';
@@ -243,7 +244,7 @@ function DonorSheet({
   const [q, setQ] = useState('');
   const list = (members.data ?? [])
     .filter((m) => m.status === 'active')
-    .filter((m) => displayName(m).toLowerCase().includes(q.trim().toLowerCase()));
+    .filter((m) => nameMatches(displayName(m), q));
   return (
     <Sheet open={open} onClose={onClose} title={t.treasury.donor}>
       <div className="px-4 pb-2">

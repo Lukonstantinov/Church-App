@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import {
   displayName,
+  nameMatches,
   resolveBrand,
   type GroupStatistics,
   type MeetingKind,
@@ -302,7 +303,7 @@ function PeopleTab({ s }: { s: GroupStatistics }) {
     const rows = s.people.filter(
       (p) =>
         !needle ||
-        displayName(p).toLowerCase().includes(needle) ||
+        nameMatches(displayName(p), needle) ||
         (p.username ?? '').toLowerCase().includes(needle),
     );
     const by: Record<Sort, (a: StatPerson, b: StatPerson) => number> = {

@@ -17,3 +17,4 @@ export * from './labels';
 export * from './background';
 export * from './screenLook';
 export * from './people';
+export * from './search';

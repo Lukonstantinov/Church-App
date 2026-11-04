@@ -125,6 +125,7 @@ export async function sendPlannedEventReminders(db: Db, env: { APP_URL?: string 
       envAppUrl: env.APP_URL,
       roster: true,
       dedupe: `plan:${event.startsAt}:${Math.floor(left)}`,
+      text: plan.text || null,
       poster: plan.picture !== 'none',
       posterMediaId: plan.picture === 'moving' ? (plan.mediaId ?? null) : null,
     });
