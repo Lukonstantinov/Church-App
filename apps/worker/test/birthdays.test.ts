@@ -143,3 +143,33 @@ describe('birthdays from Telegram', () => {
     expect((await syncTelegramBirthdays(db, api)).found).toBe(0);
   });
 });
+
+describe('birthday weeks', () => {
+  it('this week is Monday to Sunday with the days gone by, and the past week is the one before', async () => {
+    const { birthdaysBetween, weekAround } = await import('../src/lib/birthdays');
+    // Wednesday 4 November 2026.
+    expect(weekAround('2026-11-04')).toEqual({ from: '2026-11-02', to: '2026-11-08' });
+    expect(weekAround('2026-11-04', -1)).toEqual({ from: '2026-10-26', to: '2026-11-01' });
+    // A Sunday still belongs to the week that began on Monday.
+    expect(weekAround('2026-11-08')).toEqual({ from: '2026-11-02', to: '2026-11-08' });
+    const row = (userId: number, birthday: string) => ({
+      userId,
+      firstName: `P${userId}`,
+      lastName: null,
+      birthday,
+      birthYear: 1999,
+      roles: [],
+    });
+    const rows = [row(1, '11-03'), row(2, '11-04'), row(3, '11-09'), row(4, '10-30')];
+    const week = weekAround('2026-11-04');
+    expect(birthdaysBetween(rows, week.from, week.to).map((b) => b.userId)).toEqual([1, 2]);
+    const past = weekAround('2026-11-04', -1);
+    expect(birthdaysBetween(rows, past.from, past.to).map((b) => b.userId)).toEqual([4]);
+    // Across New Year.
+    expect(
+      birthdaysBetween([row(5, '01-01'), row(6, '12-31')], '2026-12-28', '2027-01-03').map(
+        (b) => b.userId,
+      ),
+    ).toEqual([6, 5]);
+  });
+});

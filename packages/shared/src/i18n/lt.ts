@@ -2054,6 +2054,9 @@ export const lt: Messages = {
     count: (n: number) => `${n} ef.`,
   },
   birthdays: {
+    thisWeekTitle: '🎂 Gimtadieniai šią savaitę',
+    pastWeekTitle: '🎂 Gimtadieniai praėjusią savaitę',
+    past: 'Praėjusi',
     weekTitle: (days: number) =>
       days === 7 ? '🎂 Gimtadieniai šią savaitę' : `🎂 Gimtadieniai – artimiausios ${days} d.`,
     monthTitle: '🎂 Gimtadieniai artimiausią mėnesį',

@@ -1998,6 +1998,9 @@ export const en: Messages = {
     count: (n: number) => `${n} fx`,
   },
   birthdays: {
+    thisWeekTitle: '🎂 Birthdays this week',
+    pastWeekTitle: '🎂 Birthdays last week',
+    past: 'Last week',
     weekTitle: (days: number) =>
       days === 7 ? '🎂 Birthdays this week' : `🎂 Birthdays — the next ${days} days`,
     monthTitle: '🎂 Birthdays in the coming month',

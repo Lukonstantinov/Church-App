@@ -9,7 +9,13 @@ import {
   type Messages,
   type TestAsInput,
 } from '@church/shared';
-import { birthdayMessage, birthdayRows, comingBirthdays } from '../lib/birthdays';
+import {
+  birthdayMessage,
+  birthdayRows,
+  birthdaysBetween,
+  comingBirthdays,
+  weekAround,
+} from '../lib/birthdays';
 import { adminTelegramIds, isDeveloper, type Env } from '../env';
 import { getDb, type Db } from '../db/client';
 import { events, meetings, memberships, type User } from '../db/schema';
@@ -433,32 +439,41 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
 
   // Birthdays of the coming week (/birthdays) or month (/birthdays month), for church admins
   // (everyone) and those who manage people in a ministry (their ministries' people).
-  const birthdaysFor = async (user: User, days: number, locale: Locale) => {
+  // 'w' = this calendar week (Monday to Sunday, days gone by included), 'p' = the week
+  // before, 31 = the next 31 days.
+  const birthdaysFor = async (user: User, span: 'w' | 'p' | 31, locale: Locale) => {
     const t = messages(locale);
     const groupIds = user.isAdmin
       ? undefined
       : await groupsWithPermission(db, user.id, 'people.manage');
     if (groupIds && groupIds.length === 0) return null;
     const today = localDate(new Date(), (await getChurch(db)).timezone);
-    const list = comingBirthdays(await birthdayRows(db, groupIds), today, days);
+    const rows = await birthdayRows(db, groupIds);
+    if (span === 31)
+      return birthdayMessage(locale, t.birthdays.monthTitle, comingBirthdays(rows, today, 31));
+    const { from, to } = weekAround(today, span === 'p' ? -1 : 0);
     return birthdayMessage(
       locale,
-      days > 7 ? t.birthdays.monthTitle : t.birthdays.weekTitle(days),
-      list,
+      span === 'p' ? t.birthdays.pastWeekTitle : t.birthdays.thisWeekTitle,
+      birthdaysBetween(rows, from, to),
     );
   };
   const birthdayKb = (t: Messages) =>
-    new InlineKeyboard().text(t.birthdays.week, 'bd:7').text(t.birthdays.month, 'bd:31');
+    new InlineKeyboard()
+      .text(t.birthdays.past, 'bd:p')
+      .text(t.birthdays.week, 'bd:w')
+      .text(t.birthdays.month, 'bd:31');
   pm.command('birthdays', async (ctx) => {
-    const days = /month|мес|mėn/i.test(String(ctx.match ?? '')) ? 31 : 7;
-    const text = await birthdaysFor(ctx.dbUser, days, localeOf(ctx.dbUser, churchLocale));
+    const arg = String(ctx.match ?? '');
+    const span = /month|мес|mėn/i.test(arg) ? 31 : /past|прошл|praėj/i.test(arg) ? 'p' : 'w';
+    const text = await birthdaysFor(ctx.dbUser, span, localeOf(ctx.dbUser, churchLocale));
     if (!text) return void (await ctx.reply(ctx.t.birthdays.notAllowed));
     await ctx.reply(text, { parse_mode: 'HTML', reply_markup: birthdayKb(ctx.t) });
   });
-  pm.callbackQuery(/^bd:(7|31)$/, async (ctx) => {
+  pm.callbackQuery(/^bd:(7|w|p|31)$/, async (ctx) => {
     const text = await birthdaysFor(
       ctx.dbUser,
-      Number(ctx.match[1]),
+      ctx.match[1] === '31' ? 31 : ctx.match[1] === 'p' ? 'p' : 'w',
       localeOf(ctx.dbUser, churchLocale),
     );
     await ctx.answerCallbackQuery();

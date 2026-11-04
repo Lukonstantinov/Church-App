@@ -84,24 +84,36 @@ export interface ComingBirthday extends BirthdayRow {
   turns: number | null;
 }
 
+/** Birthdays falling on the days from `from` to `to` (local "YYYY-MM-DD", both included). */
+export function birthdaysBetween(rows: BirthdayRow[], from: string, to: string): ComingBirthday[] {
+  const out: ComingBirthday[] = [];
+  for (const r of rows) {
+    for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y++) {
+      const date = birthdayIn(r.birthday, y);
+      if (date < from || date > to) continue;
+      out.push({ ...r, date, turns: r.birthYear ? y - r.birthYear : null });
+      break;
+    }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date) || a.firstName.localeCompare(b.firstName));
+}
+
 /** Birthdays from `today` (a local "YYYY-MM-DD") for `days` days, soonest first. */
 export function comingBirthdays(
   rows: BirthdayRow[],
   today: string,
   days: number,
 ): ComingBirthday[] {
-  const last = addDays(today, days - 1);
-  const year = Number(today.slice(0, 4));
-  const out: ComingBirthday[] = [];
-  for (const r of rows) {
-    for (const y of [year, year + 1]) {
-      const date = birthdayIn(r.birthday, y);
-      if (date < today || date > last) continue;
-      out.push({ ...r, date, turns: r.birthYear ? y - r.birthYear : null });
-      break;
-    }
-  }
-  return out.sort((a, b) => a.date.localeCompare(b.date) || a.firstName.localeCompare(b.firstName));
+  return birthdaysBetween(rows, today, addDays(today, days - 1));
+}
+
+/** The Monday and Sunday of the week `today` is in, moved by `weeks` (-1 = the week before). */
+export function weekAround(today: string, weeks = 0): { from: string; to: string } {
+  const monday = addDays(
+    today,
+    -((new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7) + weeks * 7,
+  );
+  return { from: monday, to: addDays(monday, 6) };
 }
 
 /** The bot's list of birthdays: a title, then one line per person with day, age and roles. */

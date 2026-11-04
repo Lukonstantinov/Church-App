@@ -2017,6 +2017,9 @@ export const ru = {
     count: (n: number) => `${n} эфф.`,
   },
   birthdays: {
+    thisWeekTitle: '🎂 Дни рождения на этой неделе',
+    pastWeekTitle: '🎂 Дни рождения на прошлой неделе',
+    past: 'Прошлая',
     weekTitle: (days: number) =>
       days === 7 ? '🎂 Дни рождения на этой неделе' : `🎂 Дни рождения — ближайшие ${days} дн.`,
     monthTitle: '🎂 Дни рождения в ближайший месяц',
