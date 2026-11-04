@@ -29,6 +29,7 @@ import { escapeHtml } from '../lib/html';
 import { generateMeetings } from '../lib/meetings';
 import { leaderRecipients } from '../lib/membership';
 import { clearEndedLive, drainOutbox, enqueue } from '../lib/outbox';
+import { syncBirthdayMenus } from '../lib/botMenu';
 import { botApi } from '../lib/telegram';
 
 export const CRON_OUTBOX = '*/5 * * * *';
@@ -63,6 +64,9 @@ export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
   await remindUpcomingEvents(db, env, now);
   await sendLiveNotices(db, env, now);
   await sendBirthdayReports(db, church, now, botApi(env));
+  await syncBirthdayMenus(db, botApi(env), env, (userId) =>
+    claim(db, 'cmd_menu', String(userId), now.toISOString().slice(0, 10)),
+  ).catch(() => 0);
 
   if (await claim(db, 'housekeeping', 'all', now.toISOString().slice(0, 10))) {
     const cutoff = new Date(now.getTime() - 7 * DAY_MS).toISOString();

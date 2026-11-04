@@ -173,3 +173,36 @@ describe('birthday weeks', () => {
     ).toEqual([6, 5]);
   });
 });
+
+describe('bot command menu', () => {
+  it('church admins and people managers get /birthdays in their own chat; others do not', async () => {
+    const { syncBirthdayMenus } = await import('../src/lib/botMenu');
+    const db = getDb(env.DB);
+    await api('/api/me', { user: ADMIN });
+    const g = await group('Меню');
+    await env.DB.prepare(
+      "insert into users (telegram_id, first_name) values (880001, 'Обычный')",
+    ).run();
+    const u = await env.DB.prepare('select id from users where telegram_id = 880001').first<{
+      id: number;
+    }>();
+    await env.DB.prepare(
+      "insert into memberships (user_id, group_id, role, status) values (?, ?, 'member', 'active')",
+    )
+      .bind(u!.id, g)
+      .run();
+    const sent = new Map<number, string[]>();
+    const telegram = {
+      setMyCommands: async (list: { command: string }[], o?: { scope?: { chat_id?: number } }) => {
+        sent.set(
+          o!.scope!.chat_id!,
+          list.map((c) => c.command),
+        );
+        return true;
+      },
+    };
+    await syncBirthdayMenus(db, telegram as never, env, async () => true);
+    expect(sent.get(ADMIN.id)).toContain('birthdays');
+    expect(sent.has(880001)).toBe(false);
+  });
+});
