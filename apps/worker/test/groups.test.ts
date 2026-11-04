@@ -339,6 +339,49 @@ describe('offline members and claim codes', () => {
     );
   });
 
+  it('an admin merges a join request into an offline person: the made-up person becomes real', async () => {
+    await api('/api/me', { user: ADMIN });
+    const group = await createGroup('Слияние');
+    const { userId } = await apiJson<{ userId: number }>(`/api/groups/${group.id}/members`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { firstName: 'Витя', lastName: 'Воображаемый' },
+    });
+    await apiJson(`/api/users/${userId}`, {
+      method: 'PATCH',
+      user: ADMIN,
+      json: { birthday: '04-12', birthYear: 2001 },
+    });
+    const vitya = fakeUser('Виктор', { username: 'vitya_real' });
+    await requestJoin(vitya, group.inviteCode);
+    const request = (await membersOf(group.id)).find((m) => m.status === 'pending')!;
+
+    const res = await api(`/api/memberships/${request.membershipId}/merge`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { userId },
+    });
+    expect(res.status).toBe(200);
+
+    // One person now: the made-up profile with the real Telegram account on it.
+    const rows = await membersOf(group.id);
+    expect(rows.filter((m) => m.status === 'pending')).toHaveLength(0);
+    expect(rows.filter((m) => m.firstName === 'Виктор')).toHaveLength(0);
+    expect(rows.find((m) => m.userId === userId)).toMatchObject({
+      offline: false,
+      status: 'active',
+      username: 'vitya_real',
+      firstName: 'Витя',
+    });
+    const me = await apiJson<MeResponse>('/api/me', { user: vitya });
+    expect(me.user).toMatchObject({ id: userId, telegramId: vitya.id });
+    expect(me.memberships).toMatchObject([{ groupId: group.id, status: 'active' }]);
+    const detail = await apiJson<{ user: { birthday: string } }>(`/api/users/${userId}`, {
+      user: ADMIN,
+    });
+    expect(detail.user.birthday).toBe('04-12');
+  });
+
   it('refuses to claim into an account that already has memberships', async () => {
     const group = await createGroup('Конфликт');
     const { userId } = await apiJson<{ userId: number }>(`/api/groups/${group.id}/members`, {

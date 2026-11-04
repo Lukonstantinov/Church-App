@@ -776,6 +776,13 @@ export const lt: Messages = {
     failed: 'Nepavyko sukurti susitikimo',
   },
   people: {
+    mergeButton: 'Sujungti su sukurtu žmogumi',
+    mergeTitle: 'Sujungti su sukurtu žmogumi',
+    mergeHint:
+      'Prašymas taps tikru žmogumi: profilis, lankomumas, pareigos ir žymos lieka pasirinktam žmogui, o jis gauna šią Telegram paskyrą.',
+    mergeConfirm: (n: string, o: string) =>
+      `${n} → ${o}: sujungti? Prašymas bus sujungtas su sukurtu profiliu.`,
+    merged: (n: string) => `${n} dabar tikras žmogus`,
     profileStats: 'Profilis ir statistika',
     sortByPosition: 'Pagal pareigą',
     sortByName: 'Pagal vardą',

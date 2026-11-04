@@ -153,6 +153,16 @@ export function useUpdateMembership() {
   });
 }
 
+/** Folds a join request into an offline person: the made-up person becomes the real one. */
+export function useMergeJoin() {
+  const invalidate = useInvalidateAll();
+  return useMutation({
+    mutationFn: ({ membershipId, userId }: { membershipId: number; userId: number }) =>
+      apiFetch(`/memberships/${membershipId}/merge`, { method: 'POST', ...json({ userId }) }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useUpdateUser(userId: number) {
   const invalidate = useInvalidateAll();
   return useMutation({

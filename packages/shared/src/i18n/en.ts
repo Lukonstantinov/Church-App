@@ -771,6 +771,13 @@ export const en: Messages = {
     failed: 'Couldn’t create the meeting',
   },
   people: {
+    mergeButton: 'Merge with a made-up person',
+    mergeTitle: 'Merge with a made-up person',
+    mergeHint:
+      'The request becomes a real person: the profile, attendance, position and labels stay on the one you pick below, and it gets this Telegram account.',
+    mergeConfirm: (n: string, o: string) =>
+      `${n} → ${o}: merge? The request will be joined with the made-up profile.`,
+    merged: (n: string) => `${n} is now a real person`,
     profileStats: 'Profile and statistics',
     sortByPosition: 'By position',
     sortByName: 'By name',

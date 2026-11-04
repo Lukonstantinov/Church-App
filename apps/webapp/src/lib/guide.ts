@@ -182,6 +182,15 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
+        title: 'Turn a made-up person into a real one',
+        steps: [
+          'Add the person as an offline member (name, birthday, position) before they join.',
+          'When they open the invite link in Telegram, their request shows under «Requests» in People.',
+          'Tap «Merge with a made-up person» and pick the made-up profile instead of «Approve».',
+          'The made-up profile keeps all its history and gets the Telegram account; the extra request disappears.',
+        ],
+      },
+      {
         title: 'Change reminders and regular meetings',
         steps: [
           'Ministry → «Напоминания»: every coming event with its reminder times; «Reminders» changes times, who gets it, the words and the picture (still or moving).',

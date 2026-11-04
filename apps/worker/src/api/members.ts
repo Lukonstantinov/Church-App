@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { HTTPException } from 'hono/http-exception';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import {
@@ -31,7 +32,7 @@ import { removeFromChat } from '../lib/chats';
 import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
 import { memberAttendance } from '../lib/meetings';
-import { issueClaimCode } from '../lib/claim';
+import { issueClaimCode, mergeJoinIntoOffline } from '../lib/claim';
 import { announceJoinDecision, decideJoin } from '../lib/membership';
 import { appUrlFor, botApi, claimLink, botUsername } from '../lib/telegram';
 import { idParam, parseBody } from './util';
@@ -155,6 +156,28 @@ membershipRoutes.patch('/:id', async (c) => {
       throw new HTTPException(409, { message: 'invalid_transition' });
     }
   }
+  return c.json({ ok: true });
+});
+
+/**
+ * POST /api/memberships/:id/merge {userId} — a join request is merged into an offline
+ * (made-up) person of the same ministry instead of being approved as someone new.
+ */
+membershipRoutes.post('/:id/merge', async (c) => {
+  const db = c.get('db');
+  const actor = c.get('user');
+  const { userId } = await parseBody(c, z.object({ userId: z.number().int().positive() }));
+  const request = await db.query.memberships.findFirst({ where: eq(memberships.id, idParam(c)) });
+  if (!request) throw new HTTPException(404, { message: 'not_found' });
+  const access = await accessIn(db, actor, request.groupId);
+  if (!access.member || !access.perms.has('people.manage'))
+    throw new HTTPException(404, { message: 'not_found' });
+  const result = await mergeJoinIntoOffline(db, actor, request.id, userId);
+  if (result.kind === 'not_found') throw new HTTPException(404, { message: 'not_found' });
+  if (result.kind !== 'ok') throw new HTTPException(409, { message: result.kind });
+  c.executionCtx.waitUntil(
+    announceJoinDecision(botApi(c.env), db, result, actor, appUrlFor(c.env, c.req.url)),
+  );
   return c.json({ ok: true });
 });
 

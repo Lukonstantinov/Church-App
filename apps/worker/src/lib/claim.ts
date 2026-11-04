@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { auditLog, memberships, users, type User } from '../db/schema';
+import { auditLog, botCards, groups, memberships, users, type User } from '../db/schema';
 import { randomCode } from './codes';
 
 export const CLAIM_TTL_DAYS = 7;
@@ -71,4 +71,97 @@ export async function claimProfile(db: Db, telegramUser: User, code: string): Pr
   ]);
   const user = (await db.query.users.findFirst({ where: eq(users.id, target.id) }))!;
   return { kind: 'claimed', user };
+}
+
+export type MergeResult =
+  | { kind: 'not_found' | 'invalid' | 'account_in_use' | 'already_decided' }
+  | {
+      kind: 'ok';
+      membership: typeof memberships.$inferSelect;
+      group: typeof groups.$inferSelect;
+      member: User;
+    };
+
+/**
+ * An admin's way to make a made-up (offline) person real: a join request from a real
+ * Telegram account is merged into an offline person of the same ministry instead of
+ * being approved as someone new. The offline profile keeps its id, so everything on it
+ * (attendance, positions, labels, birthday, notes) stays; it gets the Telegram account,
+ * and the request's own bare account is removed. The result looks like an approval, so
+ * the cards and the message to the person can be sent as usual.
+ */
+export async function mergeJoinIntoOffline(
+  db: Db,
+  actor: User,
+  requestMembershipId: number,
+  offlineUserId: number,
+): Promise<MergeResult> {
+  const request = await db.query.memberships.findFirst({
+    where: eq(memberships.id, requestMembershipId),
+  });
+  if (!request) return { kind: 'not_found' };
+  if (request.status !== 'pending') return { kind: 'already_decided' };
+  const real = await db.query.users.findFirst({ where: eq(users.id, request.userId) });
+  const offline = await db.query.users.findFirst({ where: eq(users.id, offlineUserId) });
+  if (!real?.telegramId || !offline || offline.telegramId !== null || offline.anonymizedAt)
+    return { kind: 'invalid' };
+  const mine = await db.query.memberships.findFirst({
+    where: and(eq(memberships.userId, offline.id), eq(memberships.groupId, request.groupId)),
+  });
+  if (!mine) return { kind: 'invalid' };
+  // Only a fresh account (this one request) can be folded in without losing anything.
+  const others = await db
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(eq(memberships.userId, real.id));
+  if (others.length !== 1) return { kind: 'account_in_use' };
+
+  const now = new Date().toISOString();
+  try {
+    await db.batch([
+      db
+        .update(botCards)
+        .set({ refId: mine.id })
+        .where(and(eq(botCards.kind, 'join_request'), eq(botCards.refId, request.id))),
+      db.delete(memberships).where(eq(memberships.id, request.id)),
+      db
+        .update(memberships)
+        .set({ status: 'active', joinedAt: mine.joinedAt ?? now, leftAt: null })
+        .where(eq(memberships.id, mine.id)),
+      db.update(auditLog).set({ actorUserId: offline.id }).where(eq(auditLog.actorUserId, real.id)),
+      db.delete(users).where(eq(users.id, real.id)),
+      db
+        .update(users)
+        .set({
+          telegramId: real.telegramId,
+          username: real.username,
+          languageCode: real.languageCode,
+          isAdmin: sql`${users.isAdmin} OR ${real.isAdmin ? 1 : 0}`,
+          isReachable: true,
+          privacyAcceptedAt: real.privacyAcceptedAt,
+          privacyVersion: real.privacyVersion,
+          photoMediaId: offline.photoMediaId ?? real.photoMediaId,
+          claimCode: null,
+          claimExpiresAt: null,
+        })
+        .where(eq(users.id, offline.id)),
+      db.insert(auditLog).values({
+        actorUserId: actor.id,
+        action: 'profile_merged',
+        entity: 'user',
+        entityId: offline.id,
+        groupId: request.groupId,
+        data: { telegramId: real.telegramId },
+      }),
+    ]);
+  } catch {
+    // The account turned out to be tied to something else (a row that points at it).
+    return { kind: 'account_in_use' };
+  }
+  const membership = (await db.query.memberships.findFirst({
+    where: eq(memberships.id, mine.id),
+  }))!;
+  const group = (await db.query.groups.findFirst({ where: eq(groups.id, request.groupId) }))!;
+  const member = (await db.query.users.findFirst({ where: eq(users.id, offline.id) }))!;
+  return { kind: 'ok', membership, group, member };
 }

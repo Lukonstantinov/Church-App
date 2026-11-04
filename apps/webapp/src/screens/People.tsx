@@ -7,6 +7,7 @@ import { PersonName } from '../components/LabelLook';
 import { IconSearch, IconTag, IconTelegram, IconUserPlus, IconUsers } from '../components/icons';
 import { LinkShare } from '../components/LinkShare';
 import { PercentChip } from '../components/Status';
+import { Sheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import {
   ActionRow,
@@ -25,6 +26,7 @@ import {
   useGroup,
   useMemberDetail,
   useMembers,
+  useMergeJoin,
   usePositions,
   useRotateInvite,
   useUpdateMembership,
@@ -72,6 +74,24 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
       (only === null || m.positionId === only || (only === defaultId && m.positionId === null)) &&
       (!q || nameMatches(displayName(m), q) || (m.username ?? '').toLocaleLowerCase().includes(q)),
   );
+
+  // Offline (made-up) people a request can be merged into.
+  const offlineList = list.filter((m) => m.offline && m.status === 'active');
+  const [merging, setMerging] = useState<MemberRow | null>(null);
+  const merge = useMergeJoin();
+  async function mergeInto(target: MemberRow) {
+    if (!merging) return;
+    if (!(await confirmDialog(t.people.mergeConfirm(displayName(merging), displayName(target)))))
+      return;
+    try {
+      await merge.mutateAsync({ membershipId: merging.membershipId, userId: target.userId });
+      haptic.success();
+      toast(t.people.merged(displayName(target)));
+      setMerging(null);
+    } catch {
+      toast(t.common.actionFailed, 'error');
+    }
+  }
 
   async function decide(m: MemberRow, approve: boolean) {
     try {
@@ -175,6 +195,13 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
                     {t.people.approve}
                   </Button>
                 </div>
+                {offlineList.length > 0 && (
+                  <div className="flex-1">
+                    <Button variant="glass" onClick={() => setMerging(m)}>
+                      {t.people.mergeButton}
+                    </Button>
+                  </div>
+                )}
                 <div className="flex-1">
                   <Button
                     variant="destructive"
@@ -189,6 +216,31 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
           ))}
         </Section>
       )}
+
+      <Sheet open={merging !== null} onClose={() => setMerging(null)} title={t.people.mergeTitle}>
+        <div className="flex flex-col gap-1 px-4 pb-4">
+          <p className="pb-2 text-[13px] leading-snug text-hint">{t.people.mergeHint}</p>
+          {offlineList.map((o) => (
+            <button
+              key={o.userId}
+              type="button"
+              disabled={merge.isPending}
+              onClick={() => void mergeInto(o)}
+              className="flex min-h-[52px] items-center gap-3 rounded-xl px-2 text-left active:bg-hairline"
+            >
+              <Avatar
+                id={o.userId}
+                firstName={o.firstName}
+                lastName={o.lastName}
+                photoUrl={o.photoUrl}
+              />
+              <span className="min-w-0 flex-1 truncate text-[16px] font-medium">
+                {displayName(o)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </Sheet>
 
       <div className="flex flex-col gap-3">
         {activeList.length > 5 && (
