@@ -202,8 +202,8 @@ groupMeetingRoutes.get('/:id/calendar', async (c) => {
   );
   const visible = manage ? coming : coming.filter((m) => meetingIsFor(audience, m.id, user.id));
   const today = localDate(new Date(), (await getChurch(db)).timezone);
-  // Birthdays of the ministry's people: church admins and those who manage its people.
-  const seesBirthdays = user.isAdmin || access.perms.has('people.manage');
+  // Birthdays of the ministry's people: church admins and those with the right to see birthdays.
+  const seesBirthdays = user.isAdmin || access.perms.has('birthdays');
   const body: CalendarData = {
     birthdays: seesBirthdays ? await birthdayRows(db, [group.id]) : null,
     meetings: await toMeetingRows(db, visible, c.env.WEBHOOK_SECRET),

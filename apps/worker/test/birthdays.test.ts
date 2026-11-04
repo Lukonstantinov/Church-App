@@ -206,3 +206,32 @@ describe('bot command menu', () => {
     expect(sent.has(880001)).toBe(false);
   });
 });
+
+describe('the birthdays right', () => {
+  it('a position with it sees the calendar birthdays; a plain member does not', async () => {
+    const g = await group('Право ДР');
+    const created = await apiJson<{ id: number; name: string; permissions: string[] }[]>(
+      `/api/groups/${g}/positions`,
+      { method: 'POST', user: ADMIN, json: { name: 'Поздравляющий', permissions: ['birthdays'] } },
+    );
+    const pos = created.find((p) => p.name === 'Поздравляющий')!;
+    expect(pos.permissions).toEqual(['birthdays']);
+    await env.DB.prepare(
+      "insert into users (telegram_id, first_name, birthday) values (990001, 'Видит', '05-05'), (990002, 'Не видит', NULL)",
+    ).run();
+    const ids = await env.DB.prepare(
+      'select id, telegram_id from users where telegram_id in (990001, 990002) order by telegram_id',
+    ).all<{ id: number }>();
+    const [sees, plain] = ids.results.map((r) => r.id);
+    await env.DB.prepare(
+      "insert into memberships (user_id, group_id, role, status, position_id) values (?, ?, 'member', 'active', ?), (?, ?, 'member', 'active', NULL)",
+    )
+      .bind(sees, g, pos.id, plain, g)
+      .run();
+    const as = (id: number) => ({ id, first_name: 'x' });
+    const a = await apiJson<CalendarData>(`/api/groups/${g}/calendar`, { user: as(990001) });
+    expect(a.birthdays?.map((b) => b.firstName)).toEqual(['Видит']);
+    const b = await apiJson<CalendarData>(`/api/groups/${g}/calendar`, { user: as(990002) });
+    expect(b.birthdays).toBeNull();
+  });
+});

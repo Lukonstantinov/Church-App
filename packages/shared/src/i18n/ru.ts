@@ -1939,6 +1939,7 @@ export const ru = {
     perm: {
       'people.view': 'Видеть участников',
       'people.manage': 'Добавлять и удалять людей',
+      birthdays: 'Видеть дни рождения',
       'attendance.take': 'Отмечать посещаемость',
       'meetings.manage': 'Расписание и встречи',
       'money.view': 'Видеть кассу',

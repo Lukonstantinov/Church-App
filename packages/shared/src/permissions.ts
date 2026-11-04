@@ -9,6 +9,7 @@ import { z } from 'zod';
 export const PERMISSIONS = [
   'people.view',
   'people.manage',
+  'birthdays',
   'attendance.take',
   'meetings.manage',
   'money.view',
@@ -24,7 +25,7 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 /** Rights that only make sense together with another one (granting them grants these too). */
 export const IMPLIES: Partial<Record<Permission, Permission[]>> = {
-  'people.manage': ['people.view'],
+  'people.manage': ['people.view', 'birthdays'],
   'attendance.take': ['people.view'],
   'money.manage': ['money.view', 'people.view'],
   reports: ['money.view'],
@@ -45,7 +46,7 @@ export function normalizePermissions(list: readonly string[]): Permission[] {
 
 /** Grouped for the rights editor. */
 export const PERMISSION_GROUPS: { key: string; items: Permission[] }[] = [
-  { key: 'people', items: ['people.view', 'people.manage'] },
+  { key: 'people', items: ['people.view', 'people.manage', 'birthdays'] },
   { key: 'meetings', items: ['attendance.take', 'meetings.manage'] },
   { key: 'money', items: ['money.view', 'money.manage', 'reports'] },
   { key: 'events', items: ['events.manage', 'announce'] },

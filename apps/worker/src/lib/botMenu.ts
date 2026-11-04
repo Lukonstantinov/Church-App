@@ -29,7 +29,7 @@ export async function syncBirthdayMenus(
     })
     .from(users)
     .where(and(isNotNull(users.telegramId), isNull(users.testOf), isNull(users.anonymizedAt)));
-  // Who manages people somewhere: a position with the right, or a leader without a position.
+  // Who may see birthdays somewhere: a position with the right, or a leader without a position.
   const managers = new Set<number>();
   const rows = await db
     .select({
@@ -43,7 +43,7 @@ export async function syncBirthdayMenus(
   for (const r of rows)
     if (
       r.permissions
-        ? normalizePermissions(r.permissions).includes('people.manage')
+        ? normalizePermissions(r.permissions).includes('birthdays')
         : r.role === 'leader'
     )
       managers.add(r.userId);

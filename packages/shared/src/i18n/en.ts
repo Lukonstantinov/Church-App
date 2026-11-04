@@ -1924,6 +1924,7 @@ export const en: Messages = {
     perm: {
       'people.view': 'See members',
       'people.manage': 'Add and remove people',
+      birthdays: 'See birthdays',
       'attendance.take': 'Take attendance',
       'meetings.manage': 'Schedule and meetings',
       'money.view': 'See the treasury',

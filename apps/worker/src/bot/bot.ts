@@ -438,14 +438,14 @@ export async function createBot({ env, appUrl }: BotDeps): Promise<Bot<Ctx>> {
   });
 
   // Birthdays of the coming week (/birthdays) or month (/birthdays month), for church admins
-  // (everyone) and those who manage people in a ministry (their ministries' people).
+  // (everyone) and those with the birthdays right in a ministry (their ministries' people).
   // 'w' = this calendar week (Monday to Sunday, days gone by included), 'p' = the week
   // before, 31 = the next 31 days.
   const birthdaysFor = async (user: User, span: 'w' | 'p' | 31, locale: Locale) => {
     const t = messages(locale);
     const groupIds = user.isAdmin
       ? undefined
-      : await groupsWithPermission(db, user.id, 'people.manage');
+      : await groupsWithPermission(db, user.id, 'birthdays');
     if (groupIds && groupIds.length === 0) return null;
     const today = localDate(new Date(), (await getChurch(db)).timezone);
     const rows = await birthdayRows(db, groupIds);

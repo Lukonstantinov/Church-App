@@ -9,6 +9,12 @@ describe('normalizePermissions', () => {
       'money.view',
       'money.manage',
     ]);
+    // Managing people includes seeing their birthdays.
+    expect(normalizePermissions(['people.manage'])).toEqual([
+      'people.view',
+      'people.manage',
+      'birthdays',
+    ]);
     expect(normalizePermissions([])).toEqual([]);
   });
 });

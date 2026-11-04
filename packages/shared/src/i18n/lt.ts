@@ -1976,6 +1976,7 @@ export const lt: Messages = {
     perm: {
       'people.view': 'Matyti narius',
       'people.manage': 'Pridėti ir šalinti žmones',
+      birthdays: 'Matyti gimtadienius',
       'attendance.take': 'Žymėti lankomumą',
       'meetings.manage': 'Tvarkaraštis ir susitikimai',
       'money.view': 'Matyti kasą',
