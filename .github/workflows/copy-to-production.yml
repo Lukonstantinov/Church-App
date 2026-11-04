@@ -1,0 +1,71 @@
+name: Copy test data to production
+
+# One-time move: everything in the test app (staging) → the real church bot (production).
+# Run it from the Actions tab AFTER production has been deployed once (Deploy → production).
+# It refuses to run if production already has ministries, so it can never overwrite real use.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type COPY to confirm (replaces production's data with the test data)
+        type: string
+        required: true
+
+concurrency:
+  group: copy-to-production
+  cancel-in-progress: false
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check confirmation
+        run: |
+          [ "${{ inputs.confirm }}" = "COPY" ] || { echo "::error::Type COPY in the confirm box to run this."; exit 1; }
+
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Find both databases
+        run: |
+          node scripts/ensure-d1.mjs staging
+          node scripts/ensure-d1.mjs production
+
+      - name: Bring both databases to the latest version
+        working-directory: apps/worker
+        run: |
+          pnpm exec wrangler d1 migrations apply DB --remote --env staging
+          pnpm exec wrangler d1 migrations apply DB --remote --env production
+
+      - name: Make sure production is still unused
+        working-directory: apps/worker
+        run: |
+          out="$(pnpm exec wrangler d1 execute DB --remote --env production --json --command 'SELECT COUNT(*) AS n FROM groups')"
+          n="$(printf '%s' "$out" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s)[0].results[0].n))')"
+          echo "Ministries in production: $n"
+          [ "$n" = "0" ] || { echo "::error::Production already has ministries. Nothing was copied."; exit 1; }
+
+      - name: Export the test data
+        working-directory: apps/worker
+        run: pnpm exec wrangler d1 export DB --remote --env staging --no-schema --output=../../staging-data.sql
+
+      - name: Prepare the import
+        run: node scripts/prepare-copy.mjs staging-data.sql production-import.sql
+
+      - name: Load it into production
+        working-directory: apps/worker
+        run: pnpm exec wrangler d1 execute DB --remote --env production --file=../../production-import.sql --yes
+
+      - name: Done
+        run: |
+          rm -f staging-data.sql production-import.sql
+          echo "### Copied the test data to production. Open the CZK Church bot and press /start." >> "$GITHUB_STEP_SUMMARY"
