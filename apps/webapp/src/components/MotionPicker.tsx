@@ -9,7 +9,7 @@ import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
 import { Group, Pill } from './LookControls';
 import { MotionTuneControls, TunePanel } from './MotionTune';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNearScreen } from '../lib/perf';
 import { LivingLayer } from './ui';
 import { useEffectTemplates } from '../lib/queries';
@@ -318,6 +318,15 @@ export function MotionPicker({
   // A kept list that has emptied (or own effects gone) falls back to everything.
   const open: Tab = chips.some((c) => c.key === tab) ? tab : 'all';
   const group = MOTION_GROUPS.find((g) => g.key === open);
+  // The open type's chip is brought into view in its row (it may be far along) — only when
+  // the open type changes, and only sideways: the page itself never jumps.
+  const chipRow = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = chipRow.current;
+    const chip = row?.querySelector<HTMLElement>(`[data-chip="${open}"]`);
+    if (!row || !chip) return;
+    row.scrollLeft = chip.offsetLeft - row.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2;
+  }, [open, q]);
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-3 gap-2">{first.map(tile)}</div>
@@ -333,18 +342,12 @@ export function MotionPicker({
       ) : (
         <>
           {/* One row to swipe sideways: a type at a time instead of one long list. */}
-          <div className="flex gap-1.5 overflow-x-auto whitespace-nowrap pb-1 [scrollbar-width:none]">
+          <div
+            ref={chipRow}
+            className="flex gap-1.5 overflow-x-auto whitespace-nowrap pb-1 [scrollbar-width:none]"
+          >
             {chips.map((c) => (
-              <span
-                key={c.key}
-                className="shrink-0"
-                // The open type's chip is brought into view (it may be far along the row).
-                ref={
-                  open === c.key
-                    ? (el) => el?.scrollIntoView({ block: 'nearest', inline: 'center' })
-                    : undefined
-                }
-              >
+              <span key={c.key} className="shrink-0" data-chip={c.key}>
                 <Pill on={open === c.key} onClick={() => setTab(c.key)} label={c.label} />
               </span>
             ))}

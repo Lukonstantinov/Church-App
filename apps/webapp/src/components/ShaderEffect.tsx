@@ -150,13 +150,26 @@ const RES: Record<ShaderKind, number> = {
   crossglow: 0.6,
 };
 /**
- * The biggest picture the shared context draws (a side, in pixels). Soft kinds stop at 512;
- * kinds with thin lines and sharp edges (RES of 0.6 and up) may go to 768 — at 512 their
- * lines went soft on a full-width block of a sharp phone screen. Slow phones are still
- * protected: the engine shrinks everything when drawing takes too long (`adapt`).
+ * How sharp each kind is drawn, as a share of the screen's own pixels (the screen's
+ * density counted up to 2): kinds with thin lines and hard edges (RES of 0.6 and up) at
+ * full sharpness, the middle ones at ¾, soft glows and clouds at a little over half — and
+ * never below one picture pixel per page pixel (soft ones: ¾), or a computer screen showed
+ * them as blocks. Measured before (2026-11): every kind was drawn at 13–56 % of the screen's
+ * pixels and stretched, which read as pixelated.
  */
+function density(res: number) {
+  return res >= 0.6 ? 1 : res >= 0.4 ? 0.75 : 0.55;
+}
+/**
+ * The most pixels one block's picture may have (its area): a big block is drawn a little
+ * softer instead of costing the phone more. Thin-line kinds get more. A recording draws at
+ * the size it records (up to about 2048 × 2048).
+ */
+const BUDGET_CRISP = 900_000;
+const BUDGET_SOFT = 600_000;
+const BUDGET_RECORDING = 4_200_000;
+/** The shared canvas's starting size when pictures are copied (it grows when needed). */
 const MAX_SIDE = 512;
-const MAX_SIDE_CRISP = 768;
 
 /** What a shader is told besides the time: all already in the 0…1-ish ranges it expects. */
 export interface ShaderParams {
@@ -225,6 +238,12 @@ void main() { v_uv = a * 0.5 + 0.5; gl_Position = vec4(a, 0.0, 1.0); }`;
 /** Shared by every kind: noise, fractal noise and a palette of up to four colours. */
 const COMMON = `
 precision highp float;
+#ifdef GL_OES_standard_derivatives
+/** How much x changes from one picture pixel to the next: edges a pixel or two soft, never stairs. */
+#define AA(x) fwidth(x)
+#else
+#define AA(x) (1.5 / u_res.y)
+#endif
 varying vec2 v_uv;
 uniform vec2 u_res;
 uniform float u_t;
@@ -292,9 +311,14 @@ vec2 seedShift() { return hash3(vec3(u_seed, u_seed * 0.37, 1.0)).xy * 100.0; }
 float hash1(float n) { return fract(sin(n * 91.345 + u_seed * 7.13) * 47453.5453); }
 /** The point in the box without the turn (for things placed by x / y). */
 vec2 plane() { return (v_uv - 0.5) * vec2(u_res.x / u_res.y, 1.0); }
+/** A step from 0 to 1 at edge e, smoothed over about a pixel and a half (no stairs). */
+float aaStep(float e, float x) {
+  float a = AA(x) * 0.9 + 1e-5;
+  return smoothstep(e - a, e + a, x);
+}
 /** A soft line of half-width w round distance d, plus its neon halo. */
 vec2 lineGlow(float d, float w) {
-  float soft = mix(0.6, 0.12, u_sharp) * w + 0.004;
+  float soft = max(mix(0.6, 0.12, u_sharp) * w + 0.002, AA(d) * 1.5);
   float core = 1.0 - smoothstep(w, w + soft, d);
   float halo = exp(-d / (w * 6.0 + 0.01)) * u_glow;
   return vec2(core, halo);
@@ -593,7 +617,7 @@ void main() {
   float n = 8.0 + floor(u_density * 10.0);
   float a = atan(p.y, p.x) + u_t * 0.04;
   float s = sin(a * n);
-  float edge = mix(0.6, 0.02, u_sharp);
+  float edge = max(mix(0.6, 0.02, u_sharp), AA(s) * 1.2);
   float stripe = smoothstep(-edge, edge, s);
   vec3 col = mix(u_c[0], u_c[1], stripe);
   float fade = 1.0 - smoothstep(0.0, 1.4, length(p));
@@ -753,6 +777,8 @@ void main() {
     vec2 g1 = lineGlow(0.5 - abs(fract(gx) - 0.5), w);
     vec2 g2 = lineGlow(0.5 - abs(fract(gz) - 0.5), w);
     float k = max(g1.x, g2.x) + (g1.y + g2.y) * 0.5;
+    // Far lines closer together than a few pixels would shimmer: they fade into the horizon.
+    k *= 1.0 - smoothstep(0.2, 0.55, max(AA(gx), AA(gz)));
     a = clamp(k * smoothstep(0.0, 0.2, depth), 0.0, 1.0);
     col = mix(u_c[1], u_c[0], smoothstep(0.0, 0.45, depth)) * a;
   }
@@ -769,7 +795,7 @@ void main() {
   float arms = 2.0 + floor(u_density * 3.0);
   float x = atan(p.y, p.x) / 6.2831853 * arms + log(r) * (1.2 + u_chaos * 2.0) - u_t * 0.15
     + (fbm3(p * 2.0 + seedShift()) - 0.5) * u_chaos;
-  float edge = mix(0.5, 0.04, u_sharp);
+  float edge = max(mix(0.5, 0.04, u_sharp), AA(x * 2.0) * 1.2);
   float st = floor(x * 2.0) / 2.0 + smoothstep(0.5 - edge, 0.5 + edge, fract(x * 2.0)) / 2.0;
   vec3 col = palette(mix(x, st, u_sharp), true);
   gl_FragColor = vec4(col * u_strength, u_strength);
@@ -780,8 +806,9 @@ void main() {
   vec2 p = place() / u_size;
   float n = 1.0 + u_density * 2.2;
   float wv = sin(p.y * 3.0 + u_t * 0.4) * (0.04 + 0.25 * u_chaos);
-  float f = fract((p.x + p.y * 0.6 + wv) * n - u_t * 0.3);
-  float edge = mix(0.2, 0.01, u_sharp);
+  float g = (p.x + p.y * 0.6 + wv) * n - u_t * 0.3;
+  float f = fract(g);
+  float edge = max(mix(0.2, 0.01, u_sharp), AA(g) * 1.2);
   float band = smoothstep(0.0, edge, f) * (1.0 - smoothstep(0.5, 0.5 + edge, f));
   vec3 base = palette(clamp(v_uv.x * 0.7 + v_uv.y * 0.3, 0.0, 1.0), false);
   vec3 col = mix(base * 0.5, base * (1.0 + 0.12 * u_weight), band);
@@ -986,7 +1013,7 @@ void main() {
     + (fbm3(id * 0.15 + seedShift()) - 0.5) * 1.2 * u_chaos;
   float s = clamp(0.5 + 0.5 * wv, 0.0, 1.0);
   float r = (0.14 + 0.28 * s) * min(1.3, u_weight);
-  float soft = mix(0.12, 0.03, u_sharp);
+  float soft = max(mix(0.12, 0.03, u_sharp), AA(g.x) * 1.2);
   float dotk = 1.0 - smoothstep(r - soft, r + soft * 0.5, length(f));
   vec3 col = palette(s, false);
   float a = dotk * (0.5 + 0.5 * s) * u_strength;
@@ -1064,7 +1091,7 @@ void main() {
   }
   float edge = sqrt(d2) - sqrt(d1);
   float lw = 0.03 * u_weight;
-  float lead = smoothstep(lw, lw + 0.035, edge);
+  float lead = smoothstep(lw, lw + max(0.035, AA(edge) * 1.5), edge);
   float h = hash(id + 3.7);
   vec3 glass = palette(h, true);
   float light = 0.8 + 0.3 * sin(u_t * 0.5 + h * 20.0 + (p.x + p.y) * 0.6);
@@ -1082,7 +1109,7 @@ void main() {
   vec2 p = (plane() - centre(u_pos)) / (u_size * (0.6 + 0.4 * u_weight));
   float th = 0.032;
   float d = min(boxDist(p - vec2(0.0, -0.03), vec2(th, 0.3)), boxDist(p - vec2(0.0, 0.08), vec2(0.17, th)));
-  float core = 1.0 - smoothstep(0.0, mix(0.02, 0.004, u_sharp), d);
+  float core = 1.0 - smoothstep(0.0, max(mix(0.02, 0.004, u_sharp), AA(d) * 1.5), d);
   float halo = exp(-max(d, 0.0) * (10.0 - 6.0 * u_glow)) * (0.6 + 0.15 * sin(u_t * 0.8));
   vec2 c = p - vec2(0.0, 0.08);
   float ang = atan(c.y, c.x);
@@ -1235,7 +1262,11 @@ function program(g: Gl, kind: ShaderKind) {
   const prog = gl.createProgram()!;
   try {
     gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERTEX));
-    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, COMMON + FRAGMENTS[kind]));
+    // Smooth edges where the phone can measure them (nearly all can: WebGL 1's derivatives).
+    const ext = gl.getExtension('OES_standard_derivatives')
+      ? '#extension GL_OES_standard_derivatives : enable\n'
+      : '';
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, ext + COMMON + FRAGMENTS[kind]));
     gl.bindAttribLocation(prog, 0, 'a');
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link');
@@ -1373,11 +1404,21 @@ class Painter {
     const h = this.canvas.offsetHeight;
     if (!w || !h) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const lite = getQuality() === 'lite' ? 0.75 : 1;
-    let k = RES[this.params.kind] * dpr * lite * (recordingFull ? 1 : adapt);
-    const most =
-      RES[this.params.kind] >= 0.6 && getQuality() !== 'lite' ? MAX_SIDE_CRISP : MAX_SIDE;
-    k = Math.min(k, most / w, most / h);
+    const lite = getQuality() === 'lite';
+    const res = RES[this.params.kind];
+    // Sharpness wanted (picture pixels per page pixel), never under its floor.
+    const floor = (res >= 0.4 ? 1 : 0.75) * (lite ? 0.8 : 1);
+    let k = recordingFull
+      ? Math.max(floor, density(res) * Math.min(3, recordingScale || dpr))
+      : Math.max(floor, density(res) * dpr) * (lite ? 0.75 : 1);
+    // A slow phone draws everything smaller for a while (`adapt`, not under 60 %).
+    if (!recordingFull) k *= adapt;
+    const budget = recordingFull
+      ? BUDGET_RECORDING
+      : res >= 0.6 && !lite
+        ? BUDGET_CRISP
+        : BUDGET_SOFT;
+    k = Math.min(k, Math.sqrt(budget / (w * h)));
     this.width = Math.max(1, Math.round(w * k));
     this.height = Math.max(1, Math.round(h * k));
     if (this.canvas.width !== this.width) this.canvas.width = this.width;
@@ -1408,10 +1449,14 @@ class Painter {
       return;
     }
     const q = this.params;
-    // Hand-over: the off-screen picture is exactly this block's size.
+    // Hand-over: the off-screen picture is exactly this block's size. Copying: the shared
+    // canvas grows to the biggest block (pictures are drawn in its bottom left corner).
     if (g.handover && (g.canvas.width !== this.width || g.canvas.height !== this.height)) {
       g.canvas.width = this.width;
       g.canvas.height = this.height;
+    } else if (!g.handover && (g.canvas.width < this.width || g.canvas.height < this.height)) {
+      g.canvas.width = Math.max(g.canvas.width, this.width);
+      g.canvas.height = Math.max(g.canvas.height, this.height);
     }
     gl.viewport(0, 0, this.width, this.height);
     gl.useProgram(p.prog);
@@ -1493,7 +1538,14 @@ const standing = () =>
 let adapt = 1;
 /** While a poster is recorded its shaders are drawn at full resolution. */
 let recordingFull = false;
+/** The recording's own scale (its pixels per page pixel), so its shaders are drawn at its size. */
+let recordingScale = 0;
 let slowGap = 1;
+/**
+ * Drawing easily at full sharpness: the clock runs at 60 pictures a second instead of 30
+ * (smooth, like a video). The first thing given up when drawing gets slow.
+ */
+let fast = false;
 let slowTicks = 0;
 let easyTicks = 0;
 /** Drawing time a tick may take (ms) before it counts as slow: the rest is for the page. */
@@ -1504,25 +1556,28 @@ function resizeAll() {
 }
 
 function judge(spent: number) {
-  if (spent > BUDGET_MS) {
+  // At 60 a second a tick must leave the page more room than at 30.
+  if (spent > (fast ? BUDGET_MS * 0.6 : BUDGET_MS)) {
     easyTicks = 0;
     // Two slow ticks in a row (one alone may be a shader being compiled).
     if (++slowTicks < 2) return;
     slowTicks = 0;
-    if (adapt > SCALE_MIN) {
+    if (fast) fast = false;
+    else if (adapt > SCALE_MIN) {
       adapt = stepScale(adapt, true);
       resizeAll();
     } else slowGap = Math.min(2.5, slowGap * 1.3);
   } else if (spent < BUDGET_MS * 0.35) {
     slowTicks = 0;
-    // About ten seconds of easy drawing before trying more again.
-    if (++easyTicks < 240) return;
+    // Easy for a while: first back to full sharpness, then (a few seconds more) 60 a second.
+    const full = slowGap === 1 && adapt >= 1;
+    if (++easyTicks < (full ? 90 : 240)) return;
     easyTicks = 0;
     if (slowGap > 1) slowGap = Math.max(1, slowGap / 1.3);
     else if (adapt < 1) {
       adapt = stepScale(adapt, false);
       resizeAll();
-    }
+    } else if (getQuality() === 'full') fast = true;
   } else slowTicks = 0;
 }
 
@@ -1530,7 +1585,7 @@ function tick(now: number) {
   frame = 0;
   if (!painters.size) return;
   const lite = getQuality() === 'lite';
-  const gap = (1000 / (lite ? 20 : 24)) * slowGap;
+  const gap = (1000 / (lite ? 20 : fast ? 60 : 30)) * slowGap;
   const html = document.documentElement;
   if (!document.hidden && !(lite && html.dataset.scrolling)) {
     const still = standing();
@@ -1548,8 +1603,10 @@ function tick(now: number) {
       }
       // Sped up, it is drawn more often (up to 36 a second): fast movement stays smooth
       // instead of jumping from picture to picture.
-      const quick = lite ? 1 : Math.min(1.5, Math.max(1, p.params.speed));
-      if (now - p.last < gap / quick) continue;
+      const quick = lite || fast ? 1 : Math.min(1.5, Math.max(1, p.params.speed));
+      // A couple of ms early is on time: frames arrive a little unevenly (60 a second
+      // would otherwise often skip to 30).
+      if (now - p.last < gap / quick - 2) continue;
       // After a pause (off screen, another tab) it carries on, without leaping ahead.
       const dt = p.last < 0 ? 0 : Math.min(0.25, (now - p.last) / 1000);
       p.last = now;
@@ -1577,9 +1634,13 @@ function stop(p: Painter) {
 export function seekShaders(root: Element, seconds: number) {
   for (const p of painters) if (root.contains(p.clip)) p.draw(seconds);
 }
-/** Recording: stops (or restarts) their clock while it steps them. */
-export function holdShaders(root: Element, hold: boolean) {
+/**
+ * Recording: stops (or restarts) their clock while it steps them, and draws them at the
+ * recording's own `scale` (its pixels per page pixel) instead of the screen's.
+ */
+export function holdShaders(root: Element, hold: boolean, scale = 0) {
   recordingFull = hold;
+  recordingScale = hold ? scale : 0;
   for (const p of painters)
     if (root.contains(p.clip)) {
       p.held = hold;

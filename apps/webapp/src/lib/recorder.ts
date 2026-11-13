@@ -745,9 +745,9 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
   // Animations switched off on this phone are switched on for the recording.
   const motion = html.dataset.motion;
   if (motion === 'off') html.dataset.motion = 'lively';
-  holdParticles(node, true);
+  holdParticles(node, true, k);
   holdGpu(node, true);
-  holdShaders(node, true);
+  holdShaders(node, true, k);
   await picturesReady(node);
   await document.fonts?.ready;
   await nextFrame();

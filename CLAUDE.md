@@ -65,7 +65,8 @@ Deploy → Run workflow → production.
   Running `LivingLayer`s are capped (`watchOffscreen(el, true)`; the biggest on screen run first); never animate
   `background-position` or `box-shadow` smoothly — fade a pseudo copy (`flow-fade`), slide a
   strip with transform, or use `steps()`.
-  Particle kinds (`PARTICLE_KINDS`) are drawn on one canvas per block (`ParticleCanvas`, shared 24 fps clock);
+  Particle kinds (`PARTICLE_KINDS`) are drawn on one canvas per block (`ParticleCanvas`, shared clock: 30 fps,
+  60 while drawing is measured easy on full quality, 20 on lite — the shader engine does the same);
   stack several animations with `LivingLayers` so a block's particle effects share that canvas.
   An open sheet pauses and hides the page's animation layers (`html[data-sheet]`); long lists of live
   previews mount only near the screen (`useNearScreen`).
@@ -73,8 +74,10 @@ Deploy → Run workflow → production.
   cells, holo, sun, sunburst, halo, wavelines, tunnel, dunes, lightfall, risers, synthgrid, spiral, stripes,
   aurora, goo, nebula, clouds, caustics, ink, lightning, pulserings, honeycomb, dotwave, grainient, beams,
   stainedglass, crossglow, gradient fill motion) are drawn by the shader engine
-  (`ShaderEffect.tsx`: one shared WebGL context handing pictures over without a copy, low-res canvases that
-  shrink (to 60% at most, per session) when the device can't keep up, `seekShaders`); the word wall is drawn on the
+  (`ShaderEffect.tsx`: one shared WebGL context handing pictures over without a copy; canvases drawn at
+  `density()` of the screen's pixels — thin-line kinds full, soft glows ~half, never under 1 page pixel (soft ¾),
+  within a pixel-area budget — and shrunk (to 60% at most, per session) when the device can't keep up;
+  edges smoothed with `AA()`/`aaStep` (fwidth); a recording draws them and particles at its own scale; `seekShaders`); the word wall is drawn on the
   ParticleCanvas (cached strips, very slow by default); thumbnail grids use
   `StillMotion` (no effect layers at all — paused layers still cost memory).
   Speed never multiplies the clock: shader painters and particle canvases add time × speed to their own phase

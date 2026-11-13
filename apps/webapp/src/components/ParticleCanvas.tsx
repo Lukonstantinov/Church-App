@@ -435,6 +435,8 @@ class Engine {
   last = -1;
   /** Being recorded: drawn only when the recorder asks (seekParticles), not by the clock. */
   held = false;
+  /** Being recorded: the recording's pixels per page pixel (0 = the screen's). */
+  recordScale = 0;
   /** The word wall's word when none is given (the ministry's name). */
   fallbackWord = 'JESUS';
   /** Bumped when web fonts finish loading, so the word wall's rows are drawn again in them. */
@@ -469,7 +471,8 @@ class Engine {
   resize() {
     const r = this.canvas.getBoundingClientRect();
     const lite = getQuality() === 'lite';
-    this.ratio = Math.min(window.devicePixelRatio || 1, lite ? 1 : 1.5);
+    // Full quality: as sharp as the screen (up to 2× — at 1.5 small sparks went soft).
+    this.ratio = this.recordScale || Math.min(window.devicePixelRatio || 1, lite ? 1 : 2);
     this.width = this.canvas.offsetWidth || r.width;
     this.height = this.canvas.offsetHeight || r.height;
     this.canvas.width = Math.max(1, Math.round(this.width * this.ratio));
@@ -1039,12 +1042,27 @@ function standing(): boolean {
   );
 }
 
+/**
+ * 60 pictures a second while drawing is easy (a few seconds of light ticks, full quality),
+ * else 30: smooth like a video where the phone can, light where it can't.
+ */
+let fast = false;
+let easy = 0;
+function pace(spent: number, lite: boolean) {
+  if (lite || spent > 6) {
+    easy = 0;
+    fast = false;
+  } else if (spent < 3 && ++easy > 90) fast = true;
+}
+
 function tick(now: number) {
   frame = 0;
   if (!engines.size) return;
   const html = document.documentElement;
   const lite = getQuality() === 'lite';
-  const gap = 1000 / (lite ? 20 : 24);
+  const gap = 1000 / (lite ? 20 : fast ? 60 : 30);
+  const t0 = performance.now();
+  let drew = false;
   const still = standing();
   if (!document.hidden && !(lite && html.dataset.scrolling)) {
     for (const e of engines) {
@@ -1061,18 +1079,29 @@ function tick(now: number) {
         continue;
       }
       // Sped up, it is drawn more often (up to 36 a second), so fast particles glide.
-      if (now - e.last < gap / (lite ? 1 : e.quick)) continue;
+      // A couple of ms early is on time (frames arrive a little unevenly).
+      if (now - e.last < gap / (lite || fast ? 1 : e.quick) - 2) continue;
       const dt = e.last < 0 ? 0 : Math.min(0.25, (now - e.last) / 1000);
       e.last = now;
       e.step(dt, now / 1000);
+      drew = true;
     }
   }
+  if (drew) pace(performance.now() - t0, lite);
   frame = requestAnimationFrame(tick);
 }
 
-/** Recording: the canvases inside `root` stop following the clock (or follow it again). */
-export function holdParticles(root: Element, hold: boolean) {
-  for (const e of engines) if (root.contains(e.clip)) e.held = hold;
+/**
+ * Recording: the canvases inside `root` stop following the clock (or follow it again), and
+ * are drawn at the recording's own `scale` (its pixels per page pixel, up to 3) meanwhile.
+ */
+export function holdParticles(root: Element, hold: boolean, scale = 0) {
+  for (const e of engines)
+    if (root.contains(e.clip)) {
+      e.held = hold;
+      e.recordScale = hold ? Math.min(3, scale) : 0;
+      e.resize();
+    }
 }
 
 /** Recording: draws the canvases inside `root` as they are `seconds` into their animation. */
