@@ -9,7 +9,7 @@ import {
 import { useState, type ReactNode } from 'react';
 import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
-import { SHADER_KINDS } from './ShaderEffect';
+import { placeDefault, SHADER_KINDS } from './ShaderEffect';
 import { FontPicker } from './FontPicker';
 import { Pill } from './LookControls';
 import { Toggle } from './ui';
@@ -239,6 +239,18 @@ export function MotionTuneControls({
         onChange={(glow) => set({ glow })}
       />
     ),
+    trail: (
+      <Knob
+        key="trail"
+        label={k.trail}
+        value={tune.trail ?? 0}
+        min={0}
+        max={0.9}
+        step={0.05}
+        show={percent}
+        onChange={(trail) => set({ trail: trail || null })}
+      />
+    ),
     place: (
       <div key="place" className="flex flex-col gap-2">
         <div className="text-[14px]">{k.place}</div>
@@ -247,7 +259,8 @@ export function MotionTuneControls({
           {[0.15, 0.5, 0.85].flatMap((y) =>
             [0.15, 0.5, 0.85].map((x) => {
               const on =
-                Math.abs((tune.x ?? 0.72) - x) < 0.05 && Math.abs((tune.y ?? 0.28) - y) < 0.05;
+                Math.abs((tune.x ?? placeDefault(kind).x) - x) < 0.05 &&
+                Math.abs((tune.y ?? placeDefault(kind).y) - y) < 0.05;
               return (
                 <button
                   key={`${x}${y}`}
@@ -265,7 +278,7 @@ export function MotionTuneControls({
         </div>
         <Knob
           label={k.placeX}
-          value={tune.x ?? (kind === 'fur' ? 0.8 : 0.72)}
+          value={tune.x ?? placeDefault(kind).x}
           min={0}
           max={1}
           step={0.01}
@@ -274,7 +287,7 @@ export function MotionTuneControls({
         />
         <Knob
           label={k.placeY}
-          value={tune.y ?? (kind === 'fur' ? 0.15 : 0.28)}
+          value={tune.y ?? placeDefault(kind).y}
           min={0}
           max={1}
           step={0.01}

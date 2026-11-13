@@ -19,7 +19,10 @@ import { freeCanvas } from './poster';
  *    where the colours really change — hair, shoulders, fingers);
  * 5. the background is made without the people: the hole they leave is filled from the
  *    colours around it (blurred like a shallow-focus photo), for its own layer.
- * Made for people — objects without people in front aren't found. For anything else the
+ * A second model (DeepLab v3, 3 MB, also free) knows animals and everyday things: a pet
+ * beside its owner is kept with them, and a photo with no people at all gives its animal or
+ * object (a dog, a horse, a car, a bottle, a plant…) instead of nothing. If that model
+ * can't be loaded, people are still found as before. For anything else the
  * person taps what to keep (cutOutPeople with `points`): a second model, "magic touch",
  * finds the whole thing under each tap and the same steps tidy it up. The soft edge also
  * loses the background's tint (defringe).
@@ -47,6 +50,89 @@ function segmenter(): Promise<ImageSegmenter> {
 
 /** Whether the model is already in this phone's memory (no download wait). */
 export const cutoutReady = () => loading !== null;
+
+let objectsLoading: Promise<ImageSegmenter> | null = null;
+
+/**
+ * The model for animals and things: Google's DeepLab v3 (free, Apache 2.0, 3 MB). It
+ * sorts every pixel into the background or one of 20 kinds of thing (its list below).
+ */
+function objectSegmenter(): Promise<ImageSegmenter> {
+  objectsLoading ??= (async () => {
+    const { FilesetResolver, ImageSegmenter } = await import('@mediapipe/tasks-vision');
+    const files = await FilesetResolver.forVisionTasks('/mediapipe');
+    return ImageSegmenter.createFromOptions(files, {
+      baseOptions: { modelAssetPath: '/media/model/deeplab', delegate: 'CPU' },
+      runningMode: 'IMAGE',
+      outputCategoryMask: false,
+      outputConfidenceMasks: true,
+    });
+  })();
+  objectsLoading.catch(() => (objectsLoading = null));
+  return objectsLoading;
+}
+
+/**
+ * DeepLab's kinds, in its order: 0 background, 1 aeroplane, 2 bicycle, 3 bird, 4 boat,
+ * 5 bottle, 6 bus, 7 car, 8 cat, 9 chair, 10 cow, 11 dining table, 12 dog, 13 horse,
+ * 14 motorbike, 15 person, 16 potted plant, 17 sheep, 18 sofa, 19 train, 20 tv.
+ */
+const ANIMALS = [3, 8, 10, 12, 13, 17];
+
+/**
+ * What the things model sees in a part of the photo: only the animals (kept together with
+ * the people), or everything that isn't background (a photo without people).
+ */
+function objectMask(
+  model: ImageSegmenter,
+  what: 'animals' | 'all',
+  src: HTMLCanvasElement,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  w: number,
+  h: number,
+) {
+  return maskOf(
+    (sq) => {
+      const result = model.segment(sq);
+      const masks = result.confidenceMasks;
+      const back = masks?.[0];
+      if (!masks || !back) {
+        result.close();
+        throw new Error('no mask');
+      }
+      if (what === 'all')
+        return {
+          values: back.getAsFloat32Array(),
+          width: back.width,
+          height: back.height,
+          wanted: false,
+          close: () => result.close(),
+        };
+      const sum = new Float32Array(back.width * back.height);
+      for (const k of ANIMALS) {
+        const one = masks[k]?.getAsFloat32Array();
+        if (one) for (let i = 0; i < sum.length; i++) sum[i] = Math.min(1, sum[i]! + one[i]!);
+      }
+      return {
+        values: sum,
+        width: back.width,
+        height: back.height,
+        wanted: true,
+        close: () => result.close(),
+      };
+    },
+    src,
+    sx,
+    sy,
+    sw,
+    sh,
+    w,
+    h,
+  );
+}
 
 let touchLoading: Promise<InteractiveSegmenterLegacy> | null = null;
 
@@ -649,12 +735,45 @@ export async function cutOutPeople(
 
     // 1–2: the whole photo, then a closer look at where the people are.
     let mask = look(canvas, 0, 0, w, h, w, h);
+    // The close-up asks the same models as the first look found useful.
+    type Look = typeof look;
+    let finder = model;
+    let closer: Look = tapped ? look : (c, ...at) => personMask(finder!, c, ...at);
     // Nobody at all: the model may have got stuck — a fresh one tries once more.
     if (!tapped && share(mask) < 0.002) {
       const old = await segmenter();
       old.close();
       loading = null;
-      mask = personMask(await segmenter(), canvas, 0, 0, w, h, w, h);
+      finder = await segmenter();
+      mask = personMask(finder, canvas, 0, 0, w, h, w, h);
+    }
+    if (!tapped) {
+      try {
+        const things = await objectSegmenter();
+        if (share(mask) < 0.002) {
+          // No finder: whatever animal or thing stands out is cut out instead.
+          const all = objectMask(things, 'all', canvas, 0, 0, w, h, w, h);
+          if (share(all) >= 0.005) {
+            mask = all;
+            closer = (c, ...at) => objectMask(things, 'all', c, ...at);
+          }
+        } else {
+          // People with a pet (or on a horse): the animal stays with them.
+          const pets = objectMask(things, 'animals', canvas, 0, 0, w, h, w, h);
+          if (share(pets) >= 0.003) {
+            for (let i = 0; i < mask.length; i++) mask[i] = Math.max(mask[i]!, pets[i]!);
+            const alone = closer;
+            closer = (c, ...at) => {
+              const m = alone(c, ...at);
+              const p = objectMask(things, 'animals', c, ...at);
+              for (let i = 0; i < m.length; i++) m[i] = Math.max(m[i]!, p[i]!);
+              return m;
+            };
+          }
+        }
+      } catch {
+        // The things model didn't load or run: finder only, as before.
+      }
     }
     const first = share(mask);
     const firstMask = new Float32Array(mask);
@@ -668,9 +787,7 @@ export async function cutOutPeople(
       const cw = cx1 - cx0;
       const ch = cy1 - cy0;
       if (cw * ch < w * h * 0.7 && cw > 16 && ch > 16) {
-        const near = tapped
-          ? look(canvas, cx0, cy0, cw, ch, cw, ch)
-          : personMask(await segmenter(), canvas, cx0, cy0, cw, ch, cw, ch);
+        const near = closer(canvas, cx0, cy0, cw, ch, cw, ch);
         // A close-up that lost most of the people is not trusted (kept: the first look).
         let nearShare = 0;
         for (let i = 0; i < near.length; i++) if (near[i]! > 0.5) nearShare++;

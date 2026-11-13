@@ -107,6 +107,19 @@ export const MEETING_MOTIONS = [
   'synthgrid',
   'spiral',
   'stripes',
+  // Sky, water and light (shader engine).
+  'nebula',
+  'clouds',
+  'caustics',
+  'ink',
+  'lightning',
+  'pulserings',
+  'honeycomb',
+  'dotwave',
+  'grainient',
+  'beams',
+  'stainedglass',
+  'crossglow',
   // One of the church's own effects (Design → Effect studio), by `tune.ref`: drawn as its
   // layers, so changing it there changes it everywhere it is used.
   'custom',
@@ -129,10 +142,14 @@ export const MOTION_GROUPS: {
     | 'colour'
     | 'abstract'
     | 'sunlight'
+    | 'nature'
+    | 'sacred'
     | 'gpu';
   items: MeetingMotion[];
 }[] = [
-  { key: 'light', items: ['calm', 'lively', 'mesh', 'aurora', 'silk', 'rays'] },
+  { key: 'light', items: ['calm', 'lively', 'mesh', 'grainient', 'aurora', 'silk', 'rays'] },
+  { key: 'sacred', items: ['crossglow', 'stainedglass', 'halo', 'sunburst', 'crosses', 'beams'] },
+  { key: 'nature', items: ['nebula', 'clouds', 'caustics', 'ink', 'lightning'] },
   {
     key: 'abstract',
     items: [
@@ -152,6 +169,9 @@ export const MOTION_GROUPS: {
       'kaleido',
       'cells',
       'holo',
+      'pulserings',
+      'honeycomb',
+      'dotwave',
       'wordwall',
     ],
   },
@@ -295,6 +315,11 @@ export const motionTuneSchema = z.object({
   wordStyle: z.enum(['fill', 'outline', 'mix']).nullish(),
   /** Word wall: rows slide by turns both ways, all one way, or stand still. */
   wordFlow: z.enum(['alt', 'same', 'still']).nullish(),
+  /**
+   * Particles: a soft trail behind each one (0 none … 0.9 long), so fast ones read as a
+   * flowing streak instead of jumping dots.
+   */
+  trail: z.number().min(0).max(0.9).nullish(),
   /** Own effect (`custom`): which one (an effect template id). */
   ref: z.number().int().positive().nullish(),
   /** A layer of an own effect: how it mixes with the layers under it. */
@@ -324,8 +349,11 @@ export type MotionKnob =
   | 'font'
   | 'glow'
   | 'place'
-  | 'wordStyle';
+  | 'wordStyle'
+  | 'trail';
 const PARTICLE_KNOBS: MotionKnob[] = ['density', 'weight'];
+/** Particles drawn on the canvas can also leave trails. */
+const CANVAS_KNOBS: MotionKnob[] = ['density', 'weight', 'trail'];
 const GLOW_KNOBS: MotionKnob[] = ['sharp'];
 /** The shader effects: how many folds/veins/bands, how wild, which variation, own colours. */
 const SHADER_KNOBS: MotionKnob[] = ['density', 'chaos', 'sharp', 'seed', 'colors'];
@@ -359,29 +387,41 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   synthgrid: ['density', 'weight', 'glow', 'colors'],
   spiral: SHADER_KNOBS,
   stripes: [...SHADER_KNOBS, 'weight'],
+  nebula: [...SHADER_KNOBS, 'weight'],
+  clouds: SHADER_KNOBS,
+  caustics: [...SHADER_KNOBS, 'weight'],
+  ink: SHADER_KNOBS,
+  lightning: ['density', 'weight', 'chaos', 'glow', 'seed', 'colors'],
+  pulserings: ['place', 'density', 'weight', 'sharp', 'glow', 'colors'],
+  honeycomb: [...SHADER_KNOBS, 'weight', 'glow'],
+  dotwave: [...SHADER_KNOBS, 'weight'],
+  grainient: [...SHADER_KNOBS, 'weight'],
+  beams: ['density', 'weight', 'sharp', 'chaos', 'seed', 'colors'],
+  stainedglass: ['density', 'weight', 'seed', 'colors'],
+  crossglow: ['place', 'weight', 'density', 'sharp', 'glow', 'colors'],
   custom: [],
-  embers: PARTICLE_KNOBS,
-  fireflies: PARTICLE_KNOBS,
-  bubbles: PARTICLE_KNOBS,
-  snow: PARTICLE_KNOBS,
-  confetti: PARTICLE_KNOBS,
+  embers: CANVAS_KNOBS,
+  fireflies: CANVAS_KNOBS,
+  bubbles: CANVAS_KNOBS,
+  snow: CANVAS_KNOBS,
+  confetti: CANVAS_KNOBS,
   warp: ['density'],
   lines: ['density', 'weight'],
   grid: ['density', 'weight'],
-  iconfloat: PARTICLE_KNOBS,
-  iconrain: PARTICLE_KNOBS,
+  iconfloat: CANVAS_KNOBS,
+  iconrain: CANVAS_KNOBS,
   iconorbit: ['weight'],
-  leaves: PARTICLE_KNOBS,
-  snowfall: PARTICLE_KNOBS,
-  petals: PARTICLE_KNOBS,
+  leaves: CANVAS_KNOBS,
+  snowfall: CANVAS_KNOBS,
+  petals: CANVAS_KNOBS,
   glitch: ['density', 'weight'],
   crt: ['density'],
   static: ['weight'],
   matrix: [...PARTICLE_KNOBS, 'symbols', 'words'],
   spotlight: ['density', 'weight'],
   disco: PARTICLE_KNOBS,
-  hearts: PARTICLE_KNOBS,
-  sparkle: PARTICLE_KNOBS,
+  hearts: CANVAS_KNOBS,
+  sparkle: CANVAS_KNOBS,
   smoke: ['density', 'sharp'],
   frost: ['weight'],
   crack: ['weight'],
@@ -404,14 +444,14 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   bulge: ['weight'],
   godrays: ['density'],
   reflection: ['weight'],
-  rain: PARTICLE_KNOBS,
-  stardust: PARTICLE_KNOBS,
-  orbs: PARTICLE_KNOBS,
-  meteors: PARTICLE_KNOBS,
-  glitter: PARTICLE_KNOBS,
-  fireworks: PARTICLE_KNOBS,
-  notes: PARTICLE_KNOBS,
-  crosses: PARTICLE_KNOBS,
+  rain: CANVAS_KNOBS,
+  stardust: CANVAS_KNOBS,
+  orbs: CANVAS_KNOBS,
+  meteors: CANVAS_KNOBS,
+  glitter: CANVAS_KNOBS,
+  fireworks: CANVAS_KNOBS,
+  notes: CANVAS_KNOBS,
+  crosses: CANVAS_KNOBS,
 };
 
 /** Settings per animation (an item's own, over its template's): {kind: MotionTune}. */

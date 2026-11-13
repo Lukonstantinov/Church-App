@@ -71,11 +71,15 @@ Deploy → Run workflow → production.
   previews mount only near the screen (`useNearScreen`).
   Smooth effects (silk, mesh, liquid, marble, fiery `flames`, topo, fur, streaks, ribbons, plasma, kaleido,
   cells, holo, sun, sunburst, halo, wavelines, tunnel, dunes, lightfall, risers, synthgrid, spiral, stripes,
-  aurora, goo, gradient fill motion) are drawn by the shader engine
+  aurora, goo, nebula, clouds, caustics, ink, lightning, pulserings, honeycomb, dotwave, grainient, beams,
+  stainedglass, crossglow, gradient fill motion) are drawn by the shader engine
   (`ShaderEffect.tsx`: one shared WebGL context handing pictures over without a copy, low-res canvases that
   shrink (to 60% at most, per session) when the device can't keep up, `seekShaders`); the word wall is drawn on the
   ParticleCanvas (cached strips, very slow by default); thumbnail grids use
   `StillMotion` (no effect layers at all — paused layers still cost memory).
+  Speed never multiplies the clock: shader painters and particle canvases add time × speed to their own phase
+  each tick (a new speed carries on from where it is); sped up, they draw up to 36 times a second. Canvas
+  particles can leave trails (`tune.trail`).
   Long decorative animations are capped at 30 changes a second (`capAnimations` in `lib/perf.ts`);
   backdrop blur is redone whenever anything behind or inside it moves — keep moving things
   out from under glass (the page background steps 4×/s; glass with a living layer skips blur; the sheet dim
@@ -216,6 +220,14 @@ fresh picture links via POST `/api/poster-templates/links`); the animated poster
 («Свои слои», `PosterLayersEditor`); Telegram's swipe-to-close is off (`disableVerticalSwipes`); the recorder keeps the still parts in bands between effects and cuts effects to their masks; editor previews are mockups of the real event/meeting shapes; place in % / container units, opacity, blend mode, layer styles); chosen per event or
 meeting (`poster_template_id`, rows carry `poster`) and drawn by `LayeredPoster` on covers, screens,
 tiles, the pinned card and the bot poster.
+
+Sublayers: a poster layer with `clip: true` belongs to the nearest non-sublayer under it (`layerGroups`) and shows
+only where that layer is (cut-out outline, letters, shape, effect box): drawn inside the base layer's masked box
+through `SubSpace` (poster coordinates restored). The editor's chosen layer has drag handles (resize; stretch one
+way — pictures get `stretch`); sizes may go far past the poster (`LAYER_REACH`). Effect pickers (`MotionPicker`):
+search, chips by type, ⭐ favourites and 🕘 recent kept on the phone. Effect studio: 🎲 invents a unique stack
+(`inventEffect`). Background removal also asks DeepLab v3 (`/media/model/deeplab`) for animals and objects. The
+Design tab is a list of parts in two groups (make / app looks) beside one open work area.
 
 **Posts & home** — posts with photos, blocks, types, looks, moving effects (`design.effects`, animated poster when
 publishing, `posterMoving`), reactions, comments, resend;

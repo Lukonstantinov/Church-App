@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   fontFamily,
+  layerGroups,
   type LayerShape,
   type LayerStyle,
   type MotionLayer,
@@ -64,9 +65,24 @@ export function LayeredPoster({
       {photo && bg.dim ? (
         <span className="absolute inset-0" style={{ background: `rgba(0,0,0,${bg.dim})` }} />
       ) : null}
-      {tpl.layers.map((l) =>
-        l.hidden ? null : <Layer key={l.id} layer={l} texts={texts} picture={photo} />,
-      )}
+      {layerGroups(tpl.layers).map(({ base, subs }) => {
+        // A hidden layer takes its sublayers with it (they have nothing to show on).
+        if (base.hidden) return null;
+        const shown = subs.filter((l) => !l.hidden);
+        return (
+          <Layer
+            key={base.id}
+            layer={base}
+            texts={texts}
+            picture={photo}
+            subs={
+              shown.length
+                ? shown.map((l) => <Layer key={l.id} layer={l} texts={texts} picture={photo} />)
+                : null
+            }
+          />
+        );
+      })}
       {tpl.frame && <Frame frame={tpl.frame} />}
       {children}
     </div>
@@ -160,6 +176,39 @@ export function effectBox(layer: Extract<PosterLayer, { type: 'effect' }>): CSSP
   return { left: `${x}%`, top: `${y}%`, width: `${w}%`, height: `${h}%`, translate: '-50% -50%' };
 }
 
+/**
+ * Sublayers inside the layer they belong to. They are drawn in the middle of that layer's
+ * box (inside its outline or letters, so they show only there), yet placed by the poster's
+ * own measures: the space here is the whole poster again, moved back from the layer's
+ * centre (`cx`, `cy`: where that is on the poster) and turned back by the layer's turn.
+ */
+function SubSpace({
+  cx,
+  cy,
+  rotate,
+  children,
+}: {
+  cx: string;
+  cy: string;
+  rotate?: number | null;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      className="pointer-events-none absolute inset-0"
+      style={rotate ? { rotate: `${-rotate}deg` } : undefined}
+      data-sub-space=""
+    >
+      <span
+        className="absolute left-1/2 top-1/2 h-[100cqh] w-[100cqw]"
+        style={{ translate: `calc(${cx} * -1) calc(${cy} * -1)` }}
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
 /** Photoshop-like layer styles as CSS: shadow, glow, stroke and bevel (for pictures). */
 function pictureFilter(s: LayerStyle | null | undefined): string | undefined {
   if (!s) return undefined;
@@ -217,10 +266,13 @@ function Layer({
   layer,
   texts,
   picture,
+  subs = null,
 }: {
   layer: PosterLayer;
   texts: PosterTexts;
   picture: string | null | undefined;
+  /** Its sublayers, already drawn: shown only where this layer is. */
+  subs?: ReactNode;
 }) {
   // A still copy (thumbnails): no effect layers, and no picture of the letters for them.
   const still = useEffectQuality() === 'still';
@@ -244,10 +296,18 @@ function Layer({
       >
         <SoftY shape="rect" soft={layer.fade ? layer.fade * 0.6 : 0}>
           <LivingLayer kind={layer.kind} tune={layer.tune} image={picture} />
+          {subs && (
+            // Inside the effect's box only (the box cuts them off).
+            <span className="absolute inset-0 overflow-hidden" style={{ clipPath: 'inset(0)' }}>
+              <SubSpace cx={`${layer.x ?? 50}cqw`} cy={`${layer.y ?? 50}cqh`}>
+                {subs}
+              </SubSpace>
+            </span>
+          )}
         </SoftY>
       </span>
     );
-  if (layer.type === 'fill') return <Fill layer={layer} look={look} mark={mark} />;
+  if (layer.type === 'fill') return <Fill layer={layer} look={look} mark={mark} subs={subs} />;
   const at: CSSProperties = {
     left: `${layer.x}%`,
     top: `${layer.y}%`,
@@ -255,7 +315,7 @@ function Layer({
     ...(layer.rotate ? { rotate: `${layer.rotate}deg` } : {}),
   };
   if (layer.type === 'image')
-    return layer.url ? <Picture layer={layer} look={look} mark={mark} /> : null;
+    return layer.url ? <Picture layer={layer} look={look} mark={mark} subs={subs} /> : null;
   const words = layer.source === 'custom' ? layer.text : (texts[layer.source] ?? layer.text);
   if (!words) return null;
   const type: CSSProperties = {
@@ -268,6 +328,12 @@ function Layer({
     ...textEffects(layer.style),
   };
   const effects = still ? [] : (layer.effects ?? []).filter((e) => e.kind !== 'off');
+  // Sublayers show in the letters only: placed by the poster, cut by the letters' picture.
+  const inLetters = subs ? (
+    <SubSpace cx={`${layer.x}cqw`} cy={`${layer.y}cqh`} rotate={layer.rotate}>
+      {subs}
+    </SubSpace>
+  ) : null;
   // Bent words are drawn letter by letter (WarpedText), with their effects in them.
   if (layer.warp && layer.warp.amount !== 0)
     return (
@@ -283,9 +349,10 @@ function Layer({
         style={layer.style}
         color={layer.color ?? '#ffffff'}
         size={layer.size}
+        inside={inLetters}
       />
     );
-  if (effects.length === 0)
+  if (effects.length === 0 && !inLetters)
     return (
       <span
         className="absolute w-max max-w-[92%] whitespace-pre-line leading-[1.05]"
@@ -296,7 +363,7 @@ function Layer({
       </span>
     );
   // The words first, their effects after them: a recording draws them in that order too.
-  if (layer.fxIn === 'around')
+  if (layer.fxIn === 'around' && !inLetters)
     return (
       <span className="absolute w-max max-w-[92%]" style={{ ...at, ...look }} {...mark}>
         <span className="relative block whitespace-pre-line leading-[1.05]" style={type}>
@@ -315,11 +382,14 @@ function Layer({
     <LetterEffects
       words={words}
       upper={!!layer.upper}
-      effects={effects}
+      effects={layer.fxIn === 'around' ? [] : effects}
+      around={layer.fxIn === 'around' ? effects : []}
       at={{ ...at, ...look }}
       type={type}
       id={layer.id}
-      edge={layer.fxEdge ?? 'line'}
+      // Sublayers fill the whole letters unless the words' effects ask for a border.
+      edge={layer.fxEdge ?? (effects.length && layer.fxIn !== 'around' ? 'line' : 'none')}
+      inside={inLetters}
     />
   );
 }
@@ -389,18 +459,24 @@ function LetterEffects({
   words,
   upper,
   effects,
+  around = [],
   at,
   type,
   id,
   edge,
+  inside = null,
 }: {
   words: string;
   upper: boolean;
   effects: MotionLayer[];
+  /** Effects in a soft cloud round the words (with sublayers in the letters). */
+  around?: MotionLayer[];
   at: CSSProperties;
   type: CSSProperties;
   id: string;
   edge: 'line' | 'none' | 'cover';
+  /** The words' sublayers: drawn in the letters only, over their effects. */
+  inside?: ReactNode;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [lines, setLines] = useState<string[] | null>(null);
@@ -539,6 +615,16 @@ function LetterEffects({
       {mask && (
         <span className="absolute" style={{ inset: -mask.pad, ...maskOf(`url("${mask.url}")`) }}>
           <LivingLayers layers={effects} />
+          {inside}
+        </span>
+      )}
+      {around.length > 0 && (
+        <span
+          className="absolute"
+          style={{ inset: '-45% -15%', ...edgeLook('oval', 0.6, '') }}
+          {...edgeMark('oval', 0.6)}
+        >
+          <LivingLayers layers={around} />
         </span>
       )}
     </span>
@@ -630,7 +716,10 @@ function WarpedText({
   style,
   color,
   size,
+  inside = null,
 }: {
+  /** The words' sublayers: drawn in the bent letters only. */
+  inside?: ReactNode;
   words: string;
   effects: MotionLayer[];
   around: MotionLayer[];
@@ -649,7 +738,8 @@ function WarpedText({
   const [pad, setPad] = useState(0);
   const [mask, setMask] = useState<string | null>(null);
   const fontKey = `${String(type.fontFamily)}|${String(type.fontWeight)}|${String(type.fontSize)}`;
-  const look = JSON.stringify([warp, style, color, edge, effects.length > 0]);
+  const masked = effects.length > 0 || !!inside;
+  const look = JSON.stringify([warp, style, color, edge, masked]);
 
   // Where the lines break, for the poster's width (again when it changes size).
   useEffect(() => {
@@ -770,7 +860,7 @@ function WarpedText({
       pic.height = Math.ceil(H * k);
       draw(pic.getContext('2d')!, 'paint');
       setPad(room);
-      if (effects.length) {
+      if (masked) {
         const c = document.createElement('canvas');
         c.width = pic.width;
         c.height = pic.height;
@@ -809,9 +899,10 @@ function WarpedText({
           ...(filter ? { filter } : {}),
         }}
       />
-      {mask && effects.length > 0 && (
+      {mask && masked && (
         <span className="absolute" style={{ inset: -pad, ...maskOf(`url("${mask}")`) }}>
           <LivingLayers layers={effects} />
+          {inside}
         </span>
       )}
       {around.length > 0 && (
@@ -850,10 +941,12 @@ function Fill({
   layer,
   look,
   mark,
+  subs,
 }: {
   layer: Extract<PosterLayer, { type: 'fill' }>;
   look: CSSProperties;
   mark: Record<string, string>;
+  subs: ReactNode;
 }) {
   const corner = `${(Math.min(layer.w, layer.h) * 0.12).toFixed(2)}cqmin`;
   const effects = (layer.effects ?? []).filter((e) => e.kind !== 'off');
@@ -881,6 +974,11 @@ function Fill({
         />
         {moves && <FillMotion layer={layer} />}
         <LivingLayers layers={effects} />
+        {subs && (
+          <SubSpace cx={`${layer.x}cqw`} cy={`${layer.y}cqh`} rotate={layer.rotate}>
+            {subs}
+          </SubSpace>
+        )}
       </SoftY>
     </span>
   );
@@ -933,15 +1031,37 @@ function Picture({
   layer,
   look,
   mark,
+  subs,
 }: {
   layer: Extract<PosterLayer, { type: 'image' }>;
   look: CSSProperties;
   mark: Record<string, string>;
+  subs: ReactNode;
 }) {
   const url = layer.url!;
   const effects = (layer.effects ?? []).filter((e) => e.kind !== 'off');
   const ratio = layer.ratio ?? null;
-  const masked = !!layer.cutout && effects.length > 0;
+  // A cut-out keeps its effects and its sublayers inside its outline.
+  const masked = !!layer.cutout && (effects.length > 0 || !!subs);
+  const cover = layer.fit === 'cover';
+  // Pulled out of its own shape by a side handle (pictures placed freely).
+  const stretch = !cover && ratio ? (layer.stretch ?? 1) : 1;
+  const stretched = stretch !== 1;
+  const zoomC = Math.max(1, layer.size / 100);
+  const fxC = Math.min(100, Math.max(0, layer.x)) / 100;
+  const fyC = Math.min(100, Math.max(0, layer.y)) / 100;
+  const wC = ratio ? `max(100cqw, ${ratio} * 100cqh) * ${zoomC}` : `${zoomC * 100}cqw`;
+  const hC = ratio ? `max(100cqh, 100cqw / ${ratio}) * ${zoomC}` : `${zoomC * 100}cqh`;
+  // Where the picture's middle is on the poster (its sublayers are placed from there).
+  const space = subs ? (
+    <SubSpace
+      cx={cover ? `((100cqw - ${wC}) * ${fxC} + ${wC} / 2)` : `${layer.x}cqw`}
+      cy={cover ? `((100cqh - ${hC}) * ${fyC} + ${hC} / 2)` : `${layer.y}cqh`}
+      rotate={layer.rotate}
+    >
+      {subs}
+    </SubSpace>
+  ) : null;
   const inner = (
     <span
       className="absolute inset-0"
@@ -956,8 +1076,13 @@ function Picture({
           : undefined
       }
     >
-      <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      <img
+        src={url}
+        alt=""
+        className={`absolute inset-0 h-full w-full ${stretched ? 'object-fill' : 'object-cover'}`}
+      />
       <LivingLayers layers={effects} image={url} />
+      {space}
     </span>
   );
   const turn = layer.rotate ? { rotate: `${layer.rotate}deg` } : {};
@@ -1017,7 +1142,7 @@ function Picture({
       {ratio ? (
         <span
           className="relative block"
-          style={{ aspectRatio: ratio, ...edges }}
+          style={{ aspectRatio: ratio / stretch, ...edges }}
           {...edgeMark(layer.shape, layer.soft)}
         >
           <SoftY shape={layer.shape} soft={layer.soft}>

@@ -227,6 +227,8 @@ interface Item {
 interface LayerPlan {
   kind: MeetingMotion;
   speed: number;
+  /** How long a trail each particle leaves (0 none … 0.9). */
+  trail: number;
   alpha: number;
   angle: number;
   scale: number;
@@ -373,6 +375,7 @@ function plan(layer: ParticleLayer, lite: boolean, small: boolean): LayerPlan {
   return {
     kind,
     speed: tune?.speed ?? 1,
+    trail: Math.min(0.9, Math.max(0, tune?.trail ?? 0)),
     alpha: Math.min(1, tune?.strength ?? 1),
     angle: tune?.angle ?? 0,
     scale: tune?.size ?? 1,
@@ -474,12 +477,48 @@ class Engine {
     this.last = -1;
   }
 
+  /**
+   * How far into its animation each layer is, in its own seconds (by its place in the
+   * list): the clock adds each tick's time times the layer's speed, so a new speed carries
+   * on from where the particles are instead of throwing them somewhere else.
+   */
+  private phases: number[] = [];
+
+  /** The fastest layer's speed (the clock draws a sped-up canvas more often). */
+  get quick() {
+    let q = 1;
+    for (const p of this.plans) q = Math.max(q, p.speed);
+    return Math.min(1.5, q);
+  }
+
+  /** One more picture, `dt` seconds after the last (the clock's way of drawing). */
+  step(dt: number, now: number) {
+    this.plans.forEach((p, i) => {
+      this.phases[i] = (this.phases[i] ?? now * p.speed) + dt * p.speed;
+    });
+    this.paint((_, i) => this.phases[i]!);
+  }
+
+  /** The picture `seconds` in (a recording steps through time this way). */
   draw(seconds: number) {
+    this.paint((p) => seconds * p.speed);
+  }
+
+  private paint(time: (p: LayerPlan, i: number) => number) {
     const ctx = this.ctx;
     if (!ctx || !this.width || !this.height) return;
     ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
-    ctx.clearRect(0, 0, this.width, this.height);
-    for (const p of this.plans) this.drawLayer(ctx, p, seconds * p.speed);
+    let trail = 0;
+    for (const p of this.plans) trail = Math.max(trail, p.trail);
+    if (trail > 0) {
+      // Trails: the last picture is only partly wiped, so each particle drags a fading tail.
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = `rgba(0,0,0,${(1 - trail * 0.92).toFixed(3)})`;
+      ctx.fillRect(0, 0, this.width, this.height);
+      ctx.restore();
+    } else ctx.clearRect(0, 0, this.width, this.height);
+    this.plans.forEach((p, i) => this.drawLayer(ctx, p, time(p, i)));
   }
 
   private drawLayer(ctx: CanvasRenderingContext2D, plan: LayerPlan, time: number) {
@@ -1021,9 +1060,11 @@ function tick(now: number) {
         }
         continue;
       }
-      if (now - e.last < gap) continue;
+      // Sped up, it is drawn more often (up to 36 a second), so fast particles glide.
+      if (now - e.last < gap / (lite ? 1 : e.quick)) continue;
+      const dt = e.last < 0 ? 0 : Math.min(0.25, (now - e.last) / 1000);
       e.last = now;
-      e.draw(now / 1000);
+      e.step(dt, now / 1000);
     }
   }
   frame = requestAnimationFrame(tick);

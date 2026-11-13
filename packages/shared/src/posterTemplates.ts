@@ -50,11 +50,22 @@ const common = {
   hidden: z.boolean().nullish(),
   opacity: z.number().min(0).max(1).nullish(),
   blend: z.enum(BLEND_MODES).nullish(),
+  /**
+   * A sublayer: it belongs to the nearest layer under it that isn't one itself, and shows
+   * only where that layer is — inside a cut-out's outline, a text's letters, a colour
+   * layer's shape or an effect layer's box (a clipping mask, as in design programs).
+   */
+  clip: z.boolean().nullish(),
 };
+/**
+ * How far and how big a layer may go: well past the poster's edges (a picture several times
+ * the poster's size shows only the part inside it — the poster cuts the rest off).
+ */
+export const LAYER_REACH = { min: -300, max: 400, size: 2000 } as const;
 const place = {
-  x: z.number().min(-50).max(150).default(50),
-  y: z.number().min(-50).max(150).default(50),
-  size: z.number().min(2).max(300).default(60),
+  x: z.number().min(LAYER_REACH.min).max(LAYER_REACH.max).default(50),
+  y: z.number().min(LAYER_REACH.min).max(LAYER_REACH.max).default(50),
+  size: z.number().min(2).max(LAYER_REACH.size).default(60),
   rotate: z.number().int().min(-180).max(180).default(0),
 };
 
@@ -107,6 +118,11 @@ export const posterLayerSchema = z.discriminatedUnion('type', [
     fit: z.enum(['free', 'cover']).nullish(),
     /** The picture's width ÷ height, so its box (and effects on it) has its exact shape. */
     ratio: z.number().min(0.05).max(20).nullish(),
+    /**
+     * Stretched out of its own shape: its height times this (1 = as it is; 2 = twice as
+     * tall, 0.5 = half as tall for the same width). Dragged by the side handles.
+     */
+    stretch: z.number().min(0.1).max(10).nullish(),
     /** It has see-through parts: effects on it follow its outline. */
     cutout: z.boolean().nullish(),
     /** Effects on the picture itself (drawn inside its outline, the photo effects change it). */
@@ -147,8 +163,8 @@ export const posterLayerSchema = z.discriminatedUnion('type', [
     y: place.y,
     rotate: place.rotate,
     /** Width and height in % of the poster (100 × 100 covers it). */
-    w: z.number().min(2).max(300).default(100),
-    h: z.number().min(2).max(300).default(100),
+    w: z.number().min(2).max(LAYER_REACH.size).default(100),
+    h: z.number().min(2).max(LAYER_REACH.size).default(100),
     paint: z.enum(['color', 'linear', 'radial']).default('linear'),
     colors: z.array(hex).min(1).max(4).default(['#e8402c', '#7a1410']),
     angle: z.number().int().min(0).max(360).default(135),
@@ -166,10 +182,10 @@ export const posterLayerSchema = z.discriminatedUnion('type', [
     /** Fades out towards the poster's edges instead of being cut off (0 … 1). */
     fade: z.number().min(0).max(1).nullish(),
     /** Its box when moved or resized (centre and size in % of the poster); none = all of it. */
-    x: z.number().min(-50).max(150).nullish(),
-    y: z.number().min(-50).max(150).nullish(),
-    w: z.number().min(5).max(300).nullish(),
-    h: z.number().min(5).max(300).nullish(),
+    x: z.number().min(LAYER_REACH.min).max(LAYER_REACH.max).nullish(),
+    y: z.number().min(LAYER_REACH.min).max(LAYER_REACH.max).nullish(),
+    w: z.number().min(5).max(LAYER_REACH.size).nullish(),
+    h: z.number().min(5).max(LAYER_REACH.size).nullish(),
   }),
 ]);
 export type PosterLayer = z.output<typeof posterLayerSchema>;
@@ -199,6 +215,23 @@ export const posterFrameSchema = z.object({
   double: z.boolean().nullish(),
 });
 export type PosterFrame = z.output<typeof posterFrameSchema>;
+
+/**
+ * The layers grouped as they are drawn: each layer that stands on its own with the
+ * sublayers (`clip`) that follow it. Sublayers at the very bottom have nothing to belong
+ * to and stand on their own.
+ */
+export function layerGroups<T extends { clip?: boolean | null }>(
+  layers: readonly T[],
+): { base: T; subs: T[] }[] {
+  const out: { base: T; subs: T[] }[] = [];
+  for (const l of layers) {
+    const last = out[out.length - 1];
+    if (l.clip && last) last.subs.push(l);
+    else out.push({ base: l, subs: [] });
+  }
+  return out;
+}
 
 /** How many layers a poster can have. */
 export const MAX_POSTER_LAYERS = 20;

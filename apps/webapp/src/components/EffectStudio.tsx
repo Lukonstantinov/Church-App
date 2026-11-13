@@ -49,6 +49,123 @@ const BACKDROP: Record<Backdrop, CSSProperties> = {
   light: { background: '#f4f4f6' },
 };
 
+const hslHex = (h: number, sat: number, l: number) => {
+  const a = sat * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(c * 255)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+};
+const BASES: MeetingMotion[] = [
+  'liquid',
+  'silk',
+  'mesh',
+  'plasma',
+  'marble',
+  'nebula',
+  'ink',
+  'grainient',
+  'topo',
+  'ribbons',
+  'wavelines',
+  'clouds',
+  'caustics',
+  'kaleido',
+  'cells',
+  'holo',
+  'dunes',
+  'stripes',
+  'spiral',
+  'stainedglass',
+];
+const LIGHTS: MeetingMotion[] = [
+  'aurora',
+  'lightfall',
+  'streaks',
+  'beams',
+  'sun',
+  'halo',
+  'pulserings',
+  'honeycomb',
+  'dotwave',
+  'risers',
+  'sunburst',
+  'lightning',
+];
+const SPECKS: MeetingMotion[] = [
+  'stardust',
+  'orbs',
+  'glitter',
+  'embers',
+  'fireflies',
+  'sparkle',
+  'snow',
+  'bubbles',
+  'meteors',
+  'crosses',
+];
+const SOFT_BLENDS = ['screen', 'overlay', 'soft-light', 'lighten', 'color-dodge'] as const;
+
+/**
+ * A new effect nobody has yet: a moving background, often a layer of light over it and
+ * particles on top — each picked by chance, in colours that go together (one hue, its
+ * neighbour and its opposite), with its own pattern number, speed and strength. Every
+ * press gives another one; it is a start to change, not a finished thing.
+ */
+function inventEffect(): MotionLayer[] {
+  const rnd = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
+  const step = (lo: number, hi: number, by: number) => Math.round(rnd(lo, hi) / by) * by;
+  const one = <T,>(list: readonly T[]) => list[Math.floor(Math.random() * list.length)]!;
+  const hue = Math.random() * 360;
+  const dark = Math.random() < 0.5;
+  const colors = [
+    hslHex(hue, rnd(0.6, 0.9), dark ? rnd(0.12, 0.25) : rnd(0.45, 0.6)),
+    hslHex((hue + rnd(25, 60)) % 360, rnd(0.65, 0.95), rnd(0.45, 0.62)),
+    hslHex((hue + rnd(150, 210)) % 360, rnd(0.6, 0.9), rnd(0.5, 0.68)),
+  ];
+  const seed = () => Math.floor(Math.random() * 10000);
+  const layers: MotionLayer[] = [
+    {
+      kind: one(BASES),
+      tune: {
+        colors,
+        seed: seed(),
+        chaos: step(0.15, 0.8, 0.05),
+        density: step(0.6, 1.8, 0.1),
+        speed: step(0.5, 1.25, 0.25),
+      },
+    },
+  ];
+  if (Math.random() < 0.65)
+    layers.push({
+      kind: one(LIGHTS),
+      tune: {
+        colors: [colors[2]!, colors[1]!],
+        seed: seed(),
+        blend: one(SOFT_BLENDS),
+        strength: step(0.5, 0.9, 0.05),
+        glow: step(0.2, 0.9, 0.05),
+        speed: step(0.5, 1.5, 0.25),
+      },
+    });
+  if (Math.random() < 0.7)
+    layers.push({
+      kind: one(SPECKS),
+      tune: {
+        color: Math.random() < 0.5 ? '#ffffff' : colors[2]!,
+        density: step(0.5, 1.6, 0.1),
+        weight: step(0.6, 1.6, 0.1),
+        trail: Math.random() < 0.5 ? step(0.3, 0.75, 0.05) : null,
+        speed: step(0.5, 1.5, 0.25),
+      },
+    });
+  return layers;
+}
+
 /** A small live preview of an own effect, drawn only near the screen. */
 function OwnPreview({ layers }: { layers: MotionLayer[] }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -268,6 +385,28 @@ function EffectEditor({ fx, onClose }: { fx: EffectTemplate | null; onClose: () 
             className="rounded-xl bg-hairline px-3 py-2.5 text-[16px] outline-none placeholder:text-hint"
           />
 
+          <div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                haptic.tap();
+                const layers = inventEffect();
+                // A new effect also gets a name of its own (an edited one keeps its name).
+                setDoc((d) => ({
+                  name:
+                    !fx && (d.name === te.defaultName || /#\d{4}$/.test(d.name))
+                      ? `${te.defaultName} #${String(Math.floor(Math.random() * 9000) + 1000)}`
+                      : d.name,
+                  layers,
+                }));
+                setSelected(null);
+              }}
+            >
+              🎲 {doc.layers.length ? te.inventAgain : te.invent}
+            </Button>
+            <p className="mt-1.5 px-1 text-[12px] text-hint">{te.inventHint}</p>
+          </div>
+
           <Group title={te.layers}>
             {doc.layers.length === 0 && <p className="text-[13px] text-hint">{te.empty}</p>}
             <div className="flex flex-col gap-2">
@@ -306,6 +445,26 @@ function EffectEditor({ fx, onClose }: { fx: EffectTemplate | null; onClose: () 
                       className="h-8 w-8 rounded-full bg-[var(--color-section)] disabled:opacity-30"
                     >
                       ↓
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={te.duplicate}
+                      title={te.duplicate}
+                      disabled={doc.layers.length >= MAX_EFFECTS}
+                      onClick={() => {
+                        setDoc((d) => {
+                          const next = [...d.layers];
+                          next.splice(i + 1, 0, {
+                            kind: l.kind,
+                            tune: l.tune ? { ...l.tune } : null,
+                          });
+                          return { ...d, layers: next };
+                        });
+                        setSelected(i + 1);
+                      }}
+                      className="h-8 w-8 rounded-full bg-[var(--color-section)] disabled:opacity-30"
+                    >
+                      ⧉
                     </button>
                     <button
                       type="button"

@@ -9,6 +9,7 @@ import {
 } from 'react';
 import {
   MAX_EFFECTS,
+  layerGroups,
   MAX_POSTER_LAYERS,
   POSTER_VARIANT_VIEWS,
   BLEND_MODES,
@@ -502,15 +503,45 @@ export function PosterLayersEditor({
     setDoc((d) => ({ ...d, layers: f(d.layers) }));
   const patch = (id: string, p: Partial<PosterLayer>) =>
     setLayers((all) => all.map((l) => (l.id === id ? ({ ...l, ...p } as PosterLayer) : l)));
+  // Layers move with their sublayers: a layer that stands on its own steps over the whole
+  // neighbouring group; a sublayer changes places only among its layer's sublayers.
   const move = (id: string, by: number) =>
     setLayers((all) => {
-      const i = all.findIndex((l) => l.id === id);
-      const j = i + by;
-      if (i < 0 || j < 0 || j >= all.length) return all;
+      const groups = layerGroups(all);
+      const gi = groups.findIndex((x) => x.base.id === id || x.subs.some((l) => l.id === id));
+      const grp = groups[gi];
+      if (!grp) return all;
+      if (grp.base.id === id) {
+        const gj = gi + by;
+        if (gj < 0 || gj >= groups.length) return all;
+        [groups[gi], groups[gj]] = [groups[gj]!, groups[gi]!];
+      } else {
+        const i = grp.subs.findIndex((l) => l.id === id);
+        const j = i + by;
+        if (j < 0 || j >= grp.subs.length) return all;
+        [grp.subs[i], grp.subs[j]] = [grp.subs[j]!, grp.subs[i]!];
+      }
+      return groups.flatMap((x) => [x.base, ...x.subs]);
+    });
+  /**
+   * A new sublayer of `baseId`: it goes on top of that layer's sublayers and shows only
+   * where that layer is (inside a cut-out, the letters, a shape).
+   */
+  const addSub = (baseId: string, layer: PosterLayer) => {
+    haptic.tap();
+    setLayers((all) => {
+      if (all.length >= MAX_POSTER_LAYERS) return all;
+      let at = all.findIndex((l) => l.id === baseId);
+      if (at < 0) return [...all, layer];
+      while (all[at + 1]?.clip) at++;
       const next = [...all];
-      [next[i], next[j]] = [next[j]!, next[i]!];
+      next.splice(at + 1, 0, { ...layer, clip: true } as PosterLayer);
       return next;
     });
+    setSelected(layer.id);
+  };
+  // The layer a new picture becomes a sublayer of (while its file is being chosen).
+  const subFor = useRef<string | null>(null);
   // A new layer goes right above the chosen one (on top when none is chosen), as in
   // Photoshop — not always to the very front.
   const add = (layer: PosterLayer) => {
@@ -639,7 +670,8 @@ export function PosterLayersEditor({
           fit: cut.transparent ? 'free' : 'cover',
           ...shape,
         };
-        add(layer);
+        if (subFor.current) addSub(subFor.current, { ...layer, fit: 'free', size: 70 });
+        else add(layer);
         if (cutNew) await cutOut(layer, cut.blob);
       }
     } catch {
@@ -647,10 +679,12 @@ export function PosterLayersEditor({
     } finally {
       setPictureFor(null);
       setCutNew(false);
+      subFor.current = null;
       if (picture.current) picture.current.value = '';
     }
   }
-  const choosePicture = (forId: string | null, cut = false) => {
+  const choosePicture = (forId: string | null, cut = false, sub: string | null = null) => {
+    subFor.current = sub;
     setPictureFor(forId);
     setCutNew(cut);
     picture.current?.click();
@@ -658,6 +692,7 @@ export function PosterLayersEditor({
 
   // Front first in the list, as in Photoshop.
   const ordered = [...layers].reverse();
+  const groups = layerGroups(layers);
   const label = (l: PosterLayer) =>
     l.type === 'image'
       ? l.cut === 'people' || (!l.cut && l.cutout && l.source)
@@ -768,43 +803,104 @@ export function PosterLayersEditor({
         >
           <FrameSettings value={frame} onChange={(f) => setDoc((d) => ({ ...d, frame: f }))} />
         </LayerRow>
-        {ordered.map((l, i) => (
-          <LayerRow
-            key={l.id}
-            title={label(l)}
-            icon={
-              l.type === 'image' ? '🖼' : l.type === 'text' ? 'T' : l.type === 'fill' ? '🎨' : '✨'
-            }
-            thumb={l.type === 'image' ? l.url : null}
-            hidden={!!l.hidden}
-            open={selected === l.id}
-            onOpen={() => setSelected(selected === l.id ? null : l.id)}
-            onHide={() => patch(l.id, { hidden: !l.hidden })}
-            onUp={i > 0 ? () => move(l.id, 1) : undefined}
-            onDown={i < ordered.length - 1 ? () => move(l.id, -1) : undefined}
-            onDelete={() => {
-              setLayers((all) => all.filter((x) => x.id !== l.id));
-              setSelected(null);
-            }}
-          >
-            <LayerSettings
-              layer={l}
-              onChange={(p) => patch(l.id, p)}
-              onPicture={() => choosePicture(l.id)}
-              onCut={
-                l.type === 'image' && l.url && !cutting
-                  ? (how) => {
-                      const src = l.sourceUrl && !l.cutout ? l.sourceUrl : l.url!;
-                      if (how === 'tap') setTapFor({ layer: l, src });
-                      else void cutOut(l, src, how);
-                    }
-                  : undefined
+        {ordered.map((l, i) => {
+          // Sublayers sit (indented) above the layer they belong to, as they are drawn.
+          const grp = groups.find((x) => x.base.id === l.id || x.subs.some((s) => s.id === l.id));
+          const sub = !!grp && grp.base.id !== l.id;
+          const si = sub ? grp.subs.findIndex((s) => s.id === l.id) : -1;
+          const gi = grp ? groups.indexOf(grp) : -1;
+          const canUp = sub ? si < grp!.subs.length - 1 : gi < groups.length - 1;
+          const canDown = sub ? si > 0 : gi > 0;
+          const below = layers[layers.length - 1 - i - 1];
+          return (
+            <LayerRow
+              key={l.id}
+              title={label(l)}
+              sub={sub}
+              note={sub ? t.posters.subOf(label(grp!.base)) : undefined}
+              icon={
+                l.type === 'image' ? '🖼' : l.type === 'text' ? 'T' : l.type === 'fill' ? '🎨' : '✨'
               }
-              onErase={l.type === 'image' && l.url ? () => setErasing(l) : undefined}
-              cutting={cutting}
-            />
-          </LayerRow>
-        ))}
+              thumb={l.type === 'image' ? l.url : null}
+              hidden={!!l.hidden}
+              open={selected === l.id}
+              onOpen={() => setSelected(selected === l.id ? null : l.id)}
+              onHide={() => patch(l.id, { hidden: !l.hidden })}
+              onUp={canUp ? () => move(l.id, 1) : undefined}
+              onDown={canDown ? () => move(l.id, -1) : undefined}
+              onDelete={() => {
+                // Its sublayers stay, as layers of their own.
+                setLayers((all) =>
+                  all
+                    .filter((x) => x.id !== l.id)
+                    .map((x) =>
+                      !sub && grp?.subs.some((s) => s.id === x.id)
+                        ? ({ ...x, clip: null } as PosterLayer)
+                        : x,
+                    ),
+                );
+                setSelected(null);
+              }}
+            >
+              <SubLayerControls
+                clip={!!l.clip}
+                // The lowest layer has nothing under it to show on.
+                canClip={!!below}
+                onClip={(clip) => patch(l.id, { clip: clip || null })}
+                full={layers.length >= MAX_POSTER_LAYERS}
+                onAdd={
+                  sub
+                    ? undefined
+                    : (kind) => {
+                        if (kind === 'picture') return choosePicture(null, false, l.id);
+                        addSub(
+                          l.id,
+                          kind === 'text'
+                            ? {
+                                type: 'text',
+                                id: newId(),
+                                source: 'custom',
+                                text: t.posters.sampleWords,
+                                x: 'x' in l && l.x != null ? l.x : 50,
+                                y: 'y' in l && l.y != null ? l.y : 50,
+                                size: 24,
+                                rotate: 0,
+                              }
+                            : kind === 'effect'
+                              ? { type: 'effect', id: newId(), kind: 'sparkle' }
+                              : {
+                                  ...FILL_START,
+                                  id: newId(),
+                                  paint: kind === 'color' ? 'color' : 'linear',
+                                  colors:
+                                    kind === 'color'
+                                      ? ['#ec4899']
+                                      : ['#7c3aed', '#ec4899', '#f59e0b'],
+                                  ...(kind === 'gradient' ? { move: 'flow' as const } : {}),
+                                },
+                        );
+                      }
+                }
+              />
+              <LayerSettings
+                layer={l}
+                onChange={(p) => patch(l.id, p)}
+                onPicture={() => choosePicture(l.id)}
+                onCut={
+                  l.type === 'image' && l.url && !cutting
+                    ? (how) => {
+                        const src = l.sourceUrl && !l.cutout ? l.sourceUrl : l.url!;
+                        if (how === 'tap') setTapFor({ layer: l, src });
+                        else void cutOut(l, src, how);
+                      }
+                    : undefined
+                }
+                onErase={l.type === 'image' && l.url ? () => setErasing(l) : undefined}
+                cutting={cutting}
+              />
+            </LayerRow>
+          );
+        })}
         <LayerRow
           title={t.posters.background}
           icon="▦"
@@ -1143,6 +1239,8 @@ function LayerRow({
   title,
   icon,
   thumb,
+  sub,
+  note,
   hidden,
   open,
   onOpen,
@@ -1155,6 +1253,9 @@ function LayerRow({
   title: string;
   icon: string;
   thumb?: string | null;
+  /** A sublayer: drawn indented under the layer it shows on, with a note naming it. */
+  sub?: boolean;
+  note?: string;
   hidden: boolean;
   open: boolean;
   onOpen: () => void;
@@ -1169,7 +1270,7 @@ function LayerRow({
     'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-hairline text-[14px] active:scale-90 disabled:opacity-30';
   return (
     <div
-      className={`glass rounded-2xl ${open ? 'ring-2 ring-[var(--brand)]' : ''} ${hidden ? 'opacity-60' : ''}`}
+      className={`glass rounded-2xl ${sub ? 'ml-6 border-l-2 border-[var(--brand)]' : ''} ${open ? 'ring-2 ring-[var(--brand)]' : ''} ${hidden ? 'opacity-60' : ''}`}
     >
       <div className="flex items-center gap-2 p-2">
         <button
@@ -1188,7 +1289,10 @@ function LayerRow({
               {icon}
             </span>
           )}
-          <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{title}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-semibold">{title}</span>
+            {note && <span className="block truncate text-[11px] text-hint">↳ {note}</span>}
+          </span>
           <IconChevronDown
             size={18}
             className={`shrink-0 text-hint transition ${open ? 'rotate-180' : ''}`}
@@ -1227,6 +1331,49 @@ function LayerRow({
         )}
       </div>
       {open && <div className="flex flex-col gap-4 border-t border-hairline p-3">{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * Sublayers, at the top of a layer's settings: adding one to this layer (it shows only
+ * where this layer is), and making this layer itself a sublayer of the one under it.
+ */
+function SubLayerControls({
+  clip,
+  canClip,
+  onClip,
+  onAdd,
+  full,
+}: {
+  clip: boolean;
+  canClip: boolean;
+  onClip: (clip: boolean) => void;
+  /** None for a sublayer (they don't nest). */
+  onAdd?: (kind: 'picture' | 'text' | 'color' | 'gradient' | 'effect') => void;
+  full: boolean;
+}) {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-2 rounded-xl bg-hairline p-2.5">
+      {onAdd && !full && (
+        <div>
+          <div className="mb-1.5 text-[13px] font-semibold">{t.posters.subAdd}</div>
+          <div className="flex flex-wrap gap-1.5">
+            <Pill
+              on={false}
+              onClick={() => onAdd('gradient')}
+              label={`🌈 ${t.posters.gradientLayer}`}
+            />
+            <Pill on={false} onClick={() => onAdd('color')} label={`🎨 ${t.posters.colorLayer}`} />
+            <Pill on={false} onClick={() => onAdd('effect')} label={`✨ ${t.posters.effect}`} />
+            <Pill on={false} onClick={() => onAdd('picture')} label={`🖼 ${t.posters.picture}`} />
+            <Pill on={false} onClick={() => onAdd('text')} label={`T ${t.posters.text}`} />
+          </div>
+          <p className="mt-1.5 text-[12px] text-hint">{t.posters.subHint}</p>
+        </div>
+      )}
+      {(canClip || clip) && <Toggle label={t.posters.subClip} checked={clip} onChange={onClip} />}
     </div>
   );
 }
@@ -1398,11 +1545,23 @@ function PlaceAndLook({
               label={cover ? t.posters.zoom : t.posters.size}
               value={layer.size}
               min={cover ? 100 : 4}
-              max={cover ? 300 : 200}
+              // Dragged bigger by its handles than the slider goes: the slider follows.
+              max={Math.max(cover ? 300 : 200, Math.ceil(layer.size))}
               step={1}
               show={pct}
               onChange={(size) => onChange({ size })}
             />
+            {layer.type === 'image' && !cover && !!layer.ratio && (
+              <Knob
+                label={t.posters.stretch}
+                value={layer.stretch ?? 1}
+                min={0.25}
+                max={Math.max(4, Math.ceil(layer.stretch ?? 1))}
+                step={0.05}
+                show={(v) => `×${v.toFixed(2)}`}
+                onChange={(stretch) => onChange({ stretch: stretch === 1 ? null : stretch })}
+              />
+            )}
             <Knob
               label={t.posters.rotate}
               value={layer.rotate}

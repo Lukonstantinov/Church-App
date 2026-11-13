@@ -51,7 +51,19 @@ export type ShaderKind =
   | 'risers'
   | 'synthgrid'
   | 'spiral'
-  | 'stripes';
+  | 'stripes'
+  | 'nebula'
+  | 'clouds'
+  | 'caustics'
+  | 'ink'
+  | 'lightning'
+  | 'pulserings'
+  | 'honeycomb'
+  | 'dotwave'
+  | 'grainient'
+  | 'beams'
+  | 'stainedglass'
+  | 'crossglow';
 
 /** The animations drawn by this engine. */
 export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
@@ -81,6 +93,18 @@ export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
   'synthgrid',
   'spiral',
   'stripes',
+  'nebula',
+  'clouds',
+  'caustics',
+  'ink',
+  'lightning',
+  'pulserings',
+  'honeycomb',
+  'dotwave',
+  'grainient',
+  'beams',
+  'stainedglass',
+  'crossglow',
 ]);
 
 /** How much of the screen's pixels each kind is drawn at (soft ones less, thin lines more). */
@@ -112,9 +136,27 @@ const RES: Record<ShaderKind, number> = {
   synthgrid: 0.75,
   spiral: 0.35,
   stripes: 0.35,
+  nebula: 0.5,
+  clouds: 0.35,
+  caustics: 0.5,
+  ink: 0.5,
+  lightning: 0.75,
+  pulserings: 0.75,
+  honeycomb: 0.75,
+  dotwave: 1,
+  grainient: 0.9,
+  beams: 0.4,
+  stainedglass: 0.75,
+  crossglow: 0.6,
 };
-/** The biggest picture the shared context draws (a side, in pixels). */
+/**
+ * The biggest picture the shared context draws (a side, in pixels). Soft kinds stop at 512;
+ * kinds with thin lines and sharp edges (RES of 0.6 and up) may go to 768 — at 512 their
+ * lines went soft on a full-width block of a sharp phone screen. Slow phones are still
+ * protected: the engine shrinks everything when drawing takes too long (`adapt`).
+ */
 const MAX_SIDE = 512;
+const MAX_SIDE_CRISP = 768;
 
 /** What a shader is told besides the time: all already in the 0…1-ish ranges it expects. */
 export interface ShaderParams {
@@ -142,6 +184,14 @@ export interface ShaderParams {
   drift: boolean;
 }
 
+/** Where a placed effect's centre is until it is moved (share of the width / height). */
+export function placeDefault(kind: string): { x: number; y: number } {
+  if (kind === 'fur') return { x: 0.8, y: 0.15 };
+  if (kind === 'sun' || kind === 'halo') return { x: 0.72, y: 0.28 };
+  if (kind === 'crossglow') return { x: 0.5, y: 0.42 };
+  return { x: 0.5, y: 0.5 };
+}
+
 /** A tune turned into shader settings (with the defaults each kind is designed at). */
 export function shaderParams(kind: ShaderKind, tune?: MotionTune | null): ShaderParams {
   return {
@@ -159,8 +209,8 @@ export function shaderParams(kind: ShaderKind, tune?: MotionTune | null): Shader
     mode: 0,
     paint: 0,
     glow: tune?.glow ?? 0,
-    x: tune?.x ?? (kind === 'fur' ? 0.8 : kind === 'sun' || kind === 'halo' ? 0.72 : 0.5),
-    y: tune?.y ?? (kind === 'fur' ? 0.15 : kind === 'sun' || kind === 'halo' ? 0.28 : 0.5),
+    x: tune?.x ?? placeDefault(kind).x,
+    y: tune?.y ?? placeDefault(kind).y,
     drift: tune?.drift ?? false,
   };
 }
@@ -790,6 +840,259 @@ void main() {
   col = col / max(wsum, 0.0001);
   gl_FragColor = vec4(col * a, a);
 }`,
+  // Nebula: clouds of coloured gas slowly folding, with stars twinkling through them.
+  nebula: `
+void main() {
+  vec2 p = place() * (1.4 / u_size) + seedShift();
+  float t = u_t * 0.03;
+  vec2 q = vec2(fbm(p + vec2(t, -t * 0.6)), fbm(p + vec2(5.2, 1.3) - t * 0.5));
+  float n = fbm(p * (0.8 + u_density * 0.5) + q * (1.2 + u_chaos * 2.5));
+  float cloud = smoothstep(mix(0.25, 0.45, u_sharp), 0.85, n);
+  vec3 col = palette(n * 1.3 + q.x * 0.5, false) * (0.3 + cloud * 1.2);
+  vec2 sp = plane() * 46.0;
+  vec2 id = floor(sp);
+  vec2 f = fract(sp) - 0.5;
+  float h = hash(id + u_seed);
+  vec2 off = (vec2(hash(id + 7.3), hash(id + 2.9)) - 0.5) * 0.6;
+  float tw = 0.45 + 0.55 * sin(u_t * (0.8 + h * 2.5) + h * 40.0);
+  float star = step(0.9, h) * (1.0 - smoothstep(0.0, 0.1 + 0.08 * u_weight, length(f - off))) * tw;
+  col += vec3(star);
+  float a = clamp(cloud * 0.95 + star, 0.0, 1.0) * u_strength;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * a, a);
+}`,
+  // Clouds: soft banks of cloud drifting sideways, lit from above.
+  clouds: `
+void main() {
+  vec2 p = place() * (1.2 / u_size) + seedShift();
+  p.x += u_t * 0.04;
+  float warp = fbm3(p * 0.7 - u_t * 0.01) * u_chaos * 1.5;
+  float n = fbm(p * vec2(1.0, 1.8) * (0.7 + u_density * 0.5) + warp);
+  float lo = mix(0.38, 0.48, u_sharp);
+  float c = smoothstep(lo, lo + mix(0.4, 0.12, u_sharp), n);
+  float shade = fbm3(p * 2.0 + 3.0);
+  vec3 col = mix(u_c[1], u_c[0], smoothstep(0.25, 0.75, shade));
+  float a = c * 0.9 * u_strength;
+  gl_FragColor = vec4(col * a, a);
+}`,
+  // Water light: the bright net of light that ripples on the bottom of a pool.
+  caustics: `
+void main() {
+  vec2 p = mod(place() * (3.2 * u_density / u_size) + seedShift(), 6.2831853) - 250.0;
+  float t = u_t * 0.35 + 23.0;
+  vec2 i = p;
+  float c = 1.0;
+  float inten = 0.005;
+  for (int n = 0; n < 4; n++) {
+    float tt = t * (1.0 - (3.5 / float(n + 1)));
+    i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x)) * (0.7 + u_chaos);
+    c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / inten), p.y / (cos(i.y + tt) / inten)));
+  }
+  c /= 4.0;
+  c = 1.17 - pow(c, 1.4);
+  float k = clamp(pow(abs(c), mix(6.0, 12.0, u_sharp)), 0.0, 1.0);
+  vec3 col = mix(u_c[0], u_c[1], k) + k * 0.35 * u_weight;
+  float a = clamp(0.4 + k, 0.0, 1.0) * u_strength;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * a, a);
+}`,
+  // Ink in water: billows of colour unfolding and rising.
+  ink: `
+void main() {
+  vec2 p = place() * (1.3 / u_size) + seedShift();
+  float t = u_t * 0.06;
+  vec2 w = vec2(fbm3(p * 1.5 + vec2(0.0, t)), fbm3(p * 1.5 + vec2(4.0, -t)));
+  float n = fbm(p * (0.6 + u_density * 0.8) + (w - 0.5) * (2.0 + u_chaos * 4.0) + vec2(0.0, -t * 2.0));
+  float a = smoothstep(0.3, mix(0.62, 0.38, u_sharp), n);
+  vec3 col = palette(w.x * 1.2 + n * 0.4, false) * (0.75 + 0.5 * w.y);
+  a *= 0.92 * u_strength;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * a, a);
+}`,
+  // Lightning: forked bolts flashing down and dying away, the sky lit for a moment.
+  lightning: `
+void main() {
+  vec2 p = plane() / u_size;
+  float aspect = u_res.x / u_res.y;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  float n = 1.0 + floor(u_density * 1.6);
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i);
+    if (fi >= n) break;
+    float ph = u_t * (0.45 + 0.1 * fi) + hash1(fi) * 10.0;
+    float cell = floor(ph);
+    float f = fract(ph);
+    float on = step(0.15, hash1(cell * 1.7 + fi * 13.0));
+    float env = on * exp(-f * 3.0) * (0.65 + 0.35 * sin(f * 80.0));
+    float cx = (hash1(cell + fi * 3.1) - 0.5) * aspect * 0.8;
+    float x = cx + (fbm(vec2(p.y * 3.0, cell * 3.7 + fi * 7.0)) - 0.5) * (0.25 + 0.6 * u_chaos)
+      + (noise(vec2(p.y * 16.0, cell)) - 0.5) * 0.035;
+    float d = abs(p.x - x);
+    vec2 lg = lineGlow(d, 0.002 + 0.003 * u_weight);
+    float k = (lg.x + lg.y * 0.8 + 0.004 / (d + 0.012)) * env;
+    col += mix(u_c[0], vec3(1.0), lg.x) * k;
+    a = max(a, clamp(k, 0.0, 1.0));
+    float sky = env * 0.12 * exp(-abs(p.x - cx) * 1.5);
+    col += u_c[1] * sky;
+    a = max(a, sky);
+  }
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
+  // Pulse rings: rings of light spreading out from a point, like a signal or a heartbeat.
+  pulserings: `
+void main() {
+  vec2 p = (plane() - centre(u_pos)) / u_size;
+  float r = length(p);
+  float n = 2.0 + floor(u_density * 3.0);
+  float x = r * n - u_t * 0.35;
+  float d = abs(fract(x) - 0.5) / n;
+  vec2 lg = lineGlow(d, 0.004 + 0.008 * u_weight);
+  float fade = exp(-r * 1.1);
+  float k = clamp(lg.x + lg.y + 0.012 / (d + 0.02), 0.0, 1.0) * fade;
+  vec3 col = palette(fract(floor(x) * 0.21), true);
+  gl_FragColor = vec4(col * k * u_strength, k * u_strength);
+}`,
+  // Honeycomb: a net of six-sided cells, each lighting up and fading in its own time.
+  honeycomb: `
+vec4 hexCell(vec2 p) {
+  vec2 r = vec2(1.0, 1.7320508);
+  vec2 h = r * 0.5;
+  vec2 a = mod(p, r) - h;
+  vec2 b = mod(p - h, r) - h;
+  vec2 g = dot(a, a) < dot(b, b) ? a : b;
+  return vec4(g, p - g);
+}
+void main() {
+  vec2 p = place() * (5.0 * (0.5 + u_density * 0.5) / u_size) + seedShift();
+  vec4 h = hexCell(p);
+  vec2 q = abs(h.xy);
+  float d = 0.5 - max(dot(q, vec2(0.5, 0.8660254)), q.x);
+  vec2 lg = lineGlow(d, 0.015 + 0.02 * u_weight);
+  float ph = hash(floor(h.zw * 10.0 + 0.5) + 1.7);
+  float lit = pow(0.5 + 0.5 * sin(u_t * (0.4 + ph * (0.6 + u_chaos)) + ph * 40.0), 4.0);
+  float fill = lit * 0.7 * smoothstep(0.0, 0.35, d);
+  float line = clamp(lg.x + lg.y, 0.0, 1.0);
+  vec3 col = palette(ph, true) * fill + u_c[0] * line * 0.9;
+  float a = clamp(fill + line * 0.9, 0.0, 1.0) * u_strength;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, a);
+}`,
+  // Dot wave: a field of dots swelling and shrinking as waves pass through it.
+  dotwave: `
+void main() {
+  vec2 p = place() / u_size;
+  float n = 6.0 + 14.0 * u_density;
+  vec2 g = p * n;
+  vec2 id = floor(g);
+  vec2 f = fract(g) - 0.5;
+  float wv = sin(id.x * 0.45 + u_t * 0.9 + id.y * 0.2) * cos(id.y * 0.4 - u_t * 0.6)
+    + (fbm3(id * 0.15 + seedShift()) - 0.5) * 1.2 * u_chaos;
+  float s = clamp(0.5 + 0.5 * wv, 0.0, 1.0);
+  float r = (0.14 + 0.28 * s) * min(1.3, u_weight);
+  float soft = mix(0.12, 0.03, u_sharp);
+  float dotk = 1.0 - smoothstep(r - soft, r + soft * 0.5, length(f));
+  vec3 col = palette(s, false);
+  float a = dotk * (0.5 + 0.5 * s) * u_strength;
+  gl_FragColor = vec4(col * a, a);
+}`,
+  // Grainy gradient: big soft patches of the colours drifting, under fine film grain.
+  grainient: `
+void main() {
+  vec2 p = place() / u_size;
+  float aspect = u_res.x / u_res.y;
+  p += (vec2(fbm3(p * 1.5 + seedShift()), fbm3(p * 1.5 + seedShift() + 7.0)) - 0.5) * u_chaos * 0.6;
+  float t = u_t * 0.08;
+  vec3 col = vec3(0.0);
+  float ws = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    vec2 c = 0.42 * vec2(sin(t * (0.7 + fi * 0.23) + fi * 2.4 + u_seed) * aspect,
+                         cos(t * (0.5 + fi * 0.31) + fi * 1.7 + u_seed * 0.3));
+    float d = length(p - c) * (0.6 + u_density * 0.4);
+    float w = 1.0 / (pow(d, 2.0 + u_sharp * 2.0) + 0.02);
+    col += u_c[i] * w;
+    ws += w;
+  }
+  col /= ws;
+  float g = hash(floor(v_uv * u_res) + floor(u_t * 12.0) * 17.0) - 0.5;
+  col += g * (0.03 + 0.05 * u_weight);
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0) * u_strength, u_strength);
+}`,
+  // Stage beams: cones of coloured light sweeping down from above through haze.
+  beams: `
+void main() {
+  vec2 p = plane();
+  float aspect = u_res.x / u_res.y;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  float n = 3.0 + floor(u_density * 2.0);
+  for (int i = 0; i < 8; i++) {
+    float fi = float(i);
+    if (fi >= n) break;
+    vec2 o = vec2(((fi + 0.5) / n - 0.5) * aspect, 0.56);
+    float ang = sin(u_t * (0.35 + 0.12 * hash1(fi)) + hash1(fi + 2.0) * 6.2831853) * (0.3 + 0.5 * u_chaos);
+    vec2 dir = vec2(sin(ang), -cos(ang));
+    vec2 q = p - o;
+    float along = dot(q, dir);
+    float across = abs(q.x * dir.y - q.y * dir.x);
+    float width = (0.015 + 0.14 * max(along, 0.0)) * u_weight * u_size;
+    float b = along > 0.0
+      ? (1.0 - smoothstep(width * mix(0.15, 0.8, u_sharp), width, across)) * exp(-along * 1.1)
+      : 0.0;
+    float dust = 0.7 + 0.3 * fbm3(q * 6.0 + u_t * 0.1);
+    float k = b * dust;
+    col += palette(hash1(fi + 5.0), true) * k;
+    a = max(a, k);
+  }
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
+  // Stained glass: panes of coloured glass in dark lead, light slowly passing behind them.
+  stainedglass: `
+void main() {
+  vec2 p = place() * (3.0 * u_density / u_size) + seedShift();
+  vec2 n = floor(p);
+  vec2 f = fract(p);
+  float d1 = 8.0;
+  float d2 = 8.0;
+  vec2 id = n;
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j));
+      vec2 o = hash3(vec3(n + g, u_seed)).xy;
+      vec2 r = g + o - f;
+      float d = dot(r, r);
+      if (d < d1) { d2 = d1; d1 = d; id = n + g; }
+      else if (d < d2) { d2 = d; }
+    }
+  }
+  float edge = sqrt(d2) - sqrt(d1);
+  float lw = 0.03 * u_weight;
+  float lead = smoothstep(lw, lw + 0.035, edge);
+  float h = hash(id + 3.7);
+  vec3 glass = palette(h, true);
+  float light = 0.8 + 0.3 * sin(u_t * 0.5 + h * 20.0 + (p.x + p.y) * 0.6);
+  light *= 0.85 + 0.35 * fbm3(p * 3.0);
+  vec3 col = glass * light * lead + vec3(0.03) * (1.0 - lead);
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
+}`,
+  // Cross of light: a glowing cross with a halo and slow rays behind it.
+  crossglow: `
+float boxDist(vec2 p, vec2 b) {
+  vec2 d = abs(p) - b;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+void main() {
+  vec2 p = (plane() - centre(u_pos)) / (u_size * (0.6 + 0.4 * u_weight));
+  float th = 0.032;
+  float d = min(boxDist(p - vec2(0.0, -0.03), vec2(th, 0.3)), boxDist(p - vec2(0.0, 0.08), vec2(0.17, th)));
+  float core = 1.0 - smoothstep(0.0, mix(0.02, 0.004, u_sharp), d);
+  float halo = exp(-max(d, 0.0) * (10.0 - 6.0 * u_glow)) * (0.6 + 0.15 * sin(u_t * 0.8));
+  vec2 c = p - vec2(0.0, 0.08);
+  float ang = atan(c.y, c.x);
+  float rays = pow(0.5 + 0.5 * sin(ang * (6.0 + floor(u_density * 6.0)) + u_t * 0.15), 3.0)
+    * exp(-length(c) * 2.2) * 0.55;
+  rays *= 0.7 + 0.3 * sin(ang * 3.0 - u_t * 0.3);
+  vec3 col = u_c[0] * core + u_c[1] * halo * (1.0 - core) + u_c[2] * rays * (1.0 - core);
+  float a = clamp(core + halo * 0.85 + rays, 0.0, 1.0) * u_strength;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, a);
+}`,
   // A poster colour layer that moves: its gradient flows along its angle, turns, or
   // breathes into its colours the other way round.
   fill: `
@@ -1000,6 +1303,16 @@ const OWN_DEFAULTS: Partial<Record<ShaderKind, string[]>> = {
   risers: ['#22d3ee', '#a855f7', '#ff4f7b', '#60a5fa'],
   // Grid near, grid far, horizon glow.
   synthgrid: ['#ff2bd6', '#7c3aed', '#22d3ee'],
+  nebula: ['#1e1b4b', '#7c3aed', '#ec4899', '#22d3ee'],
+  // Lit tops, shaded undersides.
+  clouds: ['#ffffff', '#b9c8e6'],
+  // Deep water, light.
+  caustics: ['#0e7490', '#a5f3fc'],
+  // Bolt, sky flash.
+  lightning: ['#c4b5fd', '#6366f1'],
+  stainedglass: ['#b91c1c', '#1d4ed8', '#f59e0b', '#15803d'],
+  // The cross, its halo, the rays.
+  crossglow: ['#fffdf2', '#ffd98a', '#ffb45e'],
 };
 
 // ---------- One block ----------
@@ -1009,6 +1322,12 @@ class Painter {
   colors: [number, number, number][] = [];
   last = -1;
   held = false;
+  /**
+   * How far into its animation it is, in its own seconds: the clock adds each tick's time
+   * times the speed. Changing the speed then carries on from where it is (multiplying the
+   * clock by the speed made the picture leap to another moment at every step of the slider).
+   */
+  phase = Math.random() * 40;
   private ctx: CanvasRenderingContext2D | null = null;
   private bitmap: ImageBitmapRenderingContext | null = null;
   width = 0;
@@ -1035,7 +1354,14 @@ class Painter {
     // the missing ones from their own set.
     if (
       own &&
-      (p.kind === 'marble' || p.kind === 'sun' || p.kind === 'sunburst' || p.kind === 'halo')
+      (p.kind === 'marble' ||
+        p.kind === 'sun' ||
+        p.kind === 'sunburst' ||
+        p.kind === 'halo' ||
+        p.kind === 'clouds' ||
+        p.kind === 'caustics' ||
+        p.kind === 'lightning' ||
+        p.kind === 'crossglow')
     )
       while (this.colors.length < own.length)
         this.colors.push(parseColor(own[this.colors.length]!)!);
@@ -1049,7 +1375,9 @@ class Painter {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const lite = getQuality() === 'lite' ? 0.75 : 1;
     let k = RES[this.params.kind] * dpr * lite * (recordingFull ? 1 : adapt);
-    k = Math.min(k, MAX_SIDE / w, MAX_SIDE / h);
+    const most =
+      RES[this.params.kind] >= 0.6 && getQuality() !== 'lite' ? MAX_SIDE_CRISP : MAX_SIDE;
+    k = Math.min(k, most / w, most / h);
     this.width = Math.max(1, Math.round(w * k));
     this.height = Math.max(1, Math.round(h * k));
     if (this.canvas.width !== this.width) this.canvas.width = this.width;
@@ -1057,7 +1385,14 @@ class Painter {
     this.last = -1;
   }
 
-  draw(seconds: number) {
+  /** One more picture, `dt` seconds after the last (the clock's way of drawing). */
+  step(dt: number) {
+    this.phase += dt * this.params.speed;
+    this.draw(this.phase, true);
+  }
+
+  /** The picture `seconds` in (a recording's way), or exactly at `seconds` when `own`. */
+  draw(seconds: number, own = false) {
     if (!this.ctx && !this.bitmap) return;
     if (!this.width) this.resize();
     if (!this.width) return;
@@ -1089,7 +1424,7 @@ class Painter {
       flat.set(col, i * 3);
     }
     gl.uniform2f(p.loc.u_res!, this.width, this.height);
-    gl.uniform1f(p.loc.u_t!, seconds * q.speed);
+    gl.uniform1f(p.loc.u_t!, own ? seconds : seconds * q.speed);
     gl.uniform3fv(p.loc.u_c!, flat);
     gl.uniform1f(p.loc.u_n!, c.length);
     gl.uniform1f(p.loc.u_strength!, Math.min(1, q.strength));
@@ -1211,9 +1546,14 @@ function tick(now: number) {
         }
         continue;
       }
-      if (now - p.last < gap) continue;
+      // Sped up, it is drawn more often (up to 36 a second): fast movement stays smooth
+      // instead of jumping from picture to picture.
+      const quick = lite ? 1 : Math.min(1.5, Math.max(1, p.params.speed));
+      if (now - p.last < gap / quick) continue;
+      // After a pause (off screen, another tab) it carries on, without leaping ahead.
+      const dt = p.last < 0 ? 0 : Math.min(0.25, (now - p.last) / 1000);
       p.last = now;
-      p.draw(now / 1000);
+      p.step(dt);
       drew = true;
     }
     if (drew) judge(performance.now() - t0);

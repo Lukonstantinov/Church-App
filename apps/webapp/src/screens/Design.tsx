@@ -23,7 +23,6 @@ import {
 } from '../components/CoverEffects';
 import { DraftsOnPhone } from '../components/DraftsOnPhone';
 import { EffectStudio } from '../components/EffectStudio';
-import { Fold } from '../components/Fold';
 import { FreePoster } from '../components/FreePoster';
 import { DesignStudio } from '../components/DesignStudio';
 import { PosterPicker, PosterStudio } from '../components/PosterStudio';
@@ -56,6 +55,7 @@ import { useFmt } from '../lib/format';
 import { useMotion } from '../lib/motion';
 import { useQuality } from '../lib/perf';
 import { useT } from '../lib/i18n';
+import { storage } from '../lib/storage';
 import { useNav } from '../lib/nav';
 import {
   useCalendar,
@@ -112,6 +112,7 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
   const motionPref = useMotion();
   const quality = useQuality();
   const isAdmin = me.data?.user.isAdmin ?? false;
+  const [open, setOpen] = useState(() => storage.get('church.design.section') ?? 'design.free');
 
   const meetings = (calendar.data?.meetings ?? [])
     .filter((m) => m.status !== 'cancelled' && Date.parse(m.endsAt) > now)
@@ -125,8 +126,253 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
   const tplName = (id: number | null) =>
     id ? templates.data?.find((x) => x.id === id)?.name : undefined;
 
+  // The tab's parts: what is made here (posters, effects) and how the app itself looks.
+  // One is open at a time, picked in the list — beside it on a wide screen, above it on a phone.
+  const sections: {
+    id: string;
+    part: 'make' | 'looks';
+    icon: string;
+    title: string;
+    hint: string;
+    body: () => ReactNode;
+  }[] = [
+    {
+      id: 'design.free',
+      part: 'make',
+      icon: '🎬',
+      title: t.freePoster.title,
+      hint: t.freePoster.hint,
+      body: () => (
+        <>
+          <FreePoster g={active} />
+        </>
+      ),
+    },
+    {
+      id: 'design.studio',
+      part: 'looks',
+      icon: '🖼',
+      title: t.studio.title,
+      hint: t.studio.hint,
+      body: () => (
+        <>
+          <DesignStudio g={active} />
+        </>
+      ),
+    },
+    {
+      id: 'design.posters',
+      part: 'make',
+      icon: '🪧',
+      title: t.posters.title,
+      hint: t.posters.hint,
+      body: () => (
+        <>
+          <PosterStudio g={active} />
+        </>
+      ),
+    },
+    {
+      id: 'design.effects',
+      part: 'make',
+      icon: '✨',
+      title: t.effectStudio.title,
+      hint: t.effectStudio.hint,
+      body: () => (
+        <>
+          <EffectStudio />
+        </>
+      ),
+    },
+    {
+      id: 'design.templates',
+      part: 'looks',
+      icon: '🎨',
+      title: t.design.templates,
+      hint: t.design.templatesHint,
+      body: () => (
+        <>
+          <section>
+            <div className="motion-still grid grid-cols-2 gap-3">
+              {(templates.data ?? []).map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => setEditing(tpl)}
+                  className="glass overflow-hidden rounded-2xl text-left shadow-card active:scale-[0.98]"
+                >
+                  <LookTop look={templateLook(tpl)} className="relative aspect-[16/10] p-2.5">
+                    <LivingLayer kind={tpl.motion ?? 'calm'} />
+                    {group.data?.meetingTemplateId === tpl.id && (
+                      <span className="relative self-start rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-black">
+                        ★ {t.design.defaultBadge}
+                      </span>
+                    )}
+                    <span className="relative mt-auto text-[12px] font-bold uppercase tracking-wider opacity-85">
+                      {tpl.motion ? t.meetings.motions[tpl.motion] : t.design.motionInherit}
+                    </span>
+                  </LookTop>
+                  <span className="block truncate p-2.5 text-[14px] font-semibold">{tpl.name}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setEditing('new')}
+                className="glass flex min-h-[130px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-hint/30 text-hint active:scale-[0.98]"
+              >
+                <span className="brand-gradient flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-cta">
+                  <IconPlus size={22} />
+                </span>
+                <span className="text-[14px] font-semibold">{t.design.newTemplate}</span>
+              </button>
+            </div>
+            {(templates.data?.length ?? 0) > 0 &&
+              (
+                [
+                  [
+                    'meetingTemplateId',
+                    t.design.defaultForMeetings,
+                    t.design.defaultForMeetingsHint,
+                  ],
+                  ['eventTemplateId', t.design.defaultForEvents, t.design.defaultForEventsHint],
+                ] as const
+              ).map(([key, title, hint]) => (
+                <div key={key} className="mt-3">
+                  <div className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
+                    {title}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5 px-1">
+                    {[null, ...(templates.data ?? []).map((x) => x.id)].map((id) => (
+                      <Pill
+                        key={id ?? 'own'}
+                        on={(group.data?.[key] ?? null) === id}
+                        onClick={() =>
+                          saveStudio.mutate(
+                            { [key]: id },
+                            { onError: () => toast(t.common.saveFailed, 'error') },
+                          )
+                        }
+                        label={id === null ? t.design.ministryLook : (tplName(id) ?? '')}
+                      />
+                    ))}
+                  </div>
+                  <p className="mt-1.5 px-3 text-[12px] text-hint">{hint}</p>
+                </div>
+              ))}
+          </section>
+        </>
+      ),
+    },
+    {
+      id: 'design.speakers',
+      part: 'looks',
+      icon: '🎤',
+      title: t.design.speakerSection,
+      hint: t.design.speakerSectionHint,
+      body: () => (
+        <>
+          <MinistrySpeakerLook g={active} />
+        </>
+      ),
+    },
+    {
+      id: 'design.items',
+      part: 'looks',
+      icon: '📅',
+      title: t.design.itemsTitle,
+      hint: t.design.itemsHint,
+      body: () => (
+        <>
+          <Section title={t.design.meetings}>
+            {meetings.length === 0 && <Row title={t.design.nothing} />}
+            {meetings.map((m) => (
+              <Row
+                key={m.id}
+                before={<Thumb look={m.look ?? groupLook(active)} motion={m.motion} />}
+                title={m.title}
+                subtitle={`${f.relativeDay(m.startsAt)} · ${f.time(m.startsAt)} · ${
+                  tplName(m.templateId) ??
+                  (m.design?.custom ? t.design.ownLook : t.design.ministryLook)
+                }`}
+                onClick={() => setDesigning(m.id)}
+              />
+            ))}
+          </Section>
+
+          <Section title={t.design.events}>
+            {events.length === 0 && <Row title={t.design.nothing} />}
+            {events.map((e) => (
+              <Row
+                key={e.id}
+                before={<Thumb look={e.look ?? groupLook(active)} photo={e.coverUrl} />}
+                title={e.title}
+                subtitle={`${f.weekdayDayMonth(e.startsAt)} · ${
+                  tplName(e.templateId) ??
+                  (e.design?.custom ? t.design.ownLook : t.design.ministryLook)
+                }`}
+                onClick={() => setApplying({ kind: 'event', e })}
+              />
+            ))}
+          </Section>
+
+          <Section title={t.design.posts}>
+            {posts.length === 0 && <Row title={t.design.nothing} />}
+            {posts.map((p) => (
+              <Row
+                key={p.id}
+                before={<Thumb look={p.look ?? groupLook(active)} photo={p.photos[0]?.url} />}
+                title={p.title || p.text.slice(0, 60) || '—'}
+                subtitle={f.weekdayDayMonth(p.createdAt)}
+                onClick={
+                  p.canDesign
+                    ? () => push({ name: 'editPost', groupId: active.id, postId: p.id })
+                    : undefined
+                }
+              />
+            ))}
+          </Section>
+        </>
+      ),
+    },
+    {
+      id: 'design.settings',
+      part: 'looks',
+      icon: '⚙️',
+      title: t.design.settingsTitle,
+      hint: t.design.settingsHint,
+      body: () => (
+        <>
+          <Section footer={t.design.lockHint}>
+            {isAdmin ? (
+              <Toggle
+                label={`🔒 ${t.design.lockToggle}`}
+                checked={locked}
+                disabled={updateChurch.isPending}
+                onChange={(v) => updateChurch.mutate({ designLock: v })}
+              />
+            ) : (
+              <Row title={locked ? `🔒 ${t.design.lockOn}` : `🔓 ${t.design.lockOff}`} />
+            )}
+          </Section>
+
+          <QualityPicker />
+          {/* If something looks stuck or slow, start the app over (keeps the open tab). */}
+          <Section footer={t.common.reloadHint}>
+            <Row title={`↻ ${t.common.reload}`} onClick={() => window.location.reload()} />
+          </Section>
+        </>
+      ),
+    },
+  ];
+  const current = sections.find((x) => x.id === open) ?? sections[0]!;
+  const pick = (id: string) => {
+    haptic.tap();
+    storage.set('church.design.section', id);
+    setOpen(id);
+  };
+
   return (
-    <Screen tabs>
+    <Screen tabs wide>
       <GroupSwitcher groups={groups} active={active} subtitle={t.design.subtitle} />
       {/* Designing is easier on the whole screen (and on a computer, in a big window). */}
       <div className="-mt-2 flex justify-end">
@@ -143,185 +389,57 @@ export function Design({ groups, active }: { groups: GroupSummary[]; active: Gro
       {/* First, before anything heavy is drawn: drafts that closed the app can go here. */}
       <DraftsOnPhone />
 
-      <Fold
-        id="design.free"
-        icon="🎬"
-        title={t.freePoster.title}
-        hint={t.freePoster.hint}
-        defaultOpen
-      >
-        <FreePoster g={active} />
-      </Fold>
-
-      <Fold id="design.studio" icon="🖼" title={t.studio.title} hint={t.studio.hint}>
-        <DesignStudio g={active} />
-      </Fold>
-
-      <Fold id="design.posters" icon="🪧" title={t.posters.title} hint={t.posters.hint}>
-        <PosterStudio g={active} />
-      </Fold>
-
-      <Fold id="design.effects" icon="✨" title={t.effectStudio.title} hint={t.effectStudio.hint}>
-        <EffectStudio />
-      </Fold>
-
-      <Fold
-        id="design.templates"
-        icon="🎨"
-        title={t.design.templates}
-        hint={t.design.templatesHint}
-      >
-        <section>
-          <div className="motion-still grid grid-cols-2 gap-3">
-            {(templates.data ?? []).map((tpl) => (
-              <button
-                key={tpl.id}
-                type="button"
-                onClick={() => setEditing(tpl)}
-                className="glass overflow-hidden rounded-2xl text-left shadow-card active:scale-[0.98]"
-              >
-                <LookTop look={templateLook(tpl)} className="relative aspect-[16/10] p-2.5">
-                  <LivingLayer kind={tpl.motion ?? 'calm'} />
-                  {group.data?.meetingTemplateId === tpl.id && (
-                    <span className="relative self-start rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-black">
-                      ★ {t.design.defaultBadge}
-                    </span>
-                  )}
-                  <span className="relative mt-auto text-[12px] font-bold uppercase tracking-wider opacity-85">
-                    {tpl.motion ? t.meetings.motions[tpl.motion] : t.design.motionInherit}
-                  </span>
-                </LookTop>
-                <span className="block truncate p-2.5 text-[14px] font-semibold">{tpl.name}</span>
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setEditing('new')}
-              className="glass flex min-h-[130px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-hint/30 text-hint active:scale-[0.98]"
-            >
-              <span className="brand-gradient flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-cta">
-                <IconPlus size={22} />
-              </span>
-              <span className="text-[14px] font-semibold">{t.design.newTemplate}</span>
-            </button>
-          </div>
-          {(templates.data?.length ?? 0) > 0 &&
-            (
-              [
-                ['meetingTemplateId', t.design.defaultForMeetings, t.design.defaultForMeetingsHint],
-                ['eventTemplateId', t.design.defaultForEvents, t.design.defaultForEventsHint],
-              ] as const
-            ).map(([key, title, hint]) => (
-              <div key={key} className="mt-3">
-                <div className="px-3 text-[13px] font-semibold uppercase tracking-wide text-section-header">
-                  {title}
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5 px-1">
-                  {[null, ...(templates.data ?? []).map((x) => x.id)].map((id) => (
-                    <Pill
-                      key={id ?? 'own'}
-                      on={(group.data?.[key] ?? null) === id}
-                      onClick={() =>
-                        saveStudio.mutate(
-                          { [key]: id },
-                          { onError: () => toast(t.common.saveFailed, 'error') },
-                        )
-                      }
-                      label={id === null ? t.design.ministryLook : (tplName(id) ?? '')}
-                    />
-                  ))}
-                </div>
-                <p className="mt-1.5 px-3 text-[12px] text-hint">{hint}</p>
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[290px_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <nav className="flex flex-col gap-3 lg:sticky lg:top-4" aria-label={t.design.title}>
+          {(['make', 'looks'] as const).map((part) => (
+            <div key={part}>
+              <div className="mb-1.5 px-1 text-[12px] font-semibold uppercase tracking-wide text-section-header">
+                {part === 'make' ? t.design.partMake : t.design.partLooks}
               </div>
-            ))}
+              {/* A row to swipe on a phone; a list down the side on a wide screen. */}
+              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
+                {sections
+                  .filter((x) => x.part === part)
+                  .map((x) => {
+                    const on = x.id === current.id;
+                    return (
+                      <button
+                        key={x.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => pick(x.id)}
+                        className={`flex w-[132px] shrink-0 flex-col gap-1.5 rounded-2xl p-3 text-left transition active:scale-[0.98] lg:w-auto lg:flex-row lg:items-center lg:gap-3 lg:px-3 lg:py-2.5 ${
+                          on ? 'brand-gradient text-white shadow-cta' : 'glass shadow-card'
+                        }`}
+                      >
+                        <span
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[18px] ${
+                            on ? 'bg-white/20' : 'bg-hairline'
+                          }`}
+                        >
+                          {x.icon}
+                        </span>
+                        <span className="line-clamp-2 min-w-0 text-[13px] font-semibold leading-tight lg:text-[14px]">
+                          {x.title}
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        <section key={current.id} className="flex min-w-0 animate-rise flex-col gap-4">
+          <header className="px-1">
+            <h2 className="text-[20px] font-bold leading-tight">
+              {current.icon} {current.title}
+            </h2>
+            <p className="mt-1 text-[13px] leading-snug text-hint">{current.hint}</p>
+          </header>
+          {current.body()}
         </section>
-      </Fold>
-
-      <Fold
-        id="design.speakers"
-        icon="🎤"
-        title={t.design.speakerSection}
-        hint={t.design.speakerSectionHint}
-      >
-        <MinistrySpeakerLook g={active} />
-      </Fold>
-
-      <Fold id="design.items" icon="📅" title={t.design.itemsTitle} hint={t.design.itemsHint}>
-        <Section title={t.design.meetings}>
-          {meetings.length === 0 && <Row title={t.design.nothing} />}
-          {meetings.map((m) => (
-            <Row
-              key={m.id}
-              before={<Thumb look={m.look ?? groupLook(active)} motion={m.motion} />}
-              title={m.title}
-              subtitle={`${f.relativeDay(m.startsAt)} · ${f.time(m.startsAt)} · ${
-                tplName(m.templateId) ??
-                (m.design?.custom ? t.design.ownLook : t.design.ministryLook)
-              }`}
-              onClick={() => setDesigning(m.id)}
-            />
-          ))}
-        </Section>
-
-        <Section title={t.design.events}>
-          {events.length === 0 && <Row title={t.design.nothing} />}
-          {events.map((e) => (
-            <Row
-              key={e.id}
-              before={<Thumb look={e.look ?? groupLook(active)} photo={e.coverUrl} />}
-              title={e.title}
-              subtitle={`${f.weekdayDayMonth(e.startsAt)} · ${
-                tplName(e.templateId) ??
-                (e.design?.custom ? t.design.ownLook : t.design.ministryLook)
-              }`}
-              onClick={() => setApplying({ kind: 'event', e })}
-            />
-          ))}
-        </Section>
-
-        <Section title={t.design.posts}>
-          {posts.length === 0 && <Row title={t.design.nothing} />}
-          {posts.map((p) => (
-            <Row
-              key={p.id}
-              before={<Thumb look={p.look ?? groupLook(active)} photo={p.photos[0]?.url} />}
-              title={p.title || p.text.slice(0, 60) || '—'}
-              subtitle={f.weekdayDayMonth(p.createdAt)}
-              onClick={
-                p.canDesign
-                  ? () => push({ name: 'editPost', groupId: active.id, postId: p.id })
-                  : undefined
-              }
-            />
-          ))}
-        </Section>
-      </Fold>
-
-      <Fold
-        id="design.settings"
-        icon="⚙️"
-        title={t.design.settingsTitle}
-        hint={t.design.settingsHint}
-      >
-        <Section footer={t.design.lockHint}>
-          {isAdmin ? (
-            <Toggle
-              label={`🔒 ${t.design.lockToggle}`}
-              checked={locked}
-              disabled={updateChurch.isPending}
-              onChange={(v) => updateChurch.mutate({ designLock: v })}
-            />
-          ) : (
-            <Row title={locked ? `🔒 ${t.design.lockOn}` : `🔓 ${t.design.lockOff}`} />
-          )}
-        </Section>
-
-        <QualityPicker />
-        {/* If something looks stuck or slow, start the app over (keeps the open tab). */}
-        <Section footer={t.common.reloadHint}>
-          <Row title={`↻ ${t.common.reload}`} onClick={() => window.location.reload()} />
-        </Section>
-      </Fold>
+      </div>
 
       {editing && (
         <TemplateSheet

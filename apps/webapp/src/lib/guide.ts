@@ -603,6 +603,20 @@ export const GUIDE: GuideSection[] = [
         ],
       },
       {
+        title:
+          'Sublayers, drag handles, 12 more effects, sorted effect picker, Design in two parts',
+        steps: [
+          'Sublayers (poster editor): any poster layer can have `clip: true` — it then belongs to the nearest layer under it that isn’t a sublayer (layerGroups in shared/posterTemplates.ts) and shows only where that layer is: inside a cut-out’s outline, a text’s letters, a colour layer’s shape, an effect layer’s box. In a layer’s settings: «Добавить слой только поверх этого» (gradient, colour, effect, picture, text) and the switch «Показывать только поверх слоя под ним». LayeredPoster draws them inside the base layer’s masked box through SubSpace (the poster’s own coordinates, moved back from the layer’s centre and turned back by its turn), so a sublayer is placed on the poster, not on its layer. Layers move with their sublayers; deleting a layer leaves its sublayers as ordinary layers; a hidden layer hides them.',
+          'Drag handles (PosterGestures, editor only): the chosen layer has a corner handle (resize) and side / bottom handles (stretch one way — pictures get `stretch`, colour and effect layers their width / height). Sizes go far past the poster (LAYER_REACH: size up to 2000 %, centre −300…400 %); the poster cuts off what is outside it. Handles of a layer bigger than the poster wait at the poster’s edge.',
+          'New effects (shader engine): nebula, clouds, caustics (water light), ink, lightning, pulserings, honeycomb, dotwave, grainient, beams, stainedglass, crossglow. To add one: its name in MEETING_MOTIONS + a MOTION_GROUPS group + MOTION_KNOBS (shared/motions.ts), a fragment in FRAGMENTS + RES + SHADER_KINDS (ShaderEffect.tsx), its name in ru/en/lt.',
+          'Speed: shader painters and particle canvases keep their own phase (time × speed is added tick by tick), so moving the speed slider carries on from where the animation is instead of jumping; sped-up effects are drawn up to 36 times a second. Canvas particles have «Шлейф» (`tune.trail`): the last picture is partly kept, so fast particles leave a flowing tail.',
+          'Effect picker (MotionPicker.tsx): a search field, and one type at a time picked in a row of chips — ⭐ favourites and 🕘 recent (kept on the phone: church.fx.fav / church.fx.recent), chosen, own effects, each MOTION_GROUPS type, or all in folding groups. The star on a preview adds it to favourites.',
+          'Effect studio: «🎲 Придумать уникальный эффект» (inventEffect in EffectStudio.tsx) builds a new stack by chance — a background, often light and particles, in matching colours with their own pattern numbers; ⧉ duplicates a layer.',
+          'Background removal: a second model, DeepLab v3 (3 MB, /media/model/deeplab), finds animals and everyday objects — pets are kept with their people, and a photo without people gives its animal or object. If it fails to load, people are found as before.',
+          'Design tab: its parts are a list (beside the work area on a computer, a row to swipe on a phone) in two groups — «Создать» (animated poster, posters, effect studio) and «Оформление приложения» (screens, templates, speakers, items, settings); one part is open at a time (church.design.section).',
+        ],
+      },
+      {
         title: 'Effect studio (own effects), more effects, full screen, Instagram view',
         steps: [
           'Own effects = effect templates (effect_templates). Design → «Студия эффектов» (EffectStudio.tsx): up to 8 layers of built-in effects, each with all its settings plus a blend mode (`tune.blend`, MOTION_BLENDS) and a place in the frame (`tune.box` x/y/w/h %, dragged on the preview). Pickers show them under «⭐ Мои эффекты»; picking one stores kind `custom` with `tune.ref` = the template id, drawn LIVE by CustomEffect (ui.tsx) — editing the template changes it everywhere. An own effect can’t contain another (schema refine + builtIn()).',

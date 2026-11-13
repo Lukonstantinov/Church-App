@@ -15,10 +15,19 @@ import { LivingLayer } from './LivingLayers';
 export * from './LivingLayers';
 
 /** Page container. `tabs` leaves room for the floating tab bar. */
-export function Screen({ children, tabs }: { children: ReactNode; tabs?: boolean }) {
+export function Screen({
+  children,
+  tabs,
+  wide,
+}: {
+  children: ReactNode;
+  tabs?: boolean;
+  /** Uses a computer's whole width (the Design tab: its list beside its work area). */
+  wide?: boolean;
+}) {
   return (
     <main
-      className={`mx-auto flex min-h-dvh max-w-xl animate-rise flex-col gap-5 px-4 pt-4 ${tabs ? 'pb-32' : 'pb-10'}`}
+      className={`mx-auto flex min-h-dvh ${wide ? 'max-w-xl lg:max-w-6xl' : 'max-w-xl'} animate-rise flex-col gap-5 px-4 pt-4 ${tabs ? 'pb-32' : 'pb-10'}`}
     >
       {children}
     </main>
