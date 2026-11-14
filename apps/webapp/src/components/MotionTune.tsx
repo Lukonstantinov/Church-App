@@ -476,7 +476,12 @@ export function MotionTuneControls({
       )}
       {/* A background colour of the effect's own (sky effects have theirs above). */}
       {!knobs.includes('bg') && (
-        <ColorRow label={k.effectBg} none={k.bgNone} value={tune.bg ?? null} onChange={(bg) => set({ bg })} />
+        <ColorRow
+          label={k.effectBg}
+          none={k.bgNone}
+          value={tune.bg ?? null}
+          onChange={(bg) => set({ bg })}
+        />
       )}
       <button
         type="button"
