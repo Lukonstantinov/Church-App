@@ -281,25 +281,234 @@ interface Effect {
   el: HTMLElement;
   box: { x: number; y: number; w: number; h: number };
   blend: GlobalCompositeOperation;
+  /** How see-through the layers holding it make it. */
   opacity: number;
+  /** Its own opacity (a drawn copy carries it already; a live canvas doesn't). */
+  ownOpacity: number;
   canvas: HTMLCanvasElement | null;
   anims: Animation[];
   /** The masks of the boxes it sits in (a cut-out's outline, letters, soft edges). */
   masks: Mask[];
   /** A layer's filters (blur, black and white…) at the recording's scale, or none. */
-  filter: string | null;
+  filter: Filter | null;
 }
 
 /**
  * The filters of the adjusted layer an effect sits in (LayeredPoster `data-adjust`), for
  * the canvas the effect is drawn onto: blurs scaled to the recording's size.
  */
-function filterOf(el: HTMLElement, node: HTMLElement, k: number): string | null {
+function filterOf(el: HTMLElement, node: HTMLElement, k: number): Filter | null {
   const box = el.parentElement?.closest<HTMLElement>('[data-adjust]');
   if (!box || !node.contains(box)) return null;
   const f = getComputedStyle(box).filter;
   if (!f || f === 'none') return null;
-  return f.replace(/blur\(([\d.]+)px\)/g, (_, px: string) => `blur(${Number(px) * k}px)`);
+  return {
+    css: f.replace(/blur\(([\d.]+)px\)/g, (_, px: string) => `blur(${Number(px) * k}px)`),
+    grain: Number(box.dataset.grain) || 0,
+    frost: Number(box.dataset.frost) || 0,
+    vignette: Number(box.dataset.vignette) || 0,
+  };
+}
+
+/**
+ * How the layers holding an effect show it: their see-through-ness multiplied, and the
+ * blend mode of the nearest one that has one. A poster layer sets both on its own box
+ * (LayeredPoster `look`, `Adjusted`), around the effect — read from the effect alone, a
+ * half-transparent or blended layer was recorded at full strength over what is under it.
+ */
+function heldLook(el: HTMLElement, node: HTMLElement) {
+  let alpha = 1;
+  let blend: string | null = null;
+  for (let e = el.parentElement; e && e !== node; e = e.parentElement) {
+    const css = getComputedStyle(e);
+    const o = Number.parseFloat(css.opacity);
+    if (Number.isFinite(o)) alpha *= o;
+    if (!blend && css.mixBlendMode && css.mixBlendMode !== 'normal') blend = css.mixBlendMode;
+  }
+  return { alpha, blend };
+}
+
+/** A layer's adjustments: the CSS filter, and its SVG part (grain, frost, vignette). */
+interface Filter {
+  css: string;
+  grain: number;
+  frost: number;
+  vignette: number;
+}
+
+/** Whether this browser's canvas takes CSS filters (iPhones' Safari long didn't). */
+let filterWorks: boolean | null = null;
+function canvasFilters() {
+  if (filterWorks === null) {
+    const c = canvasOf(1, 1).getContext('2d')!;
+    c.filter = 'blur(1px)';
+    filterWorks = c.filter === 'blur(1px)';
+  }
+  return filterWorks;
+}
+
+/** Fine noise the size of the frame, made once (the grain of adjusted layers). */
+let grainPic: HTMLCanvasElement | null = null;
+function grainOf(w: number, h: number) {
+  if (grainPic && grainPic.width === w && grainPic.height === h) return grainPic;
+  grainPic = canvasOf(w, h);
+  const g = grainPic.getContext('2d')!;
+  const img = g.createImageData(w, h);
+  let seed = 7;
+  for (let i = 0; i < img.data.length; i += 4) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const v = 64 + ((seed >> 8) % 128);
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+    img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return grainPic;
+}
+
+/**
+ * A layer's adjustments drawn by our own code, for a canvas that can't take CSS filters:
+ * blur (a smaller copy enlarged), the colour filters as one colour matrix, then grain,
+ * frost and vignette over the layer's own pixels — as the SVG filter of `Adjusted` does.
+ */
+function filtered(src: HTMLCanvasElement, f: Filter): HTMLCanvasElement {
+  const { width: w, height: h } = src;
+  const out = canvasOf(w, h);
+  const o = out.getContext('2d', { willReadFrequently: true })!;
+  const blur = /blur\(([\d.]+)px\)/.exec(f.css);
+  if (blur && Number(blur[1]) > 0.5) {
+    // Two halvings per doubling of the radius, enlarged back smoothly.
+    const s = Math.max(1, Number(blur[1]) / 1.5);
+    const tw = Math.max(1, Math.round(w / s));
+    const th = Math.max(1, Math.round(h / s));
+    const tiny = canvasOf(tw, th);
+    const t = tiny.getContext('2d')!;
+    t.imageSmoothingQuality = 'high';
+    t.drawImage(src, 0, 0, tw, th);
+    o.imageSmoothingQuality = 'high';
+    o.drawImage(tiny, 0, 0, w, h);
+    freeCanvas(tiny);
+  } else o.drawImage(src, 0, 0);
+  // The colour filters, in their CSS order, folded into one matrix.
+  let m = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  let add = [0, 0, 0];
+  const mul = (n: number[], a: number[] = [0, 0, 0]) => {
+    const r: number[] = [];
+    for (let i = 0; i < 3; i++)
+      for (let j = 0; j < 3; j++)
+        r.push(n[i * 3]! * m[j]! + n[i * 3 + 1]! * m[3 + j]! + n[i * 3 + 2]! * m[6 + j]!);
+    add = [0, 1, 2].map(
+      (i) => n[i * 3]! * add[0]! + n[i * 3 + 1]! * add[1]! + n[i * 3 + 2]! * add[2]! + a[i]!,
+    );
+    m = r;
+  };
+  let touched = false;
+  for (const [, name, arg] of f.css.matchAll(/([a-z-]+)\(([^)]*)\)/g)) {
+    const v = arg!.trim().endsWith('%') ? Number.parseFloat(arg!) / 100 : Number.parseFloat(arg!);
+    if (!Number.isFinite(v)) continue;
+    touched ||= name !== 'blur' && name !== 'url';
+    if (name === 'brightness') mul([v, 0, 0, 0, v, 0, 0, 0, v]);
+    else if (name === 'contrast')
+      mul(
+        [v, 0, 0, 0, v, 0, 0, 0, v],
+        [0, 1, 2].map(() => 0.5 - 0.5 * v),
+      );
+    else if (name === 'saturate' || name === 'grayscale') {
+      const s = name === 'saturate' ? v : 1 - Math.min(1, v);
+      mul([
+        0.213 + 0.787 * s,
+        0.715 - 0.715 * s,
+        0.072 - 0.072 * s,
+        0.213 - 0.213 * s,
+        0.715 + 0.285 * s,
+        0.072 - 0.072 * s,
+        0.213 - 0.213 * s,
+        0.715 - 0.715 * s,
+        0.072 + 0.928 * s,
+      ]);
+    } else if (name === 'sepia') {
+      const a = 1 - Math.min(1, v);
+      mul([
+        0.393 + 0.607 * a,
+        0.769 - 0.769 * a,
+        0.189 - 0.189 * a,
+        0.349 - 0.349 * a,
+        0.686 + 0.314 * a,
+        0.168 - 0.168 * a,
+        0.272 - 0.272 * a,
+        0.534 - 0.534 * a,
+        0.131 + 0.869 * a,
+      ]);
+    } else if (name === 'hue-rotate') {
+      const r = (v * Math.PI) / 180;
+      const c = Math.cos(r);
+      const n = Math.sin(r);
+      mul([
+        0.213 + c * 0.787 - n * 0.213,
+        0.715 - c * 0.715 - n * 0.715,
+        0.072 - c * 0.072 + n * 0.928,
+        0.213 - c * 0.213 + n * 0.143,
+        0.715 + c * 0.285 + n * 0.14,
+        0.072 - c * 0.072 - n * 0.283,
+        0.213 - c * 0.213 - n * 0.787,
+        0.715 - c * 0.715 + n * 0.715,
+        0.072 + c * 0.928 + n * 0.072,
+      ]);
+    }
+  }
+  // Frost: a little lighter and paler (as the CSS part of adjustFilter adds), then milk.
+  if (touched) {
+    const img = o.getImageData(0, 0, w, h);
+    const d = img.data;
+    const a0 = add[0]! * 255;
+    const a1 = add[1]! * 255;
+    const a2 = add[2]! * 255;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i]!;
+      const g = d[i + 1]!;
+      const b = d[i + 2]!;
+      d[i] = m[0]! * r + m[1]! * g + m[2]! * b + a0 * (d[i + 3]! / 255);
+      d[i + 1] = m[3]! * r + m[4]! * g + m[5]! * b + a1 * (d[i + 3]! / 255);
+      d[i + 2] = m[6]! * r + m[7]! * g + m[8]! * b + a2 * (d[i + 3]! / 255);
+    }
+    o.putImageData(img, 0, 0);
+  }
+  const grain = Math.min(1, f.grain + f.frost * 0.35);
+  if (grain > 0 || f.frost > 0 || f.vignette > 0) {
+    // Laid over the layer's pixels only: drawn on a copy, then cut to the layer's shape.
+    const shape = canvasOf(w, h);
+    shape.getContext('2d')!.drawImage(out, 0, 0);
+    o.save();
+    if (grain > 0) {
+      o.globalCompositeOperation = 'overlay';
+      o.globalAlpha = grain * 0.7;
+      o.drawImage(grainOf(w, h), 0, 0);
+    }
+    if (f.frost > 0) {
+      o.globalCompositeOperation = 'source-over';
+      o.globalAlpha = f.frost * 0.22;
+      o.fillStyle = '#ffffff';
+      o.fillRect(0, 0, w, h);
+    }
+    if (f.vignette > 0) {
+      o.globalCompositeOperation = 'source-over';
+      o.globalAlpha = 1;
+      // The SVG's gradient: centred, 72 % of the box each way (an oval on a long poster).
+      o.translate(w / 2, h / 2);
+      o.scale(w, h);
+      const v = o.createRadialGradient(0, 0, 0, 0, 0, 0.72);
+      v.addColorStop(0.45, 'rgba(0,0,0,0)');
+      v.addColorStop(1, `rgba(0,0,0,${Math.min(1, f.vignette * 0.95)})`);
+      o.fillStyle = v;
+      o.fillRect(-0.5, -0.5, 1, 1);
+      o.setTransform(1, 0, 0, 1, 0, 0);
+    }
+    o.globalCompositeOperation = 'destination-in';
+    o.globalAlpha = 1;
+    o.drawImage(shape, 0, 0);
+    o.restore();
+    freeCanvas(shape);
+  }
+  return out;
 }
 
 /** A box's CSS mask drawn once as a picture of the box, placed where the box is. */
@@ -589,7 +798,10 @@ async function prepareEffects(
   return effects.map((el, i) => {
     const css = getComputedStyle(el);
     // How the layer mixes with what is under it (the same names, but one).
-    const mode = css.mixBlendMode === 'plus-lighter' ? 'lighter' : css.mixBlendMode;
+    const held = heldLook(el, node);
+    const own = css.mixBlendMode && css.mixBlendMode !== 'normal' ? css.mixBlendMode : null;
+    const raw = own ?? held.blend ?? 'normal';
+    const mode = raw === 'plus-lighter' ? 'lighter' : raw;
     const anims = el.getAnimations({ subtree: true });
     anims.forEach((a) => a.pause());
     const canvas = el.querySelector('canvas');
@@ -597,7 +809,9 @@ async function prepareEffects(
       el,
       box: boxIn(node, el),
       blend: (mode === 'normal' ? 'source-over' : mode) as GlobalCompositeOperation,
-      opacity: Number(css.opacity),
+      // A drawn copy of the layer carries its own opacity already; the canvas doesn't.
+      opacity: held.alpha,
+      ownOpacity: Number(css.opacity),
       // A particle layer is one canvas we draw ourselves (no CSS animations in it).
       canvas: canvas && anims.length === 0 ? canvas : null,
       anims,
@@ -661,12 +875,28 @@ async function drawEffects(
       src = maskScratch;
       at = [0, 0, width, height];
     }
+    // The layer's adjustments: by the canvas where it can, else by our own code (iPhones).
+    let own: HTMLCanvasElement | null = null;
+    if (fx.filter && !canvasFilters()) {
+      if (src !== maskScratch) {
+        // Drawn alone at its place on a frame-sized copy first, so grain and vignette sit
+        // where the layer does.
+        const { width, height } = ctx.canvas;
+        const c = canvasOf(width, height);
+        c.getContext('2d')!.drawImage(src, ...at);
+        at = [0, 0, width, height];
+        own = filtered(c, fx.filter);
+        freeCanvas(c);
+      } else own = filtered(maskScratch, fx.filter);
+      src = own;
+    }
     ctx.save();
-    ctx.globalAlpha = fx.canvas ? fx.opacity : 1;
+    ctx.globalAlpha = fx.opacity * (fx.canvas ? fx.ownOpacity : 1);
     ctx.globalCompositeOperation = fx.blend;
-    if (fx.filter) ctx.filter = fx.filter;
+    if (fx.filter && canvasFilters()) ctx.filter = fx.filter.css;
     ctx.drawImage(src, ...at);
     ctx.restore();
+    if (own) freeCanvas(own);
     // A drawn copy of the layer is used once; the particle canvas is the live one.
     if (!fx.canvas) freeCanvas(pic);
     const still = over[i];

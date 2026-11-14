@@ -228,7 +228,7 @@ from a smooth background by colour, `splitGraphics`; layers carry `cut`), an era
 `data-layer-id`; effect layers have optional x/y/w/h); unfinished work is kept as a draft on the phone (`lib/drafts.ts`; a draft open when the app crashed is set
 aside — DraftAside card, Design → drafts list —,
 fresh picture links via POST `/api/poster-templates/links`); the animated poster maker can use the same layer editor
-(«Свои слои», `PosterLayersEditor`); Telegram's swipe-to-close is off (`disableVerticalSwipes`); the recorder keeps the still parts in bands between effects and cuts effects to their masks; editor previews are mockups of the real event/meeting shapes; place in % / container units, opacity, blend mode, layer styles); chosen per event or
+(«Свои слои», `PosterLayersEditor`); Telegram's swipe-to-close is off (`disableVerticalSwipes`); the recorder keeps the still parts in bands between effects and cuts effects to their masks (each effect takes the opacity and blend mode of the layers holding it, `heldLook`; layer adjustments are redrawn by our own code where the canvas can't take CSS filters — iPhones — `filtered`, from `data-grain`/`data-frost`/`data-vignette` on the `Adjusted` box); editor previews are mockups of the real event/meeting shapes; place in % / container units, opacity, blend mode, layer styles); chosen per event or
 meeting (`poster_template_id`, rows carry `poster`) and drawn by `LayeredPoster` on covers, screens,
 tiles, the pinned card and the bot poster.
 

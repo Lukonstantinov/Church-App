@@ -183,6 +183,11 @@ function Adjusted({ layer, children }: { layer: PosterLayer; children: ReactNode
         ...(layer.blend && layer.blend !== 'normal' ? { mixBlendMode: layer.blend } : {}),
       }}
       data-adjust=""
+      // The SVG part again as numbers: a recording redraws it on phones whose canvas
+      // can't take CSS filters (lib/recorder.ts).
+      data-grain={grain || undefined}
+      data-frost={f || undefined}
+      data-vignette={vignette || undefined}
     >
       {svg && (
         <svg width="0" height="0" className="absolute" aria-hidden="true">
