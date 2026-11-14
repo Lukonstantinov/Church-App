@@ -1847,6 +1847,259 @@ void main() {
   a = max(a, low);
   gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
 }`,
+  // Depth lines: a deep gradient seen through vertical bars of light at several depths —
+  // far ones thin, dim and slow, near ones wide, soft and quicker — drifting sideways.
+  depthlines: `
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.05;
+  vec3 base = palette(clamp(0.55 - p.y * 0.9 + 0.15 * sin(p.x * 1.3 + t), 0.0, 1.0), false);
+  vec3 col = base * 0.55;
+  float layers = 2.0 + u_lines;
+  for (int i = 0; i < 10; i++) {
+    float fi = float(i);
+    if (fi >= layers) break;
+    float z = fi / max(1.0, layers - 1.0);
+    float n = (7.0 + 9.0 * u_density) * mix(2.2, 0.8, z);
+    float y = p.y + 0.37 * fi;
+    float x = p.x + u_bend * (0.12 * sin(y * 2.3 + t * 3.0 + fi) + 0.04 * sin(y * 6.1 - t * 2.0))
+      + (fbm3(vec2(y * 1.4, fi * 3.7 + t)) - 0.5) * u_chaos * 0.3;
+    float u = x * n + t * (1.0 + 2.5 * z) * (fi * 0.37 + 1.0) + fi * 11.7 + u_seed;
+    float cell = floor(u);
+    float f = fract(u);
+    float w = 0.12 + 0.55 * hash1(cell + fi * 31.0) * min(u_weight, 1.6);
+    float soft = mix(0.02, 0.35, z) * mix(1.0, 0.4, u_sharp) + AA(u);
+    float bar = smoothstep(0.5 - w * 0.5 - soft, 0.5 - w * 0.5 + soft, f)
+      * (1.0 - smoothstep(0.5 + w * 0.5 - soft, 0.5 + w * 0.5 + soft, f));
+    float lum = (0.25 + 0.75 * hash1(cell * 1.3 + fi * 7.0)) * mix(0.45, 1.0, z);
+    float sheen = 0.6 + 0.4 * sin(p.y * (2.0 + hash1(cell) * 3.0) + t * 4.0 + cell);
+    vec3 c = palette(hash1(cell + fi * 13.0) * 0.6 + z * 0.4, false);
+    col = mix(col, c * (0.55 + 0.9 * lum * sheen), bar * mix(0.35, 0.85, z));
+    col += c * bar * lum * u_glow * 0.25;
+  }
+  col = 1.0 - exp(-col * 1.35);
+  gl_FragColor = vec4(col * u_strength, u_strength);
+}`,
+  // Wire mesh: a glowing wireframe landscape rolling toward the viewer, its far rows
+  // fading into a soft horizon.
+  wiremesh: `
+void main() {
+  vec2 p = place() / u_size;
+  float hz = 0.12;
+  float depth = max(hz - p.y, 0.002);
+  float z = 1.0 / (depth + 0.03);
+  float k = 1.6 + u_density * 1.4;
+  float gx = p.x * z * k;
+  float gz = z * k * 0.5 + u_t * 0.45;
+  float h = (fbm3(vec2(gx * 0.35, gz * 0.35) + seedShift()) - 0.5) * (0.6 + u_chaos * 1.6);
+  h += 0.25 * sin(gx * 0.6 + u_t * 0.6) * sin(gz * 0.4);
+  float gy = gz + h * 2.0;
+  float w = 0.01 + 0.018 * u_weight;
+  vec2 l1 = lineGlow(0.5 - abs(fract(gx + h * 0.6) - 0.5), w);
+  vec2 l2 = lineGlow(0.5 - abs(fract(gy) - 0.5), w);
+  float far = 1.0 - smoothstep(0.25, 0.6, max(AA(gx), AA(gy)));
+  float k2 = (max(l1.x, l2.x) + (l1.y + l2.y) * 0.6) * far;
+  float fade = smoothstep(0.0, 0.35, depth) * step(p.y, hz);
+  float a = clamp(k2 * fade, 0.0, 1.0);
+  vec3 col = mix(u_c[1], u_c[0], clamp(smoothstep(0.0, 0.6, depth) + h * 0.3, 0.0, 1.0)) * a;
+  float glow = exp(-abs(p.y - hz) * 10.0) * (0.25 + 0.5 * u_glow);
+  col += u_c[2] * glow;
+  a = clamp(a + glow, 0.0, 1.0);
+  gl_FragColor = vec4(col * u_strength, a * u_strength);
+}`,
+  // Prism light: bands of split, rainbow-edged light sweeping slowly across, as light
+  // through cut glass falls on a wall.
+  prism: `
+vec3 spectrum(float x) {
+  return clamp(vec3(abs(x * 6.0 - 3.0) - 1.0, 2.0 - abs(x * 6.0 - 2.0), 2.0 - abs(x * 6.0 - 4.0)), 0.0, 1.0);
+}
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.06;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  float n = 2.0 + floor(u_density * 2.0);
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    if (fi >= n) break;
+    float ang = (hash1(fi) - 0.5) * 1.6 + 0.3 * sin(t + fi * 2.1);
+    vec2 d = vec2(cos(ang), sin(ang));
+    float s = dot(p, d) + (fbm3(p * 1.5 + fi * 5.0 + t) - 0.5) * u_chaos * 0.5
+      + 0.6 * sin(t * (0.6 + 0.3 * hash1(fi + 2.0)) + fi * 3.0);
+    float w = 0.05 + 0.12 * u_weight * (0.5 + hash1(fi + 4.0));
+    float band = 1.0 - smoothstep(0.0, w, abs(s));
+    float x = clamp(s / w * 0.5 + 0.5, 0.0, 1.0);
+    vec3 c = mix(spectrum(x), palette(fi * 0.3, true), 0.25) * band * band;
+    float soft = exp(-abs(s) / (w * 2.5)) * 0.25;
+    col += c + spectrum(x) * soft * 0.3;
+    a = max(a, band * 0.85 + soft * 0.4);
+  }
+  col = 1.0 - exp(-col * 1.5);
+  gl_FragColor = vec4(col * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
+  // Glass blobs: soft colour blobs drifting behind thick rippled glass that bends them,
+  // with bright rims where the glass curves.
+  glassblobs: `
+vec3 behind(vec2 p, float t) {
+  vec3 col = vec3(0.0);
+  float ws = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    vec2 c = 0.45 * vec2(sin(t * (0.5 + fi * 0.17) + fi * 2.3 + u_seed), cos(t * (0.4 + fi * 0.21) + fi * 1.4));
+    float w = 1.0 / (pow(length(p - c), 2.4) + 0.03);
+    col += u_c[i] * w;
+    ws += w;
+  }
+  return col / ws;
+}
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.08;
+  float k = 1.1 + u_density * 0.9;
+  vec2 q = p * k + seedShift() + vec2(t * 0.6, -t * 0.4);
+  float h = noise(q) * 0.75 + noise(q * 2.1 + 5.0) * 0.25;
+  float e = 0.03;
+  vec2 g = vec2(noise(q + vec2(e, 0.0)) * 0.75 + noise((q + vec2(e, 0.0)) * 2.1 + 5.0) * 0.25 - h,
+                noise(q + vec2(0.0, e)) * 0.75 + noise((q + vec2(0.0, e)) * 2.1 + 5.0) * 0.25 - h) / e;
+  g *= 0.55 + u_chaos * 0.8;
+  vec3 col = behind(p + g * 0.06 * u_weight, t);
+  float rim = pow(clamp(length(g) * 0.35, 0.0, 1.0), 2.0);
+  float spec = pow(max(0.0, dot(normalize(vec3(-g, 1.0)), normalize(vec3(-0.4, 0.6, 1.0)))), mix(8.0, 40.0, u_sharp));
+  col = col * (0.88 + 0.2 * h) + rim * 0.3 + spec * 0.4;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
+}`,
+  // Ring tunnel: rings of light flying out of a point you place, as if travelling down a
+  // tunnel of light; the near rings soft and wide, the far ones fine.
+  ringtunnel: `
+void main() {
+  vec2 p = (plane() - centre(u_pos)) / u_size;
+  float r = length(p) + 0.0001;
+  float ang = atan(p.y, p.x);
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  float n = 6.0 + floor(u_density * 8.0);
+  for (int i = 0; i < 26; i++) {
+    float fi = float(i);
+    if (fi >= n) break;
+    float z = fract(fi / n - u_t * 0.08);
+    float rad = 0.04 / max(1.0 - z, 0.02) - 0.04;
+    float wob = (noise(vec2(ang * 2.0 + fi * 7.0, u_t * 0.3)) - 0.5) * u_chaos * 0.2 * rad;
+    float w = (0.0012 + 0.004 * u_weight) * (0.3 + z * 2.5);
+    vec2 lg = lineGlow(abs(r - rad - wob), w);
+    float fade = smoothstep(0.0, 0.15, z) * (1.0 - smoothstep(0.85, 1.0, z));
+    float k = clamp(lg.x + lg.y * 0.5, 0.0, 1.0) * fade * mix(0.5, 1.0, z);
+    col += palette(fi / n + z * 0.3, true) * k;
+    a = max(a, k);
+  }
+  float core = exp(-r * 40.0) * (0.15 + 0.4 * u_glow);
+  col += u_c[0] * core;
+  a = clamp(a + core, 0.0, 1.0);
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, a * u_strength);
+}`,
+  // Oil paint: thick impasto strokes of the colours being laid on, stroke by stroke, over
+  // the painting before — bristle marks, ridges catching the light, canvas showing through.
+  oilpaint: `
+vec2 flowAt(vec2 p) {
+  float a = fbm3(p * 0.9 + seedShift()) * 6.2831853 * (0.35 + u_chaos * 0.6) + 1.5708;
+  return vec2(cos(a), sin(a));
+}
+float strokes(vec2 p, vec2 d) {
+  vec2 r = vec2(dot(p, d), dot(p, vec2(-d.y, d.x)));
+  float k = 2.0 + u_density * 2.5;
+  vec2 cell = floor(r * vec2(k * 0.55, k * 1.8));
+  float bristles = noise(vec2(r.x * k * 0.6, r.y * k * 18.0) + cell * 3.1);
+  float body = noise(r * vec2(k * 0.7, k * 3.0) + cell);
+  return body * 0.65 + bristles * 0.35;
+}
+vec3 paintAt(vec2 p, float layer) {
+  float x = p.x * 0.8 + (fbm3(p * 1.3 + layer * 9.0 + seedShift()) - 0.5) * 0.9;
+  return palette(x + 0.5 + layer * 0.37, true);
+}
+void main() {
+  vec2 p = place() / u_size;
+  float cycle = 9.0;
+  float t = u_t / cycle;
+  float layer = floor(t);
+  float phase = fract(t);
+  vec2 d = flowAt(p);
+  vec2 r = vec2(dot(p, d), dot(p, vec2(-d.y, d.x)));
+  float k = 2.0 + u_density * 2.5;
+  vec2 cell = floor(r * vec2(k * 0.55, k * 1.8));
+  float order = hash(cell + layer * 7.31);
+  float along = fract(r.x * k * 0.55);
+  float reach = clamp((phase * 1.25 - order) * 4.0, 0.0, 1.0);
+  float wet = smoothstep(along - 0.08, along, reach);
+  vec3 under = paintAt(p, layer);
+  vec3 over = paintAt(p, layer + 1.0);
+  vec3 col = mix(under, over, wet);
+  float h = strokes(p, d) + wet * 0.15;
+  float e = 0.004;
+  float hx = strokes(p + vec2(e, 0.0), d) - strokes(p - vec2(e, 0.0), d);
+  float hy = strokes(p + vec2(0.0, e), d) - strokes(p - vec2(0.0, e), d);
+  vec3 nrm = normalize(vec3(-hx, -hy, 0.07 / (0.5 + u_weight)));
+  vec3 L = normalize(vec3(-0.5, 0.7, 0.6));
+  float diff = 0.72 + 0.4 * dot(nrm, L);
+  float spec = pow(max(0.0, dot(reflect(-L, nrm), vec3(0.0, 0.0, 1.0))), mix(10.0, 30.0, u_sharp)) * 0.35;
+  float weave = 0.97 + 0.03 * sin(v_uv.x * u_res.x * 1.2) * sin(v_uv.y * u_res.y * 1.2);
+  col = col * diff * weave + spec;
+  col *= 0.92 + 0.12 * h;
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0) * u_strength, u_strength);
+}`,
+  // VHS: a played-out tape — a tracking band rolling up, thin noisy lines, colour fringes
+  // and the odd jolt; see-through, laid over whatever is under it.
+  vhs: `
+void main() {
+  vec2 uv = v_uv;
+  float t = u_t;
+  float rows = u_res.y;
+  float row = floor(uv.y * rows);
+  float band = fract(uv.y * 0.6 + t * 0.07);
+  float track = smoothstep(0.0, 0.04, band) * (1.0 - smoothstep(0.04, 0.12, band));
+  float jolt = step(0.93, hash(vec2(floor(t * 3.0), u_seed)));
+  float lineNoise = hash(vec2(row, floor(t * 24.0)));
+  float streak = step(1.0 - 0.012 * (0.5 + u_density), lineNoise) * (0.4 + 0.6 * hash(vec2(row, t)));
+  float grain = (hash(uv * u_res + floor(t * 24.0) * 13.0) - 0.5) * 0.06 * u_weight;
+  float shift = (hash(vec2(row, floor(t * 12.0))) - 0.5) * track * 0.06 * (1.0 + u_chaos);
+  float fringe = sin((uv.x + shift) * 120.0 + row * 0.7) * 0.5 + 0.5;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  col += vec3(0.9, 0.95, 1.0) * track * 0.35 * (0.6 + 0.4 * fringe);
+  a += track * 0.35;
+  col += vec3(1.0) * streak * 0.7;
+  a += streak * 0.7;
+  float chroma = track * 0.4 + jolt * 0.25;
+  col += mix(u_c[0], u_c[1], fringe) * chroma * 0.6;
+  a += chroma * 0.3;
+  float scan = (0.5 + 0.5 * sin(uv.y * rows * 1.5)) * 0.03;
+  col += vec3(grain) + scan * 0.3;
+  a += abs(grain) + scan;
+  a = clamp(a, 0.0, 1.0) * u_strength;
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0) * u_strength, a);
+}`,
+  // Signal: digital interference — bars of broken colour blocks flashing across in short
+  // bursts, with red/blue fringes, then calm again.
+  signal: `
+void main() {
+  vec2 uv = v_uv;
+  float t = u_t;
+  float slot = floor(t * (2.0 + u_chaos * 4.0));
+  float burst = step(0.55, hash(vec2(slot, u_seed))) * (0.6 + 0.4 * hash(vec2(slot, 3.0)));
+  float rowsN = 8.0 + 30.0 * u_density;
+  float row = floor(uv.y * rowsN);
+  float on = step(0.6, hash(vec2(row, slot + 1.7))) * burst;
+  float blocksN = 4.0 + 20.0 * hash(vec2(row, slot));
+  float block = floor((uv.x + hash(vec2(row, slot + 9.0))) * blocksN);
+  float lit = step(0.45, hash(vec2(block, row + slot * 3.0)));
+  float edge = fract((uv.x + hash(vec2(row, slot + 9.0))) * blocksN);
+  vec3 c = palette(hash(vec2(block, row)), true);
+  vec3 col = c * lit;
+  col.r += step(edge, 0.08) * 0.8;
+  col.b += step(0.92, edge) * 0.8;
+  float thin = step(0.985, hash(vec2(floor(uv.y * u_res.y * 0.5), floor(t * 30.0)))) * 0.6;
+  float a = (on * lit * (0.55 + 0.4 * u_weight) + thin) * u_strength;
+  col = col * on + vec3(thin);
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0) * u_strength, clamp(a, 0.0, 1.0));
+}`,
   // A poster colour layer that moves: its gradient flows along its angle, turns, or
   // breathes into its colours the other way round.
   fill: `
@@ -2045,6 +2298,14 @@ function ownColors(el: Element): [number, number, number][] {
 /** The colours each kind uses when the block gives none of its own. */
 const MARBLE = ['#f3f0ea', '#d8d2c8', '#6f6a64', '#c9a24a'];
 const OWN_DEFAULTS: Partial<Record<ShaderKind, string[]>> = {
+  // Deep navy → royal blue → cyan → ice: the depth-lines look.
+  depthlines: ['#050b2e', '#1d4ed8', '#38bdf8', '#e0f2fe'],
+  // Wire near, wire far, horizon glow.
+  wiremesh: ['#22d3ee', '#6366f1', '#a855f7'],
+  // Bold impasto: purple, red, orange-yellow, blue.
+  oilpaint: ['#5b21b6', '#e11d48', '#f59e0b', '#1d4ed8'],
+  // Tape chroma: red and cyan fringes.
+  vhs: ['#ff3b5c', '#22d3ee'],
   marble: MARBLE,
   // Dark ember → orange → gold → white heat.
   flames: ['#3b0a00', '#b45309', '#f59e0b', '#fff3c4'],

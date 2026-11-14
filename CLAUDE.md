@@ -75,7 +75,8 @@ Deploy → Run workflow → production.
   aurora, goo, nebula, clouds, caustics, ink, lightning, pulserings, honeycomb, dotwave, grainient, beams,
   stainedglass, crossglow, threadwave, particlewave, liquidmetal, curtains, shards, fluted, dust, swarm, galaxy,
   starfield, planet, garland, bethlehem, xmassnow, candles, gradient fill motion; sky kinds take a space colour,
-  `tune.bg`; line kinds — streaks, lightfall, ribbons, risers — take `tune.lines` (the set repeated at 1–8 depths)
+  `tune.bg`; also depthlines, wiremesh, prism, glassblobs, ringtunnel, oilpaint (strokes painted over the last
+  painting, in cycles), vhs, signal; line kinds — streaks, lightfall, ribbons, risers — take `tune.lines` (the set repeated at 1–8 depths)
   and `tune.bend` (waving)) are drawn by the shader engine
   (`ShaderEffect.tsx`: one shared WebGL context handing pictures over without a copy; canvases drawn at
   `density()` of the screen's pixels — thin-line kinds full, soft glows ~half, never under 1 page pixel (soft ¾),
@@ -169,7 +170,8 @@ disco / sparkle / hearts / word wall (own words + font) …, listed in `shared/m
 own words (`tune.words`); GPU ones — heat haze, shockwave, bloom, zoom burst, swirl,
 bulge, god rays, reflection: `GPU_MOTIONS`; colour-your-own particles — rain, stardust, orbs, meteors, glitter,
 fireworks, notes, crosses (group `colour`), PixiJS filters lazy-loaded in `components/GpuEffect.tsx`, max 6 live WebGL
-canvases, recorder steps them via `seekGpu`; `LivingLayer` + `.living-*` CSS)
+canvases, recorder steps them via `seekGpu`; our own picture filters in `PHOTO_FRAGMENTS` (GLSL, no derivatives —
+older phones lack them): oilfilter (Kuwahara painting + lit strokes), datamosh, pixelsort, scanshift; `LivingLayer` + `.living-*` CSS)
 (`groups.meeting_motion`, per meeting `meetings.motion`; the home tile and the poster can have their
 own: `tile_motion` / `poster_motion` on meetings and design templates);
 a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).

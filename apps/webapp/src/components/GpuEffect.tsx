@@ -34,7 +34,171 @@ export function holdGpu(root: Element, hold: boolean) {
   for (const [c, l] of layers) if (root.contains(c)) l.held = hold;
 }
 
+/**
+ * Our own picture filters (GLSL for PixiJS): an oil painting of the photo, and glitches
+ * that break the photo itself. Each gets the time, strength and amount as uniforms.
+ */
+const PHOTO_HEAD = `
+precision highp float;
+in vec2 vTextureCoord;
+out vec4 finalColor;
+uniform sampler2D uTexture;
+uniform vec4 uInputSize;
+uniform vec4 uInputClamp;
+uniform vec4 uOutputFrame;
+uniform float uTime;
+uniform float uWeight;
+uniform float uDensity;
+vec4 at(vec2 tc) { return texture(uTexture, clamp(tc, uInputClamp.xy, uInputClamp.zw)); }
+/** The point on the picture, 0…1 across and down. */
+vec2 screen() { return vTextureCoord * uInputSize.xy / uOutputFrame.zw; }
+/** A point 0…1 back to where it is sampled. */
+vec2 tex(vec2 s) { return s * uOutputFrame.zw * uInputSize.zw; }
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+`;
+
+const PHOTO_FRAGMENTS: Partial<Record<MeetingMotion, string>> = {
+  // Kuwahara: each pixel takes the calmest of four neighbouring patches (flat dabs of
+  // colour with crisp edges), then brush strokes along the picture's edges catch a light
+  // that slowly circles, over canvas weave.
+  oilfilter: `
+/** How thick the paint is at a point: strokes stretched along the brush's direction. */
+float paint(vec2 sp, vec2 dir, float scale) {
+  vec2 r = vec2(dot(sp, dir), dot(sp, vec2(-dir.y, dir.x))) * scale;
+  return noise(r * vec2(0.022, 0.1)) * 0.75 + noise(r * vec2(0.012, 0.32)) * 0.25;
+}
+void main() {
+  vec2 px = uInputSize.zw * (1.2 + 2.2 * uWeight);
+  vec3 mean[4];
+  vec3 sq[4];
+  for (int k = 0; k < 4; k++) { mean[k] = vec3(0.0); sq[k] = vec3(0.0); }
+  for (int j = 0; j < 4; j++) {
+    for (int i = 0; i < 4; i++) {
+      vec2 o = vec2(float(i), float(j)) * px;
+      vec3 a = at(vTextureCoord + vec2(-o.x, -o.y)).rgb;
+      vec3 b = at(vTextureCoord + vec2(o.x, -o.y)).rgb;
+      vec3 c = at(vTextureCoord + vec2(-o.x, o.y)).rgb;
+      vec3 d = at(vTextureCoord + vec2(o.x, o.y)).rgb;
+      mean[0] += a; sq[0] += a * a;
+      mean[1] += b; sq[1] += b * b;
+      mean[2] += c; sq[2] += c * c;
+      mean[3] += d; sq[3] += d * d;
+    }
+  }
+  vec3 col = vec3(0.0);
+  float best = 1e9;
+  for (int k = 0; k < 4; k++) {
+    vec3 m = mean[k] / 16.0;
+    vec3 v = abs(sq[k] / 16.0 - m * m);
+    float var = v.r + v.g + v.b;
+    if (var < best) { best = var; col = m; }
+  }
+  // Strokes follow the picture: across its brightness changes.
+  vec2 e = uInputSize.zw * 3.0;
+  float gx = luma(at(vTextureCoord + vec2(e.x, 0.0)).rgb) - luma(at(vTextureCoord - vec2(e.x, 0.0)).rgb);
+  float gy = luma(at(vTextureCoord + vec2(0.0, e.y)).rgb) - luma(at(vTextureCoord - vec2(0.0, e.y)).rgb);
+  vec2 g = vec2(gx, gy);
+  vec2 dir = length(g) > 0.02 ? normalize(vec2(-g.y, g.x)) : normalize(vec2(0.8, 0.6));
+  vec2 sp = screen() * uOutputFrame.zw;
+  float scale = 1.0 / (0.6 + uDensity * 0.6);
+  float h = paint(sp, dir, scale);
+  // The paint's relief from its neighbours (no derivatives: older phones lack them).
+  vec3 n = normalize(vec3(h - paint(sp + vec2(1.0, 0.0), dir, scale), h - paint(sp + vec2(0.0, 1.0), dir, scale)
+    , 0.03));
+  float la = uTime * 0.15;
+  vec3 L = normalize(vec3(cos(la), sin(la), 0.9));
+  float shade = 0.86 + 0.28 * dot(n, L);
+  float spec = pow(max(0.0, dot(reflect(-L, n), vec3(0.0, 0.0, 1.0))), 16.0) * 0.18;
+  float weave = 0.96 + 0.04 * sin(sp.x * 1.4) * sin(sp.y * 1.4);
+  finalColor = vec4(clamp(col * shade * weave + spec, 0.0, 1.0), at(vTextureCoord).a);
+}`,
+  // Data-mosh: in short bursts, blocks of the picture smear along made-up motion and
+  // lose colour depth, as broken video does.
+  datamosh: `
+void main() {
+  vec2 s = screen();
+  float slot = floor(uTime * 2.5);
+  float phase = fract(uTime * 2.5);
+  float burst = step(0.45, hash(vec2(slot, 1.0)));
+  float n = 10.0 + 20.0 * uDensity;
+  vec2 blk = floor(s * vec2(n, n * uOutputFrame.w / uOutputFrame.z));
+  float hit = step(1.0 - 0.45 * uWeight, hash(blk + slot)) * burst;
+  vec2 mv = (vec2(hash(blk * 1.7 + slot), hash(blk * 2.3 + slot)) - 0.5) * 0.12 * phase;
+  vec2 src = s - mv * hit;
+  vec3 c = at(tex(src)).rgb;
+  vec3 q = floor(c * 6.0 + 0.5) / 6.0;
+  c = mix(c, q, hit * 0.8);
+  float bleed = at(tex(src + vec2(0.006 * hit, 0.0))).r;
+  c.r = mix(c.r, bleed, hit * 0.6);
+  finalColor = vec4(c, at(vTextureCoord).a);
+}`,
+  // Pixel sort: bright parts of the picture run down in streaks, like sorted pixels.
+  pixelsort: `
+void main() {
+  vec2 s = screen();
+  float colId = floor(s.x * uOutputFrame.z / 2.0);
+  float len = (0.08 + 0.25 * uWeight) * (0.4 + 0.6 * (0.5 + 0.5 * sin(uTime * 0.7 + hash(vec2(colId, 3.0)) * 6.28)));
+  float thr = 0.62 - 0.12 * uDensity;
+  vec3 base = at(vTextureCoord).rgb;
+  vec3 col = base;
+  float bestL = luma(base);
+  for (int i = 1; i <= 24; i++) {
+    float d = float(i) / 24.0 * len;
+    vec3 c = at(tex(s - vec2(0.0, d))).rgb;
+    float l = luma(c);
+    if (l > thr && l > bestL) {
+      float fade = 1.0 - float(i) / 25.0;
+      col = mix(col, c, fade);
+      bestL = mix(bestL, l, fade);
+    }
+  }
+  finalColor = vec4(col, at(vTextureCoord).a);
+}`,
+  // Scan shift: horizontal slices of the picture jump sideways in bursts, with the red
+  // and blue split apart.
+  scanshift: `
+void main() {
+  vec2 s = screen();
+  float slot = floor(uTime * (3.0 + 3.0 * uDensity));
+  float burst = step(0.5, hash(vec2(slot, 7.0)));
+  float rows = 6.0 + 30.0 * hash(vec2(slot, 2.0));
+  float row = floor(s.y * rows);
+  float move = (hash(vec2(row, slot)) - 0.5) * 0.16 * uWeight * step(0.55, hash(vec2(row, slot + 4.0))) * burst;
+  float split = 0.004 + 0.012 * uWeight * burst;
+  vec2 p = s + vec2(move, 0.0);
+  float r = at(tex(p + vec2(split, 0.0))).r;
+  float g = at(tex(p)).g;
+  float b = at(tex(p - vec2(split, 0.0))).b;
+  finalColor = vec4(r, g, b, at(vTextureCoord).a);
+}`,
+};
+
+/** PixiJS's own filter vertex step (the picture's coordinates for our fragments). */
+const PHOTO_VERTEX = `
+in vec2 aPosition;
+out vec2 vTextureCoord;
+uniform vec4 uInputSize;
+uniform vec4 uOutputFrame;
+uniform vec4 uOutputTexture;
+void main(void) {
+  vec2 position = aPosition * uOutputFrame.zw + uOutputFrame.xy;
+  position.x = position.x * (2.0 / uOutputTexture.x) - 1.0;
+  position.y = position.y * (2.0 * uOutputTexture.z / uOutputTexture.y) - uOutputTexture.z;
+  gl_Position = vec4(position, 0.0, 1.0);
+  vTextureCoord = aPosition * (uOutputFrame.zw * uInputSize.zw);
+}`;
+
 const STAND_IN: Partial<Record<MeetingMotion, string>> = {
+  oilfilter: '🎨',
+  datamosh: '📼',
+  pixelsort: '🌈',
+  scanshift: '📺',
   heatwave: '🌫',
   shockwave: '💥',
   bloom: '✨',
@@ -47,6 +211,10 @@ const STAND_IN: Partial<Record<MeetingMotion, string>> = {
 
 /** Effects that bend or light the photo: nothing to show without one. */
 const NEEDS_PHOTO = new Set<MeetingMotion>([
+  'oilfilter',
+  'datamosh',
+  'pixelsort',
+  'scanshift',
   'heatwave',
   'shockwave',
   'bloom',
@@ -181,7 +349,23 @@ export function GpuEffect({
 
       let noise: InstanceType<typeof PIXI.Sprite> | null = null;
       const { weight, density, angle } = settings.current;
+      const own = PHOTO_FRAGMENTS[kind];
       const filter = (() => {
+        if (own)
+          return new PIXI.Filter({
+            glProgram: PIXI.GlProgram.from({
+              vertex: PHOTO_VERTEX,
+              fragment: PHOTO_HEAD + own,
+              name: `photo-${kind}`,
+            }),
+            resources: {
+              photoUniforms: {
+                uTime: { value: 0, type: 'f32' },
+                uWeight: { value: weight, type: 'f32' },
+                uDensity: { value: density, type: 'f32' },
+              },
+            },
+          });
         switch (kind) {
           case 'heatwave': {
             const tex = PIXI.Texture.from(noiseCanvas());
@@ -251,6 +435,13 @@ export function GpuEffect({
         if (kind === 'godrays') stage.tint = color ?? 0xffffff;
         const t = seconds * speed;
         const wave = 0.5 + 0.5 * Math.sin(t * 1.6);
+        if (own && filter) {
+          const u = (filter.resources as { photoUniforms: { uniforms: Record<string, number> } })
+            .photoUniforms.uniforms;
+          u.uTime = t;
+          u.uWeight = weight;
+          u.uDensity = density;
+        }
         if (filter instanceof PIXI.DisplacementFilter && noise) {
           noise.position.set(t * 30, t * 18);
           filter.scale.x = filter.scale.y = 6 * weight;
