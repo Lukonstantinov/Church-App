@@ -369,6 +369,11 @@ export const motionTuneSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/)
     .nullish(),
   /** Line effects (streaks, falling light, ribbons, rising lines): the set of lines repeated this many times, at different depths. */
+  /**
+   * Particles: how many times more of them (1 = as set by «how many»; up to 8× — a field of
+   * snow or stars far fuller than the density slider alone allows).
+   */
+  count: z.number().int().min(1).max(8).nullish(),
   lines: z.number().int().min(1).max(8).nullish(),
   /** Line effects: how much the lines bend and wave (0 = straight; negative = the other way). */
   bend: z.number().min(-1).max(1).nullish(),
@@ -523,6 +528,44 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   notes: CANVAS_KNOBS,
   crosses: CANVAS_KNOBS,
 };
+
+/**
+ * Animations made of particles: they get «more particles» (`count`) in their settings.
+ * Shader effects added later that are particle fields belong here too.
+ */
+export const PARTICLE_LIKE: ReadonlySet<MeetingMotion> = new Set<MeetingMotion>([
+  'stars',
+  'bokeh',
+  'embers',
+  'bubbles',
+  'snow',
+  'fireflies',
+  'confetti',
+  'warp',
+  'iconfloat',
+  'iconrain',
+  'leaves',
+  'snowfall',
+  'petals',
+  'hearts',
+  'sparkle',
+  'disco',
+  'rain',
+  'stardust',
+  'orbs',
+  'meteors',
+  'glitter',
+  'fireworks',
+  'notes',
+  'crosses',
+  'dust',
+  'swarm',
+  'starfield',
+  'xmassnow',
+  'candles',
+  'particlewave',
+  'garland',
+]);
 
 /** Settings per animation (an item's own, over its template's): {kind: MotionTune}. */
 export const motionTunesSchema = z.partialRecord(z.enum(MEETING_MOTIONS), motionTuneSchema);
