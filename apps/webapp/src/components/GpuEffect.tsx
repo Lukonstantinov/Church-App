@@ -215,7 +215,7 @@ void main() {
   vec4 tf = at(vTextureCoord);
   vec2 t = tf.xy * 2.0 - 1.0;
   float A = tf.z;
-  float radius = 2.5 + 3.5 * uWeight;
+  float radius = 1.8 + 2.6 * uWeight;
   float alpha = 1.0;
   float a = radius * clamp((alpha + A) / alpha, 0.1, 2.0);
   float b = radius * clamp(alpha / (alpha + A), 0.1, 2.0);
@@ -265,7 +265,7 @@ void main() {
     }
   }
   vec4 outc = vec4(0.0);
-  float hard = 8.0 * (0.6 + 0.8 * uDensity);
+  float hard = 14.0 * (0.6 + 0.8 * uDensity);
   for (int k = 0; k < 8; k++) {
     if (m[k].w <= 0.0) continue;
     vec3 mean = m[k].rgb / m[k].w;
@@ -278,7 +278,15 @@ void main() {
   // drawn along the strokes was tried: on smooth skies the direction is too unsure and it
   // made a zigzag, so the dabs stay smooth as the filter paints them.)
   float weave = sin(here.x * 2.2) * sin(here.y * 2.2);
-  col = mix(vec3(luma(col)), col, 1.12) * (0.975 + 0.025 * weave);
+  // Clearer: the photo's own fine detail comes back where the picture has firm lines (as a
+  // painter draws the forms crisply), then a little more contrast and colour.
+  vec3 sharp = photo(here);
+  col += (sharp - col) * 0.45 * smoothstep(0.15, 0.6, A);
+  vec3 soft = (photo(here + vec2(1.5, 0.0) / uRes) + photo(here - vec2(1.5, 0.0) / uRes)
+    + photo(here + vec2(0.0, 1.5) / uRes) + photo(here - vec2(0.0, 1.5) / uRes)) * 0.25;
+  col += (sharp - soft) * 0.6;
+  col = (col - 0.5) * 1.08 + 0.5;
+  col = mix(vec3(luma(col)), col, 1.18) * (0.975 + 0.025 * weave);
   finalColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
