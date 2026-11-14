@@ -1219,6 +1219,8 @@ export const ru = {
     color: 'Цвет анимации',
     colorAuto: 'Как у служения',
     knob: {
+      moreParticles: 'Больше частиц',
+      effectBg: 'Фон эффекта',
       trail: 'Шлейф (плавный след)',
       bg: 'Цвет космоса',
       ring: 'Кольцо',

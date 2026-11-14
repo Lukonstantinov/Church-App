@@ -1208,6 +1208,8 @@ export const en: Messages = {
     color: 'Animation colour',
     colorAuto: 'Like the ministry',
     knob: {
+      moreParticles: 'More particles',
+      effectBg: 'Effect background',
       trail: 'Trail (smooth streak)',
       bg: 'Space colour',
       ring: 'Ring',

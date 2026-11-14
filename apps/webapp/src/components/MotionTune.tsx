@@ -1,6 +1,7 @@
 import {
   isFontKey,
   MOTION_KNOBS,
+  PARTICLE_LIKE,
   type MeetingMotion,
   type MotionKnob,
   type MotionTune,
@@ -461,6 +462,21 @@ export function MotionTuneControls({
       </div>
       {!knobs.includes('colors') && (
         <ColorRow value={tune.color ?? null} onChange={(color) => set({ color })} />
+      )}
+      {PARTICLE_LIKE.has(kind) && (
+        <Knob
+          label={k.moreParticles}
+          value={tune.count ?? 1}
+          min={1}
+          max={8}
+          step={1}
+          show={(v) => `×${v}`}
+          onChange={(count) => set({ count: count === 1 ? null : count })}
+        />
+      )}
+      {/* A background colour of the effect's own (sky effects have theirs above). */}
+      {!knobs.includes('bg') && (
+        <ColorRow label={k.effectBg} none={k.bgNone} value={tune.bg ?? null} onChange={(bg) => set({ bg })} />
       )}
       <button
         type="button"

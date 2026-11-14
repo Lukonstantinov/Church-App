@@ -1,5 +1,11 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
-import { GPU_MOTIONS, type MeetingMotion, type MotionIcon, type MotionTune } from '@church/shared';
+import {
+  GPU_MOTIONS,
+  MOTION_KNOBS,
+  type MeetingMotion,
+  type MotionIcon,
+  type MotionTune,
+} from '@church/shared';
 import { useEnv } from '../lib/env';
 import { useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
 import { GpuEffect } from './GpuEffect';
@@ -131,7 +137,42 @@ export function LivingLayers({
   );
 }
 
-export function LivingLayer({
+/**
+ * Any animation, with its own background colour behind it when one is set (`tune.bg`) —
+ * a plain colour layer under the effect, so it also shows in pictures and recordings.
+ * Sky effects (nebula, galaxy…) paint their space colour themselves.
+ */
+export function LivingLayer(props: Parameters<typeof LivingEffect>[0]) {
+  const { kind, tune, behind } = props;
+  const bg = tune?.bg && !MOTION_KNOBS[kind]?.includes('bg') ? tune.bg : null;
+  if (!bg || kind === 'off') return <LivingEffect {...props} />;
+  const box = tune?.box;
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: bg,
+          borderRadius: 'inherit',
+          ...(behind ? { zIndex: -1 } : {}),
+          ...(box
+            ? {
+                inset: 'auto',
+                left: `${box.x}%`,
+                top: `${box.y}%`,
+                width: `${box.w}%`,
+                height: `${box.h}%`,
+              }
+            : {}),
+        }}
+      />
+      <LivingEffect {...props} />
+    </>
+  );
+}
+
+function LivingEffect({
   kind,
   live,
   behind,
@@ -206,7 +247,8 @@ export function LivingLayer({
   const few = <T,>(list: readonly T[]): readonly T[] =>
     quality === 'lite' ? list.filter((_, i) => i % 2 === 0) : list;
   // Its own settings: how many (or how far apart), how thick / big, how sharp, how strong.
-  const density = tune?.density ?? 1;
+  // «More particles» multiplies how many there are (beyond the density slider's reach).
+  const density = (tune?.density ?? 1) * (tune?.count ?? 1);
   const weight = tune?.weight ?? 1;
   const strength = tune?.strength ?? 1;
   const sharp = tune?.sharp ?? null;

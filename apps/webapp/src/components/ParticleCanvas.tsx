@@ -257,7 +257,8 @@ const WORDS_EM_PER_SECOND = 0.18;
 /** The particles of a layer — the same spots, sizes and timings as the CSS version. */
 function plan(layer: ParticleLayer, lite: boolean, small: boolean): LayerPlan {
   const { kind, tune } = layer;
-  const density = tune?.density ?? 1;
+  // «More particles» multiplies how many there are (beyond the density slider's reach).
+  const density = (tune?.density ?? 1) * (tune?.count ?? 1);
   const weight = tune?.weight ?? 1;
   const base: readonly Particle[] =
     kind === 'iconorbit'

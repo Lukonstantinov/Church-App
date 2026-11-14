@@ -1248,6 +1248,8 @@ export const lt: Messages = {
     color: 'Animacijos spalva',
     colorAuto: 'Kaip tarnystės',
     knob: {
+      moreParticles: 'Daugiau dalelių',
+      effectBg: 'Efekto fonas',
       trail: 'Šleifas (sklandus pėdsakas)',
       bg: 'Kosmoso spalva',
       ring: 'Žiedas',

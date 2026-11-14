@@ -287,7 +287,8 @@ export function shaderParams(kind: ShaderKind, tune?: MotionTune | null): Shader
     size: tune?.size ?? 1,
     angle: tune?.angle ?? 0,
     strength: tune?.strength ?? 1,
-    density: tune?.density ?? 1,
+    // «More particles» (particle fields only) multiplies the density; loops stay bounded.
+    density: (tune?.density ?? 1) * (tune?.count ?? 1),
     weight: tune?.weight ?? 1,
     sharp: tune?.sharp ?? sharpDefault(kind),
     chaos: tune?.chaos ?? (kind === 'liquid' ? 0.45 : kind === 'marble' ? 0.35 : 0.3),
