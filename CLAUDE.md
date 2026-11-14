@@ -75,7 +75,8 @@ Deploy → Run workflow → production.
   aurora, goo, nebula, clouds, caustics, ink, lightning, pulserings, honeycomb, dotwave, grainient, beams,
   stainedglass, crossglow, threadwave, particlewave, liquidmetal, curtains, shards, fluted, dust, swarm, galaxy,
   starfield, planet, garland, bethlehem, xmassnow, candles, gradient fill motion; sky kinds take a space colour,
-  `tune.bg`) are drawn by the shader engine
+  `tune.bg`; line kinds — streaks, lightfall, ribbons, risers — take `tune.lines` (the set repeated at 1–8 depths)
+  and `tune.bend` (waving)) are drawn by the shader engine
   (`ShaderEffect.tsx`: one shared WebGL context handing pictures over without a copy; canvases drawn at
   `density()` of the screen's pixels — thin-line kinds full, soft glows ~half, never under 1 page pixel (soft ¾),
   within a pixel-area budget — and shrunk (to 60% at most, per session) when the device can't keep up;

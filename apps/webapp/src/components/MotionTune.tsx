@@ -9,7 +9,13 @@ import {
 import { useState, type ReactNode } from 'react';
 import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
-import { placeDefault, SHADER_KINDS, sharpDefault } from './ShaderEffect';
+import {
+  bendDefault,
+  linesDefault,
+  placeDefault,
+  SHADER_KINDS,
+  sharpDefault,
+} from './ShaderEffect';
 import { FontPicker } from './FontPicker';
 import { Pill } from './LookControls';
 import { Toggle } from './ui';
@@ -259,6 +265,30 @@ export function MotionTuneControls({
         step={0.05}
         show={percent}
         onChange={(trail) => set({ trail: trail || null })}
+      />
+    ),
+    lines: (
+      <Knob
+        key="lines"
+        label={k.multiply}
+        value={tune.lines ?? linesDefault(kind)}
+        min={1}
+        max={8}
+        step={1}
+        show={(v) => `×${v}`}
+        onChange={(lines) => set({ lines })}
+      />
+    ),
+    bend: (
+      <Knob
+        key="bend"
+        label={k.bend}
+        value={tune.bend ?? bendDefault(kind)}
+        min={-1}
+        max={1}
+        step={0.05}
+        show={percent}
+        onChange={(bend) => set({ bend })}
       />
     ),
     bg: (

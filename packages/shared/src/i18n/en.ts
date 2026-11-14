@@ -1212,6 +1212,8 @@ export const en: Messages = {
       bg: 'Space colour',
       ring: 'Ring',
       bgNone: 'As the block (see-through)',
+      multiply: 'Multiply lines',
+      bend: 'Bend / wave',
       settings: 'Settings',
       gap: 'Distance between lines',
       cells: 'Square size',

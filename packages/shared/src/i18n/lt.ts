@@ -1252,6 +1252,8 @@ export const lt: Messages = {
       bg: 'Kosmoso spalva',
       ring: 'Žiedas',
       bgNone: 'Kaip bloko (permatoma)',
+      multiply: 'Padauginti linijas',
+      bend: 'Lenkimas / banga',
       settings: 'Nustatymai',
       gap: 'Atstumas tarp linijų',
       cells: 'Langelių dydis',

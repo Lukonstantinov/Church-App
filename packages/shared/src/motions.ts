@@ -368,6 +368,10 @@ export const motionTuneSchema = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
     .nullish(),
+  /** Line effects (streaks, falling light, ribbons, rising lines): the set of lines repeated this many times, at different depths. */
+  lines: z.number().int().min(1).max(8).nullish(),
+  /** Line effects: how much the lines bend and wave (0 = straight; negative = the other way). */
+  bend: z.number().min(-1).max(1).nullish(),
   /** Own effect (`custom`): which one (an effect template id). */
   ref: z.number().int().positive().nullish(),
   /** A layer of an own effect: how it mixes with the layers under it. */
@@ -399,7 +403,9 @@ export type MotionKnob =
   | 'place'
   | 'wordStyle'
   | 'trail'
-  | 'bg';
+  | 'bg'
+  | 'lines'
+  | 'bend';
 const PARTICLE_KNOBS: MotionKnob[] = ['density', 'weight'];
 /** Particles drawn on the canvas can also leave trails. */
 const CANVAS_KNOBS: MotionKnob[] = ['density', 'weight', 'trail'];
@@ -418,8 +424,8 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   flames: [...SHADER_KNOBS, 'weight'],
   topo: [...SHADER_KNOBS, 'weight', 'glow'],
   fur: [...SHADER_KNOBS, 'weight', 'place'],
-  streaks: [...SHADER_KNOBS, 'weight', 'glow'],
-  ribbons: [...SHADER_KNOBS, 'weight', 'glow'],
+  streaks: [...SHADER_KNOBS, 'lines', 'bend', 'weight', 'glow'],
+  ribbons: [...SHADER_KNOBS, 'lines', 'bend', 'weight', 'glow'],
   plasma: SHADER_KNOBS,
   kaleido: SHADER_KNOBS,
   cells: [...SHADER_KNOBS, 'glow'],
@@ -431,8 +437,8 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   wavelines: [...SHADER_KNOBS, 'weight', 'glow'],
   tunnel: [...SHADER_KNOBS, 'weight', 'glow', 'place'],
   dunes: [...SHADER_KNOBS, 'weight'],
-  lightfall: [...SHADER_KNOBS, 'weight', 'glow'],
-  risers: [...SHADER_KNOBS, 'weight', 'glow'],
+  lightfall: [...SHADER_KNOBS, 'lines', 'bend', 'weight', 'glow'],
+  risers: [...SHADER_KNOBS, 'lines', 'bend', 'weight', 'glow'],
   synthgrid: ['density', 'weight', 'glow', 'colors'],
   spiral: SHADER_KNOBS,
   stripes: [...SHADER_KNOBS, 'weight'],

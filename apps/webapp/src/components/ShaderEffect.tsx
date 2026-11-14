@@ -242,6 +242,10 @@ export interface ShaderParams {
   drift: boolean;
   /** The colour of space behind a sky effect (#rrggbb), or none: see-through as before. */
   bg: string | null;
+  /** Line effects: how many times the set of lines is repeated, at different depths (1…8). */
+  lines: number;
+  /** Line effects: how much the lines bend and wave (−1 … 1; 0 = straight). */
+  bend: number;
 }
 
 /** Where a placed effect's centre is until it is moved (share of the width / height). */
@@ -259,6 +263,18 @@ export function sharpDefault(kind: string): number {
   if (kind === 'marble') return 0.45;
   if (kind === 'planet') return 0.7;
   if (kind === 'fluted') return 0.6;
+  return 0;
+}
+
+/** How many depths of lines a line effect has until it is tuned. */
+export function linesDefault(kind: string): number {
+  return kind === 'streaks' || kind === 'lightfall' ? 3 : 2;
+}
+/** How much a line effect's lines wave until it is tuned (a little: they should flow, not stand stiff). */
+export function bendDefault(kind: string): number {
+  if (kind === 'ribbons') return 0.4;
+  if (kind === 'streaks' || kind === 'risers') return 0.25;
+  if (kind === 'lightfall') return 0.15;
   return 0;
 }
 
@@ -283,6 +299,8 @@ export function shaderParams(kind: ShaderKind, tune?: MotionTune | null): Shader
     y: tune?.y ?? placeDefault(kind).y,
     drift: tune?.drift ?? false,
     bg: tune?.bg ?? null,
+    lines: tune?.lines ?? linesDefault(kind),
+    bend: tune?.bend ?? bendDefault(kind),
   };
 }
 
@@ -314,6 +332,7 @@ uniform float u_mode, u_paint;
 uniform float u_glow;
 uniform vec2 u_pos;
 uniform vec4 u_bg;
+uniform float u_lines, u_bend;
 
 /** The placed centre (sun, halo, swirl) in the same space as place(), unturned. */
 vec2 centre(vec2 at) {
@@ -408,6 +427,49 @@ vec3 mote(vec2 q, float r, float soft, float keep, float salt, float wob) {
   float d = length(f - o);
   float k = (1.0 - smoothstep(max(r - sa, 0.0), r + sa, d)) * step(h.z, keep);
   return vec3(k, fract(h.z * 57.3 + h.x * 13.7), d / max(r, 1e-4));
+}
+`;
+
+/**
+ * Shared by the light streaks and falling light: one depth of soft strands. Several depths
+ * are laid over each other (the "multiply lines" knob) — the near ones wide, soft and
+ * faint, the middle ones crisp and bright, the far ones thin and dim — so the picture has
+ * depth instead of one flat row of bars.
+ */
+const STRANDS = `
+/** q.x runs along the strands, q.y across them. Its light (colour, cover). */
+vec4 strands(vec2 q, float fi, float rows, float bothWays) {
+  float z = u_lines > 1.5 ? fi / (u_lines - 1.0) : 0.5;
+  float focus = 1.0 - abs(z - 0.5) * 2.0;
+  // Bend: every depth waves in its own slow rhythm; chaos adds an uneven wander.
+  float wav = u_bend * (0.16 * sin(q.x * 1.7 + u_t * 0.13 + fi * 1.9) + 0.06 * sin(q.x * 3.9 - u_t * 0.09 + fi * 4.1))
+    + u_chaos * 0.12 * (noise(vec2(q.x * 1.4 + fi * 5.0, q.y * 1.1 + u_t * 0.04)) - 0.5);
+  float g = (q.y + wav) * rows * mix(0.6, 1.5, z) + fi * 3.71;
+  float row = floor(g) + fi * 101.0;
+  float d = abs(fract(g) - 0.5);
+  float h = hash1(row);
+  float speed = (0.25 + h * 0.9 + u_chaos * hash1(row + 3.1) * 1.2) * mix(1.3, 0.6, z);
+  float dir = bothWays > 0.5 && hash1(row + 9.7) < 0.5 - u_chaos * 0.5 ? -1.0 : 1.0;
+  float len = 0.7 + hash1(row + 1.7) * 1.8;
+  float s = q.x / len + u_t * speed * 0.3 * dir + hash1(row + 4.4) * 10.0;
+  float duty = 0.3 + hash1(row + 7.3) * 0.5;
+  float f = fract(s);
+  // 0 at the head, 1 at the end of the tail: the head is feathered, the tail dies away,
+  // so a strand has no cut-off ends.
+  float u = dir > 0.0 ? f / duty : 1.0 - f / duty;
+  float b = f < duty ? smoothstep(0.0, 0.14, u) * pow(1.0 - u, 1.5) * 1.4 : 0.0;
+  b *= 0.8 + 0.2 * sin(q.x * 7.0 + h * 30.0);
+  float px = AA(g) + 1e-4;
+  // Thinner toward its ends (a tapered stroke), never thinner than the pixels can show.
+  float w = clamp((0.045 + 0.085 * u_weight) * mix(1.9, 0.55, z) * (0.3 + 0.7 * b), px * 0.6, 0.3);
+  float soft = max(w * mix(0.9, 0.25, u_sharp) * mix(1.8, 1.0, smoothstep(0.0, 0.5, z)), px * 1.3);
+  float core = 1.0 - smoothstep(max(w - soft, 0.0) * 0.5, w + soft, d);
+  float halo = exp(-d / (w * 5.0 + 0.01)) * u_glow * 0.8;
+  // Nothing of a strand reaches its neighbour's lane (it would be cut off there).
+  // More depths: each a little fainter, so the whole stays as bright as it was.
+  float k = (core + halo) * (1.0 - smoothstep(0.3, 0.5, d)) * b * mix(0.4, 1.0, focus)
+    * min(1.3, 2.1 * inversesqrt(u_lines));
+  return vec4(palette(hash1(row + 2.2), true) * k * (1.0 + halo * 0.5), k);
 }
 `;
 
@@ -562,49 +624,60 @@ void main() {
   col += pow(s2, 6.0) * 0.35 * u_weight;
   gl_FragColor = vec4(col * u_strength, u_strength);
 }`,
-  // A wall of motion lines: rows of streaks racing by at their own speeds, heads bright.
-  streaks: `
+  // A wall of motion lines: soft tapered streaks of light gliding by at several depths.
+  streaks:
+    STRANDS +
+    `
 void main() {
   vec2 p = place() / u_size;
-  float rows = 14.0 + u_density * 26.0;
-  float y = p.y * rows;
-  float row = floor(y);
-  float speed = 0.25 + hash1(row) * 0.9 + u_chaos * hash1(row + 3.1) * 1.4;
-  float dir = hash1(row + 9.7) > 0.5 - u_chaos * 0.5 ? 1.0 : -1.0;
-  float len = 0.6 + hash1(row + 1.7) * 1.8;
-  float s = p.x * (2.0 / len) + u_t * speed * 0.35 * dir + hash1(row + 4.4) * 10.0;
-  float duty = 0.25 + hash1(row + 7.3) * 0.5;
-  float f = fract(s);
-  float on = step(f, duty);
-  float tail = dir > 0.0 ? 1.0 - f / duty : f / duty;
-  vec2 lg = lineGlow(abs(fract(y) - 0.5), 0.08 + 0.14 * u_weight);
-  float b = on * mix(0.25, 1.0, pow(tail, 1.5));
-  vec3 col = palette(hash1(row + 2.2), true);
-  float a = clamp((lg.x + lg.y * 0.7) * b, 0.0, 1.0) * u_strength;
-  col = col * (1.0 + lg.y * 0.5);
-  gl_FragColor = vec4(col * a, a);
+  float rows = 8.0 + 14.0 * u_density;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float fi = float(i);
+    if (fi >= u_lines) break;
+    vec4 s = strands(p, fi, rows, 1.0);
+    col += s.rgb;
+    a = max(a, s.a);
+  }
+  // Many lines over each other roll off softly toward white instead of burning out.
+  col = 1.0 - exp(-col * 1.25);
+  gl_FragColor = vec4(col * u_strength, clamp(a, 0.0, 1.0) * u_strength);
 }`,
-  // Ribbon waves: several smooth lines riding over each other.
+  // Ribbon waves: silk ribbons flowing over each other, turning as they go, soft at the edges.
   ribbons: `
 void main() {
   vec2 p = place() / u_size;
   float t = u_t * 0.25;
-  float n = 3.0 + floor(u_density * 4.0);
+  float n = min(40.0, (4.0 + floor(u_density * 5.0)) * u_lines);
   vec3 col = vec3(0.0);
   float a = 0.0;
-  for (int i = 0; i < 9; i++) {
+  for (int i = 0; i < 40; i++) {
     float fi = float(i);
     if (fi >= n) break;
-    float off = (fi / n - 0.5) * 0.9;
-    float y = off + 0.12 * sin(p.x * (2.0 + hash1(fi) * 2.0) + t * (0.6 + hash1(fi + 1.0)) + fi)
-      + u_chaos * 0.25 * (fbm3(vec2(p.x * 1.3 + t * 0.3, fi * 3.1)) - 0.5);
-    vec2 lg = lineGlow(abs(p.y - y), 0.006 + 0.012 * u_weight);
-    float k = clamp(lg.x + lg.y * 0.6, 0.0, 1.0);
-    col += palette(fi / n, true) * k;
+    float h = hash1(fi);
+    // How far away this ribbon is: far ones are narrow and dim, near ones wide and soft.
+    float z = hash1(fi + 5.0);
+    float ph = fi * 1.7;
+    float y = ((fi + 0.5) / n - 0.5) * 1.05 + (h - 0.5) * 0.08
+      + 0.09 * sin(p.x * (1.6 + h * 1.8) + t * (0.6 + hash1(fi + 1.0)) + ph)
+      + u_bend * (0.24 * sin(p.x * 0.9 + t * 0.5 + ph * 0.35) + 0.07 * sin(p.x * 3.1 - t * 0.8 + ph))
+      + u_chaos * 0.24 * (noise(vec2(p.x * 1.3 + t * 0.3, fi * 3.1)) - 0.5);
+    float dy = p.y - y;
+    // Silk turning as it flows: broad where it faces us, a thin bright edge where it is side-on.
+    float face = 0.5 + 0.5 * sin(p.x * (1.1 + h) + t * (0.5 + 0.4 * h) + ph * 2.0);
+    float w = (0.01 + 0.026 * u_weight) * mix(1.7, 0.45, z) * (0.1 + 0.9 * face);
+    float soft = max(w * mix(0.9, 0.3, u_sharp), AA(dy) * 1.5);
+    float band = 1.0 - smoothstep(max(w - soft, 0.0), w + soft, abs(dy));
+    float sheen = 0.4 + 0.6 * smoothstep(-w, w, dy);
+    float halo = exp(-abs(dy) / (w * 3.0 + 0.01)) * u_glow * 0.6;
+    float k = (band * sheen * (1.1 - 0.5 * face) + halo) * mix(1.0, 0.4, z) * min(1.0, 3.6 * inversesqrt(n));
+    col += palette(fi / n + h * 0.15, true) * k;
     a = max(a, k);
   }
-  a *= u_strength;
-  gl_FragColor = vec4(col * u_strength, a);
+  // Many lines over each other roll off softly toward white instead of burning out.
+  col = 1.0 - exp(-col * 1.25);
+  gl_FragColor = vec4(col * u_strength, clamp(a, 0.0, 1.0) * u_strength);
 }`,
   // Plasma: the classic flowing colour field.
   plasma: `
@@ -787,65 +860,82 @@ void main() {
   col += pow(max(light, 0.0), 24.0) * (0.3 - 0.2 * u_sharp);
   gl_FragColor = vec4(col * u_strength, u_strength);
 }`,
-  // Falling light: glowing streaks pouring down, bright heads and fading tails.
-  lightfall: `
+  // Falling light: soft strands of light pouring down at several depths, heads feathered, tails fading.
+  lightfall:
+    STRANDS +
+    `
 void main() {
   vec2 p = place() / u_size;
-  float cols = 26.0 + u_density * 50.0;
-  float x = p.x * cols;
-  float id = floor(x);
-  float h = hash1(id);
-  vec2 lg = lineGlow(abs(fract(x) - 0.5), 0.06 + 0.12 * u_weight);
-  float speed = 0.5 + h * 1.2 + u_chaos * hash1(id + 2.0) * 1.5;
-  float len = 0.4 + hash1(id + 4.0) * 0.9;
-  float f = fract(p.y / len + u_t * speed * 0.45 + h * 7.0);
-  float part = 0.35 + 0.5 * hash1(id + 6.0);
-  float b = f < part ? pow(1.0 - f / part, 1.6) : 0.0;
-  vec3 col = palette(hash1(id + 1.0), true);
-  float a = clamp((lg.x + lg.y * 0.8) * b, 0.0, 1.0) * u_strength;
-  gl_FragColor = vec4(col * a * (1.0 + lg.y * 0.5), a);
+  float rows = 14.0 + 24.0 * u_density;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float fi = float(i);
+    if (fi >= u_lines) break;
+    // The same strands stood upright: along them is down the picture.
+    vec4 s = strands(vec2(p.y, p.x), fi, rows, 0.0);
+    col += s.rgb;
+    a = max(a, s.a);
+  }
+  // Many lines over each other roll off softly toward white instead of burning out.
+  col = 1.0 - exp(-col * 1.25);
+  gl_FragColor = vec4(col * u_strength, clamp(a, 0.0, 1.0) * u_strength);
 }`,
   // Rising lines: lines of light sweep in along the floor, bend upward and rise, with
   // pulses of light running up them.
   risers: `
 void main() {
-  vec2 P = plane() / u_size;
+  vec2 P0 = plane() / u_size;
   float aspect = u_res.x / u_res.y;
-  float y0 = -0.32;
-  float n = 10.0 + floor(u_density * 14.0);
+  float n = min(54.0, (8.0 + floor(u_density * 10.0)) * u_lines);
   vec3 col = vec3(0.0);
   float a = 0.0;
-  for (int i = 0; i < 26; i++) {
+  for (int i = 0; i < 54; i++) {
     float fi = float(i);
     if (fi >= n) break;
     float h = hash1(fi);
-    float xi = (h * 2.0 - 1.0) * 0.32 * aspect;
+    // How far away this line is: each depth has its own floor, width and brightness, so
+    // the lines never pile into one bright bar.
+    float z = hash1(fi + 7.0);
+    float y0 = -0.4 + z * 0.14;
+    vec2 P = P0;
+    // Bend: the rising part sways like a reed, more the higher it is.
+    P.x += smoothstep(y0, y0 + 0.4, P.y)
+      * (u_bend * 0.07 * sin(P.y * 4.5 + u_t * 0.35 + h * 6.2831853)
+        + u_chaos * 0.06 * (noise(vec2(P.y * 3.0 + u_t * 0.1, fi * 1.9)) - 0.5));
+    float xi = (h * 2.0 - 1.0) * 0.46 * aspect;
     float s = xi < 0.0 ? -1.0 : 1.0;
-    float R = 0.06 + abs(xi) * 0.9 + 0.08 * hash1(fi + 1.0);
+    float R = 0.05 + abs(xi) * 0.7 + 0.08 * hash1(fi + 1.0);
     vec2 c = vec2(xi + s * R, y0 + R);
     float d;
     float L;
+    float reach = 1.0;
     if (P.y >= c.y) {
       d = abs(P.x - xi);
       L = R * 1.5708 + (P.y - c.y);
     } else if ((P.x - c.x) * s >= 0.0) {
       d = abs(P.y - y0);
       L = -abs(P.x - c.x);
+      // Along the floor the line fades in from nothing instead of starting as a bar.
+      reach = exp(L * 10.0);
     } else {
       vec2 q = P - c;
       d = abs(length(q) - R);
       L = R * atan(abs(q.x), -q.y);
     }
-    float top = 0.05 + 0.45 * hash1(fi + 2.0);
-    float fade = 1.0 - smoothstep(top, top + 0.25, P.y);
-    vec2 lg = lineGlow(d, 0.002 + 0.004 * u_weight);
-    float f = fract(L * (2.0 + u_chaos * 3.0) - u_t * (0.3 + h * 0.5) + h * 9.0);
-    float pulse = 0.35 + 0.65 * smoothstep(0.6, 1.0, f);
-    float k = clamp(lg.x + lg.y * 0.7, 0.0, 1.0) * fade * pulse;
+    float top = 0.5 * hash1(fi + 2.0);
+    float fade = 1.0 - smoothstep(top - 0.12, top + 0.34, P.y);
+    vec2 lg = lineGlow(d, (0.001 + 0.0022 * u_weight) * mix(1.7, 0.6, z));
+    // Light breathing up the line in soft swells (no sudden starts).
+    float f = L * (2.0 + u_chaos * 3.0) - u_t * (0.3 + h * 0.5) + h * 9.0;
+    float pulse = 0.25 + 0.75 * pow(0.5 + 0.5 * sin(6.2831853 * f), 3.0);
+    float k = clamp(lg.x + lg.y * 0.7, 0.0, 1.0) * fade * reach * pulse * mix(1.0, 0.45, z);
     col += palette(hash1(fi + 3.0), true) * k;
     a = max(a, k);
   }
-  gl_FragColor = vec4(col * u_strength, a * u_strength);
+  // Many lines over each other roll off softly toward white instead of burning out.
+  col = 1.0 - exp(-col * 1.25);
+  gl_FragColor = vec4(col * u_strength, clamp(a, 0.0, 1.0) * u_strength);
 }`,
   // Neon grid: a glowing floor racing toward a bright horizon (synthwave).
   synthgrid: `
@@ -1854,6 +1944,8 @@ const UNIFORMS = [
   'u_glow',
   'u_pos',
   'u_bg',
+  'u_lines',
+  'u_bend',
 ];
 
 /** Kinds whose shader didn't compile here: not tried again every frame (that alone lags). */
@@ -2127,6 +2219,8 @@ class Painter {
     );
     gl.uniform1f(p.loc.u_glow!, q.glow);
     gl.uniform2f(p.loc.u_pos!, q.x, 1 - q.y);
+    gl.uniform1f(p.loc.u_lines!, q.lines);
+    gl.uniform1f(p.loc.u_bend!, q.bend);
     // The colour of space (alpha 0 = none chosen: the effect stays see-through).
     const bg = q.bg ? parseColor(q.bg) : null;
     gl.uniform4f(p.loc.u_bg!, bg?.[0] ?? 0, bg?.[1] ?? 0, bg?.[2] ?? 0, bg ? 1 : 0);
