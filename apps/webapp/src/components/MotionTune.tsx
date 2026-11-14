@@ -9,7 +9,7 @@ import {
 import { useState, type ReactNode } from 'react';
 import { useT } from '../lib/i18n';
 import { haptic } from '../lib/telegram';
-import { placeDefault, SHADER_KINDS } from './ShaderEffect';
+import { placeDefault, SHADER_KINDS, sharpDefault } from './ShaderEffect';
 import { FontPicker } from './FontPicker';
 import { Pill } from './LookControls';
 import { Toggle } from './ui';
@@ -117,7 +117,17 @@ export function MotionTuneControls({
   const lined = kind === 'lines' || kind === 'grid';
   const shader = SHADER_KINDS.has(kind);
   // What "how many" and "how thick" mean for this animation.
-  const lineKinds = ['topo', 'streaks', 'ribbons', 'wordwall'];
+  const lineKinds = ['topo', 'streaks', 'ribbons', 'wordwall', 'threadwave', 'fluted'];
+  // Shader-drawn fields of specks and lights: "how many" and "how big", as for particles.
+  const speckKinds = [
+    'particlewave',
+    'dust',
+    'swarm',
+    'starfield',
+    'xmassnow',
+    'candles',
+    'garland',
+  ];
   const label: Record<'density' | 'weight' | 'sharp', string> = {
     density:
       kind === 'lines'
@@ -132,7 +142,7 @@ export function MotionTuneControls({
                 ? k.folds
                 : kind === 'marble'
                   ? k.veins
-                  : shader
+                  : shader && !speckKinds.includes(kind)
                     ? k.bands
                     : k.count,
     weight: lined
@@ -147,12 +157,12 @@ export function MotionTuneControls({
               ? kind === 'marble'
                 ? k.veinWidth
                 : k.thick
-              : shader
+              : shader && !speckKinds.includes(kind)
                 ? k.gloss
                 : kind.startsWith('icon')
                   ? k.iconSize
                   : k.particle,
-    sharp: k.clarity,
+    sharp: kind === 'planet' ? k.ring : k.clarity,
   };
   const knob: Record<MotionKnob, ReactNode> = {
     density: (
@@ -183,7 +193,7 @@ export function MotionTuneControls({
       <Knob
         key="sharp"
         label={label.sharp}
-        value={tune.sharp ?? (kind === 'marble' ? 0.45 : 0)}
+        value={tune.sharp ?? sharpDefault(kind)}
         min={0}
         max={1}
         step={0.05}
@@ -249,6 +259,15 @@ export function MotionTuneControls({
         step={0.05}
         show={percent}
         onChange={(trail) => set({ trail: trail || null })}
+      />
+    ),
+    bg: (
+      <ColorRow
+        key="bg"
+        label={k.bg}
+        none={k.bgNone}
+        value={tune.bg ?? null}
+        onChange={(bg) => set({ bg })}
       />
     ),
     place: (
@@ -536,16 +555,21 @@ function ColorsRow({ value, onChange }: { value: string[]; onChange: (c: string[
 function ColorRow({
   value,
   onChange,
+  label,
+  none,
 }: {
   value: string | null;
   onChange: (c: string | null) => void;
+  /** Another heading and "none" word (the colour of space behind a sky effect). */
+  label?: string;
+  none?: string;
 }) {
   const t = useT();
   return (
     <div>
-      <div className="mb-2 text-[14px]">{t.studio.color}</div>
+      <div className="mb-2 text-[14px]">{label ?? t.studio.color}</div>
       <div className="flex flex-wrap items-center gap-2">
-        <Pill on={!value} onClick={() => onChange(null)} label={t.studio.colorAuto} />
+        <Pill on={!value} onClick={() => onChange(null)} label={none ?? t.studio.colorAuto} />
         {PALETTE.map((c) => (
           <button
             key={c}

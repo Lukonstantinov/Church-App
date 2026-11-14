@@ -63,7 +63,22 @@ export type ShaderKind =
   | 'grainient'
   | 'beams'
   | 'stainedglass'
-  | 'crossglow';
+  | 'crossglow'
+  | 'threadwave'
+  | 'particlewave'
+  | 'liquidmetal'
+  | 'curtains'
+  | 'shards'
+  | 'fluted'
+  | 'dust'
+  | 'swarm'
+  | 'galaxy'
+  | 'starfield'
+  | 'planet'
+  | 'garland'
+  | 'bethlehem'
+  | 'xmassnow'
+  | 'candles';
 
 /** The animations drawn by this engine. */
 export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
@@ -105,6 +120,21 @@ export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
   'beams',
   'stainedglass',
   'crossglow',
+  'threadwave',
+  'particlewave',
+  'liquidmetal',
+  'curtains',
+  'shards',
+  'fluted',
+  'dust',
+  'swarm',
+  'galaxy',
+  'starfield',
+  'planet',
+  'garland',
+  'bethlehem',
+  'xmassnow',
+  'candles',
 ]);
 
 /** How much of the screen's pixels each kind is drawn at (soft ones less, thin lines more). */
@@ -148,6 +178,21 @@ const RES: Record<ShaderKind, number> = {
   beams: 0.4,
   stainedglass: 0.75,
   crossglow: 0.6,
+  threadwave: 1,
+  particlewave: 1,
+  liquidmetal: 0.6,
+  curtains: 0.4,
+  shards: 0.75,
+  fluted: 1,
+  dust: 0.6,
+  swarm: 0.75,
+  galaxy: 0.6,
+  starfield: 0.75,
+  planet: 0.75,
+  garland: 0.75,
+  bethlehem: 0.75,
+  xmassnow: 0.6,
+  candles: 0.4,
 };
 /**
  * How sharp each kind is drawn, as a share of the screen's own pixels (the screen's
@@ -195,6 +240,8 @@ export interface ShaderParams {
   x: number;
   y: number;
   drift: boolean;
+  /** The colour of space behind a sky effect (#rrggbb), or none: see-through as before. */
+  bg: string | null;
 }
 
 /** Where a placed effect's centre is until it is moved (share of the width / height). */
@@ -202,7 +249,17 @@ export function placeDefault(kind: string): { x: number; y: number } {
   if (kind === 'fur') return { x: 0.8, y: 0.15 };
   if (kind === 'sun' || kind === 'halo') return { x: 0.72, y: 0.28 };
   if (kind === 'crossglow') return { x: 0.5, y: 0.42 };
+  if (kind === 'bethlehem') return { x: 0.5, y: 0.3 };
+  if (kind === 'planet') return { x: 0.6, y: 0.42 };
   return { x: 0.5, y: 0.5 };
+}
+
+/** How sharp a kind is until it is tuned (marble's veins; the planet's ring: 0 = none; crisp ribs). */
+export function sharpDefault(kind: string): number {
+  if (kind === 'marble') return 0.45;
+  if (kind === 'planet') return 0.7;
+  if (kind === 'fluted') return 0.6;
+  return 0;
 }
 
 /** A tune turned into shader settings (with the defaults each kind is designed at). */
@@ -216,7 +273,7 @@ export function shaderParams(kind: ShaderKind, tune?: MotionTune | null): Shader
     strength: tune?.strength ?? 1,
     density: tune?.density ?? 1,
     weight: tune?.weight ?? 1,
-    sharp: tune?.sharp ?? (kind === 'marble' ? 0.45 : 0),
+    sharp: tune?.sharp ?? sharpDefault(kind),
     chaos: tune?.chaos ?? (kind === 'liquid' ? 0.45 : kind === 'marble' ? 0.35 : 0.3),
     seed: tune?.seed ?? 0,
     mode: 0,
@@ -225,6 +282,7 @@ export function shaderParams(kind: ShaderKind, tune?: MotionTune | null): Shader
     x: tune?.x ?? placeDefault(kind).x,
     y: tune?.y ?? placeDefault(kind).y,
     drift: tune?.drift ?? false,
+    bg: tune?.bg ?? null,
   };
 }
 
@@ -255,6 +313,7 @@ uniform float u_strength, u_density, u_weight, u_sharp, u_chaos, u_seed, u_angle
 uniform float u_mode, u_paint;
 uniform float u_glow;
 uniform vec2 u_pos;
+uniform vec4 u_bg;
 
 /** The placed centre (sun, halo, swirl) in the same space as place(), unturned. */
 vec2 centre(vec2 at) {
@@ -313,6 +372,10 @@ vec2 seedShift() { return hash3(vec3(u_seed, u_seed * 0.37, 1.0)).xy * 100.0; }
 float hash1(float n) { return fract(sin(n * 91.345 + u_seed * 7.13) * 47453.5453); }
 /** The point in the box without the turn (for things placed by x / y). */
 vec2 plane() { return (v_uv - 0.5) * vec2(u_res.x / u_res.y, 1.0); }
+/** The picture laid over the chosen colour of space (solid), or left see-through when none is chosen. */
+vec4 overSpace(vec4 c) {
+  return u_bg.a > 0.5 ? vec4(c.rgb + u_bg.rgb * (1.0 - c.a), 1.0) : c;
+}
 /** A step from 0 to 1 at edge e, smoothed over about a pixel and a half (no stairs). */
 float aaStep(float e, float x) {
   float a = AA(x) * 0.9 + 1e-5;
@@ -324,6 +387,27 @@ vec2 lineGlow(float d, float w) {
   float core = 1.0 - smoothstep(w, w + soft, d);
   float halo = exp(-d / (w * 6.0 + 0.01)) * u_glow;
   return vec2(core, halo);
+}
+`;
+
+/**
+ * Shared by the fields of specks (dust, snow, stars, candle lights): one layer is a grid
+ * with one soft disc somewhere in each cell — no loop over particles, so a thousand cost
+ * the same as ten. A disc never reaches its cell's edge, where it would be cut off.
+ */
+const MOTES = `
+/** x = how bright the disc is here, y = a random number of its own, z = distance from its middle (1 = its edge). */
+vec3 mote(vec2 q, float r, float soft, float keep, float salt, float wob) {
+  vec2 id = floor(q);
+  vec2 f = fract(q) - 0.5;
+  vec3 h = hash3(vec3(id + 17.0, salt * 7.31 + u_seed + 1.0));
+  float sa = max(soft, AA(q.x) * 1.2);
+  float reach = max(0.5 - r - sa - wob, 0.0);
+  vec2 o = (h.xy - 0.5) * 2.0 * reach
+    + wob * vec2(sin(u_t * 0.6 + h.z * 40.0), cos(u_t * 0.45 + h.x * 31.0));
+  float d = length(f - o);
+  float k = (1.0 - smoothstep(max(r - sa, 0.0), r + sa, d)) * step(h.z, keep);
+  return vec3(k, fract(h.z * 57.3 + h.x * 13.7), d / max(r, 1e-4));
 }
 `;
 
@@ -891,7 +975,7 @@ void main() {
   float star = step(0.9, h) * (1.0 - smoothstep(0.0, 0.1 + 0.08 * u_weight, length(f - off))) * tw;
   col += vec3(star);
   float a = clamp(cloud * 0.95 + star, 0.0, 1.0) * u_strength;
-  gl_FragColor = vec4(min(col, vec3(1.0)) * a, a);
+  gl_FragColor = overSpace(vec4(min(col, vec3(1.0)) * a, a));
 }`,
   // Clouds: soft banks of cloud drifting sideways, lit from above.
   clouds: `
@@ -1126,6 +1210,528 @@ void main() {
   float a = clamp(core + halo * 0.85 + rays, 0.0, 1.0) * u_strength;
   gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, a);
 }`,
+  // Thread wave: hundreds of hair-thin parallel threads lying on a slowly rolling surface;
+  // light grazes the crests and the troughs fall into darkness.
+  threadwave: `
+float twDisp(vec2 p, float t) {
+  float a = sin(p.x * 1.9 + t + 1.4 * sin(p.y * 1.1 - t * 0.35));
+  float b = sin(p.x * 3.7 - t * 0.7 + p.y * 2.6);
+  return 0.22 * a + 0.07 * b
+    + u_chaos * 0.16 * (fbm3(vec2(p.x * 1.1 + t * 0.15, p.y * 1.3) + seedShift()) - 0.5);
+}
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.22;
+  float n = 30.0 + 70.0 * u_density;
+  float e = 0.01;
+  float h = twDisp(p, t);
+  float hx = (twDisp(p + vec2(e, 0.0), t) - h) / e;
+  float hy = (twDisp(p + vec2(0.0, e), t) - h) / e;
+  float g = (p.y + h) * n;
+  float d = 0.5 - abs(fract(g) - 0.5);
+  float w = 0.07 + 0.09 * u_weight;
+  float fw = AA(g);
+  float soft = max(mix(0.14, 0.05, u_sharp), fw * 1.2);
+  float line = 1.0 - smoothstep(w, w + soft, d);
+  // Where the threads crowd closer than the pixels can show, they melt into their
+  // average tone instead of shimmering (moiré).
+  line = mix(line, min(1.0, 2.0 * w + soft), smoothstep(0.45, 1.0, fw));
+  // The slope toward the light: crests facing it shine, the far sides go dark.
+  float lit = clamp(0.5 - 1.5 * hx - 0.9 * hy, 0.0, 1.0);
+  lit = lit * lit * (3.0 - 2.0 * lit);
+  float deep = smoothstep(-0.3, 0.35, h + 0.25 * (fbm3(p * 0.7 + seedShift() + 3.0) - 0.5));
+  float shade = pow(lit, 1.7) * (0.3 + 0.7 * deep);
+  vec3 tone = palette(shade, false);
+  float halo = u_glow * exp(-d / (w * 3.0)) * 0.5 * shade;
+  vec3 col = u_c[0] * 0.04 + tone * (line * 1.7 * shade + halo) + u_c[1] * line * 0.16 * (0.4 + 0.6 * deep);
+  col += vec3(1.0) * line * pow(shade, 3.0) * 0.6;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
+}`,
+  // Particle wave: a floor of glowing dots seen in perspective, rolling like a sea and
+  // fading into the distance.
+  particlewave: `
+float pwH(vec2 w, float t) {
+  return 0.5 * sin(w.x * 1.5 + t) * cos(w.y * 1.1 - t * 0.6)
+    + 0.3 * sin(w.x * 0.6 + w.y * 0.85 + t * 0.8)
+    + u_chaos * 0.5 * sin(w.x * 2.6 - w.y * 2.0 + t * 1.3 + u_seed);
+}
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.5;
+  float focal = 0.9;
+  float camH = 1.0;
+  float horizon = 0.27;
+  float dz = 0.21 / (0.55 + 0.45 * u_density);
+  float px = 1.0 / u_res.y;
+  // The rows come toward the eye; each keeps its own number, so nothing jumps when the
+  // nearest one leaves and a new one appears far away (both faded).
+  float scroll = u_t * 0.3 / dz;
+  float k0 = floor(scroll);
+  float fr = scroll - k0;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 44; i++) {
+    float fi = float(i);
+    float row = fi + 1.0 - fr;
+    float z = 1.1 + row * dz;
+    float X = p.x * z / focal;
+    float cx = (floor(X / dz) + 0.5) * dz;
+    float h = pwH(vec2(cx, (fi + k0) * dz), t);
+    vec2 s = vec2(cx, h * 0.42 - camH) * (focal / z) + vec2(0.0, horizon);
+    float r = (0.05 + 0.05 * u_weight) * dz * focal / z;
+    // A dot smaller than a pixel is drawn a pixel big and fainter, so far rows don't flicker.
+    float rr = max(r, px * 0.9);
+    float d = length(p - s);
+    float k = (1.0 - smoothstep(rr * mix(0.2, 0.7, u_sharp), rr + px, d)) * min(1.0, (r * r) / (rr * rr) + 0.25);
+    k += u_glow * 0.6 * exp(-d / (rr * 2.5));
+    float up = 0.5 + 0.5 * clamp(h / (1.0 + 0.5 * u_chaos), -1.0, 1.0);
+    float fade = smoothstep(0.0, 1.5, row) * (1.0 - smoothstep(34.0, 43.0, row)) * exp(-z * 0.1);
+    k *= fade * (0.4 + 1.1 * up * up);
+    col += palette(up, false) * k;
+    a = max(a, k);
+  }
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
+  // Liquid metal: dark mirror chrome flowing in slow swirls, bright studio highlights and
+  // a thin-film sheen of the colours (gloss = how much sheen).
+  liquidmetal: `
+float lmH(vec2 p, float t) {
+  vec2 q = vec2(fbm3(p + vec2(0.0, t)), fbm3(p + vec2(5.2, 1.3) - t));
+  return fbm3(p * 0.9 + (q - 0.5) * (1.5 + 3.5 * u_chaos) + t * 0.3);
+}
+void main() {
+  vec2 p = place() * ((0.9 + 0.5 * u_density) / u_size) + seedShift();
+  float t = u_t * 0.05;
+  float e = 0.03;
+  float h = lmH(p, t);
+  float hx = (lmH(p + vec2(e, 0.0), t) - h) / e;
+  float hy = (lmH(p + vec2(0.0, e), t) - h) / e;
+  vec3 n = normalize(vec3(-hx, -hy, 0.55));
+  vec3 r = reflect(vec3(0.0, 0.0, -1.0), n);
+  // What the metal mirrors: a dark room with long soft lamps.
+  float k = mix(3.0, 6.0, u_sharp);
+  float env = pow(0.5 + 0.5 * sin(r.y * 6.0 + r.x * 2.5 + h * 4.0), k) * 0.9
+    + pow(0.5 + 0.5 * sin(r.x * 5.0 - r.y * 2.0 + 1.3), k * 1.6) * 0.5;
+  float fres = pow(1.0 - n.z, 2.0);
+  float spec = pow(max(dot(n, normalize(vec3(0.35, 0.55, 0.75))), 0.0), 50.0);
+  vec3 sheen = palette(h * 2.2 + r.x * 0.5 + r.y * 0.35 + t * 0.6, true);
+  vec3 metal = vec3(0.03, 0.035, 0.05) + vec3(0.6, 0.66, 0.78) * env;
+  float s = clamp(0.55 * u_weight, 0.0, 1.0);
+  vec3 col = mix(metal, sheen * (0.12 + 1.5 * env) + sheen * fres * 0.6, s) + vec3(spec) * 0.9;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
+}`,
+  // Curtains of light: tall blurred bands of colour sliding sideways behind each other.
+  curtains: `
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.035;
+  p.x += u_chaos * 0.14 * sin(p.y * 1.7 + t * 4.0 + u_seed);
+  vec3 col = vec3(0.0);
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float x = p.x * (2.2 + fi * 1.6) * (0.5 + 0.5 * u_density) + t * (1.0 + fi * 0.7) + fi * 17.3 + u_seed * 1.7;
+    float a = noise(vec2(x, fi * 3.1 + 0.5));
+    float b = noise(vec2(x * 2.3 + 5.0, fi * 7.7 + 0.5));
+    float band = smoothstep(mix(0.2, 0.42, u_sharp), mix(0.8, 0.62, u_sharp), a) * (0.55 + 0.45 * b);
+    float fold = 0.6 + 0.4 * sin(p.y * (1.1 + fi * 0.45) + a * 5.0 + t * 3.0 + fi * 2.0);
+    col += palette(b * 0.8 + fi * 0.27 + a * 0.35, true) * band * fold * (1.0 - fi * 0.15);
+  }
+  col = 1.0 - exp(-col * col * 2.6);
+  col += u_c[0] * 0.03;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
+}`,
+  // Glass shards: see-through angular pieces of coloured glass with bright cut edges,
+  // drifting and slowly turning over each other.
+  shards: `
+void main() {
+  vec2 p = place() / u_size;
+  float aspect = u_res.x / u_res.y;
+  float n = 6.0 + floor(u_density * 6.0);
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 21; i++) {
+    float fi = float(i);
+    if (fi >= n) break;
+    float h = hash1(fi);
+    float h2 = hash1(fi + 9.0);
+    vec2 c = vec2((h - 0.5) * (aspect + 0.3), (h2 - 0.5) * 1.3)
+      + 0.1 * vec2(sin(u_t * (0.11 + 0.1 * h2) + h * 6.28), cos(u_t * (0.09 + 0.1 * h) + h2 * 6.28));
+    float rot = hash1(fi + 3.0) * 6.2831853 + u_t * (hash1(fi + 4.0) - 0.5) * (0.08 + 0.3 * u_chaos);
+    float sz = (0.1 + 0.2 * hash1(fi + 5.0)) * u_weight;
+    vec2 q = p - c;
+    float d = -10.0;
+    for (int j = 0; j < 3; j++) {
+      float fj = float(j);
+      float ang = rot + fj * 2.0943951 + (hash1(fi * 3.0 + fj + 20.0) - 0.5) * 1.1;
+      d = max(d, dot(q, vec2(cos(ang), sin(ang))) - sz * (0.45 + 0.6 * hash1(fi * 5.0 + fj + 40.0)));
+    }
+    float cover = 1.0 - aaStep(0.0, d);
+    float edge = exp(min(d, 0.0) * 70.0) * cover;
+    float g = clamp(0.5 + dot(q, vec2(cos(rot + 0.7), sin(rot + 0.7))) / (sz * 1.6), 0.0, 1.0);
+    vec3 tint = palette(hash1(fi + 6.0), true);
+    float body = cover * (0.16 + 0.5 * g * g);
+    vec3 light = tint * body * 1.25 + mix(tint, vec3(1.0), 0.65) * edge * (0.55 + 0.6 * u_glow);
+    float al = clamp(body + edge * 0.8, 0.0, 1.0);
+    col = col * (1.0 - al * 0.45) + light;
+    a = a + (1.0 - a) * al;
+  }
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
+  // Fluted glass: a soft drifting gradient seen through ribbed glass — every narrow rib
+  // bends the picture behind it, with a bright edge on one side and a dark one on the other.
+  fluted: `
+vec3 flBack(vec2 q, float t) {
+  q += (vec2(fbm3(q * 1.1 + seedShift() + t * 0.25), fbm3(q * 1.1 + seedShift() + 7.0 - t * 0.25)) - 0.5)
+    * (0.2 + 1.1 * u_chaos);
+  vec3 col = vec3(0.0);
+  float ws = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    vec2 c = vec2(0.55 * sin(t * (0.7 + fi * 0.23) + fi * 2.4 + u_seed),
+                  0.45 * cos(t * (0.5 + fi * 0.31) + fi * 1.7 + u_seed * 0.3));
+    float d = length(q - c);
+    float w = 1.0 / (d * d * d * d + 0.004);
+    col += u_c[i] * w;
+    ws += w;
+  }
+  return col / ws;
+}
+/** What one rib shows at f across it (0…1; a little beyond for smoothing its edges). */
+vec3 flRib(vec2 p, float id, float f, float n, float t) {
+  float depth = min(u_weight, 2.5);
+  // The rib is a lens: it shows a wider, mirrored slice of what is behind it, and each
+  // rib sits a little higher or lower than its neighbours (the comb edge).
+  vec2 q = vec2((id + 0.5) / n - (f - 0.5) * 0.2 * depth,
+                p.y + (hash1(id * 1.37) - 0.5) * 0.16 * depth);
+  vec3 col = flBack(q, t);
+  float dp = min(depth, 1.5);
+  col *= 1.0 - 0.5 * dp * exp(-(1.0 - f) * 5.0);
+  col += (0.12 + 0.88 * col) * 0.55 * dp * exp(-max(f, 0.0) * 8.0);
+  return col;
+}
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.12;
+  float n = 12.0 + 33.0 * u_density;
+  float s = p.x * n;
+  float id = floor(s);
+  float f = s - id;
+  float side = f < 0.5 ? -1.0 : 1.0;
+  vec3 a = flRib(p, id, f, n, t);
+  vec3 b = flRib(p, id + side, f - side, n, t);
+  float aw = max(mix(0.05, 0.0, u_sharp), AA(s));
+  float k = 0.5 * (1.0 - smoothstep(0.0, aw, min(f, 1.0 - f)));
+  vec3 col = mix(a, b, k);
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0) * u_strength, u_strength);
+}`,
+  // Dust in a sunbeam: fine glowing motes at different depths, the near and far ones out
+  // of focus, all drifting slowly.
+  dust:
+    MOTES +
+    `
+void main() {
+  vec2 p = place() / u_size;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  float keep = clamp(0.5 * u_density, 0.08, 1.0);
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i);
+    float sc = 2.4 * pow(1.75, fi);
+    float blur = abs(fi - 2.5) / 2.5;
+    vec2 q = p * sc + vec2(u_t * 0.035, u_t * 0.02) + fi * 13.7
+      + u_chaos * 0.5 * vec2(sin(u_t * 0.13 + fi * 2.1), cos(u_t * 0.11 + fi));
+    float r = mix(0.035, 0.17, blur * blur) * min(u_weight, 1.6);
+    vec3 m = mote(q, r, mix(0.03, 0.1, blur), keep, fi, 0.06);
+    float tw = 0.55 + 0.45 * sin(u_t * (0.4 + m.y * 1.3) + m.y * 50.0);
+    float k = m.x * tw * mix(1.3, 0.3, blur) * (0.3 + 0.7 * m.y * m.y);
+    col += mix(palette(m.y, true), vec3(1.0), 0.35 * (1.0 - blur)) * k;
+    a = max(a, k);
+  }
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
+  // Swarm: bright specks streaming along the lines of a wandering current, each with a
+  // soft tail behind it.
+  swarm: `
+void main() {
+  vec2 p = place() / u_size;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    vec2 w = p * (1.0 + 0.35 * fi) + fi * 7.3;
+    // The current's lanes: lines of equal psi. Specks stay in their lane as it bends.
+    float psi = w.y + (0.25 + 1.1 * u_chaos) * (fbm3(w * 1.2 + seedShift() + vec2(u_t * 0.015, 0.0)) - 0.5);
+    float g = psi * (8.0 + 7.0 * fi) * u_density;
+    float lane = floor(g);
+    float px = AA(g) + 1e-4;
+    float d = abs(fract(g) - 0.5) / px;
+    float wpx = (0.7 + 0.8 * u_weight) / (1.0 + 0.3 * fi);
+    float line = 1.0 - smoothstep(wpx * 0.5, wpx * 0.5 + 1.2, d);
+    float h = hash1(lane + fi * 57.0);
+    float along = (w.x + 0.2 * fbm3(w * 0.7 + 3.0)) * (1.3 + 1.2 * h);
+    float f = fract(along - u_t * (0.1 + 0.16 * h) + h * 17.0);
+    float tip = AA(along) * 1.5 + 1e-4;
+    float tail = pow(f, 7.0) * 0.75 + exp(-(1.0 - f) * 45.0);
+    tail *= 1.0 - smoothstep(1.0 - tip, 1.0, f);
+    float k = (line + u_glow * 0.7 * exp(-d / (wpx * 3.0))) * tail * (1.0 - 0.22 * fi);
+    col += mix(palette(h, true), vec3(1.0), 0.5 * exp(-(1.0 - f) * 45.0)) * k;
+    a = max(a, k);
+  }
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
+  // Galaxy: a tilted spiral of stars and dust slowly turning round a bright core.
+  galaxy: `
+void main() {
+  vec2 p = (plane() - centre(u_pos)) / (u_size * 1.5);
+  float ca = cos(u_angle), sa = sin(u_angle);
+  p = mat2(ca, -sa, sa, ca) * p;
+  p.y /= 0.58;
+  float r = length(p);
+  float rot = u_t * 0.04;
+  // Two arms: the angle taken twice, so the picture has no seam where the angle wraps.
+  float s = 2.0 * atan(p.y, p.x) - log(r + 0.03) * (3.0 + 2.5 * u_density) + 2.0 * rot;
+  float arm = pow(0.5 + 0.5 * cos(s), mix(1.4, 3.5, u_sharp));
+  float cr = cos(rot), sr = sin(rot);
+  vec2 rp = mat2(cr, -sr, sr, cr) * p;
+  float dust = fbm(rp * 5.0 + seedShift());
+  float fine = fbm(rp * 11.0 + seedShift() + 4.0);
+  float disc = exp(-r * 2.8) * smoothstep(0.0, 0.12, r);
+  float arms = arm * (0.25 + 1.3 * mix(dust, dust * fine * 2.0, u_chaos)) * disc;
+  float lanes = 1.0 - 0.6 * arm * smoothstep(0.45, 0.75, fine);
+  float haze = exp(-r * 4.5) * 0.25;
+  float core = exp(-r * 22.0) * 1.3 + exp(-r * 8.0) * 0.35;
+  vec2 sg = rp * 55.0;
+  vec2 sid = floor(sg);
+  vec3 sh = hash3(vec3(sid, 3.0 + u_seed));
+  float sd = length(fract(sg) - 0.5 - (sh.xy - 0.5) * 0.6);
+  float star = step(1.0 - (0.06 + 0.5 * arm) * disc * 1.6 - 0.02, sh.z)
+    * (1.0 - smoothstep(0.03, 0.16, sd)) * (0.6 + 0.4 * sin(u_t * (0.6 + sh.x * 2.0) + sh.y * 40.0));
+  vec3 col = u_c[0] * core
+    + mix(u_c[2], u_c[1], smoothstep(0.1, 0.8, arm)) * arms * 1.7 * lanes
+    + u_c[3] * pow(dust, 3.0) * arm * disc * 1.6
+    + u_c[2] * haze
+    + mix(u_c[1], vec3(1.0), 0.6) * star;
+  float a = clamp(core + arms * 1.4 + haze + star, 0.0, 1.0);
+  gl_FragColor = overSpace(vec4(min(col, vec3(1.0)) * a, a) * u_strength);
+}`,
+  // Deep starfield: layers of stars sliding past at different depths, twinkling; a few
+  // bright ones with the cross-shaped glint of a telescope.
+  starfield:
+    MOTES +
+    `
+void main() {
+  vec2 p = place() / u_size;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  vec2 slide = vec2(u_t * 0.012, u_t * 0.004);
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float sc = 7.0 * pow(1.8, fi) * sqrt(u_density);
+    vec3 m = mote(p * sc + slide + fi * 31.7, 0.04 * min(u_weight, 2.0), 0.03, 0.34, fi + 10.0, 0.0);
+    float mag = m.y * m.y * m.y;
+    float tw = 0.65 + 0.35 * sin(u_t * (0.7 + m.y * 2.4) + m.y * 70.0);
+    float k = m.x * tw * (0.12 + 1.2 * mag) * (1.0 - 0.15 * fi);
+    col += mix(vec3(1.0), palette(fract(m.y * 7.3), true), 0.55) * k;
+    a = max(a, k);
+  }
+  // The few bright ones, nearest, with long thin rays.
+  vec2 q = p * 2.3 * sqrt(u_density) + slide * 1.6 + 5.3;
+  vec2 id = floor(q);
+  vec3 h = hash3(vec3(id, 77.0 + u_seed));
+  vec2 f = fract(q) - 0.5 - (h.xy - 0.5) * 0.5;
+  float on = step(h.z, 0.45);
+  float tw = 0.75 + 0.25 * sin(u_t * (0.9 + h.x) + h.y * 30.0);
+  float sz = (0.6 + 0.6 * h.x) * min(u_weight, 2.0);
+  float d = length(f);
+  float core = exp(-d * 70.0 / sz) * 1.5 + exp(-d * 16.0 / sz) * 0.22;
+  float ray = exp(-abs(f.y) * 190.0) * exp(-abs(f.x) * 13.0 / sz) + exp(-abs(f.x) * 190.0) * exp(-abs(f.y) * 13.0 / sz);
+  // Nothing of a star may reach its cell's edge (it would be cut off there).
+  vec2 g = abs(fract(q) - 0.5);
+  float inside = 1.0 - smoothstep(0.36, 0.5, max(g.x, g.y));
+  float k = on * tw * inside * (core + ray * 0.75);
+  col += mix(vec3(1.0), palette(h.z * 2.2, true), 0.35) * k;
+  a = max(a, k);
+  a = clamp(a, 0.0, 1.0);
+  gl_FragColor = overSpace(vec4(min(col, vec3(1.0)), a) * u_strength);
+}`,
+  // Planet: a turning banded world lit from one side, its air glowing at the rim, with a
+  // ring round it (the ring knob takes it away).
+  planet: `
+void main() {
+  vec2 q = (plane() - centre(u_pos)) / u_size;
+  float R = 0.2 * (0.5 + 0.5 * u_weight);
+  float d = length(q);
+  float la = 2.3 - u_angle;
+  vec3 L = normalize(vec3(cos(la), sin(la), 0.5));
+  float disc = 1.0 - aaStep(R, d);
+  vec3 n = vec3(q / R, sqrt(max(1.0 - d * d / (R * R), 0.0)));
+  // Its axis leans a little; it turns round it.
+  float tl = 0.35;
+  vec3 m = vec3(n.x * cos(tl) + n.y * sin(tl), -n.x * sin(tl) + n.y * cos(tl), n.z);
+  float rt = u_t * 0.05;
+  vec3 rp = vec3(m.x * cos(rt) + m.z * sin(rt), m.y, -m.x * sin(rt) + m.z * cos(rt));
+  vec2 sp = vec2(rp.x * 1.3 + rp.z * 0.9, rp.y * (2.0 + 3.0 * u_density)) + seedShift();
+  float swirl = fbm3(vec2(rp.x * 3.0 - rp.z * 2.0, rp.y * 5.0) + seedShift() + 9.0);
+  float bands = fbm(sp + vec2(swirl * (0.3 + 2.2 * u_chaos), 0.0));
+  bands = smoothstep(0.25, 0.75, bands + 0.25 * sin(rp.y * (5.0 + 7.0 * u_density) + swirl * 2.0));
+  float diff = smoothstep(-0.12, 0.65, dot(n, L));
+  float rim = pow(1.0 - n.z, 2.5);
+  vec3 body = mix(u_c[1], u_c[0], bands) * (0.03 + 1.1 * diff) + u_c[2] * rim * (0.08 + 1.2 * diff);
+  float outside = max(d - R, 0.0);
+  float halo = exp(-outside / (R * (0.1 + 0.3 * u_glow)))
+    * (0.2 + 0.8 * clamp(dot(q / max(d, 1e-4), L.xy) * 0.9 + 0.5, 0.0, 1.0)) * 0.8;
+  vec3 col = body * disc + u_c[2] * halo * (1.0 - disc);
+  float a = disc + halo * (1.0 - disc);
+  // The ring: a flat disc seen nearly edge-on, in front of the planet below, behind it above.
+  float rc = cos(0.3), rs = sin(0.3);
+  vec2 rq = mat2(rc, -rs, rs, rc) * q;
+  rq.y /= 0.26;
+  float rr = length(rq) / R;
+  float ring = smoothstep(1.35, 1.45, rr) * (1.0 - smoothstep(2.15, 2.3, rr))
+    * (0.45 + 0.55 * noise(vec2(rr * 13.0, u_seed)));
+  // A dark gap part of the way out, as Saturn's rings have.
+  ring *= 1.0 - 0.75 * (1.0 - smoothstep(1.78, 1.84, rr)) * smoothstep(1.72, 1.78, rr);
+  ring *= u_sharp * (rq.y < 0.0 ? 1.0 : 1.0 - disc);
+  // The planet's shadow falls across the far side of the ring.
+  float lit = 0.35 + 0.65 * smoothstep(-0.3, 0.5, dot(normalize(vec3(q, 0.0) + vec3(0.0, 0.0, 0.2)), L));
+  col = col * (1.0 - ring * 0.85) + u_c[3] * ring * lit;
+  a = a + (1.0 - a) * ring;
+  a = clamp(a, 0.0, 1.0);
+  gl_FragColor = overSpace(vec4(min(col, vec3(1.0)), a) * u_strength);
+}`,
+  // Garland: strings of small warm lamps hung across, swaying a little, each twinkling
+  // in its own time; a further string out of focus behind.
+  garland: `
+float gaY(float x, float fi, float sway) {
+  return 0.34 - fi * 0.3 + (0.07 + 0.02 * fi) * cos(x * (4.2 - fi * 0.9) + fi * 2.3 + sway) * (1.0 + 0.5 * sway);
+}
+void main() {
+  vec2 p = place() / u_size;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    // The last string hangs further away: bigger soft lights, no wire to see.
+    float far = fi > 1.5 ? 1.0 : 0.0;
+    float sway = 0.12 * sin(u_t * (0.5 + 0.13 * fi) + fi * 1.9);
+    float nb = (10.0 + 2.0 * fi) * u_density * (1.0 - 0.45 * far);
+    float wy = abs(p.y - gaY(p.x, fi, sway));
+    float wire = (1.0 - smoothstep(0.0015, 0.0015 + max(0.002, AA(p.y) * 1.2), wy)) * (1.0 - far) * 0.75;
+    col = col * (1.0 - wire) + vec3(0.1, 0.17, 0.12) * wire;
+    a = a + (1.0 - a) * wire;
+    float ci = floor(p.x * nb);
+    for (int j = -1; j <= 1; j++) {
+      float id = ci + float(j);
+      float cx = (id + 0.5) / nb;
+      vec2 c = vec2(cx, gaY(cx, fi, sway) - 0.016 * (1.0 - far));
+      float d = length(p - c);
+      float h = hash1(id + fi * 31.0);
+      float tw = 0.5 + 0.5 * sin(u_t * (0.5 + 1.6 * h) + h * 40.0);
+      tw = 0.3 + 0.7 * tw * tw;
+      float rb = 0.015 * u_weight * (1.0 + 2.6 * far);
+      float core = 1.0 - smoothstep(rb * mix(0.55, 0.1, far), rb, d);
+      // The glow dies away before the third lamp along (only the nearest three are drawn).
+      float halo = exp(-d / (rb * (2.2 + 3.5 * u_glow))) * 0.6
+        * (1.0 - smoothstep(0.8, 1.5, abs(p.x - cx) * nb));
+      vec3 tint = palette(hash1(id * 1.7 + fi * 13.0 + 5.0), true);
+      float k = (core * mix(1.0, 0.3, far) + halo * mix(1.0, 0.35, far)) * tw;
+      col += tint * k + vec3(1.0) * core * tw * 0.45 * (1.0 - far);
+      a = max(a, clamp(k, 0.0, 1.0));
+    }
+  }
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
+  // Star of Bethlehem: one great star with long rays — the longest reaching down —
+  // breathing softly, small stars round it.
+  bethlehem:
+    MOTES +
+    `
+void main() {
+  vec2 q = (plane() - centre(u_pos)) / (u_size * (0.55 + 0.45 * u_weight));
+  float d = length(q);
+  float tw = 0.86 + 0.1 * sin(u_t * 1.1) + 0.05 * sin(u_t * 2.7 + 1.0);
+  float core = exp(-d * 42.0) * 1.8;
+  float halo = exp(-d * (8.0 - 4.5 * u_glow)) * 0.5;
+  float w = mix(0.008, 0.0045, u_sharp);
+  float len = 0.9 + 0.1 * sin(u_t * 0.7 + 2.0);
+  float rv = exp(-abs(q.x) / w) * exp(-abs(q.y) / ((q.y < 0.0 ? 0.36 : 0.2) * len));
+  float rh = exp(-abs(q.y) / w) * exp(-abs(q.x) / (0.15 * len));
+  vec2 dq = mat2(0.7071, -0.7071, 0.7071, 0.7071) * q;
+  float rd = (exp(-abs(dq.x) / (w * 0.8)) * exp(-abs(dq.y) / 0.07)
+    + exp(-abs(dq.y) / (w * 0.8)) * exp(-abs(dq.x) / 0.07)) * 0.55;
+  // Fine rays between the great ones, slowly turning (a whole number of them: no seam).
+  float ang = atan(q.y, q.x);
+  float fine = pow(0.5 + 0.5 * sin(ang * (4.0 + 2.0 * floor(u_density * 3.0)) + u_t * 0.12), 6.0)
+    * exp(-d * 9.0) * 0.35;
+  float rays = (rv + rh + rd) * tw;
+  vec3 col = u_c[0] * (core + rays) + u_c[1] * (halo + fine + rays * 0.4) + u_c[2] * exp(-d * 2.4) * 0.22;
+  float a = core + halo + rays + fine + exp(-d * 2.4) * 0.2;
+  vec2 p = plane() / u_size;
+  for (int i = 0; i < 2; i++) {
+    float fi = float(i);
+    vec3 m = mote(p * (9.0 + 8.0 * fi) + fi * 11.0, 0.045, 0.035, 0.4, fi + 20.0, 0.0);
+    float k = m.x * (0.3 + 0.7 * m.y) * (0.6 + 0.4 * sin(u_t * (0.6 + m.y * 2.0) + m.y * 60.0)) * 0.8;
+    col += vec3(k);
+    a += k;
+  }
+  a = clamp(a, 0.0, 1.0);
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, a * u_strength);
+}`,
+  // Christmas snow: deep soft snowfall — small sharp flakes far away, big blurred ones
+  // floating past the eye.
+  xmassnow:
+    MOTES +
+    `
+void main() {
+  vec2 p = place() / u_size;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  float keep = clamp(0.55 * u_density, 0.1, 1.0);
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    // Layer 0 is nearest the eye (big, out of focus), the last is far away.
+    float sc = 1.7 * pow(1.62, fi);
+    float near = 1.0 - fi / 5.0;
+    float blur = near * near;
+    vec2 q = p * sc + fi * 23.1
+      + vec2(sin(u_t * 0.21 + fi * 1.7) * (0.25 + 0.6 * u_chaos), u_t * (0.16 + 0.03 * fi));
+    float r = mix(0.045, 0.2, blur) * min(u_weight, 1.5);
+    vec3 m = mote(q, r, mix(0.035, 0.11, blur), keep, fi + 30.0, 0.07);
+    float k = m.x * mix(0.95, 0.2, blur) * (0.6 + 0.4 * m.y);
+    col += mix(u_c[0], u_c[1], m.y) * k;
+    a = max(a, k);
+  }
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
+  // Candlelight: big soft circles of warm light out of focus, each flickering like a flame.
+  candles:
+    MOTES +
+    `
+void main() {
+  vec2 p = place() / u_size;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  float keep = clamp(0.5 * u_density, 0.1, 1.0);
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float sc = 1.5 + 1.1 * fi;
+    vec2 q = p * sc + fi * 9.7 + vec2(sin(u_t * 0.07 + fi) * 0.2, u_t * 0.012);
+    float r = (0.2 - 0.03 * fi) * min(u_weight, 1.4);
+    vec3 m = mote(q, r, 0.05, keep, fi + 40.0, 0.03);
+    // A flame's flicker: slow breathing with quick small shivers.
+    float fl = 0.6 + 0.28 * noise(vec2(u_t * 1.7 + m.y * 90.0, m.y * 13.0))
+      + 0.12 * noise(vec2(u_t * 6.0 + m.y * 40.0, 3.0));
+    float bokeh = 0.72 + 0.28 * smoothstep(0.6, 1.0, m.z);
+    float k = m.x * fl * bokeh * (0.75 - 0.1 * fi);
+    col += palette(m.y, true) * k;
+    a = max(a, k);
+  }
+  // The warm air low down, where the candles stand.
+  float low = exp(-(plane().y + 0.5) * 3.0) * 0.3;
+  col += u_c[0] * low;
+  a = max(a, low);
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
   // A poster colour layer that moves: its gradient flows along its angle, turns, or
   // breathes into its colours the other way round.
   fill: `
@@ -1247,6 +1853,7 @@ const UNIFORMS = [
   'u_paint',
   'u_glow',
   'u_pos',
+  'u_bg',
 ];
 
 /** Kinds whose shader didn't compile here: not tried again every frame (that alone lags). */
@@ -1350,6 +1957,27 @@ const OWN_DEFAULTS: Partial<Record<ShaderKind, string[]>> = {
   stainedglass: ['#b91c1c', '#1d4ed8', '#f59e0b', '#15803d'],
   // The cross, its halo, the rays.
   crossglow: ['#fffdf2', '#ffd98a', '#ffb45e'],
+  // Darkness, deep blue, light blue: light grazing a dark cloth.
+  threadwave: ['#0b1e6b', '#2563eb', '#9bd4ff'],
+  particlewave: ['#1d4ed8', '#22d3ee', '#e0f7ff'],
+  // The thin-film sheen over the chrome.
+  liquidmetal: ['#7c3aed', '#22d3ee', '#f0abfc', '#fde68a'],
+  curtains: ['#2563eb', '#a855f7', '#ec4899', '#22d3ee'],
+  shards: ['#22d3ee', '#a855f7', '#ff4f7b', '#fbbf24'],
+  // Navy, royal blue, cyan, pale blue.
+  fluted: ['#0a1a4f', '#1d4ed8', '#22d3ee', '#bfe9ff'],
+  dust: ['#fff3d6', '#ffd9a0', '#ffffff'],
+  swarm: ['#22d3ee', '#a855f7', '#f0abfc', '#60a5fa'],
+  // Core, arms, dust between them, young blue stars.
+  galaxy: ['#fff4d6', '#8fb4ff', '#c084fc', '#67e8f9'],
+  starfield: ['#ffffff', '#bcd4ff', '#ffe2b8'],
+  // Light bands, dark bands, the air, the ring.
+  planet: ['#f4c38a', '#8a4b2a', '#7cc4ff', '#e9d8b8'],
+  garland: ['#ffe2a6', '#ffb347', '#ff8a5c', '#fff1d0'],
+  // The star, its halo and rays, the far glow.
+  bethlehem: ['#fffdf2', '#ffe08a', '#8fb4ff'],
+  xmassnow: ['#ffffff', '#dbeafe'],
+  candles: ['#ffb347', '#ff8a3d', '#ffd98a', '#fff1c9'],
 };
 
 // ---------- One block ----------
@@ -1398,7 +2026,11 @@ class Painter {
         p.kind === 'clouds' ||
         p.kind === 'caustics' ||
         p.kind === 'lightning' ||
-        p.kind === 'crossglow')
+        p.kind === 'crossglow' ||
+        p.kind === 'galaxy' ||
+        p.kind === 'planet' ||
+        p.kind === 'bethlehem' ||
+        p.kind === 'xmassnow')
     )
       while (this.colors.length < own.length)
         this.colors.push(parseColor(own[this.colors.length]!)!);
@@ -1495,6 +2127,9 @@ class Painter {
     );
     gl.uniform1f(p.loc.u_glow!, q.glow);
     gl.uniform2f(p.loc.u_pos!, q.x, 1 - q.y);
+    // The colour of space (alpha 0 = none chosen: the effect stays see-through).
+    const bg = q.bg ? parseColor(q.bg) : null;
+    gl.uniform4f(p.loc.u_bg!, bg?.[0] ?? 0, bg?.[1] ?? 0, bg?.[2] ?? 0, bg ? 1 : 0);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

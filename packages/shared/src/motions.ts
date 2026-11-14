@@ -120,6 +120,22 @@ export const MEETING_MOTIONS = [
   'beams',
   'stainedglass',
   'crossglow',
+  // Premium moving backgrounds, more particle fields, space and Christmas (shader engine).
+  'threadwave',
+  'particlewave',
+  'liquidmetal',
+  'curtains',
+  'shards',
+  'fluted',
+  'dust',
+  'swarm',
+  'galaxy',
+  'starfield',
+  'planet',
+  'garland',
+  'bethlehem',
+  'xmassnow',
+  'candles',
   // One of the church's own effects (Design → Effect studio), by `tune.ref`: drawn as its
   // layers, so changing it there changes it everywhere it is used.
   'custom',
@@ -144,6 +160,8 @@ export const MOTION_GROUPS: {
     | 'sunlight'
     | 'nature'
     | 'sacred'
+    | 'cosmic'
+    | 'christmas'
     | 'gpu';
   items: MeetingMotion[];
 }[] = [
@@ -151,8 +169,31 @@ export const MOTION_GROUPS: {
   { key: 'sacred', items: ['crossglow', 'stainedglass', 'halo', 'sunburst', 'crosses', 'beams'] },
   { key: 'nature', items: ['nebula', 'clouds', 'caustics', 'ink', 'lightning'] },
   {
+    key: 'cosmic',
+    items: ['galaxy', 'starfield', 'planet', 'nebula', 'stardust', 'meteors', 'warp'],
+  },
+  {
+    key: 'christmas',
+    items: [
+      'bethlehem',
+      'garland',
+      'xmassnow',
+      'candles',
+      'snowfall',
+      'snow',
+      'crossglow',
+      'crosses',
+    ],
+  },
+  {
     key: 'abstract',
     items: [
+      'threadwave',
+      'particlewave',
+      'liquidmetal',
+      'fluted',
+      'curtains',
+      'shards',
       'wavelines',
       'tunnel',
       'risers',
@@ -179,6 +220,8 @@ export const MOTION_GROUPS: {
   {
     key: 'particles',
     items: [
+      'dust',
+      'swarm',
       'flames',
       'embers',
       'stars',
@@ -320,6 +363,11 @@ export const motionTuneSchema = z.object({
    * flowing streak instead of jumping dots.
    */
   trail: z.number().min(0).max(0.9).nullish(),
+  /** Sky effects (nebula, galaxy, starfield, planet): the colour of space behind them (none = see-through). */
+  bg: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullish(),
   /** Own effect (`custom`): which one (an effect template id). */
   ref: z.number().int().positive().nullish(),
   /** A layer of an own effect: how it mixes with the layers under it. */
@@ -350,7 +398,8 @@ export type MotionKnob =
   | 'glow'
   | 'place'
   | 'wordStyle'
-  | 'trail';
+  | 'trail'
+  | 'bg';
 const PARTICLE_KNOBS: MotionKnob[] = ['density', 'weight'];
 /** Particles drawn on the canvas can also leave trails. */
 const CANVAS_KNOBS: MotionKnob[] = ['density', 'weight', 'trail'];
@@ -387,7 +436,7 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   synthgrid: ['density', 'weight', 'glow', 'colors'],
   spiral: SHADER_KNOBS,
   stripes: [...SHADER_KNOBS, 'weight'],
-  nebula: [...SHADER_KNOBS, 'weight'],
+  nebula: [...SHADER_KNOBS, 'weight', 'bg'],
   clouds: SHADER_KNOBS,
   caustics: [...SHADER_KNOBS, 'weight'],
   ink: SHADER_KNOBS,
@@ -399,6 +448,21 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   beams: ['density', 'weight', 'sharp', 'chaos', 'seed', 'colors'],
   stainedglass: ['density', 'weight', 'seed', 'colors'],
   crossglow: ['place', 'weight', 'density', 'sharp', 'glow', 'colors'],
+  threadwave: [...SHADER_KNOBS, 'weight', 'glow'],
+  particlewave: [...SHADER_KNOBS, 'weight', 'glow'],
+  liquidmetal: [...SHADER_KNOBS, 'weight'],
+  curtains: SHADER_KNOBS,
+  shards: ['density', 'weight', 'chaos', 'glow', 'seed', 'colors'],
+  fluted: ['density', 'weight', 'chaos', 'sharp', 'seed', 'colors'],
+  dust: ['density', 'weight', 'chaos', 'seed', 'colors'],
+  swarm: ['density', 'weight', 'chaos', 'glow', 'seed', 'colors'],
+  galaxy: ['place', 'density', 'chaos', 'sharp', 'seed', 'colors', 'bg'],
+  starfield: ['density', 'weight', 'seed', 'colors', 'bg'],
+  planet: ['place', 'weight', 'density', 'chaos', 'sharp', 'glow', 'seed', 'colors', 'bg'],
+  garland: ['density', 'weight', 'glow', 'seed', 'colors'],
+  bethlehem: ['place', 'weight', 'density', 'sharp', 'glow', 'colors'],
+  xmassnow: ['density', 'weight', 'chaos', 'seed', 'colors'],
+  candles: ['density', 'weight', 'seed', 'colors'],
   custom: [],
   embers: CANVAS_KNOBS,
   fireflies: CANVAS_KNOBS,
