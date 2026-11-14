@@ -171,7 +171,7 @@ own words (`tune.words`); GPU ones — heat haze, shockwave, bloom, zoom burst, 
 bulge, god rays, reflection: `GPU_MOTIONS`; colour-your-own particles — rain, stardust, orbs, meteors, glitter,
 fireworks, notes, crosses (group `colour`), PixiJS filters lazy-loaded in `components/GpuEffect.tsx`, max 6 live WebGL
 canvases, recorder steps them via `seekGpu`; our own picture filters in `PHOTO_FRAGMENTS` (GLSL, no derivatives —
-older phones lack them): oilfilter (Kuwahara painting + lit strokes), datamosh, pixelsort, scanshift; `LivingLayer` + `.living-*` CSS)
+older phones lack them): oilfilter (anisotropic Kuwahara, 4 passes, MIT port — see THIRD_PARTY_NOTICES.md; drawn once, not every frame), datamosh, pixelsort, scanshift; `LivingLayer` + `.living-*` CSS)
 (`groups.meeting_motion`, per meeting `meetings.motion`; the home tile and the poster can have their
 own: `tile_motion` / `poster_motion` on meetings and design templates);
 a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).

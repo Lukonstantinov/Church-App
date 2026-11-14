@@ -64,60 +64,6 @@ float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 `;
 
 const PHOTO_FRAGMENTS: Partial<Record<MeetingMotion, string>> = {
-  // Kuwahara: each pixel takes the calmest of four neighbouring patches (flat dabs of
-  // colour with crisp edges), then brush strokes along the picture's edges catch a light
-  // that slowly circles, over canvas weave.
-  oilfilter: `
-/** How thick the paint is at a point: strokes stretched along the brush's direction. */
-float paint(vec2 sp, vec2 dir, float scale) {
-  vec2 r = vec2(dot(sp, dir), dot(sp, vec2(-dir.y, dir.x))) * scale;
-  return noise(r * vec2(0.022, 0.1)) * 0.75 + noise(r * vec2(0.012, 0.32)) * 0.25;
-}
-void main() {
-  vec2 px = uInputSize.zw * (1.2 + 2.2 * uWeight);
-  vec3 mean[4];
-  vec3 sq[4];
-  for (int k = 0; k < 4; k++) { mean[k] = vec3(0.0); sq[k] = vec3(0.0); }
-  for (int j = 0; j < 4; j++) {
-    for (int i = 0; i < 4; i++) {
-      vec2 o = vec2(float(i), float(j)) * px;
-      vec3 a = at(vTextureCoord + vec2(-o.x, -o.y)).rgb;
-      vec3 b = at(vTextureCoord + vec2(o.x, -o.y)).rgb;
-      vec3 c = at(vTextureCoord + vec2(-o.x, o.y)).rgb;
-      vec3 d = at(vTextureCoord + vec2(o.x, o.y)).rgb;
-      mean[0] += a; sq[0] += a * a;
-      mean[1] += b; sq[1] += b * b;
-      mean[2] += c; sq[2] += c * c;
-      mean[3] += d; sq[3] += d * d;
-    }
-  }
-  vec3 col = vec3(0.0);
-  float best = 1e9;
-  for (int k = 0; k < 4; k++) {
-    vec3 m = mean[k] / 16.0;
-    vec3 v = abs(sq[k] / 16.0 - m * m);
-    float var = v.r + v.g + v.b;
-    if (var < best) { best = var; col = m; }
-  }
-  // Strokes follow the picture: across its brightness changes.
-  vec2 e = uInputSize.zw * 3.0;
-  float gx = luma(at(vTextureCoord + vec2(e.x, 0.0)).rgb) - luma(at(vTextureCoord - vec2(e.x, 0.0)).rgb);
-  float gy = luma(at(vTextureCoord + vec2(0.0, e.y)).rgb) - luma(at(vTextureCoord - vec2(0.0, e.y)).rgb);
-  vec2 g = vec2(gx, gy);
-  vec2 dir = length(g) > 0.02 ? normalize(vec2(-g.y, g.x)) : normalize(vec2(0.8, 0.6));
-  vec2 sp = screen() * uOutputFrame.zw;
-  float scale = 1.0 / (0.6 + uDensity * 0.6);
-  float h = paint(sp, dir, scale);
-  // The paint's relief from its neighbours (no derivatives: older phones lack them).
-  vec3 n = normalize(vec3(h - paint(sp + vec2(1.0, 0.0), dir, scale), h - paint(sp + vec2(0.0, 1.0), dir, scale)
-    , 0.03));
-  float la = uTime * 0.15;
-  vec3 L = normalize(vec3(cos(la), sin(la), 0.9));
-  float shade = 0.86 + 0.28 * dot(n, L);
-  float spec = pow(max(0.0, dot(reflect(-L, n), vec3(0.0, 0.0, 1.0))), 16.0) * 0.18;
-  float weave = 0.96 + 0.04 * sin(sp.x * 1.4) * sin(sp.y * 1.4);
-  finalColor = vec4(clamp(col * shade * weave + spec, 0.0, 1.0), at(vTextureCoord).a);
-}`,
   // Data-mosh: in short bursts, blocks of the picture smear along made-up motion and
   // lose colour depth, as broken video does.
   datamosh: `
@@ -192,6 +138,148 @@ void main(void) {
   position.y = position.y * (2.0 * uOutputTexture.z / uOutputTexture.y) - uOutputTexture.z;
   gl_Position = vec4(position, 0.0, 1.0);
   vTextureCoord = aPosition * (uOutputFrame.zw * uInputSize.zw);
+}`;
+
+/**
+ * The oil-painting filter: the anisotropic Kuwahara filter of Kyprianidis et al., after the
+ * MIT-licensed Unity version by Eric Xiong (github.com/ericxiong1/AKFUnity6). Unlike a plain
+ * Kuwahara filter (square patches), its dabs stretch along the picture's own edges and
+ * shapes, as a painter's brush follows a form. Four passes: the edges' directions (a
+ * structure tensor from Sobel), blurred across and down, turned into a direction and how
+ * strongly it holds; then each pixel averages eight overlapping sectors of an ellipse along
+ * that direction, the calmest ones counting most. The in-between pictures are 8-bit, so
+ * the tensor is kept square-root encoded (small edges keep their detail).
+ */
+const AKF_CODEC = `
+vec3 enc(vec3 g) {
+  return vec3(sqrt(clamp(g.x / 3.0, 0.0, 1.0)), sqrt(clamp(g.y / 3.0, 0.0, 1.0)),
+    0.5 + 0.5 * sign(g.z) * sqrt(clamp(abs(g.z) / 3.0, 0.0, 1.0)));
+}
+vec3 dec(vec3 e) {
+  float f = (e.z - 0.5) * 2.0;
+  return vec3(e.x * e.x * 3.0, e.y * e.y * 3.0, sign(f) * f * f * 3.0);
+}
+`;
+const AKF_TENSOR = `
+void main() {
+  vec2 d = uInputSize.zw;
+  vec3 a = at(vTextureCoord + vec2(-d.x, -d.y)).rgb;
+  vec3 b = at(vTextureCoord + vec2(0.0, -d.y)).rgb;
+  vec3 c = at(vTextureCoord + vec2(d.x, -d.y)).rgb;
+  vec3 l = at(vTextureCoord + vec2(-d.x, 0.0)).rgb;
+  vec3 r = at(vTextureCoord + vec2(d.x, 0.0)).rgb;
+  vec3 f = at(vTextureCoord + vec2(-d.x, d.y)).rgb;
+  vec3 g = at(vTextureCoord + vec2(0.0, d.y)).rgb;
+  vec3 h = at(vTextureCoord + vec2(d.x, d.y)).rgb;
+  vec3 sx = (a + 2.0 * l + f - c - 2.0 * r - h) / 4.0;
+  vec3 sy = (a + 2.0 * b + c - f - 2.0 * g - h) / 4.0;
+  finalColor = vec4(enc(vec3(dot(sx, sx), dot(sy, sy), dot(sx, sy))), 1.0);
+}`;
+/** The tensor blurred one way (`uDir`): a Gaussian of 11 taps. */
+const AKF_BLUR = `
+uniform vec2 uDir;
+void main() {
+  vec3 sum = vec3(0.0);
+  float ws = 0.0;
+  for (int i = -5; i <= 5; i++) {
+    float x = float(i);
+    float w = exp(-x * x / 8.0);
+    sum += dec(at(vTextureCoord + uDir * x * uInputSize.zw).rgb) * w;
+    ws += w;
+  }
+  finalColor = vec4(enc(sum / ws), 1.0);
+}`;
+/** The blurred tensor as a direction (packed) and how strongly it holds (0 … 1). */
+const AKF_EIGEN = `
+void main() {
+  vec3 g = dec(at(vTextureCoord).rgb);
+  float root = sqrt(g.y * g.y - 2.0 * g.x * g.y + g.x * g.x + 4.0 * g.z * g.z);
+  float l1 = 0.5 * (g.y + g.x + root);
+  float l2 = 0.5 * (g.y + g.x - root);
+  vec2 v = vec2(l1 - g.x, -g.z);
+  vec2 t = length(v) > 0.0 ? normalize(v) : vec2(0.0, 1.0);
+  float A = l1 + l2 > 0.0 ? (l1 - l2) / (l1 + l2) : 0.0;
+  finalColor = vec4(t * 0.5 + 0.5, A, 1.0);
+}`;
+/**
+ * The painting itself: the photo (`uImage`, placed by `uImgPos`/`uImgSize` in page pixels)
+ * averaged over eight sectors of an ellipse turned along the direction (`uTexture`).
+ */
+const AKF_PAINT = `
+uniform sampler2D uImage;
+uniform vec2 uImgPos;
+uniform vec2 uImgSize;
+uniform float uRes;
+vec3 photo(vec2 page) { return texture(uImage, clamp((page - uImgPos) / uImgSize, 0.0, 1.0)).rgb; }
+void main() {
+  vec4 tf = at(vTextureCoord);
+  vec2 t = tf.xy * 2.0 - 1.0;
+  float A = tf.z;
+  float radius = 2.5 + 3.5 * uWeight;
+  float alpha = 1.0;
+  float a = radius * clamp((alpha + A) / alpha, 0.1, 2.0);
+  float b = radius * clamp(alpha / (alpha + A), 0.1, 2.0);
+  float phi = -atan(t.y, t.x);
+  float cp = cos(phi), sp = sin(phi);
+  mat2 SR = mat2(0.5 / a, 0.0, 0.0, 0.5 / b) * mat2(cp, -sp, sp, cp);
+  float maxX = sqrt(a * a * cp * cp + b * b * sp * sp);
+  float maxY = sqrt(a * a * sp * sp + b * b * cp * cp);
+  float zeta = 2.0 / radius;
+  float zc = 0.58;
+  float eta = (zeta + cos(zc)) / (sin(zc) * sin(zc));
+  vec4 m[8];
+  vec3 s[8];
+  for (int k = 0; k < 8; k++) { m[k] = vec4(0.0); s[k] = vec3(0.0); }
+  // Where this pixel is on the page (frame origin + its place), in page pixels.
+  vec2 here = (vTextureCoord * uInputSize.xy + uOutputFrame.xy) / uRes;
+  for (int j = -10; j <= 10; j++) {
+    float y = float(j);
+    if (abs(y) > maxY) continue;
+    for (int i = -10; i <= 10; i++) {
+      float x = float(i);
+      if (abs(x) > maxX) continue;
+      vec2 v = SR * vec2(x, y);
+      if (dot(v, v) > 0.25) continue;
+      vec3 c = clamp(photo(here + vec2(x, y) / uRes), 0.0, 1.0);
+      float w[8];
+      float sum = 0.0;
+      float vxx = zeta - eta * v.x * v.x;
+      float vyy = zeta - eta * v.y * v.y;
+      float z = max(0.0, v.y + vxx); w[0] = z * z; sum += w[0];
+      z = max(0.0, -v.x + vyy); w[2] = z * z; sum += w[2];
+      z = max(0.0, -v.y + vxx); w[4] = z * z; sum += w[4];
+      z = max(0.0, v.x + vyy); w[6] = z * z; sum += w[6];
+      vec2 u = 0.70710678 * vec2(v.x - v.y, v.x + v.y);
+      vxx = zeta - eta * u.x * u.x;
+      vyy = zeta - eta * u.y * u.y;
+      z = max(0.0, u.y + vxx); w[1] = z * z; sum += w[1];
+      z = max(0.0, -u.x + vyy); w[3] = z * z; sum += w[3];
+      z = max(0.0, -u.y + vxx); w[5] = z * z; sum += w[5];
+      z = max(0.0, u.x + vyy); w[7] = z * z; sum += w[7];
+      float g = exp(-3.125 * dot(u, u)) / max(sum, 1e-5);
+      for (int k = 0; k < 8; k++) {
+        float wk = w[k] * g;
+        m[k] += vec4(c * wk, wk);
+        s[k] += c * c * wk;
+      }
+    }
+  }
+  vec4 outc = vec4(0.0);
+  float hard = 8.0 * (0.6 + 0.8 * uDensity);
+  for (int k = 0; k < 8; k++) {
+    if (m[k].w <= 0.0) continue;
+    vec3 mean = m[k].rgb / m[k].w;
+    vec3 var = abs(s[k] / m[k].w - mean * mean);
+    float w = 1.0 / (1.0 + pow(hard * 1000.0 * (var.r + var.g + var.b), 4.0));
+    outc += vec4(mean * w, w);
+  }
+  vec3 col = outc.w > 0.0 ? outc.rgb / outc.w : photo(here);
+  // A touch of canvas weave, and paint a little richer than the photo. (Bristle relief
+  // drawn along the strokes was tried: on smooth skies the direction is too unsure and it
+  // made a zigzag, so the dabs stay smooth as the filter paints them.)
+  float weave = sin(here.x * 2.2) * sin(here.y * 2.2);
+  col = mix(vec3(luma(col)), col, 1.12) * (0.975 + 0.025 * weave);
+  finalColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 
 const STAND_IN: Partial<Record<MeetingMotion, string>> = {
@@ -350,7 +438,61 @@ export function GpuEffect({
       let noise: InstanceType<typeof PIXI.Sprite> | null = null;
       const { weight, density, angle } = settings.current;
       const own = PHOTO_FRAGMENTS[kind];
+      // The oil painting: four passes, the last one reading the photo itself as well.
+      const paintUniforms = {
+        uImgPos: { value: new Float32Array([0, 0]), type: 'vec2<f32>' },
+        uImgSize: { value: new Float32Array([1, 1]), type: 'vec2<f32>' },
+        uRes: { value: Math.min(2, window.devicePixelRatio || 1), type: 'f32' },
+        uTime: { value: 0, type: 'f32' },
+        uWeight: { value: weight, type: 'f32' },
+        uDensity: { value: density, type: 'f32' },
+      } as const;
+      const akf =
+        kind === 'oilfilter' && sprite
+          ? (() => {
+              const pass = (name: string, fragment: string, extra: Record<string, unknown> = {}) =>
+                new PIXI.Filter({
+                  glProgram: PIXI.GlProgram.from({
+                    vertex: PHOTO_VERTEX,
+                    fragment: PHOTO_HEAD + AKF_CODEC + fragment,
+                    name: `akf-${name}`,
+                  }),
+                  resources: {
+                    photoUniforms: {
+                      uTime: { value: 0, type: 'f32' },
+                      uWeight: { value: weight, type: 'f32' },
+                      uDensity: { value: density, type: 'f32' },
+                    },
+                    ...extra,
+                  },
+                });
+              const source = sprite.texture.source;
+              return [
+                pass('tensor', AKF_TENSOR),
+                pass('blur-x', AKF_BLUR, {
+                  dirUniforms: { uDir: { value: new Float32Array([1, 0]), type: 'vec2<f32>' } },
+                }),
+                pass('blur-y', AKF_BLUR, {
+                  dirUniforms: { uDir: { value: new Float32Array([0, 1]), type: 'vec2<f32>' } },
+                }),
+                pass('eigen', AKF_EIGEN),
+                new PIXI.Filter({
+                  glProgram: PIXI.GlProgram.from({
+                    vertex: PHOTO_VERTEX,
+                    fragment: PHOTO_HEAD + AKF_PAINT,
+                    name: 'akf-paint',
+                  }),
+                  resources: {
+                    photoUniforms: paintUniforms,
+                    uImage: source,
+                    uImageSampler: source.style,
+                  },
+                }),
+              ];
+            })()
+          : null;
       const filter = (() => {
+        if (akf) return akf[akf.length - 1]!;
         if (own)
           return new PIXI.Filter({
             glProgram: PIXI.GlProgram.from({
@@ -427,7 +569,20 @@ export function GpuEffect({
             return null;
         }
       })();
-      if (filter) stage.filters = [filter];
+      if (akf) stage.filters = akf;
+      else if (filter) stage.filters = [filter];
+      // Where the photo is on the page, for the painting pass (it reads the photo itself).
+      const placePhoto = () => {
+        if (!akf || !sprite) return;
+        const u = paintUniforms;
+        u.uImgPos.value[0] = sprite.x;
+        u.uImgPos.value[1] = sprite.y;
+        u.uImgSize.value[0] = sprite.width;
+        u.uImgSize.value[1] = sprite.height;
+      };
+      placePhoto();
+      // A painting stands still: drawn once, then again only when its size or settings change.
+      let painted = '';
 
       // One moment of the effect (seconds since its start, at its speed).
       const draw = (seconds: number) => {
@@ -435,7 +590,15 @@ export function GpuEffect({
         if (kind === 'godrays') stage.tint = color ?? 0xffffff;
         const t = seconds * speed;
         const wave = 0.5 + 0.5 * Math.sin(t * 1.6);
-        if (own && filter) {
+        if (akf) {
+          const u = (
+            akf[akf.length - 1]!.resources as {
+              photoUniforms: { uniforms: Record<string, number> };
+            }
+          ).photoUniforms.uniforms;
+          u.uWeight = weight;
+          u.uDensity = density;
+        } else if (own && filter) {
           const u = (filter.resources as { photoUniforms: { uniforms: Record<string, number> } })
             .photoUniforms.uniforms;
           u.uTime = t;
@@ -472,6 +635,8 @@ export function GpuEffect({
 
       const resize = new ResizeObserver(() => {
         ({ W, H } = layout());
+        placePhoto();
+        painted = '';
         if (filter instanceof F.ShockwaveFilter || filter instanceof F.ZoomBlurFilter)
           filter.center = { x: W / 2, y: H / 2 };
         if (filter instanceof F.TwistFilter) {
@@ -489,6 +654,11 @@ export function GpuEffect({
         frame = requestAnimationFrame(tick);
         if (entry.held || now - last < 33 || document.hidden || el.closest('[data-off]')) return;
         last = now;
+        if (akf) {
+          const key = `${W}x${H}|${settings.current.weight}|${settings.current.density}`;
+          if (key === painted) return;
+          painted = key;
+        }
         draw((now - start) / 1000);
       };
       frame = requestAnimationFrame(tick);
