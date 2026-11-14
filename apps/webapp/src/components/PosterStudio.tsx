@@ -1693,9 +1693,7 @@ function LayerEffects({
   // The first of each kind is the one the picker shows; the same kind again further down
   // the list is a copy with settings of its own (smoke from both sides, two ribbons).
   const firstAt = (m: MeetingMotion) => list.findIndex((e) => e.kind === m);
-  const copies = list
-    .map((e, i) => ({ e, i }))
-    .filter(({ e, i }) => firstAt(e.kind) !== i);
+  const copies = list.map((e, i) => ({ e, i })).filter(({ e, i }) => firstAt(e.kind) !== i);
   const picked = [...new Set(kinds)];
   // A copy starts turned round (from the other side), with the original's other settings.
   const addCopy = (m: MeetingMotion) => {
