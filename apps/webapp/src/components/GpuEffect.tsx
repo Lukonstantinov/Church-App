@@ -61,6 +61,41 @@ float noise(vec2 p) {
   return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+float rnd(vec2 c) { return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
+float tr(float x, float n) { return floor(x * n) / n; }
+vec2 tr2(vec2 x, vec2 n) { return floor(x * n) / n; }
+vec3 rgb2yuv(vec3 c) {
+  return vec3(dot(c, vec3(0.299, 0.587, 0.114)), dot(c, vec3(-0.14713, -0.28886, 0.436)), dot(c, vec3(0.615, -0.51499, -0.10001)));
+}
+vec3 yuv2rgb(vec3 c) {
+  return vec3(c.x + 1.13983 * c.z, c.x - 0.39465 * c.y - 0.5806 * c.z, c.x + 2.03211 * c.y);
+}
+// Ashima Arts' 2D simplex noise (MIT), as in the Bad TV shader.
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec3 permute(vec3 x) { return mod289(((x * 34.0) + 1.0) * x); }
+float snoise(vec2 v) {
+  const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+  vec2 i = floor(v + dot(v, C.yy));
+  vec2 x0 = v - i + dot(i, C.xx);
+  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod289(i);
+  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+  vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
+  m = m * m;
+  m = m * m;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+  vec3 g;
+  g.x = a0.x * x0.x + h.x * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
 `;
 
 const PHOTO_FRAGMENTS: Partial<Record<MeetingMotion, string>> = {
@@ -165,6 +200,138 @@ void main() {
   if (m != 1.0) s.x = s.x < cx ? s.x : 2.0 * cx - s.x;
   if (m != 0.0) s.y = s.y < cy ? s.y : 2.0 * cy - s.y;
   finalColor = vec4(at(tex(s)).rgb, 1.0);
+}`,
+  // Glitches after X-PostProcessing-Library (MIT, github.com/QianMo/X-PostProcessing-Library)
+  // and felixturner's Bad TV (MIT); notices in THIRD_PARTY_NOTICES.md. Strength = how hard,
+  // amount = how often / how fine. Each comes in bursts and settles, as a real glitch does.
+  // Block glitch: blocks of two sizes break off and slide, the colours tearing apart.
+  blockglitch: `
+void main() {
+  vec2 s = screen();
+  float t = floor(uTime * (3.0 + 4.0 * uDensity));
+  float burst = step(0.4, rnd(vec2(t, 1.0)));
+  vec2 bs = vec2(8.0, 16.0) * (0.6 + 0.8 * uDensity);
+  float b1 = rnd(floor(s * bs) + t);
+  float b2 = rnd(floor(s * bs * vec2(4.0, 2.0)) + t * 1.7);
+  // Some blocks break off (big ones, and a few small ones), each by its own amount.
+  float hit = max(step(0.86 - 0.08 * uWeight, b1), step(0.93, b2) * 0.7);
+  vec2 dir = vec2(rnd(floor(s * bs) + t + 3.1) - 0.5, (rnd(floor(s * bs) + t + 5.3) - 0.5) * 0.25);
+  vec2 off = dir * hit * 0.25 * uWeight * burst;
+  float split = (0.004 + pow(rnd(vec2(t, 3.0)), 4.0) * 0.03) * uWeight * burst;
+  vec3 c = vec3(at(tex(s + off + vec2(split, 0.0))).r, at(tex(s + off)).g, at(tex(s + off - vec2(split, 0.0))).b);
+  c = mix(c, c.gbr, step(0.985, b2) * burst);
+  finalColor = vec4(c, 1.0);
+}`,
+  // Line glitch: horizontal bands of uneven width slide sideways with their colour shifted.
+  lineglitch: `
+void main() {
+  vec2 s = screen();
+  float T = uTime * (0.5 + 0.5 * cos(uTime * (0.7 + 0.6 * uDensity))) * 2.0;
+  float tt = tr(T, 4.0);
+  float ut = rnd(tr2(s.yy, vec2(8.0)) + 100.0 * tt);
+  float rt = 6.0 * tr(T, 24.0 * ut);
+  float bl = 0.5 * rnd(tr2(s.yy + rt, vec2(8.0 * (0.6 + uDensity)))) + 0.5 * rnd(tr2(s.yy + rt, vec2(7.0)));
+  bl = bl * 2.0 - 1.0;
+  bl = sign(bl) * clamp((abs(bl) - 0.5) / 0.4, 0.0, 1.0) * uWeight;
+  vec3 c = at(tex(clamp(s + vec2(0.1 * bl, 0.0), 0.0, 1.0))).rgb;
+  vec3 yuv = rgb2yuv(c);
+  yuv.y /= 1.0 - 3.0 * abs(bl) * clamp(0.5 - bl, 0.0, 1.0);
+  yuv.z += 0.125 * bl * clamp(bl - 0.5, 0.0, 1.0);
+  finalColor = vec4(clamp(yuv2rgb(yuv), 0.0, 1.0), 1.0);
+}`,
+  // Analog noise: grain, colour flicker and now and then a flash to black and white.
+  analognoise: `
+void main() {
+  vec2 s = screen();
+  vec3 c = at(vTextureCoord).rgb;
+  float t = floor(uTime * 24.0);
+  float grain = (rnd(s * vec2(213.0, 117.0) + t * 0.37) - 0.5) * 0.3 * uWeight;
+  c += grain;
+  c.r += (rnd(vec2(t, 1.0)) - 0.5) * 0.06 * uWeight;
+  c.b += (rnd(vec2(t, 2.0)) - 0.5) * 0.06 * uWeight;
+  float flash = step(0.9, rnd(vec2(floor(uTime * (3.0 + 5.0 * uDensity)), 3.0)));
+  c = mix(c, vec3(luma(c)), flash);
+  float line = step(0.996, rnd(vec2(floor(s.y * uOutputFrame.w * 0.5), t))) * 0.5 * uWeight;
+  finalColor = vec4(clamp(c + line, 0.0, 1.0), 1.0);
+}`,
+  // Wave jitter: the picture rippling sideways in waves, red and blue torn apart with it.
+  wavejitter: `
+void main() {
+  vec2 s = screen();
+  float strength = 0.5 + 0.5 * cos(uTime * (0.8 + uDensity));
+  float y = s.y * uOutputFrame.w;
+  float w1 = snoise(vec2(y * 0.01, uTime * 1.6)) * strength * uWeight * 32.0;
+  float w2 = snoise(vec2(y * 0.02, uTime * 0.8)) * strength * uWeight * 4.0;
+  float dx = w1 * w2 / uOutputFrame.z;
+  float split = dx * (0.6 + strength);
+  vec2 rb = at(tex(vec2(s.x + dx + split, s.y))).rb;
+  float g = at(tex(vec2(s.x + dx, s.y))).g;
+  finalColor = vec4(rb.x, g, rb.y, 1.0);
+}`,
+  // Scan-line jitter: single lines of the picture jumping sideways, in pulses.
+  scanjitter: `
+void main() {
+  vec2 s = screen();
+  float strength = 0.5 + 0.5 * cos(uTime * (1.0 + uDensity));
+  float row = floor(s.y * uOutputFrame.w / 2.0);
+  float j = rnd(vec2(row, floor(uTime * 30.0))) * 2.0 - 1.0;
+  j *= step(0.82 - 0.2 * uDensity, abs(j)) * 0.12 * uWeight * strength;
+  finalColor = vec4(at(tex(vec2(fract(s.x + j), s.y))).rgb, 1.0);
+}`,
+  // Tile jitter: every other band of the picture shaking sideways against the next.
+  tilejitter: `
+void main() {
+  vec2 s = screen();
+  float n = 8.0 + 24.0 * uDensity;
+  float strength = 0.5 + 0.5 * cos(uTime * 1.3);
+  float band = step(1.0, mod(s.y * n, 2.0)) * 2.0 - 1.0;
+  float dx = band * cos(uTime * 18.0) * 14.0 * uWeight * strength / uOutputFrame.z;
+  finalColor = vec4(at(tex(vec2(s.x + dx, s.y))).rgb, 1.0);
+}`,
+  // RGB split: the three colours drifting apart in sudden jolts, each its own way.
+  rgbsplit: `
+void main() {
+  vec2 s = screen();
+  float k = uTime * (2.0 + 3.0 * uDensity);
+  vec3 n = vec3(noise(vec2(k, 1.0)), noise(vec2(k + 3.0, 2.0)), noise(vec2(k + 7.0, 3.0)));
+  // Always a little apart, now and then jolting far.
+  n = (n * 2.0 - 1.0) * (0.15 + 1.5 * pow(abs(n * 2.0 - 1.0), vec3(3.0))) * 0.03 * uWeight;
+  float r = at(tex(s + vec2(n.x, -n.y))).r;
+  float g = at(tex(s + vec2(n.y, -n.z))).g;
+  float b = at(tex(s + vec2(n.z, -n.x))).b;
+  finalColor = vec4(r, g, b, 1.0);
+}`,
+  // Screen jump: the picture now and then rolls up and settles, like a TV losing its hold.
+  screenjump: `
+void main() {
+  vec2 s = screen();
+  float slot = floor(uTime * (0.4 + 0.6 * uDensity));
+  float ph = fract(uTime * (0.4 + 0.6 * uDensity));
+  float on = step(0.3, rnd(vec2(slot, 5.0)));
+  float jump = on * pow(1.0 - ph, 2.0) * (0.4 + 0.6 * rnd(vec2(slot, 9.0))) * uWeight;
+  float y = fract(s.y + jump);
+  vec3 c = at(tex(vec2(s.x, y))).rgb;
+  float bar = on * (1.0 - smoothstep(0.0, 0.02, abs(y - 0.999))) * 0.6;
+  finalColor = vec4(c * (1.0 - bar), 1.0);
+}`,
+  // Bad TV: a slow rolling wobble with fine jitter, a drifting colour split, static and
+  // scan lines (felixturner's BadTV with its usual companions).
+  badtv: `
+void main() {
+  vec2 p = screen();
+  float yt = p.y - uTime * 0.15;
+  float off = snoise(vec2(yt * 3.0, 0.0)) * 0.2;
+  float dist = 2.5 + 3.5 * uWeight;
+  off = off * dist * off * dist * off;
+  off += snoise(vec2(yt * 50.0, 0.0)) * (1.0 + uDensity) * 0.001;
+  vec2 q = vec2(fract(p.x + off), p.y);
+  float sh = 0.003 + 0.004 * uWeight * (0.5 + 0.5 * sin(uTime * 1.3));
+  vec3 c = vec3(at(tex(q + vec2(sh, 0.0))).r, at(tex(q)).g, at(tex(q - vec2(sh, 0.0))).b);
+  float st = rnd(p * vec2(311.0, 197.0) + floor(uTime * 24.0) * 0.17);
+  c = mix(c, vec3(st), 0.08 + 0.06 * uWeight);
+  float scan = 0.5 + 0.5 * sin(p.y * uOutputFrame.w * 1.6);
+  c *= 0.9 + 0.1 * scan;
+  finalColor = vec4(c, 1.0);
 }`,
   // Data-mosh: in short bursts, blocks of the picture smear along made-up motion and
   // lose colour depth, as broken video does.
@@ -317,7 +484,7 @@ void main() {
   vec4 tf = at(vTextureCoord);
   vec2 t = tf.xy * 2.0 - 1.0;
   float A = tf.z;
-  float radius = 1.8 + 2.6 * uWeight;
+  float radius = min(1.8 + 2.6 * uWeight, 3.5);
   float alpha = 1.0;
   float a = radius * clamp((alpha + A) / alpha, 0.1, 2.0);
   float b = radius * clamp(alpha / (alpha + A), 0.1, 2.0);
@@ -334,10 +501,11 @@ void main() {
   for (int k = 0; k < 8; k++) { m[k] = vec4(0.0); s[k] = vec3(0.0); }
   // Where this pixel is on the page (frame origin + its place), in page pixels.
   vec2 here = (vTextureCoord * uInputSize.xy + uOutputFrame.xy) / uRes;
-  for (int j = -10; j <= 10; j++) {
+  // At most 15 × 15 samples: phone graphics chips refuse much longer loops.
+  for (int j = -7; j <= 7; j++) {
     float y = float(j);
     if (abs(y) > maxY) continue;
-    for (int i = -10; i <= 10; i++) {
+    for (int i = -7; i <= 7; i++) {
       float x = float(i);
       if (abs(x) > maxX) continue;
       vec2 v = SR * vec2(x, y);
@@ -398,6 +566,15 @@ const STAND_IN: Partial<Record<MeetingMotion, string>> = {
   sketch: '✏️',
   neonedge: '💡',
   photomirror: '🪞',
+  blockglitch: '🧱',
+  lineglitch: '📶',
+  analognoise: '📻',
+  wavejitter: '〰️',
+  scanjitter: '📉',
+  tilejitter: '🎞',
+  rgbsplit: '🔴',
+  screenjump: '⏫',
+  badtv: '📺',
   datamosh: '📼',
   pixelsort: '🌈',
   scanshift: '📺',
@@ -418,6 +595,15 @@ const NEEDS_PHOTO = new Set<MeetingMotion>([
   'sketch',
   'neonedge',
   'photomirror',
+  'blockglitch',
+  'lineglitch',
+  'analognoise',
+  'wavejitter',
+  'scanjitter',
+  'tilejitter',
+  'rgbsplit',
+  'screenjump',
+  'badtv',
   'datamosh',
   'pixelsort',
   'scanshift',

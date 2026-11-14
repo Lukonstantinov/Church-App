@@ -172,7 +172,9 @@ bulge, god rays, reflection: `GPU_MOTIONS`; colour-your-own particles — rain, 
 fireworks, notes, crosses (group `colour`), PixiJS filters lazy-loaded in `components/GpuEffect.tsx`, max 6 live WebGL
 canvases, recorder steps them via `seekGpu`; our own picture filters in `PHOTO_FRAGMENTS` (GLSL, no derivatives —
 older phones lack them): oilfilter (anisotropic Kuwahara, 4 passes, MIT port — see THIRD_PARTY_NOTICES.md; drawn once, not every frame), datamosh, pixelsort, scanshift, retro8bit, sketch, neonedge, photomirror
-(the last four after the MIT glitch-core); `LivingLayer` + `.living-*` CSS)
+(the last four after the MIT glitch-core); blockglitch, lineglitch, analognoise, wavejitter, scanjitter, tilejitter,
+rgbsplit, screenjump (after the MIT X-PostProcessing-Library) and badtv (MIT, felixturner). A picture filter put on
+a picture as a sublayer is drawn as that picture's own effect (LayeredPoster), from its photo in its box; `LivingLayer` + `.living-*` CSS)
 (`groups.meeting_motion`, per meeting `meetings.motion`; the home tile and the poster can have their
 own: `tile_motion` / `poster_motion` on meetings and design templates);
 a ⏳ timer and a slow pulse in the last 2 hours (`SoonTimer`, `SoonPulse`).

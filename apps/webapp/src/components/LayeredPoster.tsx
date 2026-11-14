@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   fontFamily,
+  GPU_MOTIONS,
   layerGroups,
   type LayerAdjust,
   type LayerShape,
@@ -69,11 +70,31 @@ export function LayeredPoster({
       {layerGroups(tpl.layers).map(({ base, subs }) => {
         // A hidden layer takes its sublayers with it (they have nothing to show on).
         if (base.hidden) return null;
-        const shown = subs.filter((l) => !l.hidden);
+        let shown = subs.filter((l) => !l.hidden);
+        // A picture filter (oil painting, glitches…) put only on top of a picture changes that
+        // picture itself: it becomes one of the picture's own effects, drawn in its exact box
+        // from its own photo. As a separate layer it would only have the poster's background.
+        let own = base;
+        if (base.type === 'image') {
+          const filters = shown.filter(
+            (l): l is Extract<PosterLayer, { type: 'effect' }> =>
+              l.type === 'effect' && GPU_MOTIONS.includes(l.kind),
+          );
+          if (filters.length) {
+            own = {
+              ...base,
+              effects: [
+                ...(base.effects ?? []),
+                ...filters.map((l) => ({ kind: l.kind, tune: l.tune ?? null })),
+              ],
+            };
+            shown = shown.filter((l) => !filters.includes(l as (typeof filters)[number]));
+          }
+        }
         return (
           <Adjusted key={base.id} layer={base}>
             <Layer
-              layer={base}
+              layer={own}
               texts={texts}
               picture={photo}
               subs={
