@@ -128,6 +128,11 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
     }
   };
 
+  // iPhones may leave pictures out of the very first drawing of the page: one small
+  // drawing, thrown away, before the ones that count (as the bot's poster pictures do).
+  await toCanvas(node, { pixelRatio: 0.25, skipFonts: true, width: W, height: H })
+    .then(freeCanvas)
+    .catch(() => undefined);
   const below = canvasOf(outW, outH);
   const b = below.getContext('2d')!;
   let undo = hideFor([...effects, ...bands.slice(1).flat(), ...unders]);
@@ -412,6 +417,79 @@ async function preparePictures(roots: HTMLElement[], k: number): Promise<() => v
     undo.push(() => (el.style.backgroundImage = before));
   }
   return () => undo.forEach((u) => u());
+}
+
+/**
+ * The block's own pictures (poster picture layers, cut-outs) and the masks made of them,
+ * embedded as small copies before the still parts are drawn. iPhones leave big pictures
+ * out of the drawing library's picture now and then: a cut-out logo with an effect inside
+ * its letters came out as the effect alone, pale on white (the letters themselves were
+ * missing under it). A copy is no bigger than it shows in the recording; a picture with
+ * see-through parts stays a PNG, others become a JPEG. Returns how to put them back.
+ */
+async function prepareImages(node: HTMLElement, k: number): Promise<() => void> {
+  const undo: (() => void)[] = [];
+  const done = new Map<string, string | null>();
+  const copyOf = async (url: string, longest: number) => {
+    if (/^data:/i.test(url)) return null;
+    const key = `${url}|${Math.round(longest)}`;
+    if (done.has(key)) return done.get(key)!;
+    let out: string | null;
+    try {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = url;
+      await img.decode();
+      const w = img.naturalWidth || 1;
+      const h = img.naturalHeight || 1;
+      const scale = Math.min(1, Math.max(320, longest * 1.1) / Math.max(w, h));
+      const c = canvasOf(Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)));
+      const ctx = c.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      // See-through anywhere? (a sparse sample is enough to tell a cut-out from a photo)
+      const px = ctx.getImageData(0, 0, c.width, c.height).data;
+      let clear = false;
+      for (let i = 3; i < px.length && !clear; i += 4 * 97) clear = px[i]! < 250;
+      out = clear ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.92);
+      freeCanvas(c);
+    } catch {
+      out = null;
+    }
+    done.set(key, out);
+    return out;
+  };
+  for (const el of [node, ...node.querySelectorAll<HTMLElement>('*')]) {
+    // Effects are handled on their own (preparePictures); their pictures stay as they are.
+    if (el.closest('.living-clip')) continue;
+    const longest = Math.max(el.offsetWidth, el.offsetHeight) * k;
+    if (!longest) continue;
+    if (el instanceof HTMLImageElement && el.currentSrc) {
+      const pic = await copyOf(el.currentSrc, longest);
+      if (pic) {
+        const before = el.getAttribute('src');
+        const set = el.getAttribute('srcset');
+        el.removeAttribute('srcset');
+        el.src = pic;
+        undo.push(() => {
+          if (set !== null) el.setAttribute('srcset', set);
+          if (before !== null) el.setAttribute('src', before);
+        });
+      }
+    }
+    // A mask made of a picture (a cut-out's outline, letters): the same small copy.
+    for (const prop of ['maskImage', 'webkitMaskImage'] as const) {
+      const v = el.style[prop];
+      const m = v && /url\("?([^")]+)"?\)/.exec(v);
+      if (!m) continue;
+      const pic = await copyOf(m[1]!, longest);
+      if (!pic) continue;
+      el.style[prop] = v.replace(m[0], `url("${pic}")`);
+      undo.push(() => (el.style[prop] = v));
+    }
+  }
+  // The new copies must be decoded before the drawing library reads the page.
+  await picturesReady(node);
+  return () => undo.reverse().forEach((u) => u());
 }
 
 async function prepareEffects(
@@ -752,9 +830,11 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
   await document.fonts?.ready;
   await nextFrame();
   let restoreTextures: (() => void) | undefined;
+  let restoreImages: (() => void) | undefined;
   // Every canvas of this recording, freed at the end (see freeCanvas).
   const used: HTMLCanvasElement[] = [];
   try {
+    restoreImages = await prepareImages(node, k);
     const { below, over, effects } = await stillParts(node, k, outW, outH);
     used.push(below, ...over.filter((c): c is HTMLCanvasElement => !!c));
     const list = await prepareEffects(node, effects, k);
@@ -895,6 +975,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     freeCanvas(maskScratch);
     maskScratch = null;
     restoreTextures?.();
+    restoreImages?.();
     holdParticles(node, false);
     holdGpu(node, false);
     holdShaders(node, false);

@@ -21,6 +21,7 @@ import {
   type FontKey,
   type GroupSummary,
   type LayerStyle,
+  type MeetingMotion,
   type MotionLayer,
   type PosterBackground,
   type PosterFrame,
@@ -61,7 +62,7 @@ import { LookTop } from './LookTop';
 import { Group, Pill } from './LookControls';
 import { MotionPicker } from './MotionPicker';
 import { PosterGestures } from './PosterGestures';
-import { Knob, PALETTE } from './MotionTune';
+import { Knob, MotionTuneControls, PALETTE, TunePanel } from './MotionTune';
 import { Sheet } from './Sheet';
 import { useToast } from './Toast';
 import { Button, DateBadge, FullscreenButton, Toggle } from './ui';
@@ -1687,7 +1688,21 @@ function LayerEffects({
   onChange: (effects: MotionLayer[]) => void;
   children?: ReactNode;
 }) {
+  const t = useT();
   const kinds = list.map((e) => e.kind);
+  // The first of each kind is the one the picker shows; the same kind again further down
+  // the list is a copy with settings of its own (smoke from both sides, two ribbons).
+  const firstAt = (m: MeetingMotion) => list.findIndex((e) => e.kind === m);
+  const copies = list
+    .map((e, i) => ({ e, i }))
+    .filter(({ e, i }) => firstAt(e.kind) !== i);
+  const picked = [...new Set(kinds)];
+  // A copy starts turned round (from the other side), with the original's other settings.
+  const addCopy = (m: MeetingMotion) => {
+    const base = list[firstAt(m)]?.tune ?? {};
+    haptic.tap();
+    onChange([...list, { kind: m, tune: { ...base, angle: ((base.angle ?? 0) + 180) % 360 } }]);
+  };
   return (
     <Group title={title}>
       <p className="mb-2 px-1 text-[12px] text-hint">{hint}</p>
@@ -1699,7 +1714,7 @@ function LayerEffects({
         value={null}
         onChange={() => undefined}
         many={{
-          values: kinds,
+          values: picked,
           toggle: (m) =>
             onChange(
               m === 'off'
@@ -1709,9 +1724,50 @@ function LayerEffects({
                   : [...list, { kind: m }].slice(-MAX_EFFECTS),
             ),
         }}
-        tuneOf={(m) => list.find((e) => e.kind === m)?.tune ?? null}
-        onTune={(m, tune) => onChange(list.map((e) => (e.kind === m ? { ...e, tune } : e)))}
+        tuneOf={(m) => list[firstAt(m)]?.tune ?? null}
+        onTune={(m, tune) => {
+          const at = firstAt(m);
+          onChange(list.map((e, i) => (i === at ? { ...e, tune } : e)));
+        }}
       />
+      {/* The same effect again, each with its own settings. */}
+      {picked.length > 0 && list.length < MAX_EFFECTS && (
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="px-1 text-[13px] text-hint">{t.events.effectCopyHint}</div>
+          <div className="flex flex-wrap gap-2">
+            {picked
+              .filter((m) => m !== 'custom')
+              .map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => addCopy(m)}
+                  className="rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold active:scale-95"
+                >
+                  ＋ {t.meetings.motions[m]}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+      {copies.map(({ e, i }) => (
+        <div key={`${e.kind}${i}`} className="mt-3">
+          <TunePanel title={`${t.meetings.motions[e.kind]} · ${t.events.effectCopy}`}>
+            <MotionTuneControls
+              kind={e.kind}
+              tune={e.tune ?? {}}
+              onChange={(tune) => onChange(list.map((x, j) => (j === i ? { ...x, tune } : x)))}
+            />
+            <button
+              type="button"
+              onClick={() => onChange(list.filter((_, j) => j !== i))}
+              className="mt-3 text-[13px] font-semibold text-destructive"
+            >
+              {t.events.effectCopyRemove}
+            </button>
+          </TunePanel>
+        </div>
+      ))}
     </Group>
   );
 }
