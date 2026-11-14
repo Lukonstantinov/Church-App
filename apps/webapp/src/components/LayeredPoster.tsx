@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   fontFamily,
   layerGroups,
+  type LayerAdjust,
   type LayerShape,
   type LayerStyle,
   type MotionLayer,
@@ -70,22 +71,150 @@ export function LayeredPoster({
         if (base.hidden) return null;
         const shown = subs.filter((l) => !l.hidden);
         return (
-          <Layer
-            key={base.id}
-            layer={base}
-            texts={texts}
-            picture={photo}
-            subs={
-              shown.length
-                ? shown.map((l) => <Layer key={l.id} layer={l} texts={texts} picture={photo} />)
-                : null
-            }
-          />
+          <Adjusted key={base.id} layer={base}>
+            <Layer
+              layer={base}
+              texts={texts}
+              picture={photo}
+              subs={
+                shown.length
+                  ? shown.map((l) => (
+                      <Adjusted key={l.id} layer={l}>
+                        <Layer layer={l} texts={texts} picture={photo} />
+                      </Adjusted>
+                    ))
+                  : null
+              }
+            />
+          </Adjusted>
         );
       })}
       {tpl.frame && <Frame frame={tpl.frame} />}
       {children}
     </div>
+  );
+}
+
+/** Whether a layer's adjustments change anything (all at their neutral values: no). */
+export function adjusts(a: LayerAdjust | null | undefined): a is LayerAdjust {
+  if (!a) return false;
+  return (
+    !!a.blur ||
+    !!a.grain ||
+    !!a.frost ||
+    !!a.bw ||
+    !!a.sepia ||
+    !!a.vignette ||
+    !!a.hue ||
+    (a.brightness != null && a.brightness !== 1) ||
+    (a.contrast != null && a.contrast !== 1) ||
+    (a.saturation != null && a.saturation !== 1)
+  );
+}
+
+/** The CSS filter of a layer's adjustments (the SVG part — grain, sheen, vignette — by id). */
+function adjustFilter(a: LayerAdjust, svgId: string | null): string {
+  const f = a.frost ?? 0;
+  const parts: string[] = [];
+  if (svgId) parts.push(`url(#${svgId})`);
+  const blur = (a.blur ?? 0) * 6 + f * 2.4;
+  if (blur > 0) parts.push(`blur(${blur.toFixed(2)}cqmin)`);
+  // Frosted glass is a little lighter and paler than what is behind it.
+  const bright = (a.brightness ?? 1) * (1 + f * 0.12);
+  const sat = (a.saturation ?? 1) * (1 - f * 0.25);
+  if (bright !== 1) parts.push(`brightness(${bright.toFixed(3)})`);
+  if (a.contrast != null && a.contrast !== 1) parts.push(`contrast(${a.contrast})`);
+  if (sat !== 1) parts.push(`saturate(${sat.toFixed(3)})`);
+  if (a.hue) parts.push(`hue-rotate(${a.hue}deg)`);
+  if (a.bw) parts.push(`grayscale(${a.bw})`);
+  if (a.sepia) parts.push(`sepia(${a.sepia})`);
+  return parts.join(' ');
+}
+
+/** A soft dark edge, as a picture the vignette filter lays over the layer. */
+const VIGNETTE = (k: number) =>
+  `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" preserveAspectRatio="none"><defs><radialGradient id="v" cx="50%" cy="50%" r="72%"><stop offset="45%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity="${Math.min(1, k * 0.95).toFixed(2)}"/></radialGradient></defs><rect width="100" height="100" fill="url(#v)"/></svg>`,
+  )}`;
+
+/**
+ * A layer with its adjustments: one box over the poster carrying the filters, so the
+ * layer and its sublayers are adjusted together. Grain, the frosted sheen and the
+ * vignette are an SVG filter that keeps to the layer's own pixels (letters, a cut-out's
+ * outline). The layer's blend mode moves to this box: a filter would otherwise keep it
+ * from blending with the layers below.
+ */
+function Adjusted({ layer, children }: { layer: PosterLayer; children: ReactNode }) {
+  // Unique per drawing: the same design is often on screen twice (tile and poster).
+  const uid = useId();
+  const a = layer.adjust;
+  if (!adjusts(a)) return <>{children}</>;
+  const f = a.frost ?? 0;
+  const grain = Math.min(1, (a.grain ?? 0) + f * 0.35);
+  const vignette = a.vignette ?? 0;
+  const svg = grain > 0 || f > 0 || vignette > 0;
+  const id = `adj${uid.replace(/[^\w-]/g, '')}`;
+  return (
+    <span
+      className="absolute inset-0"
+      style={{
+        filter: adjustFilter(a, svg ? id : null),
+        ...(layer.blend && layer.blend !== 'normal' ? { mixBlendMode: layer.blend } : {}),
+      }}
+      data-adjust=""
+    >
+      {svg && (
+        <svg width="0" height="0" className="absolute" aria-hidden="true">
+          <filter id={id} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+            {/* What the effects stack on. */}
+            <feMerge result="base">
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+            {f > 0 && (
+              <>
+                {/* Frost: a pale milky light over the glass, only where the layer is. */}
+                <feFlood floodColor="#ffffff" floodOpacity={(f * 0.22).toFixed(3)} />
+                <feComposite in2="SourceGraphic" operator="in" result="milk" />
+                <feMerge result="base">
+                  <feMergeNode in="base" />
+                  <feMergeNode in="milk" />
+                </feMerge>
+              </>
+            )}
+            {grain > 0 && (
+              <>
+                {/* Grain: fine noise laid over the layer's own pixels. */}
+                <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" />
+                <feColorMatrix
+                  type="matrix"
+                  values={`0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 0 ${(grain * 0.7).toFixed(3)}`}
+                />
+                <feComposite in2="SourceGraphic" operator="in" result="noise" />
+                <feBlend in="noise" in2="base" mode="overlay" result="base" />
+              </>
+            )}
+            {vignette > 0 && (
+              <>
+                <feImage
+                  href={VIGNETTE(vignette)}
+                  x="0"
+                  y="0"
+                  width="100%"
+                  height="100%"
+                  preserveAspectRatio="none"
+                />
+                <feComposite in2="SourceGraphic" operator="in" result="edge" />
+                <feMerge result="base">
+                  <feMergeNode in="base" />
+                  <feMergeNode in="edge" />
+                </feMerge>
+              </>
+            )}
+          </filter>
+        </svg>
+      )}
+      {children}
+    </span>
   );
 }
 
@@ -278,7 +407,10 @@ function Layer({
   const still = useEffectQuality() === 'still';
   const look: CSSProperties = {
     ...(layer.opacity != null && layer.opacity < 1 ? { opacity: layer.opacity } : {}),
-    ...(layer.blend && layer.blend !== 'normal' ? { mixBlendMode: layer.blend } : {}),
+    // Adjusted layers blend from their adjustment box (see Adjusted).
+    ...(layer.blend && layer.blend !== 'normal' && !adjusts(layer.adjust)
+      ? { mixBlendMode: layer.blend }
+      : {}),
   };
   // Which layer a finger touches in the editor (PosterGestures).
   const mark = { 'data-layer-id': layer.id };

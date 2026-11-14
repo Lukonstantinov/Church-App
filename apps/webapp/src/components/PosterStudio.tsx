@@ -1964,7 +1964,91 @@ function FrameSettings({
   );
 }
 
-function LayerSettings({
+type Adjust = NonNullable<PosterLayer['adjust']>;
+/** Ready-made looks, as in a video editor's effect presets. */
+const ADJUST_PRESETS: Record<string, Adjust> = {
+  frost: { frost: 0.7 },
+  softBlur: { blur: 0.35 },
+  film: { grain: 0.5, contrast: 1.1, sepia: 0.15, vignette: 0.4 },
+  bw: { bw: 1, contrast: 1.15 },
+  vintage: { sepia: 0.5, saturation: 0.8, vignette: 0.5, grain: 0.3 },
+  vivid: { saturation: 1.4, contrast: 1.1 },
+  dreamy: { blur: 0.12, brightness: 1.1, saturation: 1.15 },
+};
+
+/**
+ * Filters and corrections on a layer (and its sublayers), like a video editor's effects:
+ * presets first, then every slider. Matte glass softens, lightens and grains the layer.
+ */
+function AdjustControls({
+  value,
+  onChange,
+}: {
+  value: Adjust | null | undefined;
+  onChange: (a: Adjust | null) => void;
+}) {
+  const t = useT();
+  const ta = t.posters.adjust;
+  const a = value ?? {};
+  const set = (p: Partial<Adjust>) => onChange({ ...a, ...p });
+  const share = (v: number) => pct(v * 100);
+  const sliders: [keyof Adjust, number, number, number, (v: number) => string][] = [
+    ['frost', 0, 1, 0, share],
+    ['blur', 0, 1, 0, share],
+    ['grain', 0, 1, 0, share],
+    ['brightness', 0, 2, 1, share],
+    ['contrast', 0, 2, 1, share],
+    ['saturation', 0, 2, 1, share],
+    ['hue', -180, 180, 0, (v) => `${v}°`],
+    ['bw', 0, 1, 0, share],
+    ['sepia', 0, 1, 0, share],
+    ['vignette', 0, 1, 0, share],
+  ];
+  return (
+    <Group title={ta.title}>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {Object.entries(ADJUST_PRESETS).map(([key, preset]) => (
+            <Pill
+              key={key}
+              on={JSON.stringify(a) === JSON.stringify(preset)}
+              onClick={() => onChange(preset)}
+              label={ta.presets[key as keyof typeof ta.presets]}
+            />
+          ))}
+          <Pill on={false} onClick={() => onChange(null)} label={`↺ ${ta.reset}`} />
+        </div>
+        {sliders.map(([key, min, max, neutral, show]) => (
+          <Knob
+            key={key}
+            label={ta[key]}
+            value={(a[key] as number | null | undefined) ?? neutral}
+            min={min}
+            max={max}
+            step={key === 'hue' ? 5 : 0.05}
+            show={show}
+            onChange={(v) => set({ [key]: v === neutral ? null : v })}
+          />
+        ))}
+        <p className="px-1 text-[12px] text-hint">{ta.hint}</p>
+      </div>
+    </Group>
+  );
+}
+
+function LayerSettings(props: Parameters<typeof LayerSettingsOwn>[0]) {
+  return (
+    <>
+      <LayerSettingsOwn {...props} />
+      <AdjustControls
+        value={props.layer.adjust}
+        onChange={(adjust) => props.onChange({ adjust })}
+      />
+    </>
+  );
+}
+
+function LayerSettingsOwn({
   layer,
   onChange,
   onPicture,

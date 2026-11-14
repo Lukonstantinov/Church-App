@@ -45,8 +45,37 @@ export const layerStyleSchema = z.object({
 });
 export type LayerStyle = z.output<typeof layerStyleSchema>;
 
+/**
+ * Adjustments on a layer, as in a video editor's effects panel (Premiere: Gaussian Blur,
+ * Noise, Brightness & Contrast, Lumetri saturation and hue, Black & White, Tint, Vignette),
+ * plus matte (frosted) glass: the layer softened, lightened and grained as if seen through
+ * frosted glass. All 0 / 1 = untouched; a layer's sublayers are adjusted with it.
+ */
+export const layerAdjustSchema = z.object({
+  /** Gaussian blur: 0 … 1 (about 6 % of the poster's smaller side). */
+  blur: z.number().min(0).max(1).nullish(),
+  /** Film grain: 0 … 1. */
+  grain: z.number().min(0).max(1).nullish(),
+  /** Matte / frosted glass: 0 … 1. */
+  frost: z.number().min(0).max(1).nullish(),
+  /** 1 = as it is; 0 … 2. */
+  brightness: z.number().min(0).max(2).nullish(),
+  contrast: z.number().min(0).max(2).nullish(),
+  saturation: z.number().min(0).max(2).nullish(),
+  /** Colours turned round the colour wheel, degrees. */
+  hue: z.number().int().min(-180).max(180).nullish(),
+  /** Black and white: 0 … 1. */
+  bw: z.number().min(0).max(1).nullish(),
+  /** Warm old-photo tint: 0 … 1. */
+  sepia: z.number().min(0).max(1).nullish(),
+  /** Edges darkened: 0 … 1. */
+  vignette: z.number().min(0).max(1).nullish(),
+});
+export type LayerAdjust = z.output<typeof layerAdjustSchema>;
+
 const common = {
   id: z.string().min(1).max(24),
+  adjust: layerAdjustSchema.nullish(),
   hidden: z.boolean().nullish(),
   opacity: z.number().min(0).max(1).nullish(),
   blend: z.enum(BLEND_MODES).nullish(),

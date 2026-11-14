@@ -118,6 +118,8 @@ function restoreMissing(
   try {
     for (const img of pics) {
       if (!img.naturalWidth || !img.offsetWidth || !img.offsetHeight) continue;
+      // A filtered layer (black and white, matte glass…) shows other colours on purpose.
+      if (img.closest('[data-adjust]')) continue;
       const box = boxIn(node, img);
       if (box.w < 4 || box.h < 4) continue;
       if (Math.abs(box.w / box.h - img.offsetWidth / img.offsetHeight) > 0.02) continue;
@@ -284,6 +286,20 @@ interface Effect {
   anims: Animation[];
   /** The masks of the boxes it sits in (a cut-out's outline, letters, soft edges). */
   masks: Mask[];
+  /** A layer's filters (blur, black and white…) at the recording's scale, or none. */
+  filter: string | null;
+}
+
+/**
+ * The filters of the adjusted layer an effect sits in (LayeredPoster `data-adjust`), for
+ * the canvas the effect is drawn onto: blurs scaled to the recording's size.
+ */
+function filterOf(el: HTMLElement, node: HTMLElement, k: number): string | null {
+  const box = el.parentElement?.closest<HTMLElement>('[data-adjust]');
+  if (!box || !node.contains(box)) return null;
+  const f = getComputedStyle(box).filter;
+  if (!f || f === 'none') return null;
+  return f.replace(/blur\(([\d.]+)px\)/g, (_, px: string) => `blur(${Number(px) * k}px)`);
 }
 
 /** A box's CSS mask drawn once as a picture of the box, placed where the box is. */
@@ -585,6 +601,7 @@ async function prepareEffects(
       // A particle layer is one canvas we draw ourselves (no CSS animations in it).
       canvas: canvas && anims.length === 0 ? canvas : null,
       anims,
+      filter: filterOf(el, node, k),
       masks: masks[i]!,
     };
   });
@@ -647,6 +664,7 @@ async function drawEffects(
     ctx.save();
     ctx.globalAlpha = fx.canvas ? fx.opacity : 1;
     ctx.globalCompositeOperation = fx.blend;
+    if (fx.filter) ctx.filter = fx.filter;
     ctx.drawImage(src, ...at);
     ctx.restore();
     // A drawn copy of the layer is used once; the particle canvas is the live one.
