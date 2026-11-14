@@ -159,6 +159,10 @@ export const MEETING_MOTIONS = [
   'datamosh',
   'pixelsort',
   'scanshift',
+  'retro8bit',
+  'sketch',
+  'neonedge',
+  'photomirror',
   // One of the church's own effects (Design → Effect studio), by `tune.ref`: drawn as its
   // layers, so changing it there changes it everywhere it is used.
   'custom',
@@ -259,7 +263,7 @@ export const MOTION_GROUPS: {
     ],
   },
   { key: 'sunlight', items: ['sun', 'sunburst', 'halo'] },
-  { key: 'paint', items: ['oilpaint', 'oilfilter', 'oil', 'fur', 'marble', 'ink'] },
+  { key: 'paint', items: ['oilpaint', 'oilfilter', 'sketch', 'oil', 'fur', 'marble', 'ink'] },
   {
     key: 'particles',
     items: [
@@ -306,6 +310,9 @@ export const MOTION_GROUPS: {
       'datamosh',
       'pixelsort',
       'scanshift',
+      'retro8bit',
+      'neonedge',
+      'photomirror',
       'crt',
       'static',
       'matrix',
@@ -351,6 +358,10 @@ export const GPU_MOTIONS: readonly MeetingMotion[] = [
   'datamosh',
   'pixelsort',
   'scanshift',
+  'retro8bit',
+  'sketch',
+  'neonedge',
+  'photomirror',
 ];
 
 /** How a layer of an own effect mixes with what is under it. */
@@ -567,6 +578,10 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   datamosh: ['weight', 'density'],
   pixelsort: ['weight', 'density'],
   scanshift: ['weight', 'density'],
+  retro8bit: ['weight', 'density'],
+  sketch: ['weight', 'density'],
+  neonedge: ['weight', 'density'],
+  photomirror: ['weight', 'density'],
   custom: [],
   embers: CANVAS_KNOBS,
   fireflies: CANVAS_KNOBS,

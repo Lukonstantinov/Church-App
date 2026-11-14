@@ -465,6 +465,10 @@ export const ru = {
       datamosh: 'Датамош (смаз блоков)',
       pixelsort: 'Сортировка пикселей',
       scanshift: 'Сдвиг строк',
+      retro8bit: '8-бит',
+      sketch: 'Карандашный набросок',
+      neonedge: 'Неоновые контуры',
+      photomirror: 'Зеркало',
       custom: 'Свой эффект',
     },
     motionGroups: {

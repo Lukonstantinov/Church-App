@@ -64,6 +64,108 @@ float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 `;
 
 const PHOTO_FRAGMENTS: Partial<Record<MeetingMotion, string>> = {
+  // The next four after glitch-core (MIT, github.com/samplemaple/glitch-core; notice in
+  // THIRD_PARTY_NOTICES.md), each given movement of its own here.
+  // 8-bit: the picture in big pixels, each the nearest colour of a retro palette (amount
+  // picks it: Game Boy greens, the 16-colour PICO-8, or few levels per colour like an old
+  // home computer), with a light ordered dither
+  // that shimmers slowly.
+  retro8bit: `
+vec3 nearest16(vec3 c) {
+  vec3 p[16];
+  p[0] = vec3(0.0); p[1] = vec3(0.114, 0.169, 0.325); p[2] = vec3(0.494, 0.145, 0.325);
+  p[3] = vec3(0.0, 0.529, 0.318); p[4] = vec3(0.671, 0.322, 0.212); p[5] = vec3(0.373, 0.341, 0.31);
+  p[6] = vec3(0.761, 0.765, 0.78); p[7] = vec3(1.0, 0.945, 0.91); p[8] = vec3(1.0, 0.0, 0.302);
+  p[9] = vec3(1.0, 0.639, 0.0); p[10] = vec3(1.0, 0.925, 0.153); p[11] = vec3(0.0, 0.894, 0.212);
+  p[12] = vec3(0.161, 0.678, 1.0); p[13] = vec3(0.514, 0.463, 0.612); p[14] = vec3(1.0, 0.467, 0.659);
+  p[15] = vec3(1.0, 0.8, 0.667);
+  vec3 best = p[0];
+  float bd = 9.0;
+  for (int i = 0; i < 16; i++) {
+    vec3 d = c - p[i];
+    float e = dot(d * d, vec3(0.3, 0.59, 0.11));
+    if (e < bd) { bd = e; best = p[i]; }
+  }
+  return best;
+}
+void main() {
+  vec2 s = screen();
+  vec2 cells = uOutputFrame.zw / (2.0 + 3.0 * uWeight);
+  vec2 cell = floor(s * cells);
+  vec3 c = at(tex((cell + 0.5) / cells)).rgb;
+  float bayer = (mod(cell.x + floor(uTime * 1.5), 2.0) * 2.0 + mod(cell.y, 2.0)) / 4.0 - 0.375;
+  // Contrast lifted first: dark photos would otherwise fall to one or two colours.
+  c = clamp((c - 0.45) * 1.35 + 0.5 + bayer * 0.08, 0.0, 1.0);
+  float p = floor(clamp((uDensity - 0.3) / 2.2, 0.0, 0.999) * 3.0);
+  vec3 o;
+  if (p < 0.5) {
+    float g = floor(clamp(luma(c) * 1.15, 0.0, 0.999) * 4.0) / 3.0;
+    o = mix(vec3(0.06, 0.22, 0.06), vec3(0.61, 0.74, 0.06), g);
+  } else if (p < 1.5) o = nearest16(c);
+  else o = floor(c * 3.999) / 3.0;
+  finalColor = vec4(o, 1.0);
+}`,
+  // Pencil sketch: the picture's lines drawn in graphite on paper, with light hatching in
+  // its shadows and a faint paper grain.
+  sketch: `
+void main() {
+  vec2 d = uInputSize.zw * (0.8 + 0.8 * uWeight);
+  float tl = luma(at(vTextureCoord + vec2(-d.x, -d.y)).rgb);
+  float t = luma(at(vTextureCoord + vec2(0.0, -d.y)).rgb);
+  float tr = luma(at(vTextureCoord + vec2(d.x, -d.y)).rgb);
+  float l = luma(at(vTextureCoord + vec2(-d.x, 0.0)).rgb);
+  float r = luma(at(vTextureCoord + vec2(d.x, 0.0)).rgb);
+  float bl = luma(at(vTextureCoord + vec2(-d.x, d.y)).rgb);
+  float b = luma(at(vTextureCoord + vec2(0.0, d.y)).rgb);
+  float br = luma(at(vTextureCoord + vec2(d.x, d.y)).rgb);
+  float gx = -tl - 2.0 * l - bl + tr + 2.0 * r + br;
+  float gy = -tl - 2.0 * t - tr + bl + 2.0 * b + br;
+  float edge = clamp(sqrt(gx * gx + gy * gy) * (1.2 + uDensity), 0.0, 1.0);
+  float lum = luma(at(vTextureCoord).rgb);
+  vec2 px = screen() * uOutputFrame.zw;
+  float hatch = step(0.5, fract((px.x + px.y) * 0.18)) * smoothstep(0.55, 0.15, lum) * 0.35;
+  float hatch2 = step(0.5, fract((px.x - px.y) * 0.18)) * smoothstep(0.3, 0.05, lum) * 0.3;
+  float grain = (noise(px * 0.9) - 0.5) * 0.06;
+  float ink = clamp(edge + hatch + hatch2, 0.0, 1.0);
+  vec3 paper = vec3(0.97, 0.95, 0.9) + grain;
+  finalColor = vec4(mix(paper, vec3(0.16, 0.16, 0.18), ink), 1.0);
+}`,
+  // Neon edges: the picture's outlines glowing in colours that slowly travel round, over
+  // the picture darkened.
+  neonedge: `
+void main() {
+  vec2 d = uInputSize.zw * 1.2;
+  float tl = luma(at(vTextureCoord + vec2(-d.x, -d.y)).rgb);
+  float t = luma(at(vTextureCoord + vec2(0.0, -d.y)).rgb);
+  float tr = luma(at(vTextureCoord + vec2(d.x, -d.y)).rgb);
+  float l = luma(at(vTextureCoord + vec2(-d.x, 0.0)).rgb);
+  float r = luma(at(vTextureCoord + vec2(d.x, 0.0)).rgb);
+  float bl = luma(at(vTextureCoord + vec2(-d.x, d.y)).rgb);
+  float b = luma(at(vTextureCoord + vec2(0.0, d.y)).rgb);
+  float br = luma(at(vTextureCoord + vec2(d.x, d.y)).rgb);
+  float gx = -tl - 2.0 * l - bl + tr + 2.0 * r + br;
+  float gy = -tl - 2.0 * t - tr + bl + 2.0 * b + br;
+  // Only firm outlines glow (fine texture stays dark).
+  float edge = smoothstep(0.18, 0.7, sqrt(gx * gx + gy * gy) * (0.8 + 0.5 * uDensity));
+  vec2 s = screen();
+  float hue = s.x * 0.6 + s.y * 0.4 - uTime * 0.08;
+  vec3 neon = 0.5 + 0.5 * cos(6.2831853 * (hue + vec3(0.0, 0.33, 0.67)));
+  vec3 base = at(vTextureCoord).rgb * (0.25 - 0.15 * uWeight * 0.5);
+  float pulse = 0.85 + 0.15 * sin(uTime * 2.0);
+  finalColor = vec4(clamp(base + neon * edge * 1.3 * pulse, 0.0, 1.0), 1.0);
+}`,
+  // Mirror: the picture folded into a symmetry (amount: left/right, top/bottom, four
+  // ways), the fold drifting slowly so it breathes.
+  photomirror: `
+void main() {
+  vec2 s = screen();
+  float m = floor(clamp((uDensity - 0.3) / 2.2, 0.0, 0.999) * 3.0);
+  float cx = 0.5 + 0.06 * uWeight * sin(uTime * 0.3);
+  float cy = 0.5 + 0.06 * uWeight * cos(uTime * 0.23);
+  if (m != 1.0) s.x = s.x < cx ? s.x : 2.0 * cx - s.x;
+  if (m != 0.0) s.y = s.y < cy ? s.y : 2.0 * cy - s.y;
+  finalColor = vec4(at(tex(s)).rgb, 1.0);
+}`,
   // Data-mosh: in short bursts, blocks of the picture smear along made-up motion and
   // lose colour depth, as broken video does.
   datamosh: `
@@ -292,6 +394,10 @@ void main() {
 
 const STAND_IN: Partial<Record<MeetingMotion, string>> = {
   oilfilter: '🎨',
+  retro8bit: '👾',
+  sketch: '✏️',
+  neonedge: '💡',
+  photomirror: '🪞',
   datamosh: '📼',
   pixelsort: '🌈',
   scanshift: '📺',
@@ -308,6 +414,10 @@ const STAND_IN: Partial<Record<MeetingMotion, string>> = {
 /** Effects that bend or light the photo: nothing to show without one. */
 const NEEDS_PHOTO = new Set<MeetingMotion>([
   'oilfilter',
+  'retro8bit',
+  'sketch',
+  'neonedge',
+  'photomirror',
   'datamosh',
   'pixelsort',
   'scanshift',

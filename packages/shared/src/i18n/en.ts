@@ -460,6 +460,10 @@ export const en: Messages = {
       datamosh: 'Datamosh (block smear)',
       pixelsort: 'Pixel sorting',
       scanshift: 'Scan shift',
+      retro8bit: '8-bit',
+      sketch: 'Pencil sketch',
+      neonedge: 'Neon edges',
+      photomirror: 'Mirror',
       custom: 'Own effect',
     },
     motionGroups: {

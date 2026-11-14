@@ -462,6 +462,10 @@ export const lt: Messages = {
       datamosh: 'Datamosh (blokų tepimas)',
       pixelsort: 'Pikselių rūšiavimas',
       scanshift: 'Eilučių poslinkis',
+      retro8bit: '8 bitų',
+      sketch: 'Pieštukinis eskizas',
+      neonedge: 'Neoniniai kontūrai',
+      photomirror: 'Veidrodis',
       custom: 'Savas efektas',
     },
     motionGroups: {
