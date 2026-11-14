@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import type { GroupSummary } from '@church/shared';
 import {
   IconCalendar,
@@ -11,12 +12,17 @@ import { TabBar, type TabDef } from '../components/TabBar';
 import { useEnv } from '../lib/env';
 import { useT } from '../lib/i18n';
 import { useNav, type Tab } from '../lib/nav';
-import { Design } from './Design';
 import { Meetings } from './Meetings';
 import { More } from './More';
 import { Overview } from './Overview';
 import { People } from './People';
 import { Treasury } from './Treasury';
+
+/**
+ * The Design tab and its editors (posters, effects, studio) are a large part of the app that
+ * most members never open: loaded only when the tab is opened, so the app starts lighter.
+ */
+const Design = lazy(() => import('./Design').then((m) => ({ default: m.Design })));
 
 /** Inside an environment, for people with rights: tabs shown according to their position. */
 export function ManagerShell({ env }: { env: GroupSummary }) {
@@ -60,7 +66,9 @@ export function ManagerShell({ env }: { env: GroupSummary }) {
     ) : current === 'treasury' ? (
       <Treasury groups={groups} active={env} />
     ) : current === 'design' ? (
-      <Design groups={groups} active={env} />
+      <Suspense fallback={<TabLoading />}>
+        <Design groups={groups} active={env} />
+      </Suspense>
     ) : current === 'people' ? (
       <People groups={groups} active={env} />
     ) : (
@@ -75,5 +83,14 @@ export function ManagerShell({ env }: { env: GroupSummary }) {
       </div>
       <TabBar tabs={tabs} active={current} onChange={setTab} />
     </>
+  );
+}
+
+/** While the Design tab's code arrives (a moment, once): a quiet placeholder. */
+function TabLoading() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center">
+      <span className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--brand)] border-t-transparent" />
+    </div>
   );
 }
