@@ -41,6 +41,7 @@ const GROUP_ICON: Record<GroupKey, string> = {
   christmas: '🎄',
   paint: '🖌',
   abstract: '🌀',
+  text: '🔤',
   sunlight: '☀️',
   particles: '✨',
   liquid: '💧',

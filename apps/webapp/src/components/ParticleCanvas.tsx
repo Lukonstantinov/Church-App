@@ -1,5 +1,12 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
-import { fontFamily, type MeetingMotion, type MotionIcon, type MotionTune } from '@church/shared';
+import {
+  fontFamily,
+  TEXT_MOTIONS,
+  type MeetingMotion,
+  type MotionIcon,
+  type MotionTune,
+} from '@church/shared';
+import { drawTextFx, type TextFx } from './wordFx';
 import { useEnv } from '../lib/env';
 import { getMotion } from '../lib/motion';
 import { getQuality, useEffectQuality, useUnlimited, watchOffscreen } from '../lib/perf';
@@ -39,6 +46,14 @@ export const PARTICLE_KINDS: ReadonlySet<MeetingMotion> = new Set<MeetingMotion>
   // than as rows of huge moving text (measured: 10 frames a second instead of 60 on a
   // computer drawing without its graphics chip).
   'wordwall',
+  // The other text effects (wordFx.ts), drawn the same way.
+  'wordwave',
+  'wordtunnel',
+  'wordring',
+  'wordecho',
+  'wordmarquee',
+  'wordglitch',
+  'wordrain',
 ]);
 
 export interface ParticleLayer {
@@ -236,6 +251,8 @@ interface LayerPlan {
   items: Item[];
   /** The word wall's own settings (the tune it was made from). */
   words?: WordsPlan;
+  /** A text effect's words and look (wordFx.ts). */
+  text?: TextFx;
 }
 
 /** The word wall: its words, look and motion, and its rows drawn once (redrawn on resize). */
@@ -381,7 +398,23 @@ function plan(layer: ParticleLayer, lite: boolean, small: boolean): LayerPlan {
     angle: tune?.angle ?? 0,
     scale: tune?.size ?? 1,
     color: tune?.color ?? null,
-    items: kind === 'wordwall' ? [] : items,
+    items: kind === 'wordwall' || TEXT_MOTIONS.has(kind) ? [] : items,
+    ...(TEXT_MOTIONS.has(kind) && kind !== 'wordwall'
+      ? {
+          text: {
+            words: tune?.words?.length ? tune.words : [],
+            font: `${(fontFamily(tune?.font ?? 'oswald') ?? '').split(', var(')[0] || 'system-ui'}, system-ui, sans-serif`,
+            density,
+            size: weight,
+            glow: tune?.glow ?? 0,
+            colors: tune?.colors?.length ? tune.colors : tune?.color ? [tune.color] : null,
+            style: tune?.wordStyle ?? 'fill',
+            flow: tune?.wordFlow ?? 'alt',
+            chaos: tune?.chaos ?? 0.3,
+            seed: tune?.seed ?? 0,
+          },
+        }
+      : {}),
     ...(kind === 'wordwall'
       ? {
           words: {
@@ -541,6 +574,24 @@ class Engine {
       ctx.translate(-W / 2, -H / 2);
     }
     if (plan.words) this.drawWords(ctx, plan, plan.words, time, W, H);
+    if (plan.text)
+      drawTextFx(
+        ctx,
+        plan.kind,
+        plan.text,
+        {
+          ratio: this.ratio,
+          width: this.width,
+          height: this.height,
+          fallback: this.fallbackWord,
+          own: () => this.ownColours(),
+          fonts: this.fontsReady,
+          alpha: plan.alpha,
+        },
+        time,
+        W,
+        H,
+      );
     for (const it of plan.items) this.drawItem(ctx, plan, it, time, W, H);
     ctx.restore();
   }
@@ -1195,9 +1246,9 @@ export function ParticleCanvas({
     e.fallbackWord = env?.name ?? 'JESUS';
     // The word wall's font may still be loading: draw its rows again once it is there.
     for (const p of e.plans)
-      if (p.words)
+      if (p.words || p.text)
         void document.fonts
-          ?.load(`900 32px ${p.words.font}`)
+          ?.load(`900 32px ${(p.words ?? p.text)!.font}`)
           .then(() => {
             e.fontsReady++;
             e.last = -1;

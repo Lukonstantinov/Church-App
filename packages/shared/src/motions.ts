@@ -98,6 +98,15 @@ export const MEETING_MOTIONS = [
   'halo',
   // Words of one's own, repeated in rows that slide (drawn as text, any font).
   'wordwall',
+  // Text in motion: the person's own words in their font, moving as a background (drawn as
+  // text on the particle canvas, like the word wall).
+  'wordwave',
+  'wordtunnel',
+  'wordring',
+  'wordecho',
+  'wordmarquee',
+  'wordglitch',
+  'wordrain',
   // Lines and shapes in motion (shader engine).
   'wavelines',
   'tunnel',
@@ -171,6 +180,7 @@ export const MOTION_GROUPS: {
     | 'seasons'
     | 'colour'
     | 'abstract'
+    | 'text'
     | 'sunlight'
     | 'nature'
     | 'sacred'
@@ -233,6 +243,18 @@ export const MOTION_GROUPS: {
       'pulserings',
       'honeycomb',
       'dotwave',
+    ],
+  },
+  {
+    key: 'text',
+    items: [
+      'wordwave',
+      'wordecho',
+      'wordmarquee',
+      'wordring',
+      'wordtunnel',
+      'wordglitch',
+      'wordrain',
       'wordwall',
     ],
   },
@@ -459,6 +481,16 @@ const CANVAS_KNOBS: MotionKnob[] = ['density', 'weight', 'trail'];
 const GLOW_KNOBS: MotionKnob[] = ['sharp'];
 /** The shader effects: how many folds/veins/bands, how wild, which variation, own colours. */
 const SHADER_KNOBS: MotionKnob[] = ['density', 'chaos', 'sharp', 'seed', 'colors'];
+/** Text in motion: the words, their font and look, how many, how big, the glow and colours. */
+const TEXT_KNOBS: MotionKnob[] = [
+  'words',
+  'font',
+  'wordStyle',
+  'density',
+  'weight',
+  'glow',
+  'colors',
+];
 export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   calm: GLOW_KNOBS,
   lively: GLOW_KNOBS,
@@ -481,6 +513,13 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   sunburst: ['place', 'density', 'sharp', 'colors'],
   halo: ['place', 'weight', 'glow', 'colors'],
   wordwall: ['words', 'font', 'wordStyle', 'density', 'weight', 'glow', 'colors'],
+  wordwave: [...TEXT_KNOBS, 'chaos'],
+  wordtunnel: [...TEXT_KNOBS, 'chaos'],
+  wordring: TEXT_KNOBS,
+  wordecho: TEXT_KNOBS,
+  wordmarquee: TEXT_KNOBS,
+  wordglitch: [...TEXT_KNOBS, 'chaos', 'seed'],
+  wordrain: [...TEXT_KNOBS, 'seed'],
   wavelines: [...SHADER_KNOBS, 'weight', 'glow'],
   tunnel: [...SHADER_KNOBS, 'weight', 'glow', 'place'],
   dunes: [...SHADER_KNOBS, 'weight'],
@@ -619,6 +658,18 @@ export const PARTICLE_LIKE: ReadonlySet<MeetingMotion> = new Set<MeetingMotion>(
   'candles',
   'particlewave',
   'garland',
+]);
+
+/** Text in motion: drawn from the person's words (the ministry's name when none are given). */
+export const TEXT_MOTIONS: ReadonlySet<MeetingMotion> = new Set<MeetingMotion>([
+  'wordwall',
+  'wordwave',
+  'wordtunnel',
+  'wordring',
+  'wordecho',
+  'wordmarquee',
+  'wordglitch',
+  'wordrain',
 ]);
 
 /** Settings per animation (an item's own, over its template's): {kind: MotionTune}. */
