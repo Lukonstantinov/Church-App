@@ -1847,258 +1847,448 @@ void main() {
   a = max(a, low);
   gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
 }`,
-  // Depth lines: a deep gradient seen through vertical bars of light at several depths —
-  // far ones thin, dim and slow, near ones wide, soft and quicker — drifting sideways.
+  // Depth lines: a wall of straight upright strips of uneven width at several depths. Each
+  // strip shows the glow behind it from its own height (so the light breaks into steps) and
+  // runs from lit on one edge to shade on the other; the nearer strips drift past the far ones.
   depthlines: `
+/** The strip at u: x = which one, y = place across it (0…1), z = its width; widths are uneven. */
+vec3 dlStrip(float u, float salt, float jit) {
+  float i = floor(u);
+  float lo = i + (hash1(i + salt) - 0.5) * jit;
+  if (u < lo) { i -= 1.0; lo = i + (hash1(i + salt) - 0.5) * jit; }
+  float hi = i + 1.0 + (hash1(i + 1.0 + salt) - 0.5) * jit;
+  return vec3(i, (u - lo) / (hi - lo), hi - lo);
+}
+/** The light behind the strips (0 dark … 1 bright): slow glows on a rising gradient. */
+float dlBack(vec2 q, float t) {
+  vec2 b1 = vec2(0.42 * sin(t * 0.7), 0.22 * cos(t * 0.5) + 0.1);
+  vec2 b2 = vec2(-0.5 * cos(t * 0.45 + 1.0), -0.3 * sin(t * 0.6 + 2.0));
+  vec2 b3 = vec2(0.3 * sin(t * 0.38 + 4.0), -0.38 + 0.15 * cos(t * 0.52));
+  float v = 0.36 + 0.2 * q.y + 0.08 * sin(q.x * 2.1 + t);
+  v += (0.42 + 0.3 * u_glow) * exp(-dot(q - b1, q - b1) * 3.2);
+  v += 0.28 * exp(-dot(q - b2, q - b2) * 5.0);
+  v -= 0.3 * exp(-dot(q - b3, q - b3) * 3.0);
+  return v;
+}
 void main() {
   vec2 p = place() / u_size;
-  float t = u_t * 0.05;
-  vec3 base = palette(clamp(0.55 - p.y * 0.9 + 0.15 * sin(p.x * 1.3 + t), 0.0, 1.0), false);
-  vec3 col = base * 0.55;
-  float layers = 2.0 + u_lines;
-  for (int i = 0; i < 10; i++) {
+  float t = u_t * 0.12;
+  float layers = 1.0 + u_lines;
+  float jit = 0.45 + 0.5 * clamp(u_chaos * 1.5, 0.0, 1.0);
+  vec3 col = vec3(0.0);
+  for (int i = 0; i < 9; i++) {
     float fi = float(i);
     if (fi >= layers) break;
     float z = fi / max(1.0, layers - 1.0);
-    float n = (7.0 + 9.0 * u_density) * mix(2.2, 0.8, z);
-    float y = p.y + 0.37 * fi;
-    float x = p.x + u_bend * (0.12 * sin(y * 2.3 + t * 3.0 + fi) + 0.04 * sin(y * 6.1 - t * 2.0))
-      + (fbm3(vec2(y * 1.4, fi * 3.7 + t)) - 0.5) * u_chaos * 0.3;
-    float u = x * n + t * (1.0 + 2.5 * z) * (fi * 0.37 + 1.0) + fi * 11.7 + u_seed;
-    float cell = floor(u);
-    float f = fract(u);
-    float w = 0.12 + 0.55 * hash1(cell + fi * 31.0) * min(u_weight, 1.6);
-    float soft = mix(0.02, 0.35, z) * mix(1.0, 0.4, u_sharp) + AA(u);
-    float bar = smoothstep(0.5 - w * 0.5 - soft, 0.5 - w * 0.5 + soft, f)
-      * (1.0 - smoothstep(0.5 + w * 0.5 - soft, 0.5 + w * 0.5 + soft, f));
-    float lum = (0.25 + 0.75 * hash1(cell * 1.3 + fi * 7.0)) * mix(0.45, 1.0, z);
-    float sheen = 0.6 + 0.4 * sin(p.y * (2.0 + hash1(cell) * 3.0) + t * 4.0 + cell);
-    vec3 c = palette(hash1(cell + fi * 13.0) * 0.6 + z * 0.4, false);
-    col = mix(col, c * (0.55 + 0.9 * lum * sheen), bar * mix(0.35, 0.85, z));
-    col += c * bar * lum * u_glow * 0.25;
+    float n = (5.0 + 7.0 * u_density) * mix(1.5, 0.55, z);
+    float x = p.x + u_bend * (0.1 * sin(p.y * 2.3 + t * 2.0 + fi * 1.7) + 0.035 * sin(p.y * 6.1 - t * 1.5 + fi));
+    float u = x * n + t * (0.25 + 0.5 * z) * (mod(fi, 2.0) < 0.5 ? 1.0 : -1.0) + fi * 17.3;
+    vec3 s = dlStrip(u, fi * 31.0, jit);
+    float f = s.y;
+    float h1 = hash1(s.x * 1.7 + fi * 13.1);
+    float h2 = hash1(s.x * 2.9 + fi * 7.7);
+    float h3 = hash1(s.x * 4.3 + fi * 3.3);
+    // Every strip sees the glow from the middle of its width and from its own height.
+    float xc = x - (f - 0.5) * s.z / n;
+    float v = dlBack(vec2(xc, p.y + (h1 - 0.5) * (0.3 + 0.9 * u_chaos)), t + fi * 1.3);
+    float across = h2 < 0.5 ? f : 1.0 - f;
+    v += (pow(across, mix(0.6, 2.6, h3)) - 0.45) * 0.42 * u_weight;
+    vec3 c = palette(clamp(v, 0.0, 1.0), false);
+    float e = max(AA(u) / s.z, mix(0.07, 0.006, u_sharp) * (h3 > 0.65 ? 3.0 : 1.0));
+    float edge = smoothstep(0.0, e, f) * smoothstep(0.0, e, 1.0 - f);
+    float a = fi < 0.5 ? 1.0 : step(0.5, hash1(s.x * 5.1 + fi * 2.2)) * edge * mix(0.55, 0.95, h1);
+    if (fi < 0.5) c *= mix(0.8, 1.0, edge);
+    col = mix(col, c, a) + c * a * u_glow * 0.15;
   }
-  col = 1.0 - exp(-col * 1.35);
-  gl_FragColor = vec4(col * u_strength, u_strength);
-}`,
-  // Wire mesh: a glowing wireframe landscape rolling toward the viewer, its far rows
-  // fading into a soft horizon.
-  wiremesh: `
-void main() {
-  vec2 p = place() / u_size;
-  float hz = 0.12;
-  float depth = max(hz - p.y, 0.002);
-  float z = 1.0 / (depth + 0.03);
-  float k = 1.6 + u_density * 1.4;
-  float gx = p.x * z * k;
-  float gz = z * k * 0.5 + u_t * 0.45;
-  float h = (fbm3(vec2(gx * 0.35, gz * 0.35) + seedShift()) - 0.5) * (0.6 + u_chaos * 1.6);
-  h += 0.25 * sin(gx * 0.6 + u_t * 0.6) * sin(gz * 0.4);
-  float gy = gz + h * 2.0;
-  float w = 0.01 + 0.018 * u_weight;
-  vec2 l1 = lineGlow(0.5 - abs(fract(gx + h * 0.6) - 0.5), w);
-  vec2 l2 = lineGlow(0.5 - abs(fract(gy) - 0.5), w);
-  float far = 1.0 - smoothstep(0.25, 0.6, max(AA(gx), AA(gy)));
-  float k2 = (max(l1.x, l2.x) + (l1.y + l2.y) * 0.6) * far;
-  float fade = smoothstep(0.0, 0.35, depth) * step(p.y, hz);
-  float a = clamp(k2 * fade, 0.0, 1.0);
-  vec3 col = mix(u_c[1], u_c[0], clamp(smoothstep(0.0, 0.6, depth) + h * 0.3, 0.0, 1.0)) * a;
-  float glow = exp(-abs(p.y - hz) * 10.0) * (0.25 + 0.5 * u_glow);
-  col += u_c[2] * glow;
-  a = clamp(a + glow, 0.0, 1.0);
-  gl_FragColor = vec4(col * u_strength, a * u_strength);
-}`,
-  // Prism light: bands of split, rainbow-edged light sweeping slowly across, as light
-  // through cut glass falls on a wall.
-  prism: `
-vec3 spectrum(float x) {
-  return clamp(vec3(abs(x * 6.0 - 3.0) - 1.0, 2.0 - abs(x * 6.0 - 2.0), 2.0 - abs(x * 6.0 - 4.0)), 0.0, 1.0);
-}
-void main() {
-  vec2 p = place() / u_size;
-  float t = u_t * 0.06;
-  vec3 col = vec3(0.0);
-  float a = 0.0;
-  float n = 2.0 + floor(u_density * 2.0);
-  for (int i = 0; i < 6; i++) {
-    float fi = float(i);
-    if (fi >= n) break;
-    float ang = (hash1(fi) - 0.5) * 1.6 + 0.3 * sin(t + fi * 2.1);
-    vec2 d = vec2(cos(ang), sin(ang));
-    float s = dot(p, d) + (fbm3(p * 1.5 + fi * 5.0 + t) - 0.5) * u_chaos * 0.5
-      + 0.6 * sin(t * (0.6 + 0.3 * hash1(fi + 2.0)) + fi * 3.0);
-    float w = 0.05 + 0.12 * u_weight * (0.5 + hash1(fi + 4.0));
-    float band = 1.0 - smoothstep(0.0, w, abs(s));
-    float x = clamp(s / w * 0.5 + 0.5, 0.0, 1.0);
-    vec3 c = mix(spectrum(x), palette(fi * 0.3, true), 0.25) * band * band;
-    float soft = exp(-abs(s) / (w * 2.5)) * 0.25;
-    col += c + spectrum(x) * soft * 0.3;
-    a = max(a, band * 0.85 + soft * 0.4);
-  }
-  col = 1.0 - exp(-col * 1.5);
-  gl_FragColor = vec4(col * u_strength, clamp(a, 0.0, 1.0) * u_strength);
-}`,
-  // Glass blobs: soft colour blobs drifting behind thick rippled glass that bends them,
-  // with bright rims where the glass curves.
-  glassblobs: `
-vec3 behind(vec2 p, float t) {
-  vec3 col = vec3(0.0);
-  float ws = 0.0;
-  for (int i = 0; i < 4; i++) {
-    float fi = float(i);
-    vec2 c = 0.45 * vec2(sin(t * (0.5 + fi * 0.17) + fi * 2.3 + u_seed), cos(t * (0.4 + fi * 0.21) + fi * 1.4));
-    float w = 1.0 / (pow(length(p - c), 2.4) + 0.03);
-    col += u_c[i] * w;
-    ws += w;
-  }
-  return col / ws;
-}
-void main() {
-  vec2 p = place() / u_size;
-  float t = u_t * 0.08;
-  float k = 1.1 + u_density * 0.9;
-  vec2 q = p * k + seedShift() + vec2(t * 0.6, -t * 0.4);
-  float h = noise(q) * 0.75 + noise(q * 2.1 + 5.0) * 0.25;
-  float e = 0.03;
-  vec2 g = vec2(noise(q + vec2(e, 0.0)) * 0.75 + noise((q + vec2(e, 0.0)) * 2.1 + 5.0) * 0.25 - h,
-                noise(q + vec2(0.0, e)) * 0.75 + noise((q + vec2(0.0, e)) * 2.1 + 5.0) * 0.25 - h) / e;
-  g *= 0.55 + u_chaos * 0.8;
-  vec3 col = behind(p + g * 0.06 * u_weight, t);
-  float rim = pow(clamp(length(g) * 0.35, 0.0, 1.0), 2.0);
-  float spec = pow(max(0.0, dot(normalize(vec3(-g, 1.0)), normalize(vec3(-0.4, 0.6, 1.0)))), mix(8.0, 40.0, u_sharp));
-  col = col * (0.88 + 0.2 * h) + rim * 0.3 + spec * 0.4;
   gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
 }`,
-  // Ring tunnel: rings of light flying out of a point you place, as if travelling down a
-  // tunnel of light; the near rings soft and wide, the far ones fine.
+  // Wire mesh: a fine net of hair-thin lines lying on a slowly rolling surface, seen from
+  // above at a slant — lines bunch into light on the crests, thin out in the hollows and
+  // melt into haze far away.
+  wiremesh: `
+float wmH(vec2 w, float t) {
+  float h = 0.55 * sin(w.x * 0.55 + t * 0.5 + 1.3 * sin(w.y * 0.3 - t * 0.2));
+  h += 0.4 * sin(w.y * 0.42 - t * 0.35 + w.x * 0.2);
+  h += (noise(w * 0.3 + seedShift() + t * 0.08) - 0.5) * 1.4;
+  return h * (0.45 + 1.5 * u_chaos);
+}
+/** How much of a pixel a thin line at whole numbers of g covers; fw = g's change per pixel. */
+float wmLine(float g, float fw, float w) {
+  float d = 0.5 - abs(fract(g) - 0.5);
+  float halfW = max(w, fw * 0.5);
+  float cover = clamp((halfW - d) / fw + 0.5, 0.0, 1.0) * (w / halfW);
+  return mix(cover, 2.0 * w, smoothstep(0.35, 0.9, fw));
+}
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.5;
+  vec3 ro = vec3(0.0, 3.2, 0.0);
+  vec3 rd = normalize(vec3(p.x, p.y, 1.1));
+  float cp = cos(0.62), sp = sin(0.62);
+  rd = vec3(rd.x, rd.y * cp - rd.z * sp, rd.y * sp + rd.z * cp);
+  float tt = (ro.y - 1.6) / max(-rd.y, 0.02);
+  vec3 pos = ro + rd * tt;
+  for (int i = 0; i < 18; i++) {
+    pos = ro + rd * tt;
+    float d = pos.y - wmH(pos.xz, t);
+    tt += d * 0.55 / max(-rd.y, 0.25);
+  }
+  pos = ro + rd * tt;
+  float e = 0.05;
+  float h0 = wmH(pos.xz, t);
+  vec3 nrm = normalize(vec3(h0 - wmH(pos.xz + vec2(e, 0.0), t), e, h0 - wmH(pos.xz + vec2(0.0, e), t)));
+  float k = 5.0 + 6.0 * u_density;
+  float pxl = 1.4 / (u_res.y * u_size);
+  float graze = max(dot(nrm, -rd), 0.05);
+  float fwx = tt * k * pxl;
+  float fwz = fwx * 0.5 / graze;
+  float w = 0.02 + 0.035 * u_weight;
+  float lx = wmLine(pos.x * k, fwx, w);
+  float lz = wmLine(pos.z * k * 0.5 + t * 0.6, fwz, w * 0.7);
+  float lit = pow(clamp(0.5 + 0.5 * dot(nrm, normalize(vec3(-0.5, 0.45, -0.6))), 0.0, 1.0), 2.5);
+  float fog = exp(-tt * 0.07);
+  float line = lx + lz * 0.7 + lx * lz * 2.0;
+  vec3 tint = mix(u_c[1], u_c[0], lit);
+  vec3 col = tint * line * (0.25 + 2.4 * lit) * fog;
+  col += mix(u_c[2], u_c[0], lit) * (lit * lit * 0.35 * u_glow + 0.05) * fog;
+  // Lit wires stand out over a coloured block too (not only on black): brighter, whiter crests.
+  col = 1.0 - exp(-col * 2.4);
+  col = mix(col, vec3(1.0), clamp(line * lit * 0.35, 0.0, 0.5) * fog);
+  float a = clamp(max(col.r, max(col.g, col.b)) * 1.8, 0.0, 1.0);
+  gl_FragColor = vec4(col * u_strength, a * u_strength);
+}`,
+  // Prism light: shafts of light through cut glass crossing each other — each with one
+  // clean edge, a soft fall behind it and the colours of the rainbow split apart along
+  // its edges; where shafts cross they add up to white.
+  prism: `
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.07;
+  float px = max(AA(p.x), 1.0 / u_res.y);
+  vec3 col = vec3(0.0);
+  float n = 3.0 + floor(u_density * 2.0);
+  for (int i = 0; i < 7; i++) {
+    float fi = float(i);
+    if (fi >= n) break;
+    float h1 = hash1(fi * 3.1 + 1.0), h2 = hash1(fi * 5.7 + 2.0), h3 = hash1(fi * 7.3 + 3.0);
+    float ang = h1 * 6.2831853 + 0.35 * sin(t * (0.7 + h2) + fi * 2.1);
+    vec2 d = vec2(cos(ang), sin(ang));
+    vec2 c = (vec2(h2, h3) - 0.5) * 0.7 + 0.12 * vec2(sin(t * 1.3 + fi), cos(t * 1.1 + fi * 1.7));
+    vec2 q = p - c;
+    float along = dot(q, d);
+    float s = dot(q, vec2(-d.y, d.x)) + (fbm3(p * 1.2 + fi * 5.0 + t) - 0.5) * u_chaos * 0.12;
+    // A shaft widens along its way.
+    float w = (0.07 + 0.16 * h3) * (0.5 + 0.5 * u_weight) * (1.0 + 0.45 * along);
+    w = max(w, 0.02);
+    float disp = w * (0.1 + 0.12 * h2);
+    float soft = max(px * 1.5, mix(0.012, 0.003, u_sharp));
+    vec3 e = vec3(s + disp, s, s - disp);
+    vec3 on = smoothstep(vec3(0.0), vec3(soft), e) * (1.0 - smoothstep(vec3(w), vec3(w + soft * 3.0 + disp), e));
+    float fall = 0.3 + 0.7 * exp(-max(s, 0.0) / w * 2.2);
+    float rim = exp(-abs(s) / (px * 1.5 + 0.004)) + 0.5 * exp(-abs(s - w * 0.62) / (px * 1.5 + 0.003));
+    vec3 tint = mix(vec3(1.0), palette(fi / n + 0.1, true), 0.6);
+    float reach = smoothstep(-1.1, -0.2, along) * (0.55 + 0.45 * h1);
+    col += (on * fall * tint * 0.75 + rim * mix(vec3(1.0), tint, 0.4) * 0.6) * reach;
+  }
+  col = 1.0 - exp(-col * 1.35);
+  float a = clamp(max(col.r, max(col.g, col.b)) * 1.25, 0.0, 1.0);
+  gl_FragColor = vec4(col * u_strength, a * u_strength);
+}`,
+  // Glass blobs: drops of thick clear glass drifting and merging over a glowing gradient —
+  // each bends the colours under it, with a bright rim toward the light, a dark one away
+  // from it, a crisp highlight and a soft shadow.
+  glassblobs: `
+vec3 gbBack(vec2 p, float t) {
+  float x = fbm3(p * 0.8 + seedShift() + vec2(t * 0.25, -t * 0.18)) * 1.6 + 0.25 * sin(p.y * 1.7 + t) + p.x * 0.35;
+  vec3 c = palette(x, true);
+  return c * (0.8 + 0.45 * fbm3(p * 1.7 - t * 0.2));
+}
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.1;
+  float n = 4.0 + floor(u_density * 2.0);
+  vec2 L = normalize(vec2(-0.6, 0.8));
+  float f = 0.0, fs = 0.0, hl = 0.0;
+  vec2 g = vec2(0.0);
+  for (int i = 0; i < 8; i++) {
+    float fi = float(i);
+    if (fi >= n) break;
+    vec2 c = vec2(0.36 * sin(t * (0.5 + fi * 0.13) + fi * 2.3 + u_seed), 0.52 * cos(t * (0.4 + fi * 0.17) + fi * 1.4));
+    c += (0.1 + 0.4 * u_chaos) * 0.2 * vec2(sin(t * 1.7 + fi * 4.0), cos(t * 1.3 + fi * 3.0));
+    float r = (0.11 + 0.09 * hash1(fi * 3.7)) * (0.6 + 0.4 * u_weight);
+    vec2 d = p - c;
+    float dd = dot(d, d) + 1e-4;
+    f += r * r / dd;
+    g += -2.0 * r * r * d / (dd * dd);
+    vec2 ds = d - vec2(0.035, -0.05);
+    fs += r * r / (dot(ds, ds) + 1e-4);
+    // The window's reflection: a small slanted oval near the lit rim.
+    vec2 hq = (d - r * vec2(-0.3, 0.36)) / r;
+    hq = vec2(hq.x * 0.8 + hq.y * 0.6, hq.y * 0.8 - hq.x * 0.6);
+    hl = max(hl, 1.0 - smoothstep(0.7, 1.0, length(hq / vec2(0.3, 0.12))));
+  }
+  float inside = smoothstep(1.0 - AA(f), 1.0 + AA(f), f);
+  float deep = clamp((f - 1.0) / 1.3, 0.0, 1.0);
+  float slope = (1.0 - deep) * (1.0 - deep);
+  vec2 outw = -g / (length(g) + 1e-5);
+  vec3 back = gbBack(p, t);
+  float shadow = smoothstep(0.75, 1.2, fs) * (1.0 - inside);
+  back *= (0.62 - 0.3 * shadow);
+  vec3 glass = gbBack(p - outw * slope * 0.22, t) * 1.2 + 0.05;
+  float toL = dot(outw, L);
+  glass += pow(slope, 1.5) * max(toL, 0.0) * 0.9;
+  glass *= 1.0 - pow(slope, 1.2) * max(-toL, 0.0) * 0.55;
+  glass += pow(max(-toL, 0.0), 2.0) * (1.0 - slope) * deep * 0.0 + slope * (1.0 - slope) * max(-toL, 0.0) * 0.9;
+  float spec = hl * smoothstep(0.25, 0.6, deep) * mix(0.75, 1.0, u_sharp);
+  glass = mix(glass, vec3(1.0), spec);
+  glass += smoothstep(0.75, 1.0, slope) * 0.25;
+  vec3 col = mix(back, glass, inside);
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0) * u_strength, u_strength);
+}`,
+  // Ring tunnel: flying down a winding tunnel of thin rings of light from the point you
+  // place — a few wide ones rush past, ever more crowd toward the far end and fade into
+  // its glow; some rings are broken arcs that turn.
   ringtunnel: `
 void main() {
   vec2 p = (plane() - centre(u_pos)) / u_size;
-  float r = length(p) + 0.0001;
-  float ang = atan(p.y, p.x);
-  vec3 col = vec3(0.0);
-  float a = 0.0;
-  float n = 6.0 + floor(u_density * 8.0);
-  for (int i = 0; i < 26; i++) {
-    float fi = float(i);
-    if (fi >= n) break;
-    float z = fract(fi / n - u_t * 0.08);
-    float rad = 0.04 / max(1.0 - z, 0.02) - 0.04;
-    float wob = (noise(vec2(ang * 2.0 + fi * 7.0, u_t * 0.3)) - 0.5) * u_chaos * 0.2 * rad;
-    float w = (0.0012 + 0.004 * u_weight) * (0.3 + z * 2.5);
-    vec2 lg = lineGlow(abs(r - rad - wob), w);
-    float fade = smoothstep(0.0, 0.15, z) * (1.0 - smoothstep(0.85, 1.0, z));
-    float k = clamp(lg.x + lg.y * 0.5, 0.0, 1.0) * fade * mix(0.5, 1.0, z);
-    col += palette(fi / n + z * 0.3, true) * k;
-    a = max(a, k);
+  float t = u_t * 0.3;
+  float R = 0.2;
+  vec2 q = p;
+  float z = 0.0;
+  for (int i = 0; i < 2; i++) {
+    z = R / max(length(q), 1e-3);
+    vec2 off = vec2(sin(z * 0.35 + t * 0.6), cos(z * 0.27 + t * 0.45)) * (1.0 - exp(-z * 0.2));
+    q = p - off * (0.03 + 0.3 * u_chaos);
   }
-  float core = exp(-r * 40.0) * (0.15 + 0.4 * u_glow);
-  col += u_c[0] * core;
-  a = clamp(a + core, 0.0, 1.0);
+  float r = max(length(q), 1e-3);
+  z = R / r;
+  float k = 1.0 + 1.6 * u_density;
+  float g = z * k + t;
+  float id = floor(g);
+  float h = hash1(id);
+  float dgdr = k * R / (r * r);
+  float fw = dgdr / (u_res.y * u_size) * 1.4;
+  float wg = min((0.0035 + 0.005 * u_weight) * (0.4 + r * 2.4) * dgdr, 0.22);
+  float d = abs(fract(g) - 0.5);
+  float halfW = max(wg, fw * 0.5);
+  float core = clamp((halfW - d) / max(fw, mix(0.5, 0.05, u_sharp) * wg) + 0.5, 0.0, 1.0) * (wg / halfW);
+  core = mix(core, 2.0 * wg, smoothstep(0.4, 1.0, fw));
+  float halo = exp(-max(d - wg, 0.0) / (wg * 3.0 + fw)) * (0.12 + 0.6 * u_glow);
+  float ang = atan(q.y, q.x);
+  float arcs = 0.5 + 0.5 * sin(ang * (1.0 + floor(h * 3.0)) + id * 2.4 + t * (h - 0.5) * 4.0);
+  float seg = mix(1.0, smoothstep(0.3, 0.38, arcs), step(0.55, hash1(id + 7.0)));
+  float fog = exp(-z * 0.2) * smoothstep(0.12, 0.4, z);
+  float bright = (0.4 + 0.6 * h) * seg * fog;
+  vec3 tint = palette(id * 0.13 + 0.05 * z, true);
+  vec3 col = (mix(tint, vec3(1.0), 0.45 * core) * core + tint * halo) * bright;
+  float far = exp(-r * 22.0) * (0.3 + 0.5 * u_glow) + exp(-r * 6.0) * 0.12;
+  col += palette(0.0, true) * far;
+  float a = clamp(max(col.r, max(col.g, col.b)) * 1.3, 0.0, 1.0);
   gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, a * u_strength);
 }`,
-  // Oil paint: thick impasto strokes of the colours being laid on, stroke by stroke, over
-  // the painting before — bristle marks, ridges catching the light, canvas showing through.
+  // Oil paint: thick dabs of paint laid on one by one over the painting before. Every dab
+  // has one colour and one direction of its own; its bristle grooves, the ridges the knife
+  // pushes to its sides and the pile where it lifts off catch the light, with dark
+  // crevices between dabs and the canvas weave under it all.
   oilpaint: `
-vec2 flowAt(vec2 p) {
-  float a = fbm3(p * 0.9 + seedShift()) * 6.2831853 * (0.35 + u_chaos * 0.6) + 1.5708;
-  return vec2(cos(a), sin(a));
+/** A dab's own frame from its grid cell: centre, direction, half-length, half-width, a number of its own. */
+void opFrame(vec2 cell, float layer, float k, out vec2 c, out vec2 d, out vec3 sz) {
+  vec2 hc = cell + layer * 17.0 + seedShift();
+  float h1 = hash(hc), h2 = hash(hc + 5.3), h3 = hash(hc + 9.1);
+  c = (cell + 0.5 + (vec2(h1, h2) - 0.5) * 0.6) / k;
+  float ang = 1.5708 + (noise(c * 1.1 + seedShift() + layer * 3.0) - 0.5) * (0.8 + 5.0 * u_chaos) + (h3 - 0.5) * 0.6;
+  d = vec2(cos(ang), sin(ang));
+  sz = vec3(1.05 + 0.4 * h2, 0.5 + 0.2 * h3, h1);
 }
-float strokes(vec2 p, vec2 d) {
-  vec2 r = vec2(dot(p, d), dot(p, vec2(-d.y, d.x)));
-  float k = 2.0 + u_density * 2.5;
-  vec2 cell = floor(r * vec2(k * 0.55, k * 1.8));
-  float bristles = noise(vec2(r.x * k * 0.6, r.y * k * 18.0) + cell * 3.1);
-  float body = noise(r * vec2(k * 0.7, k * 3.0) + cell);
-  return body * 0.65 + bristles * 0.35;
+/** How thick the paint of a dab is at l (along, across; in cells). */
+float opH(vec2 l, vec3 sz) {
+  float a = min(abs(l.y) / sz.y, 1.3);
+  float dome = 1.0 - a * a * 0.55;
+  float ridge = smoothstep(0.5, 0.88, a) * (1.0 - smoothstep(0.88, 1.05, a));
+  float bristle = noise(vec2(l.y * 13.0 + sz.z * 40.0, l.x * 1.1 + sz.z * 9.0));
+  float fine = noise(vec2(l.y * 27.0 + sz.z * 11.0, l.x * 2.6));
+  float lift = smoothstep(sz.x * 0.45, sz.x, l.x) * (0.6 + 0.4 * bristle);
+  return dome * 0.4 + ridge * 0.38 + bristle * 0.36 + fine * 0.14 + lift * 0.3;
 }
-vec3 paintAt(vec2 p, float layer) {
-  float x = p.x * 0.8 + (fbm3(p * 1.3 + layer * 9.0 + seedShift()) - 0.5) * 0.9;
-  return palette(x + 0.5 + layer * 0.37, true);
+/**
+ * The top dab of a layer over p (phase < 0: the whole layer; else only the dabs laid so
+ * far, each wiped on along its length). Returns how far out of its dab p is (under 1 =
+ * inside, 9 = no dab yet); where no dab reaches, the nearest one spreads to fill.
+ */
+float opTop(vec2 p, float layer, float k, float phase, out vec2 bc, out vec2 bd, out vec3 bsz) {
+  vec2 base = floor(p * k);
+  float best = -1.0, near = 9.0;
+  bc = vec2(0.0); bd = vec2(0.0, 1.0); bsz = vec3(1.0, 0.5, 0.0);
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 cell = base + vec2(float(i), float(j));
+      vec2 c, d; vec3 sz;
+      opFrame(cell, layer, k, c, d, sz);
+      vec2 l = vec2(dot(p - c, d), dot(p - c, vec2(-d.y, d.x))) * k;
+      float rag = noise(vec2(l.y * 11.0, sz.z * 50.0));
+      float ends = max(abs(l.x) + rag * 0.3 - (sz.x - sz.y), 0.0) / sz.y;
+      float m = length(vec2(l.y / sz.y, ends));
+      float order = hash(cell + layer * 7.31 + 2.7);
+      if (phase >= 0.0) {
+        float prog = (phase - order * 0.8) / 0.14;
+        if ((l.x + sz.x) / (2.0 * sz.x) + rag * 0.12 > prog) continue;
+      }
+      if (m < 1.0) {
+        if (order > best) { best = order; near = m; bc = c; bd = d; bsz = sz; }
+      } else if (phase < 0.0 && best < 0.0 && m < near) {
+        // Only the finished painting fills its gaps from the nearest dab: a layer still
+        // being painted covers just its own strokes (spreading them made hard blocks).
+        near = m; bc = c; bd = d; bsz = sz;
+      }
+    }
+  }
+  return near;
+}
+vec3 opColour(vec2 c, float layer, vec3 sz) {
+  float x = c.x * 0.6 + (fbm3(c * 0.9 + layer * 9.0 + seedShift()) - 0.5) * 0.8;
+  vec3 col = palette(x + 0.5 + layer * 0.37, true);
+  // No two dabs are mixed alike: some lighter with white, some deeper.
+  col = mix(col, vec3(1.0, 0.95, 0.88), max(fract(sz.z * 7.0) - 0.6, 0.0) * 1.1);
+  return col * (0.72 + 0.4 * fract(sz.z * 13.0));
 }
 void main() {
   vec2 p = place() / u_size;
-  float cycle = 9.0;
-  float t = u_t / cycle;
-  float layer = floor(t);
-  float phase = fract(t);
-  vec2 d = flowAt(p);
-  vec2 r = vec2(dot(p, d), dot(p, vec2(-d.y, d.x)));
-  float k = 2.0 + u_density * 2.5;
-  vec2 cell = floor(r * vec2(k * 0.55, k * 1.8));
-  float order = hash(cell + layer * 7.31);
-  float along = fract(r.x * k * 0.55);
-  float reach = clamp((phase * 1.25 - order) * 4.0, 0.0, 1.0);
-  float wet = smoothstep(along - 0.08, along, reach);
-  vec3 under = paintAt(p, layer);
-  vec3 over = paintAt(p, layer + 1.0);
-  vec3 col = mix(under, over, wet);
-  float h = strokes(p, d) + wet * 0.15;
-  float e = 0.004;
-  float hx = strokes(p + vec2(e, 0.0), d) - strokes(p - vec2(e, 0.0), d);
-  float hy = strokes(p + vec2(0.0, e), d) - strokes(p - vec2(0.0, e), d);
-  vec3 nrm = normalize(vec3(-hx, -hy, 0.07 / (0.5 + u_weight)));
-  vec3 L = normalize(vec3(-0.5, 0.7, 0.6));
-  float diff = 0.72 + 0.4 * dot(nrm, L);
-  float spec = pow(max(0.0, dot(reflect(-L, nrm), vec3(0.0, 0.0, 1.0))), mix(10.0, 30.0, u_sharp)) * 0.35;
-  float weave = 0.97 + 0.03 * sin(v_uv.x * u_res.x * 1.2) * sin(v_uv.y * u_res.y * 1.2);
-  col = col * diff * weave + spec;
-  col *= 0.92 + 0.12 * h;
+  float cycle = 10.0;
+  float layer = floor(u_t / cycle);
+  float phase = fract(u_t / cycle) * 1.02;
+  float k = 2.6 + u_density * 2.2;
+  vec2 c, d; vec3 sz;
+  float m = opTop(p, layer + 1.0, k, phase, c, d, sz);
+  float lay = layer + 1.0;
+  float wet = 1.0;
+  if (m > 8.0) {
+    m = opTop(p, layer, k, -1.0, c, d, sz);
+    lay = layer;
+    wet = 0.4;
+  }
+  vec2 perp = vec2(-d.y, d.x);
+  vec2 l = vec2(dot(p - c, d), dot(p - c, perp)) * k;
+  float e = 1.3 / (u_res.y * u_size);
+  float h0 = opH(l, sz);
+  float hx = opH(l + vec2(d.x, perp.x) * e * k, sz);
+  float hy = opH(l + vec2(d.y, perp.y) * e * k, sz);
+  vec2 px = v_uv * u_res * (220.0 / u_res.y);
+  float weave = sin(px.x * 3.14159) * sin(px.y * 3.14159);
+  vec3 col = opColour(c, lay, sz) * (0.86 + 0.28 * noise(vec2(l.y * 13.0 + sz.z * 40.0, l.x * 0.7)));
+  vec3 nrm = normalize(vec3(h0 - hx, h0 - hy, 0.11 / (0.4 + 0.6 * u_weight)));
+  vec3 L = normalize(vec3(-0.55, 0.65, 0.5));
+  float diff = dot(nrm, L);
+  float spec = pow(max(0.0, dot(reflect(-L, nrm), vec3(0.0, 0.0, 1.0))), mix(14.0, 40.0, u_sharp));
+  float crevice = smoothstep(0.8, 1.05, m);
+  col *= (0.5 + 0.62 * diff) * (0.78 + 0.34 * h0) * (1.0 - 0.5 * crevice);
+  col *= 1.0 + 0.05 * weave * (1.0 - h0 * 0.6);
+  col += spec * (0.22 + 0.3 * wet) * (1.0 - crevice);
   gl_FragColor = vec4(clamp(col, 0.0, 1.0) * u_strength, u_strength);
 }`,
-  // VHS: a played-out tape — a tracking band rolling up, thin noisy lines, colour fringes
-  // and the odd jolt; see-through, laid over whatever is under it.
+  // VHS: a worn tape played back, see-through over whatever is under it — faint scan
+  // lines and grain, a noisy strip where the heads switch at the bottom, short white
+  // drop-outs with tails, and now and then a creased band of torn lines with colour
+  // fringes rolling up the picture.
   vhs: `
 void main() {
   vec2 uv = v_uv;
   float t = u_t;
-  float rows = u_res.y;
-  float row = floor(uv.y * rows);
-  float band = fract(uv.y * 0.6 + t * 0.07);
-  float track = smoothstep(0.0, 0.04, band) * (1.0 - smoothstep(0.04, 0.12, band));
-  float jolt = step(0.93, hash(vec2(floor(t * 3.0), u_seed)));
-  float lineNoise = hash(vec2(row, floor(t * 24.0)));
-  float streak = step(1.0 - 0.012 * (0.5 + u_density), lineNoise) * (0.4 + 0.6 * hash(vec2(row, t)));
-  float grain = (hash(uv * u_res + floor(t * 24.0) * 13.0) - 0.5) * 0.06 * u_weight;
-  float shift = (hash(vec2(row, floor(t * 12.0))) - 0.5) * track * 0.06 * (1.0 + u_chaos);
-  float fringe = sin((uv.x + shift) * 120.0 + row * 0.7) * 0.5 + 0.5;
+  float rowsN = 240.0;
+  float row = floor(uv.y * rowsN);
+  float fr = floor(t * 24.0);
   vec3 col = vec3(0.0);
   float a = 0.0;
-  col += vec3(0.9, 0.95, 1.0) * track * 0.35 * (0.6 + 0.4 * fringe);
-  a += track * 0.35;
-  col += vec3(1.0) * streak * 0.7;
-  a += streak * 0.7;
-  float chroma = track * 0.4 + jolt * 0.25;
-  col += mix(u_c[0], u_c[1], fringe) * chroma * 0.6;
-  a += chroma * 0.3;
-  float scan = (0.5 + 0.5 * sin(uv.y * rows * 1.5)) * 0.03;
-  col += vec3(grain) + scan * 0.3;
-  a += abs(grain) + scan;
-  a = clamp(a, 0.0, 1.0) * u_strength;
-  gl_FragColor = vec4(clamp(col, 0.0, 1.0) * u_strength, a);
+  // Scan lines and grain: always there, barely.
+  float scan = step(0.5, fract(uv.y * rowsN * 0.5)) * 0.07;
+  a += scan;
+  float grain = hash(floor(uv * vec2(rowsN * u_res.x / u_res.y, rowsN)) + fr * 13.1);
+  float gr = smoothstep(0.82, 1.0, grain) * 0.07 * u_weight;
+  col += vec3(gr); a += gr;
+  // Slow bands of tape colour drifting.
+  float tintN = noise(vec2(uv.y * 5.0 - t * 0.4, floor(t * 6.0) * 0.37 + u_seed));
+  float tk = smoothstep(0.55, 0.9, tintN) * 0.1;
+  col += mix(u_c[0], u_c[1], step(0.5, fract(tintN * 7.0))) * tk; a += tk;
+  // Where the heads switch: a torn strip along the bottom.
+  float hs = 1.0 - smoothstep(0.0, 0.045, uv.y);
+  float hn = noise(vec2(uv.x * 14.0 + row * 2.7 + fr * 5.0, row * 0.9));
+  float hk = hs * smoothstep(0.35, 0.75, hn) * 0.7;
+  col += vec3(0.92, 0.95, 1.0) * hk; a += hk + hs * 0.25;
+  // A crease in the tape rolls up the picture: every few seconds a strong one.
+  float per = 5.0;
+  float slot = floor(t / per);
+  float lt = fract(t / per);
+  float strong = smoothstep(0.0, 0.05, lt) * (1.0 - smoothstep(0.35, 0.5, lt)) * step(0.35 - 0.3 * u_chaos, hash(vec2(slot, u_seed + 1.0)));
+  float yb = fract(lt * 1.6 + hash(vec2(slot, 4.0)));
+  float dy = abs(uv.y - yb);
+  float band = (1.0 - smoothstep(0.0, 0.03 + 0.05 * strong, dy)) * (0.12 + 0.88 * strong);
+  float tear = noise(vec2(uv.x * 6.0 - t * 7.0 + hash(vec2(row, fr)) * 3.0, row * 0.5 + fr));
+  float streak = smoothstep(0.5, 0.8, tear) * band;
+  col += vec3(0.95, 0.97, 1.0) * streak * 0.8; a += streak * 0.8;
+  float fringe = band * (0.5 + 0.5 * sin(uv.x * 40.0 + row * 1.3 + t * 20.0));
+  col += mix(u_c[0], u_c[1], step(0.5, fract(row * 0.5))) * fringe * 0.4; a += fringe * 0.3 + band * 0.15;
+  // Drop-outs: a few short white dashes with fading tails.
+  float dn = hash(vec2(row, fr * 1.7 + u_seed));
+  float on = step(1.0 - 0.006 * (0.4 + u_density) * (1.0 + 4.0 * strong), dn);
+  float x0 = hash(vec2(row + 3.0, fr));
+  float len = 0.05 + 0.2 * hash(vec2(row + 7.0, fr));
+  float dx = (uv.x - x0) / len;
+  float dash = on * step(0.0, dx) * (1.0 - smoothstep(0.0, 1.0, dx));
+  col += vec3(dash); a += dash;
+  a = clamp(a, 0.0, 1.0);
+  gl_FragColor = vec4(min(col, vec3(a)) * u_strength, a * u_strength);
 }`,
-  // Signal: digital interference — bars of broken colour blocks flashing across in short
-  // bursts, with red/blue fringes, then calm again.
+  // Signal: a broken digital picture, in short bursts with calm between — a few slices
+  // lit with red / cyan split edges, clusters of spoiled blocks (flat, striped, as lost
+  // video blocks look) and hairlines; see-through, laid over what is under it.
   signal: `
 void main() {
   vec2 uv = v_uv;
   float t = u_t;
-  float slot = floor(t * (2.0 + u_chaos * 4.0));
-  float burst = step(0.55, hash(vec2(slot, u_seed))) * (0.6 + 0.4 * hash(vec2(slot, 3.0)));
-  float rowsN = 8.0 + 30.0 * u_density;
-  float row = floor(uv.y * rowsN);
-  float on = step(0.6, hash(vec2(row, slot + 1.7))) * burst;
-  float blocksN = 4.0 + 20.0 * hash(vec2(row, slot));
-  float block = floor((uv.x + hash(vec2(row, slot + 9.0))) * blocksN);
-  float lit = step(0.45, hash(vec2(block, row + slot * 3.0)));
-  float edge = fract((uv.x + hash(vec2(row, slot + 9.0))) * blocksN);
-  vec3 c = palette(hash(vec2(block, row)), true);
-  vec3 col = c * lit;
-  col.r += step(edge, 0.08) * 0.8;
-  col.b += step(0.92, edge) * 0.8;
-  float thin = step(0.985, hash(vec2(floor(uv.y * u_res.y * 0.5), floor(t * 30.0)))) * 0.6;
-  float a = (on * lit * (0.55 + 0.4 * u_weight) + thin) * u_strength;
-  col = col * on + vec3(thin);
-  gl_FragColor = vec4(clamp(col, 0.0, 1.0) * u_strength, clamp(a, 0.0, 1.0));
+  float per = 1.7 / (0.6 + 1.3 * u_chaos);
+  float slot = floor(t / per);
+  float lt = t - slot * per;
+  float st = hash(vec2(slot, 1.0 + u_seed)) * per * 0.5;
+  float dur = 0.35 + 0.45 * hash(vec2(slot, 2.0));
+  float x = (lt - st) / dur;
+  float on = step(0.0, x) * step(x, 1.0);
+  float env = on * sqrt(max(sin(x * 3.14159), 0.0));
+  float fr = floor(t * 14.0) + slot * 31.0;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  // Slices of uneven height; a few of them break.
+  float ys = uv.y * 7.0 + hash(vec2(fr, 5.0)) * 7.0;
+  float si = floor(ys);
+  float lo = si + (hash(vec2(si, fr)) - 0.5) * 0.8;
+  if (ys < lo) si -= 1.0;
+  float sh = hash(vec2(si, fr + 3.0));
+  float sliceOn = step(0.62, sh) * env;
+  float shift = (hash(vec2(si, fr + 9.0)) - 0.5) * 0.5;
+  float bx = fract(uv.x * 0.5 + shift);
+  float edgeR = step(bx, 0.012) + step(0.33, bx) * step(bx, 0.34);
+  float edgeC = step(0.02, bx) * step(bx, 0.03) + step(0.36, bx) * step(bx, 0.368);
+  float body = step(0.03, bx) * step(bx, 0.33);
+  vec3 sc = palette(hash(vec2(si, slot)), true);
+  col += (vec3(1.0, 0.1, 0.25) * edgeR + vec3(0.1, 0.95, 1.0) * edgeC) * sliceOn;
+  a += (edgeR + edgeC) * sliceOn;
+  float bodyA = body * sliceOn * 0.22 * (0.6 + 0.4 * u_weight);
+  col += sc * bodyA; a += bodyA;
+  // Clusters of spoiled blocks.
+  vec2 grid = vec2(18.0 * u_res.x / u_res.y, 18.0) * (0.6 + 0.4 * u_density);
+  vec2 blk = floor(uv * grid);
+  vec2 inb = fract(uv * grid);
+  float cl = noise(blk * 0.3 + fr * 3.7);
+  float hit = step(0.74 - 0.1 * u_density, cl) * step(0.3, hash(blk + fr)) * env;
+  float kind = hash(blk * 1.7 + fr);
+  float stripes = step(0.5, fract((kind < 0.5 ? inb.x : inb.y) * (2.0 + floor(kind * 8.0))));
+  vec3 bc = palette(hash(blk + slot), true);
+  vec3 bcol = kind > 0.8 ? vec3(0.02) : mix(bc * 0.35, bc, kind < 0.6 ? stripes : 1.0);
+  float ba = hit * (0.6 + 0.35 * u_weight);
+  col = mix(col, bcol, ba); a = max(a, ba);
+  // Hairlines across the whole picture.
+  float hl = step(0.992, hash(vec2(floor(uv.y * u_res.y * 0.5), fr))) * (0.7 * env + 0.25 * step(0.97, hash(vec2(fr, 8.0))));
+  col += vec3(hl); a += hl;
+  a = clamp(a, 0.0, 1.0);
+  gl_FragColor = vec4(min(col, vec3(a)) * u_strength, a * u_strength);
 }`,
   // A poster colour layer that moves: its gradient flows along its angle, turns, or
   // breathes into its colours the other way round.
