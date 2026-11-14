@@ -241,8 +241,10 @@ precision highp float;
 #ifdef GL_OES_standard_derivatives
 /** How much x changes from one picture pixel to the next: edges a pixel or two soft, never stairs. */
 #define AA(x) fwidth(x)
+#define AA2(v) fwidth(v)
 #else
 #define AA(x) (1.5 / u_res.y)
+#define AA2(v) vec2(1.5 / u_res.y)
 #endif
 varying vec2 v_uv;
 uniform vec2 u_res;
@@ -768,17 +770,18 @@ void main() {
   float hz = 0.05;
   vec3 col = vec3(0.0);
   float a = 0.0;
+  // Worked out for every pixel (derivatives must not sit inside a branch), used below the horizon.
+  float depth = max(hz - p.y, 0.001);
+  float z = 1.0 / (depth + 0.02);
+  float gx = p.x * z * (0.8 + u_density * 0.6);
+  float gz = z * (0.35 + u_density * 0.25) + u_t * 0.5;
+  float w = 0.02 + 0.04 * u_weight;
+  vec2 g1 = lineGlow(0.5 - abs(fract(gx) - 0.5), w);
+  vec2 g2 = lineGlow(0.5 - abs(fract(gz) - 0.5), w);
+  // Far lines closer together than a few pixels would shimmer: they fade into the horizon.
+  float far = 1.0 - smoothstep(0.2, 0.55, max(AA(gx), AA(gz)));
   if (p.y < hz) {
-    float depth = hz - p.y;
-    float z = 1.0 / (depth + 0.02);
-    float gx = p.x * z * (0.8 + u_density * 0.6);
-    float gz = z * (0.35 + u_density * 0.25) + u_t * 0.5;
-    float w = 0.02 + 0.04 * u_weight;
-    vec2 g1 = lineGlow(0.5 - abs(fract(gx) - 0.5), w);
-    vec2 g2 = lineGlow(0.5 - abs(fract(gz) - 0.5), w);
-    float k = max(g1.x, g2.x) + (g1.y + g2.y) * 0.5;
-    // Far lines closer together than a few pixels would shimmer: they fade into the horizon.
-    k *= 1.0 - smoothstep(0.2, 0.55, max(AA(gx), AA(gz)));
+    float k = (max(g1.x, g2.x) + (g1.y + g2.y) * 0.5) * far;
     a = clamp(k * smoothstep(0.0, 0.2, depth), 0.0, 1.0);
     col = mix(u_c[1], u_c[0], smoothstep(0.0, 0.45, depth)) * a;
   }
@@ -795,7 +798,10 @@ void main() {
   float arms = 2.0 + floor(u_density * 3.0);
   float x = atan(p.y, p.x) / 6.2831853 * arms + log(r) * (1.2 + u_chaos * 2.0) - u_t * 0.15
     + (fbm3(p * 2.0 + seedShift()) - 0.5) * u_chaos;
-  float edge = max(mix(0.5, 0.04, u_sharp), AA(x * 2.0) * 1.2);
+  // The edge's width from how fast angle and distance change here (the angle itself jumps
+  // round the back, which would draw a line).
+  float px = length(AA2(p)) / r;
+  float edge = max(mix(0.5, 0.04, u_sharp), 2.0 * (arms / 6.2831853 + 1.2 + u_chaos * 2.0) * px);
   float st = floor(x * 2.0) / 2.0 + smoothstep(0.5 - edge, 0.5 + edge, fract(x * 2.0)) / 2.0;
   vec3 col = palette(mix(x, st, u_sharp), true);
   gl_FragColor = vec4(col * u_strength, u_strength);
@@ -1555,9 +1561,19 @@ function resizeAll() {
   for (const p of painters) p.resize();
 }
 
-function judge(spent: number) {
-  // At 60 a second a tick must leave the page more room than at 30.
-  if (spent > (fast ? BUDGET_MS * 0.6 : BUDGET_MS)) {
+/** When the page last got a frame (the gap to the next one shows a busy graphics chip). */
+let lastFrame = 0;
+
+/**
+ * `spent`: how long this tick's drawing took here. `frameGap`: the time since the page's
+ * previous frame — the graphics chip's work isn't in `spent` (the picture is handed over
+ * without waiting for it), but a busy chip makes frames come late, which this does see.
+ */
+function judge(spent: number, frameGap: number) {
+  // At 60 a second a tick must leave the page more room than at 30; frames coming slower
+  // than ~40 a second (60 mode) or ~22 a second (30 mode) count as slow too.
+  const late = frameGap > (fast ? 25 : 45);
+  if (spent > (fast ? BUDGET_MS * 0.6 : BUDGET_MS) || late) {
     easyTicks = 0;
     // Two slow ticks in a row (one alone may be a shader being compiled).
     if (++slowTicks < 2) return;
@@ -1567,7 +1583,7 @@ function judge(spent: number) {
       adapt = stepScale(adapt, true);
       resizeAll();
     } else slowGap = Math.min(2.5, slowGap * 1.3);
-  } else if (spent < BUDGET_MS * 0.35) {
+  } else if (spent < BUDGET_MS * 0.35 && frameGap < 21) {
     slowTicks = 0;
     // Easy for a while: first back to full sharpness, then (a few seconds more) 60 a second.
     const full = slowGap === 1 && adapt >= 1;
@@ -1584,6 +1600,8 @@ function judge(spent: number) {
 function tick(now: number) {
   frame = 0;
   if (!painters.size) return;
+  const before = lastFrame;
+  lastFrame = now;
   const lite = getQuality() === 'lite';
   const gap = (1000 / (lite ? 20 : fast ? 60 : 30)) * slowGap;
   const html = document.documentElement;
@@ -1613,7 +1631,9 @@ function tick(now: number) {
       p.step(dt);
       drew = true;
     }
-    if (drew) judge(performance.now() - t0);
+    // A long gap is a pause (another tab, the phone asleep), not slowness.
+    const frameGap = before && now - before < 250 ? now - before : 0;
+    if (drew) judge(performance.now() - t0, frameGap);
   }
   frame = requestAnimationFrame(tick);
 }
@@ -1641,6 +1661,13 @@ export function seekShaders(root: Element, seconds: number) {
 export function holdShaders(root: Element, hold: boolean, scale = 0) {
   recordingFull = hold;
   recordingScale = hold ? scale : 0;
+  // Copying (older iPhones): the shared canvas grew for the recording — back to its usual
+  // size, so it doesn't keep a picture of up to 2048 × 2048 in memory (it grows again if needed).
+  const g = shared;
+  if (!hold && g && !g.handover && (g.canvas.width > 1024 || g.canvas.height > 1024)) {
+    g.canvas.width = MAX_SIDE;
+    g.canvas.height = MAX_SIDE;
+  }
   for (const p of painters)
     if (root.contains(p.clip)) {
       p.held = hold;

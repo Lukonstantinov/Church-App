@@ -1048,11 +1048,13 @@ function standing(): boolean {
  */
 let fast = false;
 let easy = 0;
-function pace(spent: number, lite: boolean) {
-  if (lite || spent > 6) {
+let lastFrame = 0;
+/** `frameGap`: the time since the page's previous frame (late frames: the page is busy). */
+function pace(spent: number, lite: boolean, frameGap: number) {
+  if (lite || spent > 6 || frameGap > (fast ? 25 : 45)) {
     easy = 0;
     fast = false;
-  } else if (spent < 3 && ++easy > 90) fast = true;
+  } else if (spent < 3 && frameGap < 21 && ++easy > 90) fast = true;
 }
 
 function tick(now: number) {
@@ -1087,7 +1089,9 @@ function tick(now: number) {
       drew = true;
     }
   }
-  if (drew) pace(performance.now() - t0, lite);
+  const frameGap = lastFrame && now - lastFrame < 250 ? now - lastFrame : 0;
+  lastFrame = now;
+  if (drew) pace(performance.now() - t0, lite, frameGap);
   frame = requestAnimationFrame(tick);
 }
 
