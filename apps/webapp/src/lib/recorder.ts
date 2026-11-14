@@ -2,7 +2,7 @@ import type { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import { holdGpu, seekGpu } from '../components/GpuEffect';
 import { holdParticles, seekParticles } from '../components/ParticleCanvas';
 import { holdShaders, seekShaders } from '../components/ShaderEffect';
-import { boxIn, drawShot, freeCanvas, picturesReady } from './poster';
+import { boxIn, drawFitted, drawShot, freeCanvas, picturesReady } from './poster';
 
 /**
  * Records a poster (or any block) with its moving effects as a short seamless loop: an MP4
@@ -98,6 +98,69 @@ function layers(node: HTMLElement) {
   return { effects, bands: bands.map(tops), holders };
 }
 
+/**
+ * A safety net for iPhones, which sometimes leave a picture out of the drawing library's
+ * picture of the page: each picture of a band is looked for on the band's canvas (where the
+ * picture is solid, do its own colours show?), and one that came out missing is
+ * drawn by our own code in its place — without its shadow or soft edge, which is far
+ * better than a cut-out logo vanishing from under its effect. Turned pictures are left as
+ * they are (their box on the page isn't their own shape).
+ */
+function restoreMissing(
+  ctx: CanvasRenderingContext2D,
+  node: HTMLElement,
+  pics: HTMLImageElement[],
+  k: number,
+) {
+  const N = 48;
+  const probe = canvasOf(N, N);
+  const pc = probe.getContext('2d', { willReadFrequently: true })!;
+  try {
+    for (const img of pics) {
+      if (!img.naturalWidth || !img.offsetWidth || !img.offsetHeight) continue;
+      const box = boxIn(node, img);
+      if (box.w < 4 || box.h < 4) continue;
+      if (Math.abs(box.w / box.h - img.offsetWidth / img.offsetHeight) > 0.02) continue;
+      let alpha = 1;
+      for (let e: HTMLElement | null = img; e && e !== node; e = e.parentElement)
+        alpha *= Number.parseFloat(getComputedStyle(e).opacity) || 1;
+      // A faint picture can't be told from what's under it: left as drawn.
+      if (alpha < 0.6) continue;
+      const css = getComputedStyle(img);
+      // The picture itself, fitted into its box…
+      pc.clearRect(0, 0, N, N);
+      drawFitted(pc, img, 0, 0, N, N, css.objectFit, css.objectPosition);
+      const want = pc.getImageData(0, 0, N, N).data;
+      // …and the band's drawing there: where the picture is solid, its colours should show.
+      pc.clearRect(0, 0, N, N);
+      pc.drawImage(ctx.canvas, box.x * k, box.y * k, box.w * k, box.h * k, 0, 0, N, N);
+      const got = pc.getImageData(0, 0, N, N).data;
+      let solid = 0;
+      let same = 0;
+      for (let i = 0; i < want.length; i += 4) {
+        if (want[i + 3]! < 250) continue;
+        solid++;
+        const d =
+          Math.abs(want[i]! - got[i]!) +
+          Math.abs(want[i + 1]! - got[i + 1]!) +
+          Math.abs(want[i + 2]! - got[i + 2]!);
+        if (got[i + 3]! > 200 && d < 90) same++;
+      }
+      if (solid < 8 || same >= solid * 0.35) continue;
+      // Missing: drawn here, as see-through as the layers holding it.
+      ctx.save();
+      ctx.scale(k, k);
+      ctx.globalAlpha = alpha;
+      drawFitted(ctx, img, box.x, box.y, box.w, box.h, css.objectFit, css.objectPosition);
+      ctx.restore();
+    }
+  } catch {
+    // A canvas that can't be read here: left as drawn.
+  } finally {
+    freeCanvas(probe);
+  }
+}
+
 /** A canvas of the block's size at the output scale. */
 function canvasOf(w: number, h: number) {
   const c = document.createElement('canvas');
@@ -135,6 +198,12 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
     .catch(() => undefined);
   const below = canvasOf(outW, outH);
   const b = below.getContext('2d')!;
+  // The block's own pictures (not effects' or those we draw ourselves), by band.
+  const pics = [...node.querySelectorAll('img')].filter(
+    (img) => !img.closest('.living-clip') && !img.closest('[data-shot]'),
+  );
+  const picsOf = (band: HTMLElement[]) =>
+    pics.filter((img) => band.some((e) => e === img || e.contains(img)));
   let undo = hideFor([...effects, ...bands.slice(1).flat(), ...unders]);
   try {
     const pic = await draw();
@@ -143,6 +212,7 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
   } finally {
     undo();
   }
+  restoreMissing(b, node, picsOf(bands[0]!), k);
   b.save();
   b.scale(k, k);
   for (const u of unders) drawShot(b, node, u);
@@ -182,6 +252,7 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
         const pic = await draw();
         a.drawImage(pic, 0, 0, outW, outH);
         freeCanvas(pic);
+        restoreMissing(a, node, picsOf(keep), k);
       }
     } finally {
       undo();

@@ -124,7 +124,7 @@ function position(v: string): [number, number] {
 }
 
 /** A picture drawn into a box like CSS object-fit / object-position would show it. */
-function drawFitted(
+export function drawFitted(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
   x: number,
