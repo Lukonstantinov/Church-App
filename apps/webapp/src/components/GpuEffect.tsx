@@ -411,86 +411,76 @@ void main(void) {
 
 /**
  * The oil-painting filter: the anisotropic Kuwahara filter of Kyprianidis et al., after the
- * MIT-licensed Unity version by Eric Xiong (github.com/ericxiong1/AKFUnity6). Unlike a plain
- * Kuwahara filter (square patches), its dabs stretch along the picture's own edges and
- * shapes, as a painter's brush follows a form. Four passes: the edges' directions (a
- * structure tensor from Sobel), blurred across and down, turned into a direction and how
- * strongly it holds; then each pixel averages eight overlapping sectors of an ellipse along
- * that direction, the calmest ones counting most. The in-between pictures are 8-bit, so
- * the tensor is kept square-root encoded (small edges keep their detail).
+ * MIT-licensed Unity version by Eric Xiong (github.com/ericxiong1/AKFUnity6), plus brush
+ * bristles. Unlike a plain Kuwahara filter (square patches), its dabs stretch along the
+ * picture's own edges and shapes, as a painter's brush follows a form.
+ *
+ * Both passes read the photo itself (`uImage`, placed by `uImgPos`/`uImgSize` in page
+ * pixels) as a small copy (`uSmall`, `uSmallSize` texels) whose texels are about a quarter
+ * of a dab: so a dab is the same share of the picture at any screen density, poster size or
+ * recording scale, and the 15 × 15 loops phones allow still cover a whole brush stroke
+ * without the shimmer that spaced taps on the full photo give.
+ *  1. Flow: the structure tensor (from central differences) gathered over 7 × 7 small
+ *     texels, turned into a direction and how strongly it holds (0 … 1).
+ *  2. Paint: eight overlapping sectors of an ellipse along that direction are averaged, the
+ *     calmest counting most; then bristle streaks are combed along the direction, lit from
+ *     the top left as thick paint, fading out where the direction is unsure (flat sky, sea).
  */
-const AKF_CODEC = `
-vec3 enc(vec3 g) {
-  return vec3(sqrt(clamp(g.x / 3.0, 0.0, 1.0)), sqrt(clamp(g.y / 3.0, 0.0, 1.0)),
-    0.5 + 0.5 * sign(g.z) * sqrt(clamp(abs(g.z) / 3.0, 0.0, 1.0)));
-}
-vec3 dec(vec3 e) {
-  float f = (e.z - 0.5) * 2.0;
-  return vec3(e.x * e.x * 3.0, e.y * e.y * 3.0, sign(f) * f * f * 3.0);
-}
-`;
-const AKF_TENSOR = `
-void main() {
-  vec2 d = uInputSize.zw;
-  vec3 a = at(vTextureCoord + vec2(-d.x, -d.y)).rgb;
-  vec3 b = at(vTextureCoord + vec2(0.0, -d.y)).rgb;
-  vec3 c = at(vTextureCoord + vec2(d.x, -d.y)).rgb;
-  vec3 l = at(vTextureCoord + vec2(-d.x, 0.0)).rgb;
-  vec3 r = at(vTextureCoord + vec2(d.x, 0.0)).rgb;
-  vec3 f = at(vTextureCoord + vec2(-d.x, d.y)).rgb;
-  vec3 g = at(vTextureCoord + vec2(0.0, d.y)).rgb;
-  vec3 h = at(vTextureCoord + vec2(d.x, d.y)).rgb;
-  vec3 sx = (a + 2.0 * l + f - c - 2.0 * r - h) / 4.0;
-  vec3 sy = (a + 2.0 * b + c - f - 2.0 * g - h) / 4.0;
-  finalColor = vec4(enc(vec3(dot(sx, sx), dot(sy, sy), dot(sx, sy))), 1.0);
-}`;
-/** The tensor blurred one way (`uDir`): a Gaussian of 11 taps. */
-const AKF_BLUR = `
-uniform vec2 uDir;
-void main() {
-  vec3 sum = vec3(0.0);
-  float ws = 0.0;
-  for (int i = -5; i <= 5; i++) {
-    float x = float(i);
-    float w = exp(-x * x / 8.0);
-    sum += dec(at(vTextureCoord + uDir * x * uInputSize.zw).rgb) * w;
-    ws += w;
-  }
-  finalColor = vec4(enc(sum / ws), 1.0);
-}`;
-/** The blurred tensor as a direction (packed) and how strongly it holds (0 … 1). */
-const AKF_EIGEN = `
-void main() {
-  vec3 g = dec(at(vTextureCoord).rgb);
-  float root = sqrt(g.y * g.y - 2.0 * g.x * g.y + g.x * g.x + 4.0 * g.z * g.z);
-  float l1 = 0.5 * (g.y + g.x + root);
-  float l2 = 0.5 * (g.y + g.x - root);
-  vec2 v = vec2(l1 - g.x, -g.z);
-  vec2 t = length(v) > 0.0 ? normalize(v) : vec2(0.0, 1.0);
-  float A = l1 + l2 > 0.0 ? (l1 - l2) / (l1 + l2) : 0.0;
-  finalColor = vec4(t * 0.5 + 0.5, A, 1.0);
-}`;
-/**
- * The painting itself: the photo (`uImage`, placed by `uImgPos`/`uImgSize` in page pixels)
- * averaged over eight sectors of an ellipse turned along the direction (`uTexture`).
- */
-const AKF_PAINT = `
-uniform sampler2D uImage;
+const OIL_HEAD = `
+uniform sampler2D uSmall;
+uniform vec2 uSmallSize;
 uniform vec2 uImgPos;
 uniform vec2 uImgSize;
-uniform float uRes;
-vec3 photo(vec2 page) { return texture(uImage, clamp((page - uImgPos) / uImgSize, 0.0, 1.0)).rgb; }
+uniform float uTap;
+/** Where this pixel is on the photo, 0…1 (the frame's place on the page + its own place). */
+vec2 photoUv() { return (uOutputFrame.xy + screen() * uOutputFrame.zw - uImgPos) / uImgSize; }
+vec4 small(vec2 uv) { return texture(uSmall, clamp(uv, 0.0, 1.0)); }
+`;
+const OIL_FLOW = `
 void main() {
+  vec2 uv = photoUv();
+  vec2 d = 1.0 / uSmallSize;
+  vec3 g = vec3(0.0);
+  float ws = 0.0;
+  for (int j = -3; j <= 3; j++) {
+    for (int i = -3; i <= 3; i++) {
+      vec2 o = vec2(float(i), float(j)) * 1.6 * uTap;
+      float w = exp(-float(i * i + j * j) / 6.0);
+      vec2 p = uv + o * d;
+      vec3 sx = small(p + vec2(d.x, 0.0)).rgb - small(p - vec2(d.x, 0.0)).rgb;
+      vec3 sy = small(p + vec2(0.0, d.y)).rgb - small(p - vec2(0.0, d.y)).rgb;
+      g += vec3(dot(sx, sx), dot(sy, sy), dot(sx, sy)) * w;
+      ws += w;
+    }
+  }
+  g /= ws;
+  float root = sqrt(max(0.0, (g.x - g.y) * (g.x - g.y) + 4.0 * g.z * g.z));
+  float l1 = 0.5 * (g.x + g.y + root);
+  float l2 = 0.5 * (g.x + g.y - root);
+  vec2 v = vec2(l1 - g.x, -g.z);
+  vec2 t = length(v) > 1e-7 ? normalize(v) : vec2(0.0, 1.0);
+  float A = l1 + l2 > 1e-6 ? (l1 - l2) / (l1 + l2) : 0.0;
+  finalColor = vec4(t * 0.5 + 0.5, A, 1.0);
+}`;
+const OIL_PAINT = `
+uniform sampler2D uImage;
+void main() {
+  vec2 uv = photoUv();
+  vec2 d = 1.0 / uSmallSize;
   vec4 tf = at(vTextureCoord);
-  vec2 t = tf.xy * 2.0 - 1.0;
   float A = tf.z;
-  float radius = min(1.8 + 2.6 * uWeight, 3.5);
-  float alpha = 1.0;
-  float a = radius * clamp((alpha + A) / alpha, 0.1, 2.0);
-  float b = radius * clamp(alpha / (alpha + A), 0.1, 2.0);
+  // Where the picture has no firm direction (flat sea, sky) the brush keeps one steady slant.
+  vec2 t = tf.xy * 2.0 - 1.0;
+  t *= sign(dot(t, vec2(0.8, 0.6)) + 1e-4);
+  t = normalize(mix(vec2(0.8, 0.6), t, smoothstep(0.02, 0.25, A)) + 1e-5);
+  // The dab: up to 7 small texels long along the form, narrower across it.
+  float radius = 3.6;
+  float a = radius * clamp(1.0 + A, 0.1, 2.0);
+  float b = radius * clamp(1.0 / (1.0 + A), 0.1, 2.0);
   float phi = -atan(t.y, t.x);
   float cp = cos(phi), sp = sin(phi);
-  mat2 SR = mat2(0.5 / a, 0.0, 0.0, 0.5 / b) * mat2(cp, -sp, sp, cp);
+  // GLSL fills a matrix by columns: this is the rotation [cos -sin; sin cos].
+  mat2 SR = mat2(0.5 / a, 0.0, 0.0, 0.5 / b) * mat2(cp, sp, -sp, cp);
   float maxX = sqrt(a * a * cp * cp + b * b * sp * sp);
   float maxY = sqrt(a * a * sp * sp + b * b * cp * cp);
   float zeta = 2.0 / radius;
@@ -499,9 +489,6 @@ void main() {
   vec4 m[8];
   vec3 s[8];
   for (int k = 0; k < 8; k++) { m[k] = vec4(0.0); s[k] = vec3(0.0); }
-  // Where this pixel is on the page (frame origin + its place), in page pixels.
-  vec2 here = (vTextureCoord * uInputSize.xy + uOutputFrame.xy) / uRes;
-  // At most 15 × 15 samples: phone graphics chips refuse much longer loops.
   for (int j = -7; j <= 7; j++) {
     float y = float(j);
     if (abs(y) > maxY) continue;
@@ -510,7 +497,7 @@ void main() {
       if (abs(x) > maxX) continue;
       vec2 v = SR * vec2(x, y);
       if (dot(v, v) > 0.25) continue;
-      vec3 c = clamp(photo(here + vec2(x, y) / uRes), 0.0, 1.0);
+      vec3 c = clamp(small(uv + vec2(x, y) * uTap * d).rgb, 0.0, 1.0);
       float w[8];
       float sum = 0.0;
       float vxx = zeta - eta * v.x * v.x;
@@ -535,29 +522,55 @@ void main() {
     }
   }
   vec4 outc = vec4(0.0);
-  float hard = 14.0 * (0.6 + 0.8 * uDensity);
   for (int k = 0; k < 8; k++) {
     if (m[k].w <= 0.0) continue;
     vec3 mean = m[k].rgb / m[k].w;
     vec3 var = abs(s[k] / m[k].w - mean * mean);
-    float w = 1.0 / (1.0 + pow(hard * 1000.0 * (var.r + var.g + var.b), 4.0));
+    float w = 1.0 / (1.0 + pow(20000.0 * (var.r + var.g + var.b), 4.0));
     outc += vec4(mean * w, w);
   }
-  vec3 col = outc.w > 0.0 ? outc.rgb / outc.w : photo(here);
-  // A touch of canvas weave, and paint a little richer than the photo. (Bristle relief
-  // drawn along the strokes was tried: on smooth skies the direction is too unsure and it
-  // made a zigzag, so the dabs stay smooth as the filter paints them.)
-  float weave = sin(here.x * 2.2) * sin(here.y * 2.2);
-  // Clearer: the photo's own fine detail comes back where the picture has firm lines (as a
-  // painter draws the forms crisply), then a little more contrast and colour.
-  vec3 sharp = photo(here);
-  col += (sharp - col) * 0.45 * smoothstep(0.15, 0.6, A);
-  vec3 soft = (photo(here + vec2(1.5, 0.0) / uRes) + photo(here - vec2(1.5, 0.0) / uRes)
-    + photo(here + vec2(0.0, 1.5) / uRes) + photo(here - vec2(0.0, 1.5) / uRes)) * 0.25;
-  col += (sharp - soft) * 0.6;
-  col = (col - 0.5) * 1.08 + 0.5;
-  col = mix(vec3(luma(col)), col, 1.18) * (0.975 + 0.025 * weave);
-  finalColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+  vec3 col = outc.w > 0.0 ? outc.rgb / outc.w : small(uv).rgb;
+
+  // The stroke's own colour streak (Photoshop's "cleanliness"): the photo's colours dragged
+  // along the direction, so each dab reads as one pull of a loaded brush.
+  vec3 drag = vec3(0.0);
+  for (int i = -4; i <= 4; i++) drag += small(uv + t * float(i) * 1.5 * uTap * d).rgb;
+  drag /= 9.0;
+  float firm = smoothstep(0.03, 0.35, A);
+  col = mix(col, drag, 0.35 * firm);
+
+  // Bristles (Photoshop's "bristle detail" and "shine"): fine grain smeared along the
+  // stroke direction (line integral convolution, as G'MIC's painting filters do), which
+  // combs it into hairs ~1.5 px apart and ~25 px long; three such smears side by side give
+  // the slope, lit from the top left as thick paint. In page pixels of the picture as
+  // shown, so they read on a phone; softer where the direction is unsure.
+  vec2 p = uv * uImgSize;
+  vec2 n = vec2(-t.y, t.x);
+  float h0 = 0.0, ha = 0.0, hb = 0.0;
+  for (int i = -6; i <= 6; i++) {
+    vec2 q = p + t * float(i) * 2.0;
+    h0 += noise(q * 0.7);
+    ha += noise((q + n * 0.8) * 0.7);
+    hb += noise((q - n * 0.8) * 0.7);
+  }
+  h0 = (h0 / 13.0 - 0.5) * 3.0;
+  ha = (ha / 13.0 - 0.5) * 3.0;
+  hb = (hb / 13.0 - 0.5) * 3.0;
+  // Separate strokes, some loaded with more paint than others.
+  float load = noise(p * 0.07 + 11.0);
+  float k = (0.5 + 0.4 * uDensity) * (0.4 + 0.6 * firm) * (0.6 + 0.6 * load);
+  vec2 light = normalize(vec2(-0.6, -0.8));
+  float lit = (ha - hb) / 1.6 * dot(n, light);
+  col *= 1.0 + k * h0 * 0.16;
+  col += k * lit * 0.26;
+  col += k * pow(max(0.0, lit), 2.0) * 0.2;
+  // Paint a little richer than the photo, on a faint canvas weave.
+  vec2 px = uv * uImgSize;
+  float weave = sin(px.x * 1.9) * sin(px.y * 1.9);
+  col = (col - 0.5) * 1.06 + 0.5;
+  col = mix(vec3(luma(col)), col, 1.15) * (0.98 + 0.02 * weave);
+  float alpha = texture(uImage, clamp(uv, 0.0, 1.0)).a;
+  finalColor = vec4(clamp(col, 0.0, 1.0) * alpha, alpha);
 }`;
 
 const STAND_IN: Partial<Record<MeetingMotion, string>> = {
@@ -742,57 +755,77 @@ export function GpuEffect({
       let noise: InstanceType<typeof PIXI.Sprite> | null = null;
       const { weight, density, angle } = settings.current;
       const own = PHOTO_FRAGMENTS[kind];
-      // The oil painting: four passes, the last one reading the photo itself as well.
-      const paintUniforms = {
+      // The oil painting: two passes (the brush directions, then the paint), both reading a
+      // small copy of the photo whose texels are a set share of the picture (see OIL_HEAD).
+      const oilUniforms = new PIXI.UniformGroup({
         uImgPos: { value: new Float32Array([0, 0]), type: 'vec2<f32>' },
         uImgSize: { value: new Float32Array([1, 1]), type: 'vec2<f32>' },
-        uRes: { value: Math.min(2, window.devicePixelRatio || 1), type: 'f32' },
+        uSmallSize: { value: new Float32Array([1, 1]), type: 'vec2<f32>' },
+        uTap: { value: 1.6, type: 'f32' },
         uTime: { value: 0, type: 'f32' },
         uWeight: { value: weight, type: 'f32' },
         uDensity: { value: density, type: 'f32' },
-      } as const;
+      });
+      // The copy, one texel to a page pixel of the picture as shown: the paint pass spaces its
+      // taps by the brush size (`uTap`), so a dab is 15-35 pixels long on screen, as a stroke
+      // looks in Photoshop's Oil Paint at its usual scale, whatever the photo's own size.
+      let smallFor = '';
+      const smallCanvas = document.createElement('canvas');
+      smallCanvas.width = smallCanvas.height = 2;
+      const smallSource = new PIXI.CanvasSource({ resource: smallCanvas, scaleMode: 'linear' });
+      const makeSmall = (brush: number) => {
+        if (!photo || !sprite) return;
+        const texel = 1;
+        const key = `${brush}|${Math.round(sprite.width)}x${Math.round(sprite.height)}`;
+        if (key === smallFor) return;
+        smallFor = key;
+        const w = Math.max(8, Math.min(photo.naturalWidth, Math.round(sprite.width / texel)));
+        const h = Math.max(8, Math.min(photo.naturalHeight, Math.round(sprite.height / texel)));
+        // Halve in steps: one big jump down skips pixels and the copy shimmers.
+        let from: CanvasImageSource = photo;
+        let fw = photo.naturalWidth;
+        let fh = photo.naturalHeight;
+        while (fw / 2 > w && fh / 2 > h) {
+          const step = document.createElement('canvas');
+          step.width = Math.round(fw / 2);
+          step.height = Math.round(fh / 2);
+          const c = step.getContext('2d')!;
+          c.imageSmoothingQuality = 'high';
+          c.drawImage(from, 0, 0, step.width, step.height);
+          from = step;
+          fw = step.width;
+          fh = step.height;
+        }
+        smallSource.resize(w, h, 1);
+        const c = smallCanvas.getContext('2d')!;
+        c.clearRect(0, 0, w, h);
+        c.imageSmoothingQuality = 'high';
+        c.drawImage(from, 0, 0, w, h);
+        smallSource.update();
+        const size = oilUniforms.uniforms.uSmallSize as Float32Array;
+        size[0] = w;
+        size[1] = h;
+      };
       const akf =
         kind === 'oilfilter' && sprite
           ? (() => {
-              const pass = (name: string, fragment: string, extra: Record<string, unknown> = {}) =>
+              makeSmall(weight);
+              const pass = (name: string, fragment: string) =>
                 new PIXI.Filter({
                   glProgram: PIXI.GlProgram.from({
                     vertex: PHOTO_VERTEX,
-                    fragment: PHOTO_HEAD + AKF_CODEC + fragment,
-                    name: `akf-${name}`,
+                    fragment: PHOTO_HEAD + OIL_HEAD + fragment,
+                    name: `oil-${name}`,
                   }),
                   resources: {
-                    photoUniforms: {
-                      uTime: { value: 0, type: 'f32' },
-                      uWeight: { value: weight, type: 'f32' },
-                      uDensity: { value: density, type: 'f32' },
-                    },
-                    ...extra,
+                    photoUniforms: oilUniforms,
+                    uSmall: smallSource,
+                    uSmallSampler: smallSource.style,
+                    uImage: sprite.texture.source,
+                    uImageSampler: sprite.texture.source.style,
                   },
                 });
-              const source = sprite.texture.source;
-              return [
-                pass('tensor', AKF_TENSOR),
-                pass('blur-x', AKF_BLUR, {
-                  dirUniforms: { uDir: { value: new Float32Array([1, 0]), type: 'vec2<f32>' } },
-                }),
-                pass('blur-y', AKF_BLUR, {
-                  dirUniforms: { uDir: { value: new Float32Array([0, 1]), type: 'vec2<f32>' } },
-                }),
-                pass('eigen', AKF_EIGEN),
-                new PIXI.Filter({
-                  glProgram: PIXI.GlProgram.from({
-                    vertex: PHOTO_VERTEX,
-                    fragment: PHOTO_HEAD + AKF_PAINT,
-                    name: 'akf-paint',
-                  }),
-                  resources: {
-                    photoUniforms: paintUniforms,
-                    uImage: source,
-                    uImageSampler: source.style,
-                  },
-                }),
-              ];
+              return [pass('flow', OIL_FLOW), pass('paint', OIL_PAINT)];
             })()
           : null;
       const filter = (() => {
@@ -878,11 +911,11 @@ export function GpuEffect({
       // Where the photo is on the page, for the painting pass (it reads the photo itself).
       const placePhoto = () => {
         if (!akf || !sprite) return;
-        const u = paintUniforms;
-        u.uImgPos.value[0] = sprite.x;
-        u.uImgPos.value[1] = sprite.y;
-        u.uImgSize.value[0] = sprite.width;
-        u.uImgSize.value[1] = sprite.height;
+        const u = oilUniforms.uniforms as { uImgPos: Float32Array; uImgSize: Float32Array };
+        u.uImgPos[0] = sprite.x;
+        u.uImgPos[1] = sprite.y;
+        u.uImgSize[0] = sprite.width;
+        u.uImgSize[1] = sprite.height;
       };
       placePhoto();
       // A painting stands still: drawn once, then again only when its size or settings change.
@@ -895,13 +928,10 @@ export function GpuEffect({
         const t = seconds * speed;
         const wave = 0.5 + 0.5 * Math.sin(t * 1.6);
         if (akf) {
-          const u = (
-            akf[akf.length - 1]!.resources as {
-              photoUniforms: { uniforms: Record<string, number> };
-            }
-          ).photoUniforms.uniforms;
-          u.uWeight = weight;
-          u.uDensity = density;
+          makeSmall(weight);
+          oilUniforms.uniforms.uTap = 0.7 + 0.55 * Math.max(0.2, weight);
+          oilUniforms.uniforms.uWeight = weight;
+          oilUniforms.uniforms.uDensity = density;
         } else if (own && filter) {
           const u = (filter.resources as { photoUniforms: { uniforms: Record<string, number> } })
             .photoUniforms.uniforms;

@@ -171,7 +171,7 @@ own words (`tune.words`); GPU ones — heat haze, shockwave, bloom, zoom burst, 
 bulge, god rays, reflection: `GPU_MOTIONS`; colour-your-own particles — rain, stardust, orbs, meteors, glitter,
 fireworks, notes, crosses (group `colour`), PixiJS filters lazy-loaded in `components/GpuEffect.tsx`, max 6 live WebGL
 canvases, recorder steps them via `seekGpu`; our own picture filters in `PHOTO_FRAGMENTS` (GLSL, no derivatives —
-older phones lack them): oilfilter (anisotropic Kuwahara, 4 passes, MIT port — see THIRD_PARTY_NOTICES.md; drawn once, not every frame), datamosh, pixelsort, scanshift, retro8bit, sketch, neonedge, photomirror
+older phones lack them): oilfilter (anisotropic Kuwahara after an MIT port — see THIRD_PARTY_NOTICES.md — plus bristles smeared along the strokes and lit as thick paint; 2 passes reading a copy of the photo at the size shown, so dabs are ~15-35 px on screen at any density; drawn once, not every frame), datamosh, pixelsort, scanshift, retro8bit, sketch, neonedge, photomirror
 (the last four after the MIT glitch-core); blockglitch, lineglitch, analognoise, wavejitter, scanjitter, tilejitter,
 rgbsplit, screenjump (after the MIT X-PostProcessing-Library) and badtv (MIT, felixturner). A picture filter put on
 a picture as a sublayer is drawn as that picture's own effect (LayeredPoster), from its photo in its box; `LivingLayer` + `.living-*` CSS)
