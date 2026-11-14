@@ -78,7 +78,15 @@ export type ShaderKind =
   | 'garland'
   | 'bethlehem'
   | 'xmassnow'
-  | 'candles';
+  | 'candles'
+  | 'depthlines'
+  | 'wiremesh'
+  | 'prism'
+  | 'glassblobs'
+  | 'ringtunnel'
+  | 'oilpaint'
+  | 'vhs'
+  | 'signal';
 
 /** The animations drawn by this engine. */
 export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
@@ -135,6 +143,14 @@ export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
   'bethlehem',
   'xmassnow',
   'candles',
+  'depthlines',
+  'wiremesh',
+  'prism',
+  'glassblobs',
+  'ringtunnel',
+  'oilpaint',
+  'vhs',
+  'signal',
 ]);
 
 /** How much of the screen's pixels each kind is drawn at (soft ones less, thin lines more). */
@@ -193,6 +209,14 @@ const RES: Record<ShaderKind, number> = {
   bethlehem: 0.75,
   xmassnow: 0.6,
   candles: 0.4,
+  depthlines: 0.75,
+  wiremesh: 1,
+  prism: 0.5,
+  glassblobs: 0.6,
+  ringtunnel: 0.75,
+  oilpaint: 1,
+  vhs: 0.75,
+  signal: 0.75,
 };
 /**
  * How sharp each kind is drawn, as a share of the screen's own pixels (the screen's

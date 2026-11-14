@@ -136,6 +136,20 @@ export const MEETING_MOTIONS = [
   'bethlehem',
   'xmassnow',
   'candles',
+  // Deep line walls, wire meshes, prisms and glass; oil paint; more glitches (shader engine).
+  'depthlines',
+  'wiremesh',
+  'prism',
+  'glassblobs',
+  'ringtunnel',
+  'oilpaint',
+  'vhs',
+  'signal',
+  // A painting filter and glitches that change the photo itself (graphics chip, GpuEffect.tsx).
+  'oilfilter',
+  'datamosh',
+  'pixelsort',
+  'scanshift',
   // One of the church's own effects (Design → Effect studio), by `tune.ref`: drawn as its
   // layers, so changing it there changes it everywhere it is used.
   'custom',
@@ -162,6 +176,7 @@ export const MOTION_GROUPS: {
     | 'sacred'
     | 'cosmic'
     | 'christmas'
+    | 'paint'
     | 'gpu';
   items: MeetingMotion[];
 }[] = [
@@ -188,6 +203,11 @@ export const MOTION_GROUPS: {
   {
     key: 'abstract',
     items: [
+      'depthlines',
+      'wiremesh',
+      'prism',
+      'glassblobs',
+      'ringtunnel',
       'threadwave',
       'particlewave',
       'liquidmetal',
@@ -217,6 +237,7 @@ export const MOTION_GROUPS: {
     ],
   },
   { key: 'sunlight', items: ['sun', 'sunburst', 'halo'] },
+  { key: 'paint', items: ['oilpaint', 'oilfilter', 'oil', 'fur', 'marble', 'ink'] },
   {
     key: 'particles',
     items: [
@@ -254,7 +275,20 @@ export const MOTION_GROUPS: {
       'motionblur',
     ],
   },
-  { key: 'retro', items: ['glitch', 'crt', 'static', 'matrix'] },
+  {
+    key: 'retro',
+    items: [
+      'glitch',
+      'vhs',
+      'signal',
+      'datamosh',
+      'pixelsort',
+      'scanshift',
+      'crt',
+      'static',
+      'matrix',
+    ],
+  },
   { key: 'stage', items: ['spotlight', 'disco', 'sparkle', 'hearts'] },
   { key: 'icons', items: ['iconfloat', 'iconrain', 'iconorbit'] },
   { key: 'seasons', items: ['leaves', 'snowfall', 'petals'] },
@@ -273,6 +307,10 @@ export const MOTION_GROUPS: {
       'bulge',
       'godrays',
       'reflection',
+      'oilfilter',
+      'datamosh',
+      'pixelsort',
+      'scanshift',
     ],
   },
 ];
@@ -287,6 +325,10 @@ export const GPU_MOTIONS: readonly MeetingMotion[] = [
   'bulge',
   'godrays',
   'reflection',
+  'oilfilter',
+  'datamosh',
+  'pixelsort',
+  'scanshift',
 ];
 
 /** How a layer of an own effect mixes with what is under it. */
@@ -474,6 +516,18 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   bethlehem: ['place', 'weight', 'density', 'sharp', 'glow', 'colors'],
   xmassnow: ['density', 'weight', 'chaos', 'seed', 'colors'],
   candles: ['density', 'weight', 'seed', 'colors'],
+  depthlines: [...SHADER_KNOBS, 'lines', 'bend', 'weight', 'glow'],
+  wiremesh: [...SHADER_KNOBS, 'weight', 'glow'],
+  prism: [...SHADER_KNOBS, 'weight'],
+  glassblobs: [...SHADER_KNOBS, 'weight'],
+  ringtunnel: ['place', 'density', 'weight', 'chaos', 'sharp', 'glow', 'seed', 'colors'],
+  oilpaint: [...SHADER_KNOBS, 'weight'],
+  vhs: ['density', 'weight', 'chaos', 'seed', 'colors'],
+  signal: ['density', 'weight', 'chaos', 'seed', 'colors'],
+  oilfilter: ['weight', 'density'],
+  datamosh: ['weight', 'density'],
+  pixelsort: ['weight', 'density'],
+  scanshift: ['weight', 'density'],
   custom: [],
   embers: CANVAS_KNOBS,
   fireflies: CANVAS_KNOBS,
