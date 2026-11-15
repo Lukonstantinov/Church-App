@@ -1,3 +1,4 @@
+import { pruneDownloads } from '../lib/downloads';
 import { and, eq, gte, isNotNull, isNull, lt, lte } from 'drizzle-orm';
 import { InlineKeyboard } from 'grammy';
 import {
@@ -73,6 +74,7 @@ export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
     await db.delete(outbox).where(and(eq(outbox.status, 'sent'), lt(outbox.createdAt, cutoff)));
     await pruneNotifications(db, now);
     await pruneReminderVideos(db, now);
+    await pruneDownloads(db, now);
     await db
       .delete(jobRuns)
       .where(lt(jobRuns.ranAt, new Date(now.getTime() - 60 * DAY_MS).toISOString()));

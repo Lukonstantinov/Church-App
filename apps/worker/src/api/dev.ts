@@ -1,3 +1,4 @@
+import { forgetDownloadsOf } from '../lib/downloads';
 import { Hono, type Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { and, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
@@ -320,6 +321,7 @@ devRoutes.delete('/mock-people', async (c) => {
     await db.delete(attendance).where(inArray(attendance.userId, chunk));
     await db.delete(meetingComments).where(inArray(meetingComments.userId, chunk));
     await db.delete(memberships).where(inArray(memberships.userId, chunk));
+    for (const q of forgetDownloadsOf(db, chunk)) await q;
     await db.delete(users).where(inArray(users.id, chunk));
   }
   await db.update(churchSettings).set({ mockOnly: false }).where(eq(churchSettings.id, 1));

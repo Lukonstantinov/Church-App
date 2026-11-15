@@ -2228,9 +2228,16 @@ export const lt: Messages = {
     sizeHint: (w: number, h: number) =>
       `Savas dydis: vaizdo įrašas ir paveikslėlis bus ${w}×${h} px`,
     sizeLimited: 'Šiek tiek sumažinta pagal šio įrenginio galimybes – proporcijos tos pačios.',
+    savedDevice: 'Pasirinkite, kur išsaugoti failą',
     deliverLabel: 'Kaip atsiųsti',
-    deliver: { play: '▶️ Groja pokalbyje', file: '📎 Failu atsisiuntimui' },
+    deliver: {
+      play: '▶️ Groja pokalbyje',
+      file: '📎 Failu atsisiuntimui',
+      device: '💾 Išsaugoti įrenginyje',
+    },
     deliverHint: {
+      device:
+        'Atsidarys telefono ar kompiuterio išsaugojimo langas – failas visu dydžiu ir kokybe.',
       play: 'Groja tiesiog pokalbyje kaip GIF; Telegram gali jį šiek tiek sumažinti.',
       file: 'Tas pats failas visu dydžiu ir kokybe – paspauskite jį pokalbyje, kad atsisiųstumėte į telefoną ar kompiuterį.',
     },
@@ -2264,8 +2271,18 @@ export const lt: Messages = {
       n === 0 ? 'Išsiųsta jums — kitų gavėjų nėra' : `Išsiųsta: jums ir dar ${n}`,
     sendVideo: '🎬 Siųsti vaizdo įrašą',
     sendGif: '🎞 Siųsti GIF',
-    quality: { standard: 'Standartinė', high: 'Aukšta', max: 'Maksimali' },
+    lengthLabel: 'Trukmė',
+    length: (s: number) => `${s} s`,
+    lengthHint:
+      'GIF – iki 30 s (ilgesni pokalbyje nesigroja). Ilgas įrašas trunka ilgiau – neuždarykite programėlės.',
+    fpsLabel: 'Kadrai per sekundę',
+    fps: (n: number) => `${n} kadr./s`,
+    fitHint:
+      'Tokios trukmės ir kokybės vaizdo įrašas viršija Telegram 50 MB ribą – jis bus suspaustas tiek, kiek reikia. Kompiuteryje failas išsaugomas be suspaudimo.',
+    quality: { standard: 'Standartinė', high: 'Aukšta', max: 'Maksimali', fullhd: 'Full HD' },
     qualityHint: {
+      fullhd:
+        'Full HD vaizdo įrašas — 1920 px ilgojoje pusėje (1920×1080 arba 1080×1920), 30 kadr./s; GIF 720 px',
       standard: 'Vaizdo įrašas 720p, GIF 540 px — greita ir lengva',
       high: 'Vaizdo įrašas 1080p, GIF 640 px — ryškiau, ilgiau',
       max: 'Vaizdo įrašas 1080p su daugiau detalių, GIF 720 px — ryškiausia, ką Telegram dar rodo kaip GIF (iki 9 MB)',

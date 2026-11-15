@@ -1,3 +1,4 @@
+import { forgetDownloadsOf } from './downloads';
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { auditLog, botCards, groups, memberships, users, type User } from '../db/schema';
@@ -46,6 +47,7 @@ export async function claimProfile(db: Db, telegramUser: User, code: string): Pr
       .update(auditLog)
       .set({ actorUserId: target.id })
       .where(eq(auditLog.actorUserId, telegramUser.id)),
+    ...forgetDownloadsOf(db, [telegramUser.id]),
     db.delete(users).where(eq(users.id, telegramUser.id)),
     db
       .update(users)
@@ -129,6 +131,7 @@ export async function mergeJoinIntoOffline(
         .set({ status: 'active', joinedAt: mine.joinedAt ?? now, leftAt: null })
         .where(eq(memberships.id, mine.id)),
       db.update(auditLog).set({ actorUserId: offline.id }).where(eq(auditLog.actorUserId, real.id)),
+      ...forgetDownloadsOf(db, [real.id]),
       db.delete(users).where(eq(users.id, real.id)),
       db
         .update(users)

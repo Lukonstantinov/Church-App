@@ -28,6 +28,7 @@ import { assertCan } from '../lib/access';
 import { audit } from '../lib/audit';
 import { getChurch } from '../lib/church';
 import { recordNotification } from '../lib/notifications';
+import { DOWNLOAD_MAX_BYTES, signedDownloadUrl, storeDownload } from '../lib/downloads';
 import { drainOutbox, enqueue } from '../lib/outbox';
 import { posterRecipients } from '../lib/posterSend';
 import { mayPublish } from '../lib/publishRequests';
@@ -261,6 +262,23 @@ photoRoutes.post('/', async (c) => {
  * file through the outbox, so it is uploaded only once.
  */
 export const animationRoutes = new Hono<App>();
+
+/**
+ * POST /me/download?name= — a recorded poster or picture (MP4, GIF, PNG) kept for a day
+ * to be saved on the person's own phone or computer: answers a signed link, which the app
+ * hands to Telegram's «download file» (the device's own save dialog).
+ */
+export const downloadRoutes = new Hono<App>();
+
+downloadRoutes.post('/', async (c) => {
+  const user = c.get('user');
+  if (Number(c.req.header('content-length') ?? 0) > DOWNLOAD_MAX_BYTES)
+    throw new HTTPException(413, { message: 'too_large' });
+  const bytes = new Uint8Array(await c.req.arrayBuffer());
+  const row = await storeDownload(c.get('db'), user.id, c.req.query('name') ?? 'poster', bytes);
+  const url = new URL(await signedDownloadUrl(c.env.WEBHOOK_SECRET, row.id), c.req.url);
+  return c.json({ url: url.toString(), name: row.name });
+});
 
 animationRoutes.post('/', async (c) => {
   const user = c.get('user');

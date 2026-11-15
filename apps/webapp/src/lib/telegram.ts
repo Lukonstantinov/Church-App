@@ -179,3 +179,17 @@ export function askBeforeClosing(): () => void {
     }
   };
 }
+
+/**
+ * Saves a file on the person's own phone or computer: Telegram's save dialog (Bot API 8.0+)
+ * for a link the worker keeps for a day; an older Telegram opens the link instead. Resolves
+ * false when the person turned the dialog down.
+ */
+export function downloadToDevice(url: string, name: string): Promise<boolean> {
+  const tg = webApp();
+  if (tg?.downloadFile && tg.isVersionAtLeast?.('8.0'))
+    return new Promise((done) => tg.downloadFile({ url, file_name: name }, (ok) => done(ok)));
+  if (tg?.openLink) tg.openLink(url);
+  else window.open(url, '_blank');
+  return Promise.resolve(true);
+}

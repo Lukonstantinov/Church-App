@@ -2172,9 +2172,15 @@ export const en: Messages = {
     sizeHint: (w: number, h: number) => `Own size: the video and picture come out ${w}×${h} px`,
     sizeLimited:
       'Made a little smaller to fit what this device can record — the shape stays the same.',
+    savedDevice: 'Choose where to save the file',
     deliverLabel: 'How it comes',
-    deliver: { play: '▶️ Plays in the chat', file: '📎 As a file to save' },
+    deliver: {
+      play: '▶️ Plays in the chat',
+      file: '📎 As a file to save',
+      device: '💾 Save to device',
+    },
     deliverHint: {
+      device: 'Your phone’s or computer’s save window opens — the file in full size and quality.',
       play: 'Plays right in the chat like a GIF; Telegram may make it a bit smaller.',
       file: 'The exact file in full size and quality — tap it in the chat to download it to the phone or the computer.',
     },
@@ -2209,8 +2215,18 @@ export const en: Messages = {
       n === 0 ? 'Sent to you — nobody else to send to' : `Sent: to you and ${n} more`,
     sendVideo: '🎬 Send video',
     sendGif: '🎞 Send GIF',
-    quality: { standard: 'Standard', high: 'High', max: 'Maximum' },
+    lengthLabel: 'Length',
+    length: (s: number) => `${s} s`,
+    lengthHint:
+      'GIF up to 30 s (longer ones don’t play in the chat). Long recordings take a while — keep the app open.',
+    fpsLabel: 'Frames per second',
+    fps: (n: number) => `${n} fps`,
+    fitHint:
+      'A video this long at this quality is over Telegram’s 50 MB limit — it is compressed just enough to fit. Saved on a computer it isn’t compressed.',
+    quality: { standard: 'Standard', high: 'High', max: 'Maximum', fullhd: 'Full HD' },
     qualityHint: {
+      fullhd:
+        'Full HD video — 1920 px on the long side (1920×1080 or 1080×1920), 30 fps; GIF 720 px',
       standard: 'Video 720p, GIF 540 px — quick and light',
       high: 'Video 1080p, GIF 640 px — sharper, takes longer',
       max: 'Video 1080p with extra detail, GIF 720 px — the sharpest Telegram still plays as a GIF (up to 9 MB)',

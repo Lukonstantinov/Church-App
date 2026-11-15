@@ -6,13 +6,14 @@ import { FullMotion } from '../lib/perf';
 import { CoverPicture } from './CoverSlideshow';
 import { useT } from '../lib/i18n';
 import {
+  keepForDevice,
   sendAnimationToChat,
   sendPictureToChat,
   useContacts,
   useCoverLoop,
   useMe,
 } from '../lib/queries';
-import { confirmDialog, haptic, isInsideTelegram } from '../lib/telegram';
+import { confirmDialog, downloadToDevice, haptic, isInsideTelegram } from '../lib/telegram';
 import { EventCover, useEventWhen } from './EventCard';
 import {
   PosterTextControls,
@@ -33,13 +34,43 @@ const QUALITY = {
   standard: { video: 720, gif: 540, fps: 20, bitrate: 0.12 },
   high: { video: 1080, gif: 640, fps: 20, bitrate: 0.12 },
   max: { video: 1080, gif: 720, fps: 24, bitrate: 0.2 },
+  // Full HD: the long side 1920 px — 1920×1080 lying, 1080×1920 standing (see videoWidth).
+  fullhd: { video: 1920, gif: 720, fps: 30, bitrate: 0.14 },
 } as const;
+
+/**
+ * The width a video is drawn at: the quality's width, or for Full HD the width that makes
+ * the poster's long side 1920 px.
+ */
+function videoWidth(q: keyof typeof QUALITY, el: { offsetWidth: number; offsetHeight: number }) {
+  if (q !== 'fullhd') return QUALITY[q].video;
+  const w = Math.max(1, el.offsetWidth);
+  const h = Math.max(1, el.offsetHeight);
+  return even(w >= h ? 1920 : (1920 * w) / h);
+}
 
 /**
  * Telegram plays a GIF in the chat only while it is small enough; a bigger one arrives as
  * a file to download (a 13 MB one did). A GIF over this is made again, narrower.
  */
 const GIF_MAX_BYTES = 9_000_000;
+
+/**
+ * How long a recording runs, in seconds. A GIF stops at 30 (a longer one is too big to play
+ * in the chat) and has fewer frames a second the longer it is.
+ */
+const LENGTHS = [6, 15, 30, 60] as const;
+const GIF_MAX_SECONDS = 30;
+const gifFpsFor = (s: number) => (s <= 6 ? 10 : s <= 15 ? 8 : 6);
+
+/**
+ * The upload to the bot takes 45 MB and Telegram 50: a long video's detail is lowered so
+ * the whole file stays near this (a 60 s 1080p video at «Максимум» would be ~75 MB).
+ */
+const VIDEO_BUDGET_BYTES = 42_000_000;
+
+/** Frames a second of the video (more = smoother movement, longer to record). */
+const FPS = [20, 24, 30] as const;
 
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
@@ -155,14 +186,27 @@ export function MotionExport({
     : ['me'];
   const [busy, setBusy] = useState<'video' | 'gif' | 'picture' | null>(null);
   // Plays in the chat (an animation) or comes as a file to save, full size and untouched.
-  const [asFile, setAsFile] = useState(false);
+  // Plays in the chat, comes as a file there, or is saved straight onto this device.
+  const [deliver, setDeliver] = useState<'play' | 'file' | 'device'>('play');
+  const asFile = deliver === 'file';
+  const toDevice = deliver === 'device' && isInsideTelegram();
   const out = size ? fitSize(size) : null;
   const [quality, setQuality] = useState<keyof typeof QUALITY>('standard');
+  const [length, setLength] = useState<(typeof LENGTHS)[number]>(6);
+  const [fps, setFps] = useState<(typeof FPS)[number]>(30);
   const [progress, setProgress] = useState(0);
   const [sending, setSending] = useState(false);
   const [shrinking, setShrinking] = useState(false);
 
   const fileName = () => name.replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 50) || 'poster';
+
+  /** Kept by the worker for a day, then Telegram's save dialog opens on this device. */
+  async function saveOnDevice(file: Blob, name: string) {
+    setSending(true);
+    const kept = await keepForDevice(file, name);
+    toast(t.motionExport.savedDevice);
+    if (await downloadToDevice(kept.url, kept.name)) haptic.success();
+  }
 
   /** A still of the poster with its effects, at the own size (or the quality's width). */
   async function picture() {
@@ -176,13 +220,17 @@ export function MotionExport({
       if (!el) throw new Error('no_poster');
       const { recordLoop } = await import('../lib/recorder');
       const rec = await recordLoop(el, {
-        width: out?.w ?? Math.max(1080, QUALITY[quality].video),
+        width: out?.w ?? Math.max(1080, videoWidth(quality, el)),
         height: out?.h,
         still: 1.5,
         onProgress: setProgress,
       });
       if (!rec.png) throw new Error('no_file');
       setSending(true);
+      if (toDevice) {
+        await saveOnDevice(rec.png, fileName());
+        return;
+      }
       if (!isInsideTelegram()) saveHere(rec.png, `${fileName()}.png`);
       // A photo is squeezed by Telegram (and refused over 9 MB): big ones go as a file.
       else await sendPictureToChat(rec.png, fileName(), asFile || rec.png.size > 9_000_000);
@@ -221,8 +269,19 @@ export function MotionExport({
         return;
       }
       const q = QUALITY[quality];
+      const seconds = kind === 'gif' ? Math.min(length, GIF_MAX_SECONDS) : length;
+      // The video's detail (bits per pixel per frame), lowered for a long one to fit the
+      // budget: the width it is drawn at times the block's shape gives its pixels.
+      const vw = out ? out.w : videoWidth(quality, el);
+      const vh = out ? out.h : vw * (el.offsetHeight / Math.max(1, el.offsetWidth));
+      const viaBot = isInsideTelegram() || to !== 'me';
+      const bitrate = viaBot
+        ? Math.min(q.bitrate, (VIDEO_BUDGET_BYTES * 8) / (seconds * vw * vh * fps))
+        : q.bitrate;
       const record = (gifWidth: number) =>
         recordLoop(el, {
+          seconds,
+          gifFps: gifFpsFor(seconds),
           gif: kind === 'gif',
           // A GIF only: no video is made alongside (quicker).
           video: kind === 'video',
@@ -234,12 +293,12 @@ export function MotionExport({
               : out.w
             : kind === 'gif'
               ? Math.max(720, q.gif)
-              : q.video,
+              : videoWidth(quality, el),
           gifWidth: out ? Math.min(out.w, gifWidth) : gifWidth,
           // The video exactly the own size (the GIF follows its shape).
           height: out && kind === 'video' ? out.h : undefined,
-          fps: q.fps,
-          quality: q.bitrate,
+          fps,
+          quality: bitrate,
           onProgress: setProgress,
         });
       let rec = await record(q.gif);
@@ -248,7 +307,10 @@ export function MotionExport({
       // (A file to save may stay big: it isn't played in the chat.)
       for (
         let tries = 0;
-        rec.gif && rec.gif.size > GIF_MAX_BYTES && !(asFile && to === 'me') && tries < 3;
+        rec.gif &&
+        rec.gif.size > GIF_MAX_BYTES &&
+        !((asFile || toDevice) && to === 'me') &&
+        tries < 3;
         tries++
       ) {
         width = even(width * Math.sqrt(GIF_MAX_BYTES / rec.gif.size) * 0.92);
@@ -267,6 +329,10 @@ export function MotionExport({
         saveHere(file, `${safe}.${file.type === 'image/gif' ? 'gif' : 'mp4'}`);
         haptic.success();
         toast(t.motionExport.saved);
+        return;
+      }
+      if (to === 'me' && toDevice) {
+        await saveOnDevice(file, safe);
         return;
       }
       const res = await sendAnimationToChat(
@@ -348,6 +414,47 @@ export function MotionExport({
           <p className="text-[11px] text-hint">
             {out ? t.motionExport.sizeHint(out.w, out.h) : t.motionExport.qualityHint[quality]}
           </p>
+          <div className="text-[12px] font-semibold text-hint">{t.motionExport.lengthLabel}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {LENGTHS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setLength(s)}
+                className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                  length === s ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                }`}
+              >
+                {t.motionExport.length(s)}
+              </button>
+            ))}
+          </div>
+          {length > 6 && <p className="text-[11px] text-hint">{t.motionExport.lengthHint}</p>}
+          <div className="text-[12px] font-semibold text-hint">{t.motionExport.fpsLabel}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {FPS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setFps(n)}
+                className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                  fps === n ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                }`}
+              >
+                {t.motionExport.fps(n)}
+              </button>
+            ))}
+          </div>
+          {(() => {
+            // A long video at this quality that won't fit Telegram's limit: said plainly.
+            const q = QUALITY[quality];
+            const vw = out ? out.w : q.video;
+            const vh = out ? out.h : (vw * 9) / 16;
+            const need = (q.bitrate * vw * vh * fps * length) / 8;
+            return need > VIDEO_BUDGET_BYTES && isInsideTelegram() ? (
+              <p className="text-[11px] text-hint">{t.motionExport.fitHint}</p>
+            ) : null;
+          })()}
           {out && size && (out.w !== even(size.w) || out.h !== even(size.h)) && (
             <p className="text-[11px] text-hint">{t.motionExport.sizeLimited}</p>
           )}
@@ -407,24 +514,24 @@ export function MotionExport({
                 {t.motionExport.deliverLabel}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {([false, true] as const).map((f) => (
+                {(['play', 'file', 'device'] as const).map((f) => (
                   <button
-                    key={String(f)}
+                    key={f}
                     type="button"
                     onClick={() => {
                       haptic.tap();
-                      setAsFile(f);
+                      setDeliver(f);
                     }}
                     className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
-                      asFile === f ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                      deliver === f ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
                     }`}
                   >
-                    {f ? t.motionExport.deliver.file : t.motionExport.deliver.play}
+                    {t.motionExport.deliver[f]}
                   </button>
                 ))}
               </div>
               <p className="text-[11px] leading-snug text-hint">
-                {asFile ? t.motionExport.deliverHint.file : t.motionExport.deliverHint.play}
+                {t.motionExport.deliverHint[deliver]}
               </p>
             </>
           )}

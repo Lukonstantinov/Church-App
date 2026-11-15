@@ -145,7 +145,7 @@ Bot pictures of events: the cover photo when there is one, else the phone-drawn 
 it draws photos itself (iPhones drop them): mark poster photos `data-shot="under"` / `"top"`.
 Moving posters: `lib/recorder.ts` records a poster's effects as a seamless MP4 loop (WebCodecs + mp4-muxer;
 GIF via gifenc) — «🎬 Анимированный постер» in the announce sheet / event export, sent by the bot
-(`POST /api/me/animation`, editable caption; publishers can send it on to chosen people / the ministry / the church /
+(`POST /api/me/animation`, editable caption; length 6/15/30/60 s, 20/24/30 fps and a Full HD quality (long side 1920 px) — a GIF stops at 30 s, a long video's bitrate is lowered only as much as the 45 MB upload needs (`VIDEO_BUDGET_BYTES`); «💾 Save to device» keeps the file a day (`downloads`, `POST /api/me/download`, signed `/media/d/:id` as an attachment, pruned by housekeeping) and opens Telegram's `downloadFile` save dialog (`downloadToDevice`); publishers can send it on to chosen people / the ministry / the church /
 those serving — `?to=`, `lib/posterSend.ts`, same file_id via the outbox); a live preview with text on it
 (design's own / own words with font, size, place / none — `PosterText.tsx`, `LivePreview`), also for reminders and
 announcements (picture: none / poster / animated, `posterMediaId`, `lib/movingPoster.ts`); effects are `.living-clip` layers stepped through time (`seekParticles`).

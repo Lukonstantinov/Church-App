@@ -936,6 +936,35 @@ export const fileParts = sqliteTable(
   (t) => [primaryKey({ columns: [t.fileId, t.idx] })],
 );
 
+/**
+ * Recorded moving posters and pictures waiting to be saved on the person's own phone or
+ * computer (Telegram's «download file» opens the device's save dialog on a link to it).
+ * In parts under D1's 2 MB row limit, like files; deleted after a day (housekeeping).
+ */
+export const downloads = sqliteTable('downloads', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  name: text('name').notNull(),
+  mime: text('mime').notNull(),
+  bytes: integer('bytes').notNull(),
+  parts: integer('parts').notNull(),
+  createdAt: createdAt(),
+});
+
+export const downloadParts = sqliteTable(
+  'download_parts',
+  {
+    downloadId: integer('download_id')
+      .notNull()
+      .references(() => downloads.id),
+    idx: integer('idx').notNull(),
+    data: bytesColumn('data').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.downloadId, t.idx] })],
+);
+
 /** Leaders' notes on calendar days, each with a colour (only leaders see them). */
 export const calendarNotes = sqliteTable(
   'calendar_notes',

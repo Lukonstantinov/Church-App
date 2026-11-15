@@ -1,3 +1,4 @@
+import { downloadStream, verifyDownloadSignature } from '../lib/downloads';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { eq } from 'drizzle-orm';
@@ -284,6 +285,34 @@ mediaRoutes.get('/v/:id', requireTelegramAuth, async (c) => {
   return c.body(bytes.slice(start, end + 1), 206, {
     ...headers,
     'Content-Range': `bytes ${start}-${end}/${size}`,
+  });
+});
+
+/**
+ * GET /media/d/:id?e=&s= — a recorded poster kept to be saved on the device (see
+ * /me/download): sent as an attachment so phones and computers save it, readable from
+ * Telegram's own pages (its «download file» fetches it there).
+ */
+mediaRoutes.get('/d/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  const exp = Number(c.req.query('e'));
+  const sig = c.req.query('s') ?? '';
+  if (!Number.isSafeInteger(id) || id <= 0) return c.body(null, 404);
+  if (!(await verifyDownloadSignature(c.env.WEBHOOK_SECRET, id, exp, sig)))
+    return c.body(null, 403);
+  const file = await downloadStream(getDb(c.env.DB), id);
+  if (!file) return c.body(null, 404);
+  const { meta, body } = file;
+  const ascii = meta.name.replace(/[^\x20-\x7e]/g, '_');
+  return new Response(body, {
+    headers: {
+      'Content-Type': meta.mime,
+      'Content-Length': String(meta.bytes),
+      'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(meta.name)}`,
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'private, max-age=86400',
+      'X-Content-Type-Options': 'nosniff',
+    },
   });
 });
 

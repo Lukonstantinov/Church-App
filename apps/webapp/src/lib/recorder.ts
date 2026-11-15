@@ -29,6 +29,8 @@ export interface RecordOptions {
   gif?: boolean;
   /** Make the video too (default); off when only the GIF is wanted, which is quicker. */
   video?: boolean;
+  /** Frames a second of the GIF (default 10; fewer keeps a long one small enough to play). */
+  gifFps?: number;
   /** Width of the GIF in pixels (default 540). */
   gifWidth?: number;
   /** Video quality: bits per pixel per frame (0.12 for posters; less for backgrounds). */
@@ -1402,7 +1404,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
 
     // The GIF: half the frames, 540 px wide. A phone that can't make videos gets one too.
     const wantGif = opts.gif || !encoder;
-    const gifStep = Math.max(1, Math.round(fps / 10));
+    const gifStep = Math.max(1, Math.round(fps / (opts.gifFps ?? 10)));
     const gifW = even(Math.min(outW, opts.gifWidth ?? 540));
     const gifH = even((outH * gifW) / outW);
     const gifCanvas = wantGif ? canvasOf(gifW, gifH) : null;
@@ -1486,6 +1488,8 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     used.forEach(freeCanvas);
     freeCanvas(maskScratch);
     maskScratch = null;
+    freeCanvas(groupScratch);
+    groupScratch = null;
     restoreTextures?.();
     restoreImages?.();
     holdParticles(node, false);

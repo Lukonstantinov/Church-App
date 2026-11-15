@@ -192,6 +192,28 @@ describe('sending a recorded moving poster to the chat', () => {
   });
 });
 
+describe('saving a recorded poster on the device', () => {
+  it('keeps the file a day behind a signed link that downloads it; refuses other files', async () => {
+    const mp4 = Uint8Array.from([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]);
+    const keep = (body: Uint8Array) =>
+      api('/api/me/download?name=Постер', { method: 'POST', user: ADMIN, body });
+    const res = await keep(mp4);
+    expect(res.status).toBe(200);
+    const { url, name } = (await res.json()) as { url: string; name: string };
+    expect(name).toBe('Постер.mp4');
+    const path = new URL(url).pathname + new URL(url).search;
+    const file = await api(path);
+    expect(file.status).toBe(200);
+    expect(file.headers.get('content-disposition')).toContain('attachment');
+    expect(file.headers.get('access-control-allow-origin')).toBe('*');
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(mp4);
+    // A changed signature opens nothing.
+    expect((await api(path.replace(/s=[0-9a-f]/, 's=0'))).status).toBe(403);
+    expect((await keep(Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8]))).status).toBe(415);
+    expect((await keep(new Uint8Array())).status).toBe(400);
+  });
+});
+
 describe('statistics', () => {
   it('totals, per person, per meeting and per event for a period; leaders only', async () => {
     const g = await createGroup('Статистика');

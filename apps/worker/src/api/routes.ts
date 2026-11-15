@@ -26,7 +26,13 @@ import { devRoutes } from './dev';
 import { posterTemplateRoutes } from './posterTemplates';
 import { effectTemplateRoutes } from './effectTemplates';
 import { publishRequestRoutes } from './publishRequests';
-import { animationRoutes, documentRoutes, groupReportRoutes, photoRoutes } from './reports';
+import {
+  animationRoutes,
+  documentRoutes,
+  downloadRoutes,
+  groupReportRoutes,
+  photoRoutes,
+} from './reports';
 import { notificationRoutes } from './notifications';
 import { groupLabelRoutes, labelRoutes } from './labels';
 import { eventRoutes, groupEventRoutes, myEventRoutes } from './events';
@@ -57,6 +63,7 @@ apiRoutes.route('/groups', groupReportRoutes);
 apiRoutes.route('/me/document', documentRoutes);
 apiRoutes.route('/me/photo', photoRoutes);
 apiRoutes.route('/me/animation', animationRoutes);
+apiRoutes.route('/me/download', downloadRoutes);
 apiRoutes.route('/groups', groupPositionRoutes);
 apiRoutes.route('/groups', groupLabelRoutes);
 apiRoutes.route('/labels', labelRoutes);

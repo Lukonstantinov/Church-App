@@ -61,7 +61,7 @@ export async function readImageUpload(
 
 const DAY_S = 86_400;
 
-async function hmacHex(secret: string, message: string): Promise<string> {
+export async function hmacHex(secret: string, message: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(`media:${secret}`),

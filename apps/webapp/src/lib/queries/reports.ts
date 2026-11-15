@@ -61,6 +61,17 @@ export const sendAnimationToChat = (
     },
   );
 
+/**
+ * Keeps a recorded poster or picture for a day so it can be saved on the device: answers
+ * the signed link for Telegram's «download file» (lib/telegram.ts downloadToDevice).
+ */
+export const keepForDevice = (file: Blob, name: string) =>
+  apiFetch<{ url: string; name: string }>(`/me/download?name=${encodeURIComponent(name)}`, {
+    method: 'POST',
+    body: file,
+    headers: { 'content-type': file.type || 'application/octet-stream' },
+  });
+
 /** The bot sends the file to the user's own chat. */
 export const sendDocumentToChat = (file: Blob, name: string) =>
   apiFetch<{ ok: true }>(`/me/document?name=${encodeURIComponent(name)}`, {
