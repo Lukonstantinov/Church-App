@@ -392,7 +392,103 @@ void main() {
   float b = at(tex(p - vec2(split, 0.0))).b;
   finalColor = vec4(r, g, b, at(vTextureCoord).a);
 }`,
+  // ----- Special blurs (still: drawn once, like the oil painting) -----
+  // Lens blur: the camera out of focus — 32 samples over a disc, bright spots counting
+  // more so they open into round bokeh, as a real lens does.
+  lensblur: `
+void main() {
+  vec2 s = screen();
+  vec2 px = 1.0 / uOutputFrame.zw;
+  float R = 2.0 + 9.0 * uWeight;
+  vec3 sum = vec3(0.0);
+  float ws = 0.0;
+  for (int i = 0; i < 32; i++) {
+    float fi = float(i);
+    float r = R * sqrt((fi + 0.5) / 32.0);
+    float a = fi * 2.39996;
+    vec3 c = at(tex(s + vec2(cos(a), sin(a)) * r * px)).rgb;
+    float w = 1.0 + (2.0 + 4.0 * uDensity) * pow(luma(c), 3.0);
+    sum += c * w;
+    ws += w;
+  }
+  finalColor = vec4(sum / ws, at(vTextureCoord).a);
+}`,
+  // Spin blur: everything swept round the middle, as a camera turned during the shot.
+  spinblur: `
+void main() {
+  vec2 s = screen();
+  vec2 asp = vec2(uOutputFrame.z / uOutputFrame.w, 1.0);
+  vec2 d = (s - 0.5) * asp;
+  float span = 0.01 + 0.06 * uWeight;
+  vec3 sum = vec3(0.0);
+  for (int i = 0; i < 20; i++) {
+    float a = (float(i) / 19.0 - 0.5) * span;
+    float c = cos(a), n = sin(a);
+    vec2 q = vec2(d.x * c - d.y * n, d.x * n + d.y * c) / asp + 0.5;
+    sum += at(tex(q)).rgb;
+  }
+  finalColor = vec4(sum / 20.0, at(vTextureCoord).a);
+}`,
+  // Directional blur: smeared along one direction (the "how many" knob turns it), as a
+  // fast pan or a speeding car.
+  dirblur: `
+void main() {
+  vec2 s = screen();
+  vec2 px = 1.0 / uOutputFrame.zw;
+  float ang = clamp((uDensity - 0.3) / 2.2, 0.0, 1.0) * 3.14159;
+  vec2 dir = vec2(cos(ang), sin(ang)) * (2.0 + 16.0 * uWeight) * px;
+  vec3 sum = vec3(0.0);
+  for (int i = 0; i < 16; i++) sum += at(tex(s + dir * (float(i) / 15.0 - 0.5))).rgb;
+  finalColor = vec4(sum / 16.0, at(vTextureCoord).a);
+}`,
+  // Tilt-shift: a sharp band across the middle, ever softer above and below it — the
+  // picture looks like a tiny model.
+  tiltblur: `
+void main() {
+  vec2 s = screen();
+  vec2 px = 1.0 / uOutputFrame.zw;
+  float band = 0.06 + 0.1 * clamp(uDensity, 0.0, 2.5);
+  float k = smoothstep(band, band + 0.32, abs(s.y - 0.5));
+  float R = k * (2.0 + 18.0 * uWeight);
+  vec3 sum = vec3(0.0);
+  for (int i = 0; i < 24; i++) {
+    float fi = float(i);
+    float r = R * sqrt((fi + 0.5) / 24.0);
+    float a = fi * 2.39996;
+    sum += at(tex(s + vec2(cos(a), sin(a)) * r * px)).rgb;
+  }
+  vec3 col = sum / 24.0;
+  // Miniatures look a little brighter and more colourful.
+  col = mix(vec3(luma(col)), col, 1.15);
+  finalColor = vec4(col, at(vTextureCoord).a);
+}`,
+  // Fluted glass: the picture seen through ribbed glass — each rib bends and softens it.
+  flutedblur: `
+void main() {
+  vec2 s = screen();
+  vec2 px = 1.0 / uOutputFrame.zw;
+  float n = 6.0 + 14.0 * uDensity;
+  float f = fract(s.x * n);
+  float bend = (f - 0.5) * (0.8 + 1.4 * uWeight) / n;
+  vec2 q = vec2(s.x - bend, s.y);
+  vec3 sum = vec3(0.0);
+  for (int i = 0; i < 8; i++) sum += at(tex(q + vec2((float(i) / 7.0 - 0.5) * (2.0 + 6.0 * uWeight), 0.0) * px)).rgb;
+  vec3 col = sum / 8.0;
+  // Each rib's rounded face catches a little light on one side and shade on the other.
+  col *= 0.88 + 0.24 * sin(f * 3.14159);
+  col += 0.06 * pow(1.0 - abs(f - 0.3) * 3.0, 6.0);
+  finalColor = vec4(col, at(vTextureCoord).a);
+}`,
 };
+
+/** Picture filters that don't move: drawn once, again only on a new size or settings. */
+const STILL_FILTERS = new Set<MeetingMotion>([
+  'lensblur',
+  'spinblur',
+  'dirblur',
+  'tiltblur',
+  'flutedblur',
+]);
 
 /** PixiJS's own filter vertex step (the picture's coordinates for our fragments). */
 const PHOTO_VERTEX = `
@@ -591,6 +687,11 @@ const STAND_IN: Partial<Record<MeetingMotion, string>> = {
   datamosh: '📼',
   pixelsort: '🌈',
   scanshift: '📺',
+  lensblur: '📷',
+  spinblur: '🌀',
+  dirblur: '💨',
+  tiltblur: '🔍',
+  flutedblur: '🪟',
   heatwave: '🌫',
   shockwave: '💥',
   bloom: '✨',
@@ -620,6 +721,11 @@ const NEEDS_PHOTO = new Set<MeetingMotion>([
   'datamosh',
   'pixelsort',
   'scanshift',
+  'lensblur',
+  'spinblur',
+  'dirblur',
+  'tiltblur',
+  'flutedblur',
   'heatwave',
   'shockwave',
   'bloom',
@@ -988,7 +1094,7 @@ export function GpuEffect({
         frame = requestAnimationFrame(tick);
         if (entry.held || now - last < 33 || document.hidden || el.closest('[data-off]')) return;
         last = now;
-        if (akf) {
+        if (akf || STILL_FILTERS.has(kind)) {
           const key = `${W}x${H}|${settings.current.weight}|${settings.current.density}`;
           if (key === painted) return;
           painted = key;
