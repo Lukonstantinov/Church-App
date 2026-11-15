@@ -311,19 +311,58 @@ function filterOf(el: HTMLElement, node: HTMLElement, k: number): Filter | null 
 }
 
 /**
- * How the layers holding an effect show it: their see-through-ness multiplied, and the
- * blend mode of the nearest one that has one. A poster layer sets both on its own box
+ * Whether a box starts a group of its own on the page (a stacking context): a blend mode
+ * inside such a group mixes only with what else is in it, never with the layers under it.
+ */
+function isolates(css: CSSStyleDeclaration): boolean {
+  const none = (v: string | undefined) => !v || v === 'none' || v === 'auto' || v === 'normal';
+  return (
+    Number.parseFloat(css.opacity) < 1 ||
+    !none(css.transform) ||
+    !none(css.translate) ||
+    !none(css.rotate) ||
+    !none(css.scale) ||
+    !none(css.filter) ||
+    !none(css.maskImage) ||
+    !none(css.getPropertyValue('-webkit-mask-image')) ||
+    !none(css.clipPath) ||
+    !none(css.mixBlendMode) ||
+    css.isolation === 'isolate' ||
+    /paint|strict|content/.test(css.contain) ||
+    (css.position !== 'static' && !none(css.zIndex))
+  );
+}
+
+/**
+ * How the layers holding an effect show it: their see-through-ness multiplied, and the blend
+ * mode that really reaches the layers under it. A poster layer sets both on its own box
  * (LayeredPoster `look`, `Adjusted`), around the effect — read from the effect alone, a
  * half-transparent or blended layer was recorded at full strength over what is under it.
+ * A blend inside a group of its own (the letters' masked box, a moved layer) mixes only with
+ * that group's insides on the page: taken onto the whole frame, an effect in black letters
+ * set to multiply came out solid black. Such a blend is left out (the group is drawn plain).
  */
 function heldLook(el: HTMLElement, node: HTMLElement) {
   let alpha = 1;
-  let blend: string | null = null;
   for (let e = el.parentElement; e && e !== node; e = e.parentElement) {
-    const css = getComputedStyle(e);
-    const o = Number.parseFloat(css.opacity);
+    const o = Number.parseFloat(getComputedStyle(e).opacity);
     if (Number.isFinite(o)) alpha *= o;
-    if (!blend && css.mixBlendMode && css.mixBlendMode !== 'normal') blend = css.mixBlendMode;
+  }
+  // The innermost blend whose way up to the poster crosses no group of its own.
+  let blend: string | null = null;
+  for (let e: HTMLElement | null = el; e && e !== node; e = e.parentElement) {
+    const mode = getComputedStyle(e).mixBlendMode;
+    if (!mode || mode === 'normal') continue;
+    let open = true;
+    for (let p = e.parentElement; p && p !== node; p = p.parentElement)
+      if (isolates(getComputedStyle(p))) {
+        open = false;
+        break;
+      }
+    if (open) {
+      blend = mode;
+      break;
+    }
   }
   return { alpha, blend };
 }
@@ -336,16 +375,30 @@ interface Filter {
   vignette: number;
 }
 
-/** Whether this browser's canvas takes CSS filters (iPhones' Safari long didn't). */
+/**
+ * Whether this browser's canvas really applies CSS colour filters: tested on a pixel, as a
+ * canvas may take the setting and draw nothing different (iPhones' Safari long did).
+ */
 let filterWorks: boolean | null = null;
 function canvasFilters() {
   if (filterWorks === null) {
-    const c = canvasOf(1, 1).getContext('2d')!;
-    c.filter = 'blur(1px)';
-    filterWorks = c.filter === 'blur(1px)';
+    try {
+      const c = canvasOf(2, 2).getContext('2d', { willReadFrequently: true })!;
+      c.filter = 'grayscale(1)';
+      c.fillStyle = '#ff0000';
+      c.fillRect(0, 0, 2, 2);
+      const [r, g] = c.getImageData(0, 0, 1, 1).data;
+      filterWorks = Math.abs(r! - g!) < 40;
+    } catch {
+      filterWorks = false;
+    }
   }
   return filterWorks;
 }
+
+/** The colour and blur part of a layer's CSS filter (no SVG links: a canvas that can't
+ * follow one into the page drops the whole list, colours too). */
+const cssPart = (css: string) => css.replace(/url\([^)]*\)/g, '').trim();
 
 /** Fine noise the size of the frame, made once (the grain of adjusted layers). */
 let grainPic: HTMLCanvasElement | null = null;
@@ -357,7 +410,8 @@ function grainOf(w: number, h: number) {
   let seed = 7;
   for (let i = 0; i < img.data.length; i += 4) {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    const v = 64 + ((seed >> 8) % 128);
+    // About as spread as the SVG fractal noise on the page (mostly mid-grey).
+    const v = 92 + ((seed >> 8) % 72);
     img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
     img.data[i + 3] = 255;
   }
@@ -374,8 +428,15 @@ function filtered(src: HTMLCanvasElement, f: Filter): HTMLCanvasElement {
   const { width: w, height: h } = src;
   const out = canvasOf(w, h);
   const o = out.getContext('2d', { willReadFrequently: true })!;
+  const css = cssPart(f.css);
+  const byCanvas = canvasFilters();
   const blur = /blur\(([\d.]+)px\)/.exec(f.css);
-  if (blur && Number(blur[1]) > 0.5) {
+  if (byCanvas) {
+    // The canvas does the colours and blur itself; only the SVG part is ours below.
+    o.filter = css || 'none';
+    o.drawImage(src, 0, 0);
+    o.filter = 'none';
+  } else if (blur && Number(blur[1]) > 0.5) {
     // Two halvings per doubling of the radius, enlarged back smoothly.
     const s = Math.max(1, Number(blur[1]) / 1.5);
     const tw = Math.max(1, Math.round(w / s));
@@ -402,7 +463,7 @@ function filtered(src: HTMLCanvasElement, f: Filter): HTMLCanvasElement {
     m = r;
   };
   let touched = false;
-  for (const [, name, arg] of f.css.matchAll(/([a-z-]+)\(([^)]*)\)/g)) {
+  for (const [, name, arg] of byCanvas ? [] : f.css.matchAll(/([a-z-]+)\(([^)]*)\)/g)) {
     const v = arg!.trim().endsWith('%') ? Number.parseFloat(arg!) / 100 : Number.parseFloat(arg!);
     if (!Number.isFinite(v)) continue;
     touched ||= name !== 'blur' && name !== 'url';
@@ -875,9 +936,10 @@ async function drawEffects(
       src = maskScratch;
       at = [0, 0, width, height];
     }
-    // The layer's adjustments: by the canvas where it can, else by our own code (iPhones).
+    // The layer's adjustments: colours and blur by the canvas where it really can, else by
+    // our own code (iPhones); grain, frost and vignette always by ours (filtered).
     let own: HTMLCanvasElement | null = null;
-    if (fx.filter && !canvasFilters()) {
+    if (fx.filter) {
       if (src !== maskScratch) {
         // Drawn alone at its place on a frame-sized copy first, so grain and vignette sit
         // where the layer does.
@@ -893,7 +955,6 @@ async function drawEffects(
     ctx.save();
     ctx.globalAlpha = fx.opacity * (fx.canvas ? fx.ownOpacity : 1);
     ctx.globalCompositeOperation = fx.blend;
-    if (fx.filter && canvasFilters()) ctx.filter = fx.filter.css;
     ctx.drawImage(src, ...at);
     ctx.restore();
     if (own) freeCanvas(own);
