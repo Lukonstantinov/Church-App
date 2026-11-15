@@ -64,6 +64,18 @@ export type ShaderKind =
   | 'beams'
   | 'stainedglass'
   | 'crossglow'
+  | 'datawave'
+  | 'wavescape'
+  | 'velvet'
+  | 'golddust'
+  | 'goldburst'
+  | 'goldwave'
+  | 'raycurtain'
+  | 'crossbacklit'
+  | 'crossneon'
+  | 'crossglass'
+  | 'crossrays'
+  | 'downpour'
   | 'threadwave'
   | 'particlewave'
   | 'liquidmetal'
@@ -128,6 +140,18 @@ export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
   'beams',
   'stainedglass',
   'crossglow',
+  'datawave',
+  'wavescape',
+  'velvet',
+  'golddust',
+  'goldburst',
+  'goldwave',
+  'raycurtain',
+  'crossbacklit',
+  'crossneon',
+  'crossglass',
+  'crossrays',
+  'downpour',
   'threadwave',
   'particlewave',
   'liquidmetal',
@@ -194,6 +218,18 @@ const RES: Record<ShaderKind, number> = {
   beams: 0.4,
   stainedglass: 0.75,
   crossglow: 0.6,
+  datawave: 1,
+  wavescape: 0.75,
+  velvet: 0.4,
+  golddust: 0.75,
+  goldburst: 0.75,
+  goldwave: 0.75,
+  raycurtain: 1,
+  crossbacklit: 0.75,
+  crossneon: 0.6,
+  crossglass: 0.75,
+  crossrays: 1,
+  downpour: 0.75,
   threadwave: 1,
   particlewave: 1,
   liquidmetal: 0.6,
@@ -277,6 +313,7 @@ export function placeDefault(kind: string): { x: number; y: number } {
   if (kind === 'fur') return { x: 0.8, y: 0.15 };
   if (kind === 'sun' || kind === 'halo') return { x: 0.72, y: 0.28 };
   if (kind === 'crossglow') return { x: 0.5, y: 0.42 };
+  if (kind.startsWith('cross') || kind === 'raycurtain') return { x: 0.5, y: 0.45 };
   if (kind === 'bethlehem') return { x: 0.5, y: 0.3 };
   if (kind === 'planet') return { x: 0.6, y: 0.42 };
   return { x: 0.5, y: 0.5 };
@@ -495,6 +532,90 @@ vec4 strands(vec2 q, float fi, float rows, float bothWays) {
   float k = (core + halo) * (1.0 - smoothstep(0.3, 0.5, d)) * b * mix(0.4, 1.0, focus)
     * min(1.3, 2.1 * inversesqrt(u_lines));
   return vec4(palette(hash1(row + 2.2), true) * k * (1.0 + halo * 0.5), k);
+}
+`;
+
+/**
+ * The crosses (backlit, neon, glass, of light) and the ray curtain share these: the cross's
+ * distance field (negative inside, in units of the cross's height) and a curtain of fine
+ * vertical threads of light, each thread its own brightness and shimmer.
+ */
+const CROSS = `
+float boxDist(vec2 p, vec2 b) {
+  vec2 d = abs(p) - b;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+float crossDist(vec2 q) {
+  float th = 0.034;
+  return min(boxDist(q - vec2(0.0, -0.03), vec2(th, 0.31)), boxDist(q - vec2(0.0, 0.1), vec2(0.18, th)));
+}
+float curtain(vec2 p, float n, float salt) {
+  float g = p.x * n;
+  float cl = floor(g);
+  float h = hash1(cl * 1.31 + salt);
+  float w = 0.06 + 0.16 * hash1(cl + salt + 3.1);
+  float px = AA(g) + 1e-4;
+  float core = 1.0 - smoothstep(w, w + max(px * 1.2, 0.05), abs(fract(g) - 0.5));
+  // Threads finer than the pixels melt into their average light instead of shimmering.
+  core = mix(core, 2.0 * w + 0.05, smoothstep(0.35, 0.9, px));
+  float flick = 0.45 + 0.55 * noise(vec2(cl * 0.7 + salt, p.y * (1.2 + 2.0 * h) - u_t * (0.25 + 0.6 * h)));
+  return core * (0.3 + 0.7 * h) * flick;
+}
+`;
+
+/**
+ * Gold dust (cloud, burst, rising wave): six depths of glitter specks (MOTES), the middle
+ * ones sharp and twinkling, the near and far ones soft discs of bokeh; where the specks
+ * gather is a field read at each speck's own cell (so no disc is ever cut in half), with
+ * warm smoke behind. Colours: dark amber, gold, white gold, the smoke.
+ */
+const GOLD = `
+vec4 goldField(float mode) {
+  vec2 p = place() / u_size;
+  vec2 c = centre(u_pos);
+  float t = u_t;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  float keep0 = clamp(0.25 + 0.55 * u_density, 0.05, 1.0);
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    float sc = 2.2 * pow(1.55, fi);
+    float blur = abs(fi - 2.5) / 2.5;
+    vec2 off = vec2(t * 0.04, mode > 1.5 ? -t * 0.3 : t * 0.025) + fi * 13.7
+      + u_chaos * 0.6 * vec2(sin(t * 0.13 + fi * 2.1), cos(t * 0.11 + fi));
+    vec2 q = p * sc + off;
+    // Where the specks gather, read at this speck's own cell.
+    vec2 pc = (floor(q) + 0.5 - off) / sc;
+    float f;
+    if (mode < 0.5) f = smoothstep(0.32, 0.78, fbm3(pc * 1.3 + vec2(t * 0.03, 0.0) + seedShift()));
+    else if (mode < 1.5) f = exp(-length(pc - c) * 2.3) * (0.6 + 0.8 * fbm3(pc * 3.0 + seedShift()));
+    else {
+      float band = pc.y - (0.2 * sin(pc.x * 2.2 + t * 0.35) - 0.06);
+      f = exp(-band * band * 20.0) * (0.55 + 0.7 * fbm3(pc * 2.0 + vec2(t * 0.05, 0.0)));
+    }
+    float r = mix(0.04, 0.2, blur * blur) * min(u_weight, 1.6);
+    vec3 m = mote(q, r, mix(0.03, 0.12, blur), keep0 * clamp(f * 1.4, 0.0, 1.0), fi + 20.0, 0.05);
+    float tw = pow(0.5 + 0.5 * sin(t * (1.5 + 4.0 * m.y) + m.y * 60.0), 6.0);
+    float twk = mix(1.0, 0.35 + 1.7 * tw, 1.0 - blur);
+    float k = m.x * twk * mix(1.4, 0.35, blur) * (0.4 + 0.6 * m.y);
+    float g = m.y * m.y;
+    vec3 tone = mix(mix(u_c[0], u_c[1], smoothstep(0.0, 0.55, g)), u_c[2], smoothstep(0.55, 1.0, g));
+    col += mix(tone, vec3(1.0), 0.3 * (1.0 - blur) * tw) * k;
+    a = max(a, k);
+  }
+  // Smoke behind, heavier where the gold gathers.
+  float s = fbm3(p * 1.4 + vec2(t * 0.015, -t * 0.01) + seedShift() + 5.0);
+  float where = mode < 0.5 ? 1.0 : mode < 1.5 ? exp(-length(p - c) * 1.6)
+    : exp(-pow(p.y - (0.2 * sin(p.x * 2.2 + t * 0.35) - 0.06), 2.0) * 8.0);
+  float smoke = s * s * 0.4 * (0.25 + 0.75 * u_glow) * where;
+  col += u_c[3] * smoke;
+  a = max(a, smoke);
+  if (mode > 0.5 && mode < 1.5) {
+    float core = exp(-length(p - c) * 7.0) * (0.85 + 0.15 * sin(t * 0.8)) * (0.4 + 0.6 * u_glow);
+    col += u_c[2] * core;
+    a = max(a, core);
+  }
+  return vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
 }
 `;
 
@@ -2316,6 +2437,261 @@ void main() {
   }
   gl_FragColor = vec4(col, 1.0);
 }`,
+  // ----- Worship & motion-graphics set (after a motion-design brief: Trapcode-like looks
+  // drawn in one pass each, no particle loops) -----
+
+  // Data wave: a cloth of fine dotted threads warped by a slow swell; the crests facing the
+  // light shine white-violet, the troughs sink into the dark.
+  datawave: `
+float dwH(vec2 p, float t) {
+  return (0.16 + 0.14 * u_chaos) * (fbm3(p * vec2(0.85, 1.3) + vec2(t, t * 0.6) + seedShift()) - 0.5) * 2.0
+    + 0.06 * sin(p.x * 1.3 + t * 2.0);
+}
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.11;
+  float n = 16.0 + 30.0 * u_density;
+  float e = 0.012;
+  float h = dwH(p, t);
+  float hx = (dwH(p + vec2(e, 0.0), t) - h) / e;
+  float hy = (dwH(p + vec2(0.0, e), t) - h) / e;
+  float g = (p.y + h) * n;
+  float d = 0.5 - abs(fract(g) - 0.5);
+  float fw = AA(g);
+  float w = 0.05 + 0.08 * u_weight;
+  float soft = max(mix(0.12, 0.04, u_sharp), fw * 1.2);
+  float line = 1.0 - smoothstep(w, w + soft, d);
+  line = mix(line, min(1.0, 2.0 * w + soft), smoothstep(0.45, 1.0, fw));
+  // A sparkle running along each thread (not a grid of dots, which lined up in columns).
+  float tw = 0.55 + 0.9 * noise(vec2(p.x * 38.0 + floor(g) * 7.3, floor(g) * 1.7) + seedShift());
+  // Mostly dark threads; only the crests turned toward the light flare up.
+  float crest = clamp(0.5 - 1.8 * hx - 1.1 * hy, 0.0, 1.0);
+  crest = crest * crest * (3.0 - 2.0 * crest);
+  float lit = pow(crest, 4.0);
+  vec3 col = u_c[0] * 0.3 + line * tw * (u_c[1] * 0.38 + u_c[2] * 0.95 * lit);
+  col += u_c[3] * line * pow(lit, 3.0) * 1.1 * tw;
+  col += u_c[2] * u_glow * 0.3 * exp(-d / (w * 4.0)) * lit;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
+}`,
+  // Wave landscape: lines running toward a horizon over a slowly rolling digital terrain.
+  wavescape: `
+void main() {
+  vec2 p = plane() / u_size;
+  float t = u_t * 0.18;
+  float hor = 0.22;
+  vec3 col = u_c[0] * 0.2 + u_c[1] * 0.25 * exp(-abs(p.y - hor) * 9.0);
+  float rows = 18.0 + 22.0 * u_density;
+  float acc = 0.0;
+  vec3 tint = vec3(0.0);
+  for (int i = 0; i < 40; i++) {
+    float fi = float(i);
+    if (fi >= rows) break;
+    // Row i lies at depth z (near rows first), lifted by the terrain under it.
+    float z = 0.35 + fi * fi * 0.012 + fi * 0.06;
+    float x = p.x * z;
+    float hgt = 0.5 * sin(x * 1.3 + z * 0.9 + t) * sin(x * 0.7 - z * 1.4 + t * 0.6)
+      + (0.3 + 0.4 * u_chaos) * (noise(vec2(x * 1.1, z * 0.8 - t * 0.5) + seedShift()) - 0.5);
+    float y = hor - 0.42 / z + hgt * 0.32 / z;
+    float d = abs(p.y - y);
+    float w = (0.0012 + 0.0022 * u_weight) / z + AA(p.y) * 0.6;
+    float fog = exp(-z * 0.12);
+    float k = (exp(-d / w) + u_glow * 0.25 * exp(-d / (w * 6.0))) * fog;
+    float hi = clamp(hgt * 1.2 + 0.5, 0.0, 1.0);
+    tint += mix(u_c[1], u_c[2], hi) * k + u_c[3] * k * pow(hi, 5.0);
+    acc += k;
+  }
+  col += tint;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
+}`,
+  // Velvet waves: a few thick soft ribbons of light gliding over each other.
+  velvet: `
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t * 0.25;
+  vec3 col = u_c[0] * 0.18;
+  float bands = 3.0 + floor(u_density * 2.5);
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    if (fi >= bands) break;
+    float f = 1.6 + fi * 0.55;
+    float y = (fi - (bands - 1.0) * 0.5) * 0.11
+      + 0.13 * sin(p.x * f + t * (0.6 + 0.2 * fi) + fi * 1.9)
+      + (0.08 + 0.12 * u_chaos) * (fbm3(vec2(p.x * 0.6 + fi * 3.0, t * 0.2) + seedShift()) - 0.5);
+    float w = 0.018 + 0.03 * u_weight;
+    float d = p.y - y;
+    float b = exp(-d * d / (w * w)) + (0.25 + 0.35 * u_glow) * exp(-abs(d) / (w * 4.0));
+    col += palette(fi / max(bands, 1.0), true) * b * 0.8;
+  }
+  col = 1.0 - exp(-col * 1.5);
+  gl_FragColor = vec4(col * u_strength, u_strength);
+}`,
+  // Gold dust: thousands of glittering specks at several depths, the near and far ones out
+  // of focus, gathering in a slowly drifting cloud with warm smoke behind.
+  golddust:
+    MOTES +
+    GOLD +
+    `
+void main() { gl_FragColor = goldField(0.0); }`,
+  // Gold burst: the specks gathered round a bright heart that breathes.
+  goldburst:
+    MOTES +
+    GOLD +
+    `
+void main() { gl_FragColor = goldField(1.0); }`,
+  // Gold wave: a band of gold dust rising and rolling like a wave.
+  goldwave:
+    MOTES +
+    GOLD +
+    `
+void main() { gl_FragColor = goldField(2.0); }`,
+  // Ray curtain: fine vertical threads of light shimmering behind whatever is placed on it.
+  raycurtain:
+    CROSS +
+    `
+void main() {
+  vec2 p = plane() / u_size;
+  vec2 c = p - centre(u_pos);
+  float glow = exp(-length(c * vec2(0.8, 1.0)) * (2.6 - 1.4 * u_glow));
+  float n = 70.0 + 160.0 * u_density;
+  float s = curtain(p, n, 0.0) + 0.7 * curtain(p + 0.13, n * 0.47, 7.0);
+  float k = s * (0.25 + 0.95 * glow) * (0.7 + 0.3 * smoothstep(0.5, -0.5, p.y));
+  vec3 col = mix(u_c[1], u_c[0], glow) * k + u_c[1] * glow * 0.35;
+  float a = clamp(max(k, glow * 0.35), 0.0, 1.0);
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, a * u_strength);
+}`,
+  // Backlit cross: a dark cross before a burning glow, light threads falling behind it.
+  crossbacklit:
+    CROSS +
+    `
+void main() {
+  vec2 pl = plane();
+  vec2 q = (pl - centre(u_pos)) / (u_size * (0.6 + 0.4 * u_weight));
+  float d = crossDist(q);
+  float inside = 1.0 - aaStep(0.0, d);
+  float r = length((q - vec2(0.0, 0.06)) * vec2(1.0, 0.85));
+  float glow = exp(-r * (2.6 - 1.3 * u_glow)) * (0.92 + 0.08 * sin(u_t * 0.7));
+  float s = curtain(pl / u_size, 80.0 + 140.0 * u_density, 3.0);
+  vec3 col = u_c[2] * 0.6 + u_c[3] * 0.35 * smoothstep(-0.6, 0.6, pl.x);
+  col += u_c[1] * glow * 1.15 + mix(u_c[1], u_c[0], glow) * s * (0.25 + 0.9 * glow);
+  // The rim of the cross catches the light behind it.
+  col += u_c[0] * exp(-max(d, 0.0) * 70.0) * glow * 0.8;
+  col *= 1.0 - inside * 0.97;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
+}`,
+  // Neon cross: a glowing tube of light in a red haze.
+  crossneon:
+    CROSS +
+    `
+void main() {
+  vec2 pl = plane();
+  vec2 q = (pl - centre(u_pos)) / (u_size * (0.6 + 0.4 * u_weight));
+  float d = crossDist(q);
+  float hum = 0.96 + 0.04 * sin(u_t * 9.0 + sin(u_t * 2.3) * 3.0);
+  float fill = 1.0 - aaStep(0.0, d);
+  float tube = exp(-abs(d) * (70.0 + 60.0 * u_sharp));
+  float halo = exp(-max(d, 0.0) * (13.0 - 7.0 * u_glow));
+  float r = length(q);
+  float haze = fbm3(pl * 2.2 + vec2(u_t * 0.04, -u_t * 0.03) + seedShift()) * exp(-r * 1.4);
+  vec3 col = u_c[3] * 0.5 + u_c[2] * haze * 1.1 + u_c[2] * exp(-r * 2.0) * 0.5;
+  col += u_c[1] * halo * 0.9 * hum + u_c[1] * fill * 0.85 + u_c[0] * tube * hum;
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
+}`,
+  // Glass cross: a glossy bevelled cross catching a light that slowly moves, with light
+  // leaks sweeping the dark behind it.
+  crossglass:
+    CROSS +
+    `
+void main() {
+  vec2 pl = plane();
+  vec2 q = (pl - centre(u_pos)) / (u_size * (0.6 + 0.4 * u_weight));
+  float d = crossDist(q);
+  float e = 0.004;
+  vec2 grad = vec2(crossDist(q + vec2(e, 0.0)) - crossDist(q - vec2(e, 0.0)),
+                   crossDist(q + vec2(0.0, e)) - crossDist(q - vec2(0.0, e))) / (2.0 * e);
+  float bw = 0.022 + 0.02 * u_sharp;
+  float bev = clamp(1.0 + d / bw, 0.0, 1.0);
+  vec3 n = normalize(vec3(grad * bev * 1.6, 1.0));
+  vec3 L = normalize(vec3(cos(u_t * 0.35) * 0.7, 0.45 + 0.35 * sin(u_t * 0.27), 0.75));
+  float dif = max(dot(n, L), 0.0);
+  float spec = pow(max(dot(reflect(-L, n), vec3(0.0, 0.0, 1.0)), 0.0), 28.0);
+  float fill = 1.0 - aaStep(0.0, d);
+  vec3 face = u_c[0] * (0.25 + 0.85 * dif) + u_c[1] * spec * 1.4;
+  // Behind: a dark sky and two leaks of light sweeping across it.
+  vec2 dir = normalize(vec2(1.0, -0.65));
+  float sweep = dot(pl, dir) - 0.9 * sin(u_t * 0.12);
+  float leak = exp(-abs(sweep) * 5.0) * 0.8 + exp(-abs(sweep + 0.45) * 9.0) * 0.5;
+  vec3 back = u_c[3] + u_c[2] * leak * (0.4 + 0.6 * u_glow) + u_c[0] * 0.3 * exp(-length(q) * 3.0);
+  float shadow = 1.0 - 0.6 * exp(-max(d, 0.0) * 25.0);
+  vec3 col = mix(back * shadow, face, fill);
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, u_strength);
+}`,
+  // Cross of light: a cross woven from shimmering threads of light, glowing.
+  crossrays:
+    CROSS +
+    `
+void main() {
+  vec2 pl = plane();
+  vec2 q = (pl - centre(u_pos)) / (u_size * (0.6 + 0.4 * u_weight));
+  float d = crossDist(q);
+  float inside = 1.0 - smoothstep(-0.006, 0.01, d);
+  float s = curtain(pl / u_size, 120.0 + 160.0 * u_density, 5.0);
+  float halo = exp(-max(d, 0.0) * (14.0 - 8.0 * u_glow));
+  float r = length(q - vec2(0.0, 0.06));
+  float k = inside * (0.35 + 1.1 * s) + halo * 0.45 + s * 0.12 * exp(-r * 2.0);
+  vec3 col = mix(u_c[2], u_c[1], halo) * k + u_c[0] * inside * s;
+  float a = clamp(k, 0.0, 1.0);
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, a * u_strength);
+}`,
+  // Downpour: a torrential rain — long streaks at five depths, mist rolling near the
+  // ground and drops splashing at the bottom. The angle knob slants it with the wind.
+  downpour: `
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i);
+    float z = fi / 4.0;
+    float nx = mix(80.0, 24.0, z) * (0.5 + 0.7 * u_density);
+    float spd = mix(1.1, 2.6, z) * (0.8 + 0.4 * u_chaos);
+    float len = mix(0.05, 0.16, z) * (0.6 + 0.6 * u_weight);
+    float cell = len * 2.6;
+    float gx = p.x * nx + fi * 7.31;
+    float colm = floor(gx);
+    float h = hash1(colm + fi * 31.7);
+    float yy = (p.y + t * spd * (0.85 + 0.3 * h) + h * 9.0) / cell;
+    float row = floor(yy);
+    float fy = fract(yy);
+    float keep = step(hash(vec2(colm, row + fi * 13.0)), 0.32 + 0.4 * u_density);
+    float ox = (hash(vec2(colm + 3.3, row)) - 0.5) * 0.5;
+    float px = AA(gx) + 1e-4;
+    float w = max(mix(0.05, 0.13, z), px * 0.7);
+    float fx = fract(gx) - 0.5 - ox;
+    float xm = exp(-(fx * fx) / (w * w));
+    float sy = fy * cell / len;
+    float ym = sy < 1.0 ? smoothstep(0.0, 0.25, sy) * (1.0 - smoothstep(0.55, 1.0, sy)) : 0.0;
+    float k = xm * ym * keep * mix(0.28, 0.85, z);
+    col += mix(u_c[1], u_c[0], z) * k;
+    a = max(a, k);
+  }
+  // Mist rolling along the ground.
+  float mist = fbm3(p * vec2(2.0, 1.0) + vec2(t * 0.3, -t * 0.6) + seedShift()) * 0.22
+    * smoothstep(0.1, -0.5, p.y);
+  col += u_c[1] * mist;
+  a = max(a, mist);
+  // Splashes along the bottom: little rings opening and fading.
+  vec2 sq = vec2(p.x * 16.0, (p.y + 0.5) * 22.0);
+  vec2 sid = floor(sq);
+  float sh = hash(sid + 7.0);
+  float ph = fract(t * (1.2 + sh) + sh * 9.0);
+  vec2 sf = (fract(sq) - 0.5) * vec2(1.0, 2.2);
+  float ring = exp(-abs(length(sf) - ph * 0.45) * 30.0) * (1.0 - ph)
+    * step(sh, 0.55) * smoothstep(-0.36, -0.46, p.y);
+  col += u_c[2] * ring * 0.8;
+  a = max(a, ring * 0.8);
+  gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
+}`,
 };
 
 // ---------- The one context ----------
@@ -2525,6 +2901,18 @@ const OWN_DEFAULTS: Partial<Record<ShaderKind, string[]>> = {
   stainedglass: ['#b91c1c', '#1d4ed8', '#f59e0b', '#15803d'],
   // The cross, its halo, the rays.
   crossglow: ['#fffdf2', '#ffd98a', '#ffb45e'],
+  datawave: ['#05010f', '#3b0f8c', '#8b5cf6', '#f5ecff'],
+  wavescape: ['#07021a', '#4c1d95', '#a78bfa', '#f5f3ff'],
+  velvet: ['#1e0b4b', '#6d28d9', '#4f46e5', '#a855f7'],
+  golddust: ['#7a4a10', '#e8b04a', '#fff3c4', '#5a3608'],
+  goldburst: ['#7a4a10', '#f0b84e', '#fff6d6', '#6b4210'],
+  goldwave: ['#7a4a10', '#e8b04a', '#fff3c4', '#4a2c06'],
+  raycurtain: ['#fff1e6', '#ff4f7b'],
+  crossbacklit: ['#ffe8d6', '#ff3d6e', '#22041a', '#6d28d9'],
+  crossneon: ['#fffbe0', '#ffd84d', '#c0141f', '#2a0306'],
+  crossglass: ['#8b5cf6', '#f5ecff', '#f472b6', '#0d0522'],
+  crossrays: ['#ffffff', '#ffe9a8', '#ff9f43'],
+  downpour: ['#e2ecff', '#8fa9cc', '#ffffff'],
   // Darkness, deep blue, light blue: light grazing a dark cloth.
   threadwave: ['#0b1e6b', '#2563eb', '#9bd4ff'],
   particlewave: ['#1d4ed8', '#22d3ee', '#e0f7ff'],
@@ -2595,6 +2983,18 @@ class Painter {
         p.kind === 'caustics' ||
         p.kind === 'lightning' ||
         p.kind === 'crossglow' ||
+        p.kind === 'datawave' ||
+        p.kind === 'wavescape' ||
+        p.kind === 'velvet' ||
+        p.kind === 'golddust' ||
+        p.kind === 'goldburst' ||
+        p.kind === 'goldwave' ||
+        p.kind === 'raycurtain' ||
+        p.kind === 'crossbacklit' ||
+        p.kind === 'crossneon' ||
+        p.kind === 'crossglass' ||
+        p.kind === 'crossrays' ||
+        p.kind === 'downpour' ||
         p.kind === 'galaxy' ||
         p.kind === 'planet' ||
         p.kind === 'bethlehem' ||

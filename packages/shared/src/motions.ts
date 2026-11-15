@@ -154,6 +154,18 @@ export const MEETING_MOTIONS = [
   'oilpaint',
   'vhs',
   'signal',
+  'datawave',
+  'wavescape',
+  'velvet',
+  'golddust',
+  'goldburst',
+  'goldwave',
+  'raycurtain',
+  'crossbacklit',
+  'crossneon',
+  'crossglass',
+  'crossrays',
+  'downpour',
   // A painting filter and glitches that change the photo itself (graphics chip, GpuEffect.tsx).
   'oilfilter',
   'datamosh',
@@ -204,8 +216,24 @@ export const MOTION_GROUPS: {
   items: MeetingMotion[];
 }[] = [
   { key: 'light', items: ['calm', 'lively', 'mesh', 'grainient', 'aurora', 'silk', 'rays'] },
-  { key: 'sacred', items: ['crossglow', 'stainedglass', 'halo', 'sunburst', 'crosses', 'beams'] },
-  { key: 'nature', items: ['nebula', 'clouds', 'caustics', 'ink', 'lightning'] },
+  {
+    key: 'sacred',
+    items: [
+      'crossglow',
+      'crossbacklit',
+      'crossneon',
+      'crossglass',
+      'crossrays',
+      'raycurtain',
+      'stainedglass',
+      'halo',
+      'sunburst',
+      'crosses',
+      'beams',
+      'goldburst',
+    ],
+  },
+  { key: 'nature', items: ['downpour', 'nebula', 'clouds', 'caustics', 'ink', 'lightning'] },
   {
     key: 'cosmic',
     items: ['galaxy', 'starfield', 'planet', 'nebula', 'stardust', 'meteors', 'warp'],
@@ -226,6 +254,9 @@ export const MOTION_GROUPS: {
   {
     key: 'abstract',
     items: [
+      'datawave',
+      'wavescape',
+      'velvet',
       'depthlines',
       'wiremesh',
       'prism',
@@ -276,6 +307,10 @@ export const MOTION_GROUPS: {
   {
     key: 'particles',
     items: [
+      'golddust',
+      'goldburst',
+      'goldwave',
+      'downpour',
       'dust',
       'swarm',
       'flames',
@@ -578,6 +613,18 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   beams: ['density', 'weight', 'sharp', 'chaos', 'seed', 'colors'],
   stainedglass: ['density', 'weight', 'seed', 'colors'],
   crossglow: ['place', 'weight', 'density', 'sharp', 'glow', 'colors'],
+  datawave: ['density', 'weight', 'chaos', 'sharp', 'glow', 'seed', 'colors'],
+  wavescape: ['density', 'weight', 'chaos', 'glow', 'seed', 'colors'],
+  velvet: ['density', 'weight', 'chaos', 'glow', 'seed', 'colors'],
+  golddust: ['density', 'weight', 'chaos', 'glow', 'seed', 'colors'],
+  goldburst: ['place', 'density', 'weight', 'chaos', 'glow', 'seed', 'colors'],
+  goldwave: ['density', 'weight', 'chaos', 'glow', 'seed', 'colors'],
+  raycurtain: ['place', 'density', 'glow', 'seed', 'colors'],
+  crossbacklit: ['place', 'weight', 'density', 'glow', 'seed', 'colors'],
+  crossneon: ['place', 'weight', 'sharp', 'glow', 'seed', 'colors'],
+  crossglass: ['place', 'weight', 'sharp', 'glow', 'colors'],
+  crossrays: ['place', 'weight', 'density', 'glow', 'seed', 'colors'],
+  downpour: ['density', 'weight', 'chaos', 'seed', 'colors'],
   threadwave: [...SHADER_KNOBS, 'weight', 'glow'],
   particlewave: [...SHADER_KNOBS, 'weight', 'glow'],
   liquidmetal: [...SHADER_KNOBS, 'weight'],
@@ -678,6 +725,10 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
  * Shader effects added later that are particle fields belong here too.
  */
 export const PARTICLE_LIKE: ReadonlySet<MeetingMotion> = new Set<MeetingMotion>([
+  'golddust',
+  'goldburst',
+  'goldwave',
+  'downpour',
   'stars',
   'bokeh',
   'embers',

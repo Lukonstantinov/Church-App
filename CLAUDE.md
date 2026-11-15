@@ -74,7 +74,7 @@ Deploy → Run workflow → production.
   cells, holo, sun, sunburst, halo, wavelines, tunnel, dunes, lightfall, risers, synthgrid, spiral, stripes,
   aurora, goo, nebula, clouds, caustics, ink, lightning, pulserings, honeycomb, dotwave, grainient, beams,
   stainedglass, crossglow, threadwave, particlewave, liquidmetal, curtains, shards, fluted, dust, swarm, galaxy,
-  starfield, planet, garland, bethlehem, xmassnow, candles, gradient fill motion; sky kinds take a space colour,
+  starfield, planet, garland, bethlehem, xmassnow, candles, datawave, wavescape, velvet, golddust, goldburst, goldwave (gold glitter: GOLD), raycurtain, crossbacklit, crossneon, crossglass, crossrays (crosses: CROSS), downpour (torrential rain), gradient fill motion; sky kinds take a space colour,
   `tune.bg`; also depthlines, wiremesh, prism, glassblobs, ringtunnel, oilpaint (strokes painted over the last
   painting, in cycles), vhs, signal; line kinds — streaks, lightfall, ribbons, risers — take `tune.lines` (the set repeated at 1–8 depths)
   and `tune.bend` (waving)) are drawn by the shader engine

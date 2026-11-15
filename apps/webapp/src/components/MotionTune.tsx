@@ -124,9 +124,25 @@ export function MotionTuneControls({
   const lined = kind === 'lines' || kind === 'grid';
   const shader = SHADER_KINDS.has(kind);
   // What "how many" and "how thick" mean for this animation.
-  const lineKinds = ['topo', 'streaks', 'ribbons', 'wordwall', 'threadwave', 'fluted'];
+  const lineKinds = [
+    'topo',
+    'streaks',
+    'ribbons',
+    'wordwall',
+    'threadwave',
+    'fluted',
+    'datawave',
+    'wavescape',
+    'raycurtain',
+    'crossbacklit',
+    'crossrays',
+  ];
   // Shader-drawn fields of specks and lights: "how many" and "how big", as for particles.
   const speckKinds = [
+    'golddust',
+    'goldburst',
+    'goldwave',
+    'downpour',
     'particlewave',
     'dust',
     'swarm',
