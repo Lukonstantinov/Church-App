@@ -172,13 +172,56 @@ function canvasOf(w: number, h: number) {
 }
 
 /**
+ * A layer whose blend mode reaches the poster and that holds moving effects (a text set to
+ * multiply, with effects in its letters): on the page its still parts and effects are put
+ * together first and the whole is then blended onto what lies under it. Recorded the same
+ * way — its still parts drawn on their own (`under` its first effect, `top` after it), its
+ * effects added each frame, the group then blended onto the frame.
+ */
+interface Group {
+  el: HTMLElement;
+  /** Its effects (indices into the recording's effect list, in painting order). */
+  fx: number[];
+  under: HTMLCanvasElement | null;
+  top: HTMLCanvasElement | null;
+  blend: GlobalCompositeOperation;
+  alpha: number;
+}
+
+/** The box whose blend mode reaches the poster, between an effect and the poster. */
+function reachingBlend(el: HTMLElement, node: HTMLElement): HTMLElement | null {
+  for (let e: HTMLElement | null = el.parentElement; e && e !== node; e = e.parentElement) {
+    const mode = getComputedStyle(e).mixBlendMode;
+    if (!mode || mode === 'normal') continue;
+    let open = true;
+    for (let p = e.parentElement; p && p !== node; p = p.parentElement)
+      if (isolates(getComputedStyle(p))) {
+        open = false;
+        break;
+      }
+    if (open) return e;
+  }
+  return null;
+}
+
+/**
  * Draws the block's still parts once, on see-through canvases at the output size: `below`
  * (background and photos), then for each effect what lies on it until the next effect
- * (null when nothing does) — the last one with the texts, speaker photos and logo.
+ * (null when nothing does) — the last one with the texts, speaker photos and logo. The
+ * still parts of blended layers holding effects are left out of these and drawn per group.
  */
 async function stillParts(node: HTMLElement, k: number, outW: number, outH: number) {
   const { toCanvas } = await import('html-to-image');
-  const { effects, bands, holders } = layers(node);
+  const split = layers(node);
+  const { effects, holders } = split;
+  // The blended layers holding effects (the outermost of nested ones).
+  const groupEls = tops(
+    effects.map((e) => reachingBlend(e, node)).filter((g): g is HTMLElement => !!g),
+  ).filter((g, i, all) => all.indexOf(g) === i);
+  const inGroup = (e: HTMLElement) => groupEls.some((g) => g.contains(e));
+  const bands = split.bands.map((b) => b.filter((e) => !inGroup(e)));
+  const groupStills = groupEls.map((g) => split.bands.flat().filter((e) => g.contains(e)));
+  const allGroupStills = groupStills.flat();
   const unders = [...node.querySelectorAll<HTMLElement>('[data-shot="under"]')];
   const topShots = [...node.querySelectorAll<HTMLElement>('[data-shot="top"]')];
   const W = node.offsetWidth;
@@ -206,7 +249,7 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
   );
   const picsOf = (band: HTMLElement[]) =>
     pics.filter((img) => band.some((e) => e === img || e.contains(img)));
-  let undo = hideFor([...effects, ...bands.slice(1).flat(), ...unders]);
+  let undo = hideFor([...effects, ...bands.slice(1).flat(), ...allGroupStills, ...unders]);
   try {
     const pic = await draw();
     b.drawImage(pic, 0, 0, outW, outH);
@@ -220,21 +263,21 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
   for (const u of unders) drawShot(b, node, u);
   b.restore();
 
-  const over: (HTMLCanvasElement | null)[] = [];
-  for (let i = 1; i < bands.length; i++) {
-    const last = i === bands.length - 1;
-    // Only this band's parts (what the block paints itself was drawn below).
-    const keep = bands[i]!.filter((e) => !topShots.some((x) => x === e));
-    if (keep.length === 0 && !(last && topShots.length)) {
-      over.push(null);
-      continue;
-    }
+  /**
+   * Only `keep` drawn (with everything else hidden): the boxes holding parts show none of
+   * their own paint (background, shadows, ::before/::after: drawn below). They stay visible
+   * themselves: a hidden box's mask (soft edges, a cut-out's outline) isn't applied to what
+   * it holds.
+   */
+  const drawOnly = async (keep: HTMLElement[]) => {
     const band = canvasOf(outW, outH);
     const a = band.getContext('2d')!;
-    // Everything else is hidden, and the boxes holding parts show none of their own paint
-    // (background, shadows, ::before/::after: drawn below). They stay visible themselves:
-    // a hidden box's mask (soft edges, a cut-out's outline) isn't applied to what it holds.
-    undo = hideFor([...effects, ...bands.flatMap((b, j) => (j === i ? [] : b)), ...topShots]);
+    const kept = new Set(keep);
+    undo = hideFor([
+      ...effects,
+      ...[...bands.flat(), ...allGroupStills].filter((e) => !kept.has(e)),
+      ...topShots,
+    ]);
     // A box with words of its own (not in a child) is hidden instead, its parts shown.
     const words = (e: HTMLElement) =>
       [...e.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && c.textContent?.trim());
@@ -250,12 +293,10 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
     shut.forEach((e) => (e.style.visibility = 'hidden'));
     keep.forEach((e) => (e.style.visibility = 'visible'));
     try {
-      if (keep.length) {
-        const pic = await draw();
-        a.drawImage(pic, 0, 0, outW, outH);
-        freeCanvas(pic);
-        restoreMissing(a, node, picsOf(keep), k);
-      }
+      const pic = await draw();
+      a.drawImage(pic, 0, 0, outW, outH);
+      freeCanvas(pic);
+      restoreMissing(a, node, picsOf(keep), k);
     } finally {
       undo();
       bare.forEach((e, j) => {
@@ -265,7 +306,21 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
       });
       [...shut, ...keep].forEach((e, j) => (e.style.visibility = vis[j]!));
     }
+    return band;
+  };
+
+  const over: (HTMLCanvasElement | null)[] = [];
+  for (let i = 1; i < bands.length; i++) {
+    const last = i === bands.length - 1;
+    // Only this band's parts (what the block paints itself was drawn below).
+    const keep = bands[i]!.filter((e) => !topShots.some((x) => x === e));
+    if (keep.length === 0 && !(last && topShots.length)) {
+      over.push(null);
+      continue;
+    }
+    const band = keep.length ? await drawOnly(keep) : canvasOf(outW, outH);
     if (last) {
+      const a = band.getContext('2d')!;
       a.save();
       a.scale(k, k);
       for (const t of topShots) drawShot(a, node, t);
@@ -273,7 +328,42 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
     }
     over.push(band);
   }
-  return { below, over, effects };
+
+  // Each group's still parts, drawn unblended and whole (its own blend and opacity are
+  // given to the group when it goes onto the frame).
+  const groups: Group[] = [];
+  for (const [gi, g] of groupEls.entries()) {
+    const fx = effects.flatMap((e, i) => (g.contains(e) ? [i] : []));
+    const first = effects[fx[0]!]!;
+    const stills = groupStills[gi]!;
+    const before = stills.filter(
+      (e) => first.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_PRECEDING,
+    );
+    const after = stills.filter((e) => !before.includes(e));
+    const css = getComputedStyle(g);
+    const blend = css.mixBlendMode === 'plus-lighter' ? 'lighter' : css.mixBlendMode;
+    // The group's own opacity and its holders' go to the whole group.
+    let alpha = 1;
+    for (let e: HTMLElement | null = g; e && e !== node; e = e.parentElement)
+      alpha *= Number.parseFloat(getComputedStyle(e).opacity) || 1;
+    const was = [g.style.mixBlendMode, g.style.opacity];
+    g.style.mixBlendMode = 'normal';
+    g.style.opacity = '1';
+    try {
+      groups.push({
+        el: g,
+        fx,
+        under: before.length ? await drawOnly(before) : null,
+        top: after.length ? await drawOnly(after) : null,
+        blend: blend as GlobalCompositeOperation,
+        alpha,
+      });
+    } finally {
+      g.style.mixBlendMode = was[0]!;
+      g.style.opacity = was[1]!;
+    }
+  }
+  return { below, over, effects, groups };
 }
 
 /** One effect layer, ready to be drawn at any moment. */
@@ -341,6 +431,7 @@ function isolates(css: CSSStyleDeclaration): boolean {
  * A blend inside a group of its own (the letters' masked box, a moved layer) mixes only with
  * that group's insides on the page: taken onto the whole frame, an effect in black letters
  * set to multiply came out solid black. Such a blend is left out (the group is drawn plain).
+ * `node` is where the reading stops: the poster, or the blended group the effect is drawn into.
  */
 function heldLook(el: HTMLElement, node: HTMLElement) {
   let alpha = 1;
@@ -853,13 +944,15 @@ async function prepareEffects(
   node: HTMLElement,
   effects: HTMLElement[],
   k: number,
+  groups: Group[] = [],
 ): Promise<Effect[]> {
   const drawn = new Map<HTMLElement, Mask>();
   const masks = await Promise.all(effects.map((el) => masksOf(node, el, k, drawn)));
   return effects.map((el, i) => {
     const css = getComputedStyle(el);
     // How the layer mixes with what is under it (the same names, but one).
-    const held = heldLook(el, node);
+    // Inside a blended group: read up to the group (it gets its own blend and opacity).
+    const held = heldLook(el, groups.find((g) => g.el.contains(el))?.el ?? node);
     const own = css.mixBlendMode && css.mixBlendMode !== 'normal' ? css.mixBlendMode : null;
     const raw = own ?? held.blend ?? 'normal';
     const mode = raw === 'plus-lighter' ? 'lighter' : raw;
@@ -885,81 +978,106 @@ async function prepareEffects(
 /** Where masked effects are put together before going onto the frame. */
 let maskScratch: HTMLCanvasElement | null = null;
 
+/** Where blended groups are put together before going onto the frame. */
+let groupScratch: HTMLCanvasElement | null = null;
+
+/** One effect as it is `t` seconds in, onto `ctx` (the frame, or a group being put together). */
+async function drawOne(ctx: CanvasRenderingContext2D, fx: Effect, t: number, k: number) {
+  const { toCanvas } = await import('html-to-image');
+  let pic: HTMLCanvasElement;
+  if (fx.canvas) {
+    seekParticles(fx.el, t);
+    seekGpu(fx.el, t);
+    seekShaders(fx.el, t);
+    pic = fx.canvas;
+  } else {
+    for (const a of fx.anims) a.currentTime = t * 1000;
+    if (fx.el.querySelector('canvas')) {
+      seekParticles(fx.el, t);
+      seekGpu(fx.el, t);
+      seekShaders(fx.el, t);
+    }
+    pic = await toCanvas(fx.el, {
+      pixelRatio: k,
+      skipFonts: true,
+      width: fx.el.offsetWidth,
+      height: fx.el.offsetHeight,
+    });
+  }
+  let src: CanvasImageSource = pic;
+  let at = [fx.box.x * k, fx.box.y * k, fx.box.w * k, fx.box.h * k] as const;
+  if (fx.masks.length > 0) {
+    // Inside its masks only: drawn alone, cut to each mask, then put on the frame.
+    const { width, height } = ctx.canvas;
+    if (!maskScratch || maskScratch.width !== width || maskScratch.height !== height)
+      maskScratch = canvasOf(width, height);
+    const m = maskScratch.getContext('2d')!;
+    m.globalCompositeOperation = 'source-over';
+    m.clearRect(0, 0, width, height);
+    m.drawImage(pic, ...at);
+    m.globalCompositeOperation = 'destination-in';
+    for (const mask of fx.masks)
+      m.drawImage(mask.pic, mask.box.x * k, mask.box.y * k, mask.box.w * k, mask.box.h * k);
+    src = maskScratch;
+    at = [0, 0, width, height];
+  }
+  // The layer's adjustments: colours and blur by the canvas where it really can, else by
+  // our own code (iPhones); grain, frost and vignette always by ours (filtered).
+  let own: HTMLCanvasElement | null = null;
+  if (fx.filter) {
+    if (src !== maskScratch) {
+      // Drawn alone at its place on a frame-sized copy first, so grain and vignette sit
+      // where the layer does.
+      const { width, height } = ctx.canvas;
+      const c = canvasOf(width, height);
+      c.getContext('2d')!.drawImage(src, ...at);
+      at = [0, 0, width, height];
+      own = filtered(c, fx.filter);
+      freeCanvas(c);
+    } else own = filtered(maskScratch, fx.filter);
+    src = own;
+  }
+  ctx.save();
+  ctx.globalAlpha = fx.opacity * (fx.canvas ? fx.ownOpacity : 1);
+  ctx.globalCompositeOperation = fx.blend;
+  ctx.drawImage(src, ...at);
+  ctx.restore();
+  if (own) freeCanvas(own);
+  // A drawn copy of the layer is used once; the particle canvas is the live one.
+  if (!fx.canvas) freeCanvas(pic);
+}
+
 /**
  * Draws every effect as it is `t` seconds in, each followed by the still parts lying on
- * it (`over`, from stillParts).
+ * it (`over`, from stillParts). A blended group's effects are drawn into the group with
+ * its still parts, and the group then blended onto the frame where its first effect is.
  */
 async function drawEffects(
   ctx: CanvasRenderingContext2D,
-  node: HTMLElement,
   list: Effect[],
   t: number,
   k: number,
   over: (HTMLCanvasElement | null)[] = [],
+  groups: Group[] = [],
 ) {
-  const { toCanvas } = await import('html-to-image');
   for (const [i, fx] of list.entries()) {
-    let pic: HTMLCanvasElement;
-    if (fx.canvas) {
-      seekParticles(fx.el, t);
-      seekGpu(fx.el, t);
-      seekShaders(fx.el, t);
-      pic = fx.canvas;
-    } else {
-      for (const a of fx.anims) a.currentTime = t * 1000;
-      if (fx.el.querySelector('canvas')) {
-        seekParticles(fx.el, t);
-        seekGpu(fx.el, t);
-        seekShaders(fx.el, t);
-      }
-      pic = await toCanvas(fx.el, {
-        pixelRatio: k,
-        skipFonts: true,
-        width: fx.el.offsetWidth,
-        height: fx.el.offsetHeight,
-      });
-    }
-    let src: CanvasImageSource = pic;
-    let at = [fx.box.x * k, fx.box.y * k, fx.box.w * k, fx.box.h * k] as const;
-    if (fx.masks.length > 0) {
-      // Inside its masks only: drawn alone, cut to each mask, then put on the frame.
+    const group = groups.find((g) => g.fx.includes(i));
+    if (!group) await drawOne(ctx, fx, t, k);
+    else if (group.fx[0] === i) {
       const { width, height } = ctx.canvas;
-      if (!maskScratch || maskScratch.width !== width || maskScratch.height !== height)
-        maskScratch = canvasOf(width, height);
-      const m = maskScratch.getContext('2d')!;
-      m.globalCompositeOperation = 'source-over';
-      m.clearRect(0, 0, width, height);
-      m.drawImage(pic, ...at);
-      m.globalCompositeOperation = 'destination-in';
-      for (const mask of fx.masks)
-        m.drawImage(mask.pic, mask.box.x * k, mask.box.y * k, mask.box.w * k, mask.box.h * k);
-      src = maskScratch;
-      at = [0, 0, width, height];
+      if (!groupScratch || groupScratch.width !== width || groupScratch.height !== height)
+        groupScratch = canvasOf(width, height);
+      const g = groupScratch.getContext('2d')!;
+      g.clearRect(0, 0, width, height);
+      if (group.under) g.drawImage(group.under, 0, 0);
+      for (const j of group.fx) await drawOne(g, list[j]!, t, k);
+      if (group.top) g.drawImage(group.top, 0, 0);
+      ctx.save();
+      ctx.globalAlpha = group.alpha;
+      ctx.globalCompositeOperation = group.blend;
+      ctx.drawImage(groupScratch, 0, 0);
+      ctx.restore();
     }
-    // The layer's adjustments: colours and blur by the canvas where it really can, else by
-    // our own code (iPhones); grain, frost and vignette always by ours (filtered).
-    let own: HTMLCanvasElement | null = null;
-    if (fx.filter) {
-      if (src !== maskScratch) {
-        // Drawn alone at its place on a frame-sized copy first, so grain and vignette sit
-        // where the layer does.
-        const { width, height } = ctx.canvas;
-        const c = canvasOf(width, height);
-        c.getContext('2d')!.drawImage(src, ...at);
-        at = [0, 0, width, height];
-        own = filtered(c, fx.filter);
-        freeCanvas(c);
-      } else own = filtered(maskScratch, fx.filter);
-      src = own;
-    }
-    ctx.save();
-    ctx.globalAlpha = fx.opacity * (fx.canvas ? fx.ownOpacity : 1);
-    ctx.globalCompositeOperation = fx.blend;
-    ctx.drawImage(src, ...at);
-    ctx.restore();
-    if (own) freeCanvas(own);
-    // A drawn copy of the layer is used once; the particle canvas is the live one.
-    if (!fx.canvas) freeCanvas(pic);
     const still = over[i];
     if (still) ctx.drawImage(still, 0, 0);
   }
@@ -1215,22 +1333,24 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
   const used: HTMLCanvasElement[] = [];
   try {
     restoreImages = await prepareImages(node, k);
-    const { below, over, effects } = await stillParts(node, k, outW, outH);
+    const { below, over, effects, groups } = await stillParts(node, k, outW, outH);
     used.push(below, ...over.filter((c): c is HTMLCanvasElement => !!c));
-    const list = await prepareEffects(node, effects, k);
+    for (const g of groups)
+      used.push(...[g.under, g.top].filter((c): c is HTMLCanvasElement => !!c));
+    const list = await prepareEffects(node, effects, k, groups);
     for (const fx of list) used.push(...fx.masks.map((m) => m.pic));
     const scratch = canvasOf(outW, outH);
     used.push(scratch);
     restoreTextures = await preparePictures(effects, k);
     // iPhones may leave pictures out of the library's very first drawing of a layer: one
     // drawing of each, thrown away, before the frames that count.
-    await drawEffects(scratch.getContext('2d')!, node, list, 0, k);
+    await drawEffects(scratch.getContext('2d')!, list, 0, k);
     if (opts.still !== undefined) {
       const pic = canvasOf(outW, outH);
       used.push(pic);
       const p = pic.getContext('2d')!;
       p.drawImage(below, 0, 0);
-      await drawEffects(p, node, list, opts.still, k, over);
+      await drawEffects(p, list, opts.still, k, over, groups);
       const png = await new Promise<Blob | null>((r) => pic.toBlob(r, 'image/png'));
       opts.onProgress?.(1);
       return { mp4: null, gif: null, feed: null, png };
@@ -1291,7 +1411,7 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
       const t = i / fps;
       f.clearRect(0, 0, outW, outH);
       f.drawImage(below, 0, 0);
-      await drawEffects(f, node, list, t, k, over);
+      await drawEffects(f, list, t, k, over, groups);
       if (i < fade) {
         const keep = canvasOf(outW, outH);
         keep.getContext('2d')!.drawImage(frame, 0, 0);
