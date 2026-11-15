@@ -193,13 +193,7 @@ function reachingBlend(el: HTMLElement, node: HTMLElement): HTMLElement | null {
   for (let e: HTMLElement | null = el.parentElement; e && e !== node; e = e.parentElement) {
     const mode = getComputedStyle(e).mixBlendMode;
     if (!mode || mode === 'normal') continue;
-    let open = true;
-    for (let p = e.parentElement; p && p !== node; p = p.parentElement)
-      if (isolates(getComputedStyle(p))) {
-        open = false;
-        break;
-      }
-    if (open) return e;
+    if (blendReaches(e, node)) return e;
   }
   return null;
 }
@@ -424,13 +418,37 @@ function isolates(css: CSSStyleDeclaration): boolean {
 }
 
 /**
+ * Whether a box's blend mode mixes with what is already on the frame when it is drawn. On
+ * the page it mixes with what was painted before it inside its group (the nearest box
+ * starting a group of its own): the poster's own box holds the layers under a text set to
+ * multiply, so that blend reaches them; the letters' masked box holds nothing before an
+ * effect drawn alone in it, so that blend mixes with nothing and the effect stays plain.
+ */
+function blendReaches(e: HTMLElement, stop: HTMLElement): boolean {
+  let group: HTMLElement = stop;
+  for (let p = e.parentElement; p && p !== stop; p = p.parentElement)
+    if (isolates(getComputedStyle(p))) {
+      group = p;
+      break;
+    }
+  if (group === stop) return true;
+  // Anything painted before it in its group (not a box it sits in).
+  for (const x of group.querySelectorAll<HTMLElement>('*')) {
+    if (x === e || x.contains(e)) continue;
+    if (x.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) return true;
+    break;
+  }
+  return false;
+}
+
+/**
  * How the layers holding an effect show it: their see-through-ness multiplied, and the blend
  * mode that really reaches the layers under it. A poster layer sets both on its own box
  * (LayeredPoster `look`, `Adjusted`), around the effect — read from the effect alone, a
  * half-transparent or blended layer was recorded at full strength over what is under it.
  * A blend inside a group of its own (the letters' masked box, a moved layer) mixes only with
  * that group's insides on the page: taken onto the whole frame, an effect in black letters
- * set to multiply came out solid black. Such a blend is left out (the group is drawn plain).
+ * set to multiply came out solid black. Such a blend is left out (see blendReaches).
  * `node` is where the reading stops: the poster, or the blended group the effect is drawn into.
  */
 function heldLook(el: HTMLElement, node: HTMLElement) {
@@ -444,13 +462,7 @@ function heldLook(el: HTMLElement, node: HTMLElement) {
   for (let e: HTMLElement | null = el; e && e !== node; e = e.parentElement) {
     const mode = getComputedStyle(e).mixBlendMode;
     if (!mode || mode === 'normal') continue;
-    let open = true;
-    for (let p = e.parentElement; p && p !== node; p = p.parentElement)
-      if (isolates(getComputedStyle(p))) {
-        open = false;
-        break;
-      }
-    if (open) {
+    if (blendReaches(e, node)) {
       blend = mode;
       break;
     }
