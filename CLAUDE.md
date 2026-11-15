@@ -217,7 +217,7 @@ Poster templates (Design → «Постеры», `components/PosterStudio.tsx`, 
 `/api/poster-templates`, table `poster_templates`): background + up to 20 layers (pictures keep
 transparency via `prepareCutout`; a plain photo fills the poster (`fit: cover`) so it lines up in every
 shape; own effects on a picture, masked to a cut-out's outline), texts filled from the event/meeting
-(own effects inside the letters — a PNG mask of the lines — or around them, `fxIn`), colour/gradient
+(own effects inside the letters — a PNG mask of the lines, drawn at 4× — or around them, `fxIn`; `fxEdge` default none, «Тонкий край» on request), colour/gradient
 layers (`type: fill`, a gradient can flow / turn / breathe), shapes with soft edges (`shape`, `soft`;
 `data-edge` for the recorder), effect layers anywhere in the stack (fade at the poster edge), a frame
 (`frame`), «✂️ background removal» on the phone (MediaPipe selfie model, `lib/cutout.ts`; engine copied into

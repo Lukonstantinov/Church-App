@@ -2282,8 +2282,8 @@ function TextSettings({
               {(['line', 'none', 'cover'] as const).map((m) => (
                 <Pill
                   key={m}
-                  on={(layer.fxEdge ?? 'line') === m}
-                  onClick={() => onChange({ fxEdge: m === 'line' ? null : m })}
+                  on={(layer.fxEdge ?? 'none') === m}
+                  onClick={() => onChange({ fxEdge: m === 'none' ? null : m })}
                   label={t.posters.fxEdge[m]}
                 />
               ))}

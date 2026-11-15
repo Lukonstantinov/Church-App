@@ -521,7 +521,7 @@ function Layer({
         at={{ ...at, ...look }}
         type={type}
         id={layer.id}
-        edge={layer.fxEdge ?? 'line'}
+        edge={layer.fxEdge ?? 'none'}
         warp={layer.warp}
         style={layer.style}
         color={layer.color ?? '#ffffff'}
@@ -565,7 +565,9 @@ function Layer({
       type={type}
       id={layer.id}
       // Sublayers fill the whole letters unless the words' effects ask for a border.
-      edge={layer.fxEdge ?? (effects.length && layer.fxIn !== 'around' ? 'line' : 'none')}
+      // No border unless asked for: the letters' own colour round the effect read as a dark
+      // outline on a big screen.
+      edge={layer.fxEdge ?? 'none'}
       inside={inLetters}
     />
   );

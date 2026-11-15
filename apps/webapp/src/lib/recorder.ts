@@ -827,13 +827,20 @@ async function drawMask(el: HTMLElement, css: CSSStyleDeclaration, k: number) {
       const c = pic.getContext('2d')!;
       // Spread by about half a pixel of the recording: enlarged, the mask's soft edge left the
       // layer's own colour (dark letters) showing as a thin outline the screen doesn't have.
-      const r = Math.max(0.5, k * 0.25);
+      // All round (eight ways), about a pixel: it covers the picture's own soft edge under it,
+      // which video compression turned into a dotted dark rim.
+      const r = Math.max(1, k * 0.3);
+      const d = r * 0.7071;
       for (const [dx, dy] of [
         [0, 0],
         [r, 0],
         [-r, 0],
         [0, r],
         [0, -r],
+        [d, d],
+        [-d, d],
+        [d, -d],
+        [-d, -d],
       ] as const)
         c.drawImage(img, dx, dy, pic.width, pic.height);
     }
