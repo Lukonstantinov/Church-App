@@ -5,7 +5,7 @@
  * so a recording shows what the screen showed. Recipes after Fable's motion-design brief.
  */
 
-import type { PosterLayer } from '@church/shared';
+import { SLIDE_TRANSITION_KINDS, type PosterLayer, type SlideTransitionKind } from '@church/shared';
 
 /** One slide: its own layers, how long it is on (s), and how the poster changes into it. */
 export interface Slide {
@@ -33,16 +33,9 @@ export function slideAt(slides: Slide[], t: number, change: number) {
   return { index: i, prev: null as number | null, p: 1 };
 }
 
-export const SLIDE_TRANSITIONS = [
-  'glitch',
-  'fade',
-  'zoom',
-  'blur',
-  'slide',
-  'flash',
-  'cut',
-] as const;
-export type SlideTransition = (typeof SLIDE_TRANSITIONS)[number];
+/** The transitions (shared with the server, which keeps saved slideshows). */
+export const SLIDE_TRANSITIONS = SLIDE_TRANSITION_KINDS;
+export type SlideTransition = SlideTransitionKind;
 
 /** How one of the two slides looks at a moment of the change. */
 export interface SlideLook {

@@ -54,6 +54,14 @@ export const PARTICLE_KINDS: ReadonlySet<MeetingMotion> = new Set<MeetingMotion>
   'wordmarquee',
   'wordglitch',
   'wordrain',
+  'wordtype',
+  'wordpop',
+  'wordflip',
+  'wordassemble',
+  'wordneon',
+  'wordzoom',
+  'wordroll',
+  'wordshine',
 ]);
 
 export interface ParticleLayer {

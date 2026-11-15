@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState, type CSSProperties, type SetStateAction } from 'react';
-import type { GroupSummary, PosterLayer, PosterTexts } from '@church/shared';
+import {
+  MAX_POSTER_LAYERS,
+  MAX_SLIDES,
+  posterLayerSchema,
+  type GroupSummary,
+  type PosterLayer,
+  type PosterTemplate,
+  type PosterTexts,
+  type SavedSlideshow,
+} from '@church/shared';
 import {
   clearSuspect,
   dropDraft,
@@ -11,8 +20,15 @@ import {
 } from '../lib/drafts';
 import { useT } from '../lib/i18n';
 import { preparePhoto } from '../lib/image';
-import { usePosterTemplates } from '../lib/queries';
-import { haptic } from '../lib/telegram';
+import {
+  useDeleteSlideshow,
+  usePosterTemplates,
+  useSaveSlideshow,
+  useSlideshows,
+} from '../lib/queries';
+import { StillMotion } from '../lib/perf';
+import { useToast } from './Toast';
+import { confirmDialog, haptic } from '../lib/telegram';
 import {
   SLIDE_CHANGE_SECONDS,
   SLIDE_TRANSITIONS,
@@ -48,6 +64,14 @@ const SHAPES = {
   custom: '',
 } as const;
 type Shape = keyof typeof SHAPES;
+/** Each shape's width ÷ height, for the slide pictures in the strip. */
+const SHAPE_RATIO: Record<Shape, string> = {
+  '4:3': '4 / 3',
+  '1:1': '1 / 1',
+  '4:5': '4 / 5',
+  '9:16': '9 / 16',
+  custom: '16 / 9',
+};
 
 /** An own size, in pixels of the finished video / picture. */
 interface Size {
@@ -217,8 +241,6 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
     if (next.background !== editDoc.background || next.frame !== editDoc.frame)
       layered.setDoc((d) => ({ ...d, background: next.background, frame: next.frame }));
   };
-  const setSlide = (i: number, p: Partial<Slide>) =>
-    setSlides((cur) => cur.map((sl, j) => (j === i ? { ...sl, ...p } : sl)));
   const tpl = templates.data?.find((x) => x.id === tplId) ?? templates.data?.[0] ?? null;
 
   const pick = async (f: File | undefined) => {
@@ -362,27 +384,18 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
       {source === 'layers' && (
         <SlidesBar
           slides={slides}
+          setSlides={setSlides}
           editing={slideIdx}
           onEdit={(i) => {
             haptic.tap();
             setSelected(null);
             setEditing(i);
           }}
-          onAdd={() => {
-            haptic.tap();
-            setSlides((cur) => [
-              ...cur,
-              { id: `s${Date.now().toString(36)}`, layers: [], seconds: 4, transition: 'glitch' },
-            ]);
-            setSelected(null);
-            setEditing(slides.length);
-          }}
-          onChange={setSlide}
-          onDelete={(i) => {
-            setSlides((cur) => cur.filter((_, j) => j !== i));
-            setEditing(null);
-            setSelected(null);
-          }}
+          doc={layered.doc}
+          setDoc={(d) => layered.setDoc(d)}
+          templates={templates.data ?? []}
+          aspect={shape === 'custom' ? `${size.w} / ${size.h}` : SHAPE_RATIO[shape]}
+          texts={textsOf({ mode: 'none', text: '' } as never)}
         />
       )}
       {source === 'layers' && (
@@ -480,51 +493,248 @@ function SlideshowPoster({
   );
 }
 
-/** The slides: the background or a slide to edit, and each slide's length and change. */
+/** A poster template as a slide's layers: its background first (as a colour or picture layer). */
+function posterAsLayers(tpl: PosterTemplate): PosterLayer[] {
+  const tag = Date.now().toString(36);
+  const bg = tpl.background;
+  const under: PosterLayer[] = [];
+  if (bg.type === 'color' || bg.type === 'gradient')
+    under.push(
+      posterLayerSchema.parse({
+        id: `${tag}bg`,
+        type: 'fill',
+        paint: bg.type === 'color' ? 'color' : 'linear',
+        colors: bg.colors.slice(0, 4),
+        angle: bg.angle,
+      }),
+    );
+  else if (bg.type === 'photo' && bg.mediaId)
+    under.push(
+      posterLayerSchema.parse({
+        id: `${tag}bg`,
+        type: 'image',
+        mediaId: bg.mediaId,
+        url: bg.url ?? null,
+        fit: 'cover',
+      }),
+    );
+  if (bg.type === 'photo' && bg.dim)
+    under.push(
+      posterLayerSchema.parse({
+        id: `${tag}dim`,
+        type: 'fill',
+        paint: 'color',
+        colors: ['#000000'],
+        opacity: bg.dim,
+      }),
+    );
+  return [...under, ...tpl.layers.map((l, i) => ({ ...l, id: `${tag}${i}${l.id}` }))].slice(
+    0,
+    MAX_POSTER_LAYERS,
+  );
+}
+
+/**
+ * The slides: a strip of small pictures (the background, then each slide) to choose what
+ * to edit; a new slide is empty, a copy, or made from a saved poster; the chosen slide's
+ * length, change, place in the row; and saving the whole slideshow in the app to open
+ * again (church-wide, like poster templates).
+ */
 function SlidesBar({
   slides,
+  setSlides,
   editing,
   onEdit,
-  onAdd,
-  onChange,
-  onDelete,
+  doc,
+  setDoc,
+  templates,
+  aspect,
+  texts,
 }: {
   slides: Slide[];
+  setSlides: (f: (cur: Slide[]) => Slide[]) => void;
   editing: number | null;
   onEdit: (i: number | null) => void;
-  onAdd: () => void;
-  onChange: (i: number, p: Partial<Slide>) => void;
-  onDelete: (i: number) => void;
+  doc: PosterDoc;
+  setDoc: (d: PosterDoc) => void;
+  templates: PosterTemplate[];
+  aspect: string;
+  texts: PosterTexts;
 }) {
   const t = useT();
+  const toast = useToast();
   const ts = t.freePoster.slides;
-  const chip = (on: boolean, label: string, act: () => void, key: string) => (
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [listOpen, setListOpen] = useState(false);
+  const saved = useSlideshows(listOpen || openId !== null);
+  const save = useSaveSlideshow();
+  const remove = useDeleteSlideshow();
+  const sl = editing !== null ? slides[editing] : undefined;
+  const total = slides.reduce((a, b) => a + b.seconds, 0);
+  const newId = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  const add = (layers: PosterLayer[], from?: Slide) => {
+    haptic.tap();
+    setSlides((cur) => [
+      ...cur,
+      {
+        id: newId(),
+        layers,
+        seconds: from?.seconds ?? 4,
+        transition: from?.transition ?? 'glitch',
+      },
+    ]);
+    setAdding(false);
+    onEdit(slides.length);
+  };
+  const change = (p: Partial<Slide>) =>
+    editing !== null && setSlides((cur) => cur.map((x, i) => (i === editing ? { ...x, ...p } : x)));
+  const move = (d: -1 | 1) => {
+    if (editing === null) return;
+    const to = editing + d;
+    if (to < 0 || to >= slides.length) return;
+    haptic.tap();
+    setSlides((cur) => {
+      const next = [...cur];
+      [next[editing], next[to]] = [next[to]!, next[editing]!];
+      return next;
+    });
+    onEdit(to);
+  };
+  const mine = saved.data?.find((x) => x.id === openId)?.mine ?? false;
+  const doSave = async () => {
+    const title = name.trim() || ts.untitled;
+    try {
+      const res = await save.mutateAsync({
+        ...(openId && mine ? { id: openId } : {}),
+        name: title,
+        background: doc.background,
+        layers: doc.layers,
+        frame: doc.frame ?? null,
+        slides,
+      });
+      setOpenId(res.id);
+      setName(res.name);
+      haptic.success();
+      toast(ts.savedOk);
+    } catch {
+      haptic.error();
+      toast(t.common.saveFailed, 'error');
+    }
+  };
+  const open = async (x: SavedSlideshow) => {
+    if (slides.length && !(await confirmDialog(ts.openConfirm(x.name)))) return;
+    setDoc({ ...doc, background: x.background, layers: x.layers, frame: x.frame });
+    setSlides(() => x.slides.map((s) => ({ ...s })));
+    setOpenId(x.id);
+    setName(x.name);
+    setListOpen(false);
+    onEdit(null);
+  };
+  const tile = (
+    on: boolean,
+    key: string,
+    label: string,
+    act: () => void,
+    layers: PosterLayer[] | null,
+  ) => (
     <button
       key={key}
       type="button"
       onClick={act}
-      className={`rounded-full px-3 py-1.5 text-[13px] font-semibold ${
-        on ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+      className={`relative w-[86px] shrink-0 overflow-hidden rounded-lg ring-2 transition ${
+        on ? 'ring-[var(--brand)]' : 'ring-transparent'
       }`}
+      style={{ aspectRatio: aspect }}
     >
-      {label}
+      {/* A still picture: no effects run in the strip. */}
+      <StillMotion.Provider value>
+        <div className="pointer-events-none absolute inset-0 [container-type:size]">
+          <LayeredPoster fill tpl={doc} texts={texts} slides={layers ? [{ key, layers }] : []} />
+        </div>
+      </StillMotion.Provider>
+      <span className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-[10px] font-semibold text-white">
+        {label}
+      </span>
     </button>
   );
-  const sl = editing !== null ? slides[editing] : undefined;
-  const total = slides.reduce((a, b) => a + b.seconds, 0);
   return (
-    <div className="flex flex-col gap-2 rounded-xl bg-hairline/50 p-2.5">
-      <div className="text-[12px] font-semibold text-hint">{ts.title}</div>
-      <div className="flex flex-wrap gap-1.5">
-        {chip(editing === null, ts.background, () => onEdit(null), 'bg')}
-        {slides.map((_, i) => chip(editing === i, ts.slide(i + 1), () => onEdit(i), `s${i}`))}
-        {slides.length < MAX_SLIDES && chip(false, ts.add, onAdd, 'add')}
+    <div className="flex flex-col gap-2 rounded-2xl bg-hairline/50 p-2.5">
+      <div className="flex items-center justify-between">
+        <div className="text-[13px] font-semibold">🎞 {ts.title}</div>
+        {slides.length > 0 && (
+          <div className="text-[12px] font-semibold text-hint">
+            {t.motionExport.length(Math.round(total))}
+          </div>
+        )}
       </div>
-      <p className="text-[11px] leading-snug text-hint">
-        {slides.length ? ts.total(Math.round(total)) : ts.hint}
-      </p>
+      <div className="flex gap-2 overflow-x-auto p-0.5 pb-1">
+        {tile(editing === null, 'bg', ts.background, () => onEdit(null), null)}
+        {slides.map((x, i) =>
+          tile(editing === i, x.id, `${i + 1} · ${x.seconds} с`, () => onEdit(i), x.layers),
+        )}
+        {slides.length < MAX_SLIDES && (
+          <button
+            type="button"
+            onClick={() => setAdding(!adding)}
+            className="flex w-[86px] shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-hint/40 text-[22px] text-hint"
+            style={{ aspectRatio: aspect }}
+            aria-label={ts.add}
+          >
+            ＋
+          </button>
+        )}
+      </div>
+      {slides.length === 0 && !adding && (
+        <p className="text-[11px] leading-snug text-hint">{ts.hint}</p>
+      )}
+      {adding && (
+        <div className="flex flex-col gap-1.5 rounded-xl bg-[var(--color-section)] p-2">
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => add([])}
+              className="rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold"
+            >
+              {ts.emptySlide}
+            </button>
+            {sl && (
+              <button
+                type="button"
+                onClick={() =>
+                  add(
+                    sl.layers.map((l) => ({ ...l, id: `${l.id}c` })),
+                    sl,
+                  )
+                }
+                className="rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold"
+              >
+                {ts.copySlide}
+              </button>
+            )}
+          </div>
+          {templates.length > 0 && (
+            <>
+              <div className="text-[12px] font-semibold text-hint">{ts.fromPoster}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {templates.map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => add(posterAsLayers(tpl))}
+                    className="rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold"
+                  >
+                    🖼 {tpl.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
       {sl && editing !== null && (
-        <>
+        <div className="flex flex-col gap-2 rounded-xl bg-[var(--color-section)] p-2">
           <label className="flex items-center gap-2 text-[12px] text-hint">
             {ts.seconds(sl.seconds)}
             <input
@@ -533,38 +743,133 @@ function SlidesBar({
               max={15}
               step={0.5}
               value={sl.seconds}
-              onChange={(e) => onChange(editing, { seconds: Number(e.target.value) })}
+              onChange={(e) => change({ seconds: Number(e.target.value) })}
               className="flex-1"
             />
           </label>
           <div className="text-[12px] font-semibold text-hint">{ts.transition}</div>
           <div className="flex flex-wrap gap-1.5">
-            {SLIDE_TRANSITIONS.map((k: SlideTransition) =>
-              chip(
-                sl.transition === k,
-                ts.kinds[k],
-                () => {
+            {SLIDE_TRANSITIONS.map((k: SlideTransition) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => {
                   haptic.tap();
-                  onChange(editing, { transition: k });
-                },
-                k,
-              ),
-            )}
+                  change({ transition: k });
+                }}
+                className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                  sl.transition === k ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                }`}
+              >
+                {ts.kinds[k]}
+              </button>
+            ))}
           </div>
-          <button
-            type="button"
-            onClick={() => onDelete(editing)}
-            className="self-start text-[13px] font-semibold text-[var(--color-danger,#e5484d)]"
-          >
-            {ts.remove}
-          </button>
-        </>
+          <div className="flex flex-wrap gap-1.5 text-[12px] font-semibold">
+            <button
+              type="button"
+              onClick={() => move(-1)}
+              disabled={editing === 0}
+              className="rounded-full bg-hairline px-3 py-1 disabled:opacity-40"
+            >
+              ← {ts.earlier}
+            </button>
+            <button
+              type="button"
+              onClick={() => move(1)}
+              disabled={editing === slides.length - 1}
+              className="rounded-full bg-hairline px-3 py-1 disabled:opacity-40"
+            >
+              {ts.later} →
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!(await confirmDialog(ts.removeConfirm))) return;
+                setSlides((cur) => cur.filter((_, j) => j !== editing));
+                onEdit(null);
+              }}
+              className="rounded-full bg-hairline px-3 py-1 text-[var(--color-danger,#e5484d)]"
+            >
+              🗑 {ts.remove}
+            </button>
+          </div>
+        </div>
       )}
+      <div className="flex flex-col gap-1.5 border-t border-hairline pt-2">
+        {slides.length > 0 && (
+          <div className="flex gap-1.5">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={40}
+              placeholder={ts.namePlaceholder}
+              className="min-w-0 flex-1 rounded-xl bg-[var(--color-section)] px-3 py-1.5 text-[14px] outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => void doSave()}
+              disabled={save.isPending}
+              className="rounded-full bg-[var(--brand)] px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
+            >
+              💾 {openId && mine ? ts.update : ts.save}
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setListOpen(!listOpen)}
+          className="self-start text-[13px] font-semibold text-link"
+        >
+          📂 {ts.savedList} {listOpen ? '▴' : '▾'}
+        </button>
+        {listOpen && (
+          <div className="flex flex-col gap-1">
+            {saved.isLoading && <p className="text-[12px] text-hint">…</p>}
+            {saved.data?.length === 0 && <p className="text-[12px] text-hint">{ts.noSaved}</p>}
+            {saved.data?.map((x) => (
+              <div
+                key={x.id}
+                className="flex items-center gap-2 rounded-xl bg-[var(--color-section)] px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[14px] font-semibold">{x.name}</div>
+                  <div className="text-[11px] text-hint">
+                    {ts.count(
+                      x.slides.length,
+                      Math.round(x.slides.reduce((a, b) => a + b.seconds, 0)),
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void open(x)}
+                  className="rounded-full bg-hairline px-3 py-1 text-[12px] font-semibold"
+                >
+                  {ts.open}
+                </button>
+                {x.mine && (
+                  <button
+                    type="button"
+                    aria-label={ts.deleteSaved}
+                    onClick={async () => {
+                      if (!(await confirmDialog(ts.deleteConfirm(x.name)))) return;
+                      remove.mutate(x.id);
+                      if (openId === x.id) setOpenId(null);
+                    }}
+                    className="rounded-full px-2 py-1 text-[13px]"
+                  >
+                    🗑
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-
-const MAX_SLIDES = 12;
 
 /**
  * «📐 Own size»: width and height in pixels (typed, or a ready size). The preview takes the
@@ -638,7 +943,79 @@ function OwnSize({ size, onChange }: { size: Size; onChange: (s: Size) => void }
           );
         })}
       </div>
+      <SavedSizes size={size} onPick={set} />
       <p className="text-[11px] leading-snug text-hint">{tf.ownSizeHint}</p>
+    </div>
+  );
+}
+
+/** Own sizes kept on this phone or computer (a screen in the hall, a banner…). */
+const SIZES_KEY = 'church.ownSizes';
+function readSizes(): Size[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(SIZES_KEY) ?? '[]') as Size[];
+    return Array.isArray(v) ? v.filter((x) => x && x.w > 0 && x.h > 0).slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The kept own sizes to pick, and «save this size» for the one being used. */
+function SavedSizes({ size, onPick }: { size: Size; onPick: (s: Size) => void }) {
+  const tf = useT().freePoster;
+  const [list, setList] = useState(readSizes);
+  const keep = (next: Size[]) => {
+    setList(next);
+    try {
+      localStorage.setItem(SIZES_KEY, JSON.stringify(next));
+    } catch {
+      // Storage blocked: kept for this visit only.
+    }
+  };
+  const has = list.some((x) => x.w === size.w && x.h === size.h);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {list.map((x) => {
+        const on = x.w === size.w && x.h === size.h;
+        return (
+          <span
+            key={`${x.w}x${x.h}`}
+            className={`flex items-center gap-1 rounded-full py-1 pl-2.5 pr-1 text-[12px] font-semibold ${
+              on ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                haptic.tap();
+                onPick(x);
+              }}
+            >
+              ⭐ {x.w}×{x.h}
+            </button>
+            <button
+              type="button"
+              aria-label={tf.forgetSize}
+              onClick={() => keep(list.filter((y) => y !== x))}
+              className="rounded-full px-1.5 opacity-70"
+            >
+              ✕
+            </button>
+          </span>
+        );
+      })}
+      {!has && (
+        <button
+          type="button"
+          onClick={() => {
+            haptic.tap();
+            keep([{ w: size.w, h: size.h }, ...list].slice(0, 12));
+          }}
+          className="rounded-full border border-dashed border-hint/50 px-2.5 py-1 text-[12px] font-semibold text-link"
+        >
+          {tf.saveSize(size.w, size.h)}
+        </button>
+      )}
     </div>
   );
 }

@@ -687,6 +687,252 @@ function rain(ctx: Ctx, fx: TextFx, env: TextEnv, t: number, W: number, H: numbe
     }
 }
 
+// ---------- Kinetic type: one word at a time, as motion designers set titles ----------
+
+/** The words sized to fit across, each as one picture and as its letters (with places). */
+function titleSet(fx: TextFx, env: TextEnv, kind: string, scale = 0.2) {
+  return cached(fx, env, kind, '', () => {
+    const words = wordsOf(fx, env);
+    const colours = palette(fx, env);
+    let px = env.height * scale * fx.size;
+    for (const w of words) {
+      const tw = widthOf(fontOf(px, fx.font), w);
+      if (tw > env.width * 0.86) px *= (env.width * 0.86) / tw;
+    }
+    const font = fontOf(px, fx.font);
+    const look: Look = { colours, glow: fx.glow, outline: fx.style === 'outline' };
+    return {
+      px,
+      words: words.map((w, wi) => {
+        const chars = [...w];
+        const total = widthOf(font, w);
+        let x = -total / 2;
+        const letters = chars.map((ch, i) => {
+          const cw = widthOf(font, ch);
+          const colour = along(colours, chars.length > 1 ? i / (chars.length - 1) : 0.5);
+          const s = lineSprite(env, ch, px, fx.font, {
+            ...look,
+            colours: [colour],
+            outline: fx.style === 'outline' || (fx.style === 'mix' && wi % 2 === 1),
+          });
+          const at = x + cw / 2;
+          x += cw;
+          return { s, x: at, blank: ch.trim() === '' };
+        });
+        return { whole: lineSprite(env, w, px, fx.font, look), letters, total };
+      }),
+    };
+  });
+}
+
+/** Which word is on, and how far into its turn (0…1), each word on for `each` seconds. */
+function turnOf(t: number, n: number, each: number) {
+  const at = t / each;
+  return { i: ((Math.floor(at) % n) + n) % n, u: frac(at) };
+}
+
+/** A letter's picture drawn round its own middle, moved, turned and sized. */
+function putLetter(
+  ctx: Ctx,
+  s: Sprite,
+  x: number,
+  y: number,
+  alpha: number,
+  scale = 1,
+  rot = 0,
+  sy = 1,
+) {
+  if (alpha <= 0.01 || scale <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  if (rot) ctx.rotate(rot);
+  ctx.scale(scale, scale * sy);
+  ctx.drawImage(s.c, -s.w / 2, -s.h / 2, s.w, s.h);
+  ctx.restore();
+}
+
+// Typewriter: the word typed letter by letter behind a blinking cursor, held, then taken back.
+function typewriter(ctx: Ctx, fx: TextFx, env: TextEnv, t: number, W: number, H: number) {
+  const made = titleSet(fx, env, 'type');
+  const each = 4.2;
+  const { i, u } = turnOf(t, made.words.length, each);
+  const word = made.words[i]!;
+  const n = word.letters.length;
+  // Typing in the first 45 %, held, taken back in the last 18 %.
+  const shown = u < 0.45 ? (u / 0.45) * n : u < 0.82 ? n : (1 - (u - 0.82) / 0.18) * n;
+  const count = Math.floor(clamp(shown, 0, n));
+  const cy = H / 2;
+  word.letters.forEach((l, k) => {
+    if (k < count) putLetter(ctx, l.s, W / 2 + l.x, cy, env.alpha);
+  });
+  // The cursor sits after the last letter typed and blinks while waiting.
+  const last = count > 0 ? word.letters[count - 1]! : null;
+  const cx = W / 2 + (last ? last.x + last.s.tw / 2 : -word.total / 2) + made.px * 0.08;
+  const typing = u < 0.45 || u > 0.82;
+  if (typing || frac(t * 1.6) < 0.55) {
+    ctx.globalAlpha = env.alpha;
+    ctx.fillStyle = css(palette(fx, env)[0]!);
+    ctx.fillRect(cx, cy - made.px * 0.45, Math.max(2, made.px * 0.07), made.px * 0.9);
+  }
+}
+
+// Pop: each word springs up from nothing with a bounce, holds, then flies off upward.
+function pop(ctx: Ctx, fx: TextFx, env: TextEnv, t: number, W: number, H: number) {
+  const made = titleSet(fx, env, 'pop');
+  const each = 2.6;
+  const { i, u } = turnOf(t, made.words.length, each);
+  const word = made.words[i]!;
+  const n = word.letters.length;
+  word.letters.forEach((l, k) => {
+    // Letters come in one after another.
+    const start = (k / Math.max(1, n)) * 0.22;
+    const v = clamp((u - start) / 0.3, 0, 1);
+    // An elastic spring: past the size, back under it, settling.
+    const spring = v >= 1 ? 1 : 1 - Math.cos(v * Math.PI * 2.5) * Math.exp(-v * 5.5);
+    const leave = smooth(0.8, 1, u);
+    const y = H / 2 - leave * H * 0.35 + (1 - Math.min(1, v * 1.4)) * made.px * 0.3;
+    putLetter(ctx, l.s, W / 2 + l.x, y, env.alpha * (1 - leave), spring * (1 - leave * 0.3));
+  });
+}
+
+// Flip: letters turn over into place one after another, like a departures board.
+function flip(ctx: Ctx, fx: TextFx, env: TextEnv, t: number, W: number, H: number) {
+  const made = titleSet(fx, env, 'flip');
+  const each = 3.4;
+  const { i, u } = turnOf(t, made.words.length, each);
+  const word = made.words[i]!;
+  const n = word.letters.length;
+  word.letters.forEach((l, k) => {
+    const a = clamp((u - (k / Math.max(1, n)) * 0.3) / 0.18, 0, 1);
+    const b = clamp((u - 0.82 - (k / Math.max(1, n)) * 0.12) / 0.06, 0, 1);
+    // Squeezed flat at the turn, full height once over.
+    const sy = a < 1 ? Math.abs(Math.cos(a * Math.PI)) : 1 - b;
+    const shade = a < 0.5 ? 0.55 : 1;
+    putLetter(
+      ctx,
+      l.s,
+      W / 2 + l.x,
+      H / 2,
+      env.alpha * shade * (a > 0 ? 1 : 0),
+      1,
+      0,
+      Math.max(0.02, sy),
+    );
+  });
+}
+
+// Assemble: the letters fly in from all sides, turning, to make the word, then scatter.
+function assemble(ctx: Ctx, fx: TextFx, env: TextEnv, t: number, W: number, H: number) {
+  const made = titleSet(fx, env, 'assemble');
+  const each = 4;
+  const { i, u } = turnOf(t, made.words.length, each);
+  const word = made.words[i]!;
+  const k0 = Math.floor(t / each);
+  word.letters.forEach((l, k) => {
+    const h1 = hash(k * 3.1 + k0 * 7.7 + fx.seed);
+    const h2 = hash(k * 5.3 + k0 * 1.9 + fx.seed);
+    const ang = h1 * TAU;
+    const far = Math.max(W, H) * (0.55 + 0.35 * h2);
+    const come = 1 - Math.pow(1 - clamp(u / 0.42, 0, 1), 3);
+    const go = Math.pow(clamp((u - 0.8) / 0.2, 0, 1), 2);
+    const away = 1 - come + go;
+    const x = W / 2 + l.x + Math.cos(ang) * far * away;
+    const y = H / 2 + Math.sin(ang) * far * away;
+    const rot = (h2 - 0.5) * 4 * away * (0.5 + fx.chaos);
+    putLetter(ctx, l.s, x, y, env.alpha * clamp(come * 1.4, 0, 1) * (1 - go), 1 + away * 0.6, rot);
+  });
+}
+
+// Neon sign: the word lit as a tube that buzzes; now and then letters stutter off and on.
+function neon(ctx: Ctx, fx: TextFx, env: TextEnv, t: number, W: number, H: number) {
+  const made = cached(fx, env, 'neon', '', () => {
+    const base = titleSet({ ...fx, fx: undefined, glow: Math.max(1, fx.glow) }, env, 'neonset');
+    return base;
+  });
+  const each = 5;
+  const { i } = turnOf(t, made.words.length, each);
+  const word = made.words[i]!;
+  const tick = Math.floor(t * 18);
+  const hum = 0.88 + 0.12 * Math.sin(t * 40) * Math.sin(t * 3.1);
+  word.letters.forEach((l, k) => {
+    // A faulty letter or two: dark for a few flickers now and then.
+    const bad = hash(k * 1.7 + fx.seed) > 0.75;
+    const off = bad && hash(tick * 0.61 + k * 9.3) > 0.72 - 0.25 * fx.chaos;
+    const a = off ? 0.12 : hum;
+    putLetter(ctx, l.s, W / 2 + l.x, H / 2, env.alpha * a);
+  });
+}
+
+// Zoom through: each word rushes in from far away, passes the viewer and is gone.
+function zoomThrough(ctx: Ctx, fx: TextFx, env: TextEnv, t: number, W: number, H: number) {
+  const made = titleSet(fx, env, 'zoom');
+  const each = 2.2;
+  const { i, u } = turnOf(t, made.words.length, each);
+  const s = made.words[i]!.whole;
+  // Slow in the middle (readable), fast at both ends: from a sixteenth of its size to
+  // sixteen times it, passing its own size half way.
+  const e = u < 0.5 ? 0.5 - Math.pow(1 - 2 * u, 3) / 2 : 0.5 + Math.pow(2 * u - 1, 3) / 2;
+  const scale = Math.pow(16, e * 2 - 1);
+  const alpha = smooth(0, 0.18, u) * (1 - smooth(0.82, 1, u));
+  // A trail of fainter copies behind it, as motion blur.
+  for (let k = 3; k >= 0; k--) {
+    const sk = scale * (1 - k * 0.06);
+    putLetter(ctx, s, W / 2, H / 2, env.alpha * alpha * (k === 0 ? 1 : 0.18), sk);
+  }
+}
+
+// Roll: the words roll by in a window like a slot machine, settling on each in turn.
+function roll(ctx: Ctx, fx: TextFx, env: TextEnv, t: number, W: number, H: number) {
+  const made = titleSet(fx, env, 'roll');
+  const n = made.words.length;
+  const each = 2;
+  const at = t / each;
+  const k = Math.floor(at);
+  const u = frac(at);
+  // Moves in the first 35 % of each turn with a small overshoot, then stands.
+  const v = clamp(u / 0.35, 0, 1);
+  const ease = v >= 1 ? 1 : 1 - Math.pow(1 - v, 3) + Math.sin(v * Math.PI) * 0.12;
+  const pos = k + ease;
+  const gap = made.px * 1.25;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, H / 2 - gap * 1.1, W, gap * 2.2);
+  ctx.clip();
+  for (let j = Math.floor(pos) - 1; j <= Math.floor(pos) + 2; j++) {
+    const s = made.words[((j % n) + n) % n]!.whole;
+    const y = H / 2 + (j - pos) * gap;
+    const a = 1 - clamp(Math.abs(j - pos), 0, 1) * 0.8;
+    putLetter(ctx, s, W / 2, y, env.alpha * a, 1, 0, 1 - clamp(Math.abs(j - pos), 0, 1) * 0.3);
+  }
+  ctx.restore();
+}
+
+// Shine: the title floats gently while a band of light sweeps across its letters.
+function shine(ctx: Ctx, fx: TextFx, env: TextEnv, t: number, W: number, H: number) {
+  const made = titleSet(fx, env, 'shine', 0.22);
+  const each = 4.5;
+  const { i, u } = turnOf(t, made.words.length, each);
+  const s = made.words[i]!.whole;
+  const fade = smooth(0, 0.12, u) * (1 - smooth(0.88, 1, u));
+  const y = H / 2 + Math.sin(t * 0.9) * made.px * 0.06;
+  putLetter(ctx, s, W / 2, y, env.alpha * fade);
+  // The light: the word again, lit white, seen only in a slanted band moving across.
+  const band = (frac(t / 2.6) * 1.6 - 0.3) * s.w;
+  ctx.save();
+  ctx.beginPath();
+  const x0 = W / 2 - s.w / 2 + band;
+  ctx.moveTo(x0, y - s.h);
+  ctx.lineTo(x0 + s.h * 0.35, y - s.h);
+  ctx.lineTo(x0 + s.h * 0.35 - s.h * 0.6, y + s.h);
+  ctx.lineTo(x0 - s.h * 0.6, y + s.h);
+  ctx.closePath();
+  ctx.clip();
+  ctx.globalCompositeOperation = 'lighter';
+  putLetter(ctx, s, W / 2, y, env.alpha * fade * 0.85);
+  ctx.restore();
+}
+
 /** The text effects by kind (the word wall keeps its own drawing in ParticleCanvas). */
 const DRAW: Partial<
   Record<
@@ -701,6 +947,14 @@ const DRAW: Partial<
   wordmarquee: marquee,
   wordglitch: glitch,
   wordrain: rain,
+  wordtype: typewriter,
+  wordpop: pop,
+  wordflip: flip,
+  wordassemble: assemble,
+  wordneon: neon,
+  wordzoom: zoomThrough,
+  wordroll: roll,
+  wordshine: shine,
 };
 
 /** Draws one frame of a text effect into the area W × H; false when the kind is not one. */

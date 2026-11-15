@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { displayName, type PosterAudience } from '@church/shared';
 import type { EventDetail, EventSummary } from '@church/shared';
 import { readDraft, useDraft } from '../lib/drafts';
@@ -616,19 +617,27 @@ export function LivePreview({
   /** Laid out this wide, shown smaller to fit. */
   width?: number;
 }) {
+  const t = useT();
   const box = useRef<HTMLDivElement>(null);
+  // Full screen: the poster laid out as wide as the screen (its effects drawn that sharp,
+  // not a small copy blown up) and shown as big as the screen allows.
+  const [big, setBig] = useState(false);
+  const [view, setView] = useState({ w: window.innerWidth, h: window.innerHeight });
   const [size, setSize] = useState({ w: 0, h: 0, max: 0 });
+  const laid = big ? Math.max(width, Math.min(view.w - 16, 1600)) : width;
   useEffect(() => {
     const outerEl = box.current;
     const inner = node.current;
     if (!outerEl || !inner) return;
-    const measure = () =>
+    const measure = () => {
+      setView({ w: window.innerWidth, h: window.innerHeight });
       setSize({
         w: outerEl.clientWidth,
         h: inner.offsetHeight,
         // At most about a third of the screen: the settings below stay in reach.
-        max: Math.max(180, window.innerHeight * 0.34),
+        max: big ? window.innerHeight - 70 : Math.max(180, window.innerHeight * 0.34),
       });
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(outerEl);
@@ -638,31 +647,60 @@ export function LivePreview({
       ro.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [node]);
-  const k = size.w ? Math.min(1, size.w / width, size.h ? size.max / size.h : 1) : 1;
-  return (
+  }, [node, big]);
+  useEffect(() => {
+    if (!big) return;
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setBig(false);
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [big]);
+  const k = size.w ? Math.min(1, size.w / laid, size.h ? size.max / size.h : 1) : 1;
+  const toggle = (
+    <button
+      type="button"
+      onClick={() => {
+        haptic.tap();
+        setBig(!big);
+      }}
+      aria-label={big ? t.motionExport.smallView : t.motionExport.fullView}
+      className="absolute right-2 top-2 z-10 rounded-full bg-black/55 px-2.5 py-1 text-[13px] font-semibold text-white backdrop-blur-sm"
+    >
+      {big ? '✕' : '⛶'}
+    </button>
+  );
+  const view_ = (
     // Pinned at the top while the settings under it scroll, so every change is seen.
-    <div className="sticky top-0 z-20 -mx-3 bg-[var(--color-section)] px-3 pb-2 pt-1 shadow-card">
+    <div
+      className={
+        big
+          ? 'fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black p-2'
+          : 'sticky top-0 z-20 -mx-3 bg-[var(--color-section)] px-3 pb-2 pt-1 shadow-card'
+      }
+    >
       <div ref={box} className="flex w-full justify-center">
         <div
-          className="overflow-hidden rounded-xl bg-black"
-          style={{ width: width * k, height: size.h ? size.h * k : undefined }}
+          className="relative overflow-hidden rounded-xl bg-black"
+          style={{ width: laid * k, height: size.h ? size.h * k : undefined }}
         >
-          <div style={{ width, transform: `scale(${k})`, transformOrigin: 'top left' }}>
+          <div style={{ width: laid, transform: `scale(${k})`, transformOrigin: 'top left' }}>
             <FullMotion.Provider value>
               <div
                 ref={node}
                 className="relative overflow-hidden bg-black text-white"
-                style={{ width }}
+                style={{ width: laid }}
               >
                 {children}
               </div>
             </FullMotion.Provider>
           </div>
+          {toggle}
         </div>
       </div>
     </div>
   );
+  // Full screen is put on the page itself: inside a sliding sheet (moved with a transform)
+  // a fixed box would stay within the sheet.
+  return big ? createPortal(view_, document.body) : view_;
 }
 
 /** What / when / where of an event, as the words prepared for its moving poster. */

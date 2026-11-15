@@ -487,6 +487,19 @@ export const posterTemplates = sqliteTable('poster_templates', {
   createdAt: createdAt(),
 });
 
+/**
+ * Saved slideshows (the animated poster maker's slides), church-wide like poster templates:
+ * `doc` is the JSON of the shared background and layers, the frame and the slides (without
+ * signed picture links — made fresh on reading).
+ */
+export const slideshows = sqliteTable('slideshows', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  doc: text('doc').notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: createdAt(),
+});
+
 /** Saved sets of effects (Design → effect templates), shared church-wide. */
 export const effectTemplates = sqliteTable('effect_templates', {
   id: integer('id').primaryKey({ autoIncrement: true }),

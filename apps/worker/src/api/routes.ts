@@ -24,6 +24,7 @@ import { membershipRoutes, userRoutes } from './members';
 import { groupPositionRoutes, positionRoutes } from './positions';
 import { devRoutes } from './dev';
 import { posterTemplateRoutes } from './posterTemplates';
+import { slideshowRoutes } from './slideshows';
 import { effectTemplateRoutes } from './effectTemplates';
 import { publishRequestRoutes } from './publishRequests';
 import {
@@ -72,6 +73,7 @@ apiRoutes.route('/announcements', announcementRoutes);
 apiRoutes.route('/comments', commentRoutes);
 apiRoutes.route('/templates', templateRoutes);
 apiRoutes.route('/poster-templates', posterTemplateRoutes);
+apiRoutes.route('/slideshows', slideshowRoutes);
 apiRoutes.route('/effect-templates', effectTemplateRoutes);
 apiRoutes.route('/publish-requests', publishRequestRoutes);
 apiRoutes.route('/dev', devRoutes);

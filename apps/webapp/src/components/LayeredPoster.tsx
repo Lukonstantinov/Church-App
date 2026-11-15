@@ -706,7 +706,9 @@ function LetterEffects({
       if (!w || !h) return;
       const px = Number.parseFloat(cs.fontSize);
       const lh = Number.parseFloat(cs.lineHeight) || px * 1.05;
-      const k = 2;
+      // Drawn sharper than the screen needs: a recording enlarges it up to five times, and a
+      // soft mask edge let the letters' own colour show as an outline round the effect.
+      const k = 4;
       const outlineW = Number.parseFloat(cs.getPropertyValue('-webkit-text-stroke-width')) || 0;
       const pad = Math.ceil(px * 0.35 + outlineW * 2);
       const c = document.createElement('canvas');

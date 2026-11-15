@@ -8,6 +8,8 @@ import type {
   EffectTemplate,
   EffectTemplateInput,
   PosterTemplateInput,
+  SavedSlideshow,
+  SlideshowInput,
 } from '@church/shared';
 import type {
   CommentRow,
@@ -256,6 +258,35 @@ export function useDeletePosterTemplate() {
   return useMutation({
     mutationFn: (id: number) => apiFetch(`/poster-templates/${id}`, send('DELETE')),
     onSuccess: () => void qc.invalidateQueries(),
+  });
+}
+
+/** Saved slideshows of the animated poster maker (church-wide, like poster templates). */
+export function useSlideshows(enabled = true) {
+  return useQuery({
+    queryKey: ['slideshows'],
+    queryFn: () => apiFetch<SavedSlideshow[]>('/slideshows'),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useSaveSlideshow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: SlideshowInput & { id?: number }) =>
+      id
+        ? apiFetch<SavedSlideshow>(`/slideshows/${id}`, send('PUT', input))
+        : apiFetch<SavedSlideshow>('/slideshows', send('POST', input)),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['slideshows'] }),
+  });
+}
+
+export function useDeleteSlideshow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiFetch(`/slideshows/${id}`, send('DELETE')),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['slideshows'] }),
   });
 }
 

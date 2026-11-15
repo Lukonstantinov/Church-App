@@ -307,6 +307,50 @@ export interface PosterTemplate {
   mine: boolean;
 }
 
+/**
+ * Slideshows (Design → animated poster → own layers → slides): a background with its layers
+ * shared by every slide, and slides of their own layers, each on for `seconds` and changing
+ * in with its transition. Saved church-wide like poster templates.
+ */
+export const SLIDE_TRANSITION_KINDS = [
+  'glitch',
+  'fade',
+  'zoom',
+  'blur',
+  'slide',
+  'flash',
+  'cut',
+] as const;
+export type SlideTransitionKind = (typeof SLIDE_TRANSITION_KINDS)[number];
+export const MAX_SLIDES = 12;
+
+export const slideSchema = z.object({
+  id: z.string().min(1).max(40),
+  layers: z.array(posterLayerSchema).max(MAX_POSTER_LAYERS),
+  seconds: z.number().min(1).max(30),
+  transition: z.enum(SLIDE_TRANSITION_KINDS),
+});
+export type SlideInput = z.output<typeof slideSchema>;
+
+export const slideshowInputSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  background: posterBackgroundSchema,
+  layers: z.array(posterLayerSchema).max(MAX_POSTER_LAYERS),
+  frame: posterFrameSchema.nullish(),
+  slides: z.array(slideSchema).min(1).max(MAX_SLIDES),
+});
+export type SlideshowInput = z.input<typeof slideshowInputSchema>;
+
+export interface SavedSlideshow {
+  id: number;
+  name: string;
+  background: PosterBackground;
+  layers: PosterLayer[];
+  frame: PosterFrame | null;
+  slides: SlideInput[];
+  mine: boolean;
+}
+
 /** What the text layers say, taken from the event or meeting the poster is on. */
 export interface PosterTexts {
   title: string;

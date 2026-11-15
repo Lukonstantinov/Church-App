@@ -823,7 +823,20 @@ async function drawMask(el: HTMLElement, css: CSSStyleDeclaration, k: number) {
     img.crossOrigin = 'anonymous';
     img.src = one[1]!;
     await img.decode().catch(() => undefined);
-    if (img.naturalWidth) pic.getContext('2d')!.drawImage(img, 0, 0, pic.width, pic.height);
+    if (img.naturalWidth) {
+      const c = pic.getContext('2d')!;
+      // Spread by about half a pixel of the recording: enlarged, the mask's soft edge left the
+      // layer's own colour (dark letters) showing as a thin outline the screen doesn't have.
+      const r = Math.max(0.5, k * 0.25);
+      for (const [dx, dy] of [
+        [0, 0],
+        [r, 0],
+        [-r, 0],
+        [0, r],
+        [0, -r],
+      ] as const)
+        c.drawImage(img, dx, dy, pic.width, pic.height);
+    }
     return pic;
   }
   const { toCanvas } = await import('html-to-image');
