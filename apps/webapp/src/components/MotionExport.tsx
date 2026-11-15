@@ -24,6 +24,7 @@ import {
 } from './PosterText';
 import { fontFamily } from '@church/shared';
 import { useToast } from './Toast';
+import { SLIDE_CHANGE_SECONDS, type SlideTransition } from '../lib/slideshow';
 import { Button, TextArea } from './ui';
 
 /**
@@ -122,6 +123,7 @@ export function MotionExport({
   extra,
   draftKey,
   size,
+  slideshow,
 }: {
   /** The poster to record, drawn by the caller (no preview here). */
   node?: RefObject<HTMLElement | null>;
@@ -154,6 +156,16 @@ export function MotionExport({
    * out exactly this big (within what the device can record), whatever the quality.
    */
   size?: { w: number; h: number };
+  /**
+   * A slideshow (the poster maker's slides): the recording runs the slides' lengths and
+   * asks the caller to put each slide on in turn (lib/recorder.ts recordSlides).
+   */
+  slideshow?: {
+    seconds: number[];
+    kinds: SlideTransition[];
+    show: (slide: number | null, bare: boolean) => Promise<void>;
+    stop: () => void;
+  };
 }) {
   const t = useT();
   const toast = useToast();
@@ -269,7 +281,13 @@ export function MotionExport({
         return;
       }
       const q = QUALITY[quality];
-      const seconds = kind === 'gif' ? Math.min(length, GIF_MAX_SECONDS) : length;
+      const slideTotal = slideshow ? slideshow.seconds.reduce((a, b) => a + b, 0) : 0;
+      // A slideshow runs its slides' lengths (a GIF of it too, however long).
+      const seconds = slideshow
+        ? slideTotal
+        : kind === 'gif'
+          ? Math.min(length, GIF_MAX_SECONDS)
+          : length;
       // The video's detail (bits per pixel per frame), lowered for a long one to fit the
       // budget: the width it is drawn at times the block's shape gives its pixels.
       const vw = out ? out.w : videoWidth(quality, el);
@@ -282,6 +300,14 @@ export function MotionExport({
         recordLoop(el, {
           seconds,
           gifFps: gifFpsFor(seconds),
+          slides: slideshow
+            ? {
+                seconds: slideshow.seconds,
+                kinds: slideshow.kinds,
+                change: SLIDE_CHANGE_SECONDS,
+                show: slideshow.show,
+              }
+            : undefined,
           gif: kind === 'gif',
           // A GIF only: no video is made alongside (quicker).
           video: kind === 'video',
@@ -350,6 +376,7 @@ export function MotionExport({
       toast(t.motionExport.failed, 'error');
     } finally {
       onRecording?.(false);
+      slideshow?.stop();
       setSending(false);
       setShrinking(false);
       setBusy(null);
@@ -415,21 +442,31 @@ export function MotionExport({
             {out ? t.motionExport.sizeHint(out.w, out.h) : t.motionExport.qualityHint[quality]}
           </p>
           <div className="text-[12px] font-semibold text-hint">{t.motionExport.lengthLabel}</div>
-          <div className="flex flex-wrap gap-1.5">
-            {LENGTHS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setLength(s)}
-                className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
-                  length === s ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
-                }`}
-              >
-                {t.motionExport.length(s)}
-              </button>
-            ))}
-          </div>
-          {length > 6 && <p className="text-[11px] text-hint">{t.motionExport.lengthHint}</p>}
+          {slideshow ? (
+            <p className="text-[11px] text-hint">
+              {t.motionExport.slideshowLength(
+                Math.round(slideshow.seconds.reduce((a, b) => a + b, 0)),
+              )}
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {LENGTHS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setLength(s)}
+                  className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                    length === s ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                  }`}
+                >
+                  {t.motionExport.length(s)}
+                </button>
+              ))}
+            </div>
+          )}
+          {length > 6 && !slideshow && (
+            <p className="text-[11px] text-hint">{t.motionExport.lengthHint}</p>
+          )}
           <div className="text-[12px] font-semibold text-hint">{t.motionExport.fpsLabel}</div>
           <div className="flex flex-wrap gap-1.5">
             {FPS.map((n) => (

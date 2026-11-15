@@ -2206,6 +2206,27 @@ export const lt: Messages = {
     notAllowed: 'Gimtadienius mato administratoriai ir tie, kurie tarnystėje rūpinasi žmonėmis.',
   },
   freePoster: {
+    slides: {
+      title: 'Skaidrės',
+      background: 'Fonas',
+      slide: (n: number) => `Skaidrė ${n}`,
+      add: '＋ Skaidrė',
+      hint: 'Fonas ir jo efektai bendri visoms skaidrėms. Pridėkite skaidrių — kiekviena turi savo sluoksnius (tekstą, nuotraukas, efektus), trukmę ir perėjimą.',
+      total: (s: number) =>
+        `Skaidrių peržiūra ${s} s. Pasirinkite „Fonas“ arba skaidrę, kad keistumėte jos sluoksnius.`,
+      seconds: (s: number) => `Ekrane ${s} s`,
+      transition: 'Perėjimas į šią skaidrę',
+      kinds: {
+        glitch: '⚡ Gličas',
+        fade: 'Ištirpimas',
+        zoom: 'Priartinimas',
+        blur: 'Suliejimas',
+        slide: 'Poslinkis',
+        flash: 'Blyksnis',
+        cut: 'Kirpimas',
+      },
+      remove: 'Ištrinti skaidrę',
+    },
     title: 'Animuotas plakatas',
     hint: 'GIF ar vaizdo įrašas iš nuotraukos, plakato šablono ar tarnystės spalvų — be renginio. Efektai, savas tekstas arba be jo; ateina į pokalbį su botu — persiųskite kur norite.',
     picture: 'Paveikslas',
@@ -2288,6 +2309,7 @@ export const lt: Messages = {
       n === 0 ? 'Išsiųsta jums — kitų gavėjų nėra' : `Išsiųsta: jums ir dar ${n}`,
     sendVideo: '🎬 Siųsti vaizdo įrašą',
     sendGif: '🎞 Siųsti GIF',
+    slideshowLength: (s: number) => `Skaidrių peržiūra: ${s} s — trukmė sudaroma iš skaidrių`,
     lengthLabel: 'Trukmė',
     length: (s: number) => `${s} s`,
     lengthHint:

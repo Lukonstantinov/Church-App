@@ -3,6 +3,7 @@ import { holdGpu, seekGpu } from '../components/GpuEffect';
 import { holdParticles, seekParticles } from '../components/ParticleCanvas';
 import { holdShaders, seekShaders } from '../components/ShaderEffect';
 import { boxIn, drawFitted, drawShot, freeCanvas, picturesReady } from './poster';
+import { drawFlash, drawLook, transitionAt, type SlideTransition } from './slideshow';
 
 /**
  * Records a poster (or any block) with its moving effects as a short seamless loop: an MP4
@@ -41,6 +42,21 @@ export interface RecordOptions {
    */
   still?: number;
   onProgress?: (done: number) => void;
+  /** Each finished frame as it goes into the file (tests look at chosen ones). */
+  onFrame?: (frame: HTMLCanvasElement, index: number) => void;
+  /**
+   * A slideshow (FreePoster): slides of their own layers over one moving background. The
+   * recording runs the slides' lengths (`seconds`), changing into slide i with `kinds[i]`
+   * over its first `change` seconds (`kinds[0]`: the last slide into the first, where the
+   * loop joins). `show(slide, bare)` puts a slide on the block (null = none) — bare = only
+   * its own layers, without the background — and resolves once it is laid out.
+   */
+  slides?: {
+    seconds: number[];
+    kinds: SlideTransition[];
+    change: number;
+    show: (slide: number | null, bare: boolean) => Promise<void>;
+  };
 }
 
 export interface Recording {
@@ -1413,11 +1429,321 @@ async function videoConfig(width: number, height: number, fps: number, bpp: numb
   return null;
 }
 
+/** A part of the block made ready to draw at any moment: its still bands and effects. */
+interface Scene {
+  below: HTMLCanvasElement;
+  over: (Piece | null)[];
+  groups: Group[];
+  list: Effect[];
+  canvases: HTMLCanvasElement[];
+  restore: () => void;
+}
+
+/** Gets what is on the block now ready to record (see recordLoop for the steps). */
+async function prepareScene(node: HTMLElement, k: number, outW: number, outH: number) {
+  // Layers put on the block since the last scene (a slide's) are held for recording too.
+  holdParticles(node, true, k);
+  holdGpu(node, true);
+  holdShaders(node, true, k);
+  await picturesReady(node);
+  await document.fonts?.ready;
+  await nextFrame();
+  const restoreImages = await prepareImages(node, k);
+  const canvases: HTMLCanvasElement[] = [];
+  try {
+    const { below, over, effects, groups } = await stillParts(node, k, outW, outH);
+    canvases.push(below, ...over.flatMap((c) => (c ? [c.pic] : [])));
+    for (const g of groups) canvases.push(...[g.under, g.top].flatMap((c) => (c ? [c.pic] : [])));
+    const list = await prepareEffects(node, effects, k, groups);
+    for (const fx of list) canvases.push(...fx.masks.map((m) => m.pic));
+    const restoreTextures = await preparePictures(effects, k);
+    // iPhones may leave pictures out of the library's very first drawing of a layer.
+    const scratch = canvasOf(outW, outH);
+    await drawEffects(scratch.getContext('2d')!, list, 0, k);
+    freeCanvas(scratch);
+    const scene: Scene = {
+      below,
+      over,
+      groups,
+      list,
+      canvases,
+      restore: () => {
+        restoreTextures();
+        restoreImages();
+      },
+    };
+    return scene;
+  } catch (err) {
+    canvases.forEach(freeCanvas);
+    restoreImages();
+    throw err;
+  }
+}
+
+function freeScene(s: Scene) {
+  s.canvases.forEach(freeCanvas);
+  s.restore();
+}
+
+async function drawScene(ctx: CanvasRenderingContext2D, s: Scene, t: number, k: number) {
+  ctx.drawImage(s.below, 0, 0);
+  await drawEffects(ctx, s.list, t, k, s.over, s.groups);
+}
+
+/** The video encoder and the GIF, fed one finished frame at a time. */
+async function makeOutput(
+  outW: number,
+  outH: number,
+  fps: number,
+  opts: RecordOptions,
+  used: HTMLCanvasElement[],
+) {
+  const config =
+    opts.video === false ? null : await videoConfig(outW, outH, fps, opts.quality ?? 0.12);
+  // How frames go to the encoder here; none that comes back right = a GIF instead.
+  const feed = config ? await pickFeed(config) : null;
+  let encoder: VideoEncoder | null = null;
+  let muxer: Muxer<ArrayBufferTarget> | null = null;
+  if (config && feed) {
+    const { Muxer, ArrayBufferTarget } = await import('mp4-muxer');
+    muxer = new Muxer({
+      target: new ArrayBufferTarget(),
+      video: { codec: 'avc', width: outW, height: outH, frameRate: fps },
+      fastStart: 'in-memory',
+    });
+    const m = muxer;
+    encoder = new VideoEncoder({
+      output: (chunk, meta) =>
+        m.addVideoChunk(
+          chunk,
+          meta?.decoderConfig
+            ? { ...meta, decoderConfig: { ...meta.decoderConfig, colorSpace: labelOf(meta) } }
+            : meta,
+        ),
+      error: () => undefined,
+    });
+    encoder.configure(config);
+  }
+  const wantGif = opts.gif || !encoder;
+  const gifStep = Math.max(1, Math.round(fps / (opts.gifFps ?? 10)));
+  const gifW = even(Math.min(outW, opts.gifWidth ?? 540));
+  const gifH = even((outH * gifW) / outW);
+  const gifCanvas = wantGif ? canvasOf(gifW, gifH) : null;
+  if (gifCanvas) used.push(gifCanvas);
+  const gifCtx = gifCanvas?.getContext('2d', { willReadFrequently: true }) ?? null;
+  const gifenc = wantGif ? await import('gifenc') : null;
+  const gif = gifenc?.GIFEncoder() ?? null;
+  const out = canvasOf(outW, outH);
+  const o = out.getContext('2d', { willReadFrequently: true })!;
+  used.push(out);
+  return {
+    out,
+    o,
+    /** Frame j of the file is what `out` shows now. */
+    async emit(j: number) {
+      opts.onFrame?.(out, j);
+      if (encoder) {
+        const vf = frameOf(feed!, out, o, outW, outH, {
+          timestamp: Math.round((j * 1e6) / fps),
+          duration: Math.round(1e6 / fps),
+        });
+        encoder.encode(vf, { keyFrame: j % (fps * 2) === 0 });
+        vf.close();
+        while (encoder.encodeQueueSize > 4) await new Promise((r) => setTimeout(r, 5));
+      }
+      if (gif && gifCtx && gifenc && j % gifStep === 0) {
+        gifCtx.drawImage(out, 0, 0, gifW, gifH);
+        const { data } = gifCtx.getImageData(0, 0, gifW, gifH);
+        dither(data, gifW);
+        const palette = gifenc.quantize(data, 256, { format: 'rgb565' });
+        const index = gifenc.applyPalette(data, palette, 'rgb565');
+        gif.writeFrame(index, gifW, gifH, {
+          palette,
+          delay: Math.round((1000 * gifStep) / fps),
+          repeat: 0,
+        });
+      }
+    },
+    async finish(): Promise<Recording> {
+      let mp4: Blob | null = null;
+      if (encoder && muxer) {
+        await encoder.flush();
+        encoder.close();
+        muxer.finalize();
+        mp4 = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+      }
+      let gifBlob: Blob | null = null;
+      if (gif) {
+        gif.finish();
+        gifBlob = new Blob([gif.bytes()], { type: 'image/gif' });
+      }
+      return { mp4, gif: gifBlob, feed: encoder ? feed : null };
+    },
+  };
+}
+
+/** A picture kept as a blob, back as a canvas (what drawLook draws from). */
+async function canvasFromBlob(b: Blob, w: number, h: number) {
+  const bmp = await createImageBitmap(b);
+  const c = canvasOf(w, h);
+  c.getContext('2d')!.drawImage(bmp, 0, 0, w, h);
+  bmp.close();
+  return c;
+}
+
+/**
+ * Records a slideshow. Each change between slides is drawn as the slideshow's transition
+ * (lib/slideshow.ts, the very formula the screen uses) between the outgoing slide at its
+ * last moment and the incoming one at its first, both drawn alone (as on the screen, where
+ * a slide moving in a change is a box of its own), over the background still moving. Then
+ * each slide runs as itself with the background. Only one slide's layers are prepared at a
+ * time, so a long slideshow costs no more memory than one slide. Where the loop joins, the
+ * background of the first change fades from the end's into the start's, so it doesn't jump.
+ */
+async function recordSlides(
+  node: HTMLElement,
+  opts: RecordOptions & { slides: NonNullable<RecordOptions['slides']> },
+): Promise<Recording> {
+  const { seconds: lens, kinds, show } = opts.slides;
+  const fps = opts.fps ?? 20;
+  const n = lens.length;
+  const starts = lens.map((_, i) => lens.slice(0, i).reduce((a, b) => a + b, 0));
+  const T = lens.reduce((a, b) => a + b, 0);
+  const W = node.offsetWidth;
+  const H = node.offsetHeight;
+  const k = (opts.width ?? 720) / W;
+  const outW = even(W * k);
+  const outH = opts.height ? even(opts.height) : even(H * k);
+  const html = document.documentElement;
+  const motion = html.dataset.motion;
+  if (motion === 'off') html.dataset.motion = 'lively';
+  const used: HTMLCanvasElement[] = [];
+  const totalFrames = Math.round(T * fps);
+  let done = 0;
+  const tick = () => opts.onProgress?.(Math.min(0.99, done / (totalFrames + 2 * n)));
+  try {
+    // 1. Each slide's own layers alone at its first and last moment (kept as PNG pictures,
+    //    see Piece about memory). The block's own backdrop is see-through meanwhile.
+    const firsts: Blob[] = [];
+    const lasts: Blob[] = [];
+    const back = node.style.background;
+    node.style.background = 'transparent';
+    const pic = canvasOf(outW, outH);
+    const pc = pic.getContext('2d')!;
+    try {
+      for (let i = 0; i < n; i++) {
+        await show(i, true);
+        const scene = await prepareScene(node, k, outW, outH);
+        try {
+          for (const [list, t] of [
+            [firsts, starts[i]!],
+            [lasts, starts[i]! + lens[i]! - 1 / fps],
+          ] as const) {
+            pc.clearRect(0, 0, outW, outH);
+            await drawScene(pc, scene, t, k);
+            const b = await new Promise<Blob | null>((r) => pic.toBlob(r, 'image/png'));
+            list.push(b ?? new Blob());
+            done++;
+            tick();
+          }
+        } finally {
+          freeScene(scene);
+        }
+      }
+    } finally {
+      node.style.background = back;
+      freeCanvas(pic);
+    }
+    // 2. The background alone, kept for every change.
+    await show(null, false);
+    const bg = await prepareScene(node, k, outW, outH);
+    const output = await makeOutput(outW, outH, fps, opts, used);
+    const { o } = output;
+    const tmp = canvasOf(outW, outH);
+    const tc = tmp.getContext('2d')!;
+    used.push(tmp);
+    let j = 0;
+    try {
+      for (let i = 0; i < n; i++) {
+        const startF = Math.round(starts[i]! * fps);
+        const endF = Math.round((starts[i]! + lens[i]!) * fps);
+        const changeF = Math.min(endF - startF, Math.round(opts.slides.change * fps));
+        // The change into slide i.
+        const prev = (i - 1 + n) % n;
+        const A = await canvasFromBlob(lasts[prev]!, outW, outH);
+        const B = await canvasFromBlob(firsts[i]!, outW, outH);
+        try {
+          for (let c = 0; c < changeF; c++) {
+            const t = (startF + c) / fps;
+            const p = (c + 0.5) / changeF;
+            o.clearRect(0, 0, outW, outH);
+            await drawScene(o, bg, t, k);
+            if (i === 0) {
+              // Where the loop joins: the end's background fading into the start's.
+              tc.clearRect(0, 0, outW, outH);
+              await drawScene(tc, bg, t + T, k);
+              o.globalAlpha = 1 - p;
+              o.drawImage(tmp, 0, 0);
+              o.globalAlpha = 1;
+            }
+            const look = transitionAt(kinds[i] ?? 'fade', p, i * 7 + 3);
+            drawLook(o, A, look.out);
+            drawLook(o, B, look.in);
+            drawFlash(o, look.flash);
+            await output.emit(j++);
+            done++;
+            tick();
+            if (c % 4 === 0) await nextFrame();
+          }
+        } finally {
+          freeCanvas(A);
+          freeCanvas(B);
+        }
+        // Then the slide as itself, with the background.
+        if (endF - startF > changeF) {
+          await show(i, false);
+          const scene = await prepareScene(node, k, outW, outH);
+          try {
+            for (let f = startF + changeF; f < endF; f++) {
+              o.clearRect(0, 0, outW, outH);
+              await drawScene(o, scene, f / fps, k);
+              await output.emit(j++);
+              done++;
+              tick();
+              if (f % 4 === 0) await nextFrame();
+            }
+          } finally {
+            freeScene(scene);
+          }
+        }
+      }
+    } finally {
+      freeScene(bg);
+    }
+    const rec = await output.finish();
+    opts.onProgress?.(1);
+    return rec;
+  } finally {
+    used.forEach(freeCanvas);
+    freeCanvas(maskScratch);
+    maskScratch = null;
+    freeCanvas(groupScratch);
+    groupScratch = null;
+    holdParticles(node, false);
+    holdGpu(node, false);
+    holdShaders(node, false);
+    for (const a of node.getAnimations({ subtree: true })) a.play();
+    if (motion === 'off') html.dataset.motion = motion;
+  }
+}
+
 /**
  * Records the block's loop. The block must be laid out (it may be off screen); its
  * animations are stopped while recording.
  */
 export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): Promise<Recording> {
+  if (opts.slides && opts.slides.seconds.length > 0 && opts.still === undefined)
+    return recordSlides(node, { ...opts, slides: opts.slides });
   const seconds = opts.seconds ?? 6;
   const fps = opts.fps ?? 20;
   const W = node.offsetWidth;

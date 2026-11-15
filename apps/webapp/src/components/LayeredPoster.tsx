@@ -36,6 +36,8 @@ export function LayeredPoster({
   className = '',
   fill,
   children,
+  slides,
+  bare = false,
 }: {
   tpl: Pick<PosterTemplate, 'background' | 'layers'> & {
     frame?: PosterFrame | null;
@@ -50,6 +52,14 @@ export function LayeredPoster({
   coverUrl?: string | null;
   className?: string;
   children?: ReactNode;
+  /**
+   * A slideshow's slides on show (FreePoster): each its own layers in a box of its own over
+   * the layers above, moved by a change between slides (lib/slideshow.ts `lookStyle`). A
+   * box without a style is plain, so its layers blend with the background as usual.
+   */
+  slides?: { key: string; layers: PosterLayer[]; style?: CSSProperties }[];
+  /** Only the slides, on nothing (a recording draws a slide alone for a change). */
+  bare?: boolean;
 }) {
   const tpl = (view && whole.variants?.[view]) || whole;
   const bg = tpl.background;
@@ -58,59 +68,68 @@ export function LayeredPoster({
     bg.type === 'color'
       ? bg.colors[0]
       : `linear-gradient(${bg.angle}deg, ${(bg.colors.length > 1 ? bg.colors : [...bg.colors, bg.colors[0]]).join(', ')})`;
+  const drawLayers = (layers: PosterLayer[]) =>
+    layerGroups(layers).map(({ base, subs }) => {
+      // A hidden layer takes its sublayers with it (they have nothing to show on).
+      if (base.hidden) return null;
+      let shown = subs.filter((l) => !l.hidden);
+      // A picture filter (oil painting, glitches…) put only on top of a picture changes that
+      // picture itself: it becomes one of the picture's own effects, drawn in its exact box
+      // from its own photo. As a separate layer it would only have the poster's background.
+      let own = base;
+      if (base.type === 'image') {
+        const filters = shown.filter(
+          (l): l is Extract<PosterLayer, { type: 'effect' }> =>
+            l.type === 'effect' && GPU_MOTIONS.includes(l.kind),
+        );
+        if (filters.length) {
+          own = {
+            ...base,
+            effects: [
+              ...(base.effects ?? []),
+              ...filters.map((l) => ({ kind: l.kind, tune: l.tune ?? null })),
+            ],
+          };
+          shown = shown.filter((l) => !filters.includes(l as (typeof filters)[number]));
+        }
+      }
+      return (
+        <Adjusted key={base.id} layer={base}>
+          <Layer
+            layer={own}
+            texts={texts}
+            picture={photo}
+            subs={
+              shown.length
+                ? shown.map((l) => (
+                    <Adjusted key={l.id} layer={l}>
+                      <Layer layer={l} texts={texts} picture={photo} />
+                    </Adjusted>
+                  ))
+                : null
+            }
+          />
+        </Adjusted>
+      );
+    });
   return (
     <div
       className={`layered-poster ${fill ? 'absolute inset-0' : 'relative'} isolate overflow-hidden ${className}`}
-      style={{ background: paint }}
+      style={{ background: bare ? 'transparent' : paint }}
     >
-      {photo && <img src={photo} alt="" className="absolute inset-0 h-full w-full object-cover" />}
-      {photo && bg.dim ? (
+      {!bare && photo && (
+        <img src={photo} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      )}
+      {!bare && photo && bg.dim ? (
         <span className="absolute inset-0" style={{ background: `rgba(0,0,0,${bg.dim})` }} />
       ) : null}
-      {layerGroups(tpl.layers).map(({ base, subs }) => {
-        // A hidden layer takes its sublayers with it (they have nothing to show on).
-        if (base.hidden) return null;
-        let shown = subs.filter((l) => !l.hidden);
-        // A picture filter (oil painting, glitches…) put only on top of a picture changes that
-        // picture itself: it becomes one of the picture's own effects, drawn in its exact box
-        // from its own photo. As a separate layer it would only have the poster's background.
-        let own = base;
-        if (base.type === 'image') {
-          const filters = shown.filter(
-            (l): l is Extract<PosterLayer, { type: 'effect' }> =>
-              l.type === 'effect' && GPU_MOTIONS.includes(l.kind),
-          );
-          if (filters.length) {
-            own = {
-              ...base,
-              effects: [
-                ...(base.effects ?? []),
-                ...filters.map((l) => ({ kind: l.kind, tune: l.tune ?? null })),
-              ],
-            };
-            shown = shown.filter((l) => !filters.includes(l as (typeof filters)[number]));
-          }
-        }
-        return (
-          <Adjusted key={base.id} layer={base}>
-            <Layer
-              layer={own}
-              texts={texts}
-              picture={photo}
-              subs={
-                shown.length
-                  ? shown.map((l) => (
-                      <Adjusted key={l.id} layer={l}>
-                        <Layer layer={l} texts={texts} picture={photo} />
-                      </Adjusted>
-                    ))
-                  : null
-              }
-            />
-          </Adjusted>
-        );
-      })}
-      {tpl.frame && <Frame frame={tpl.frame} />}
+      {!bare && drawLayers(tpl.layers)}
+      {slides?.map((s) => (
+        <span key={s.key} className="absolute inset-0" style={s.style} data-slide={s.key}>
+          {drawLayers(s.layers)}
+        </span>
+      ))}
+      {!bare && tpl.frame && <Frame frame={tpl.frame} />}
       {children}
     </div>
   );

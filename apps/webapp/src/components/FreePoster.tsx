@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type SetStateAction } from 'react';
 import type { GroupSummary, PosterLayer, PosterTexts } from '@church/shared';
 import {
   clearSuspect,
@@ -13,10 +13,26 @@ import { useT } from '../lib/i18n';
 import { preparePhoto } from '../lib/image';
 import { usePosterTemplates } from '../lib/queries';
 import { haptic } from '../lib/telegram';
+import {
+  SLIDE_CHANGE_SECONDS,
+  SLIDE_TRANSITIONS,
+  lookStyle,
+  slideAt,
+  transitionAt,
+  type Slide,
+  type SlideTransition,
+} from '../lib/slideshow';
 import { CoverEffects, effectLayers, initEffects, type EffectsState } from './CoverEffects';
 import { LayeredPoster } from './LayeredPoster';
 import { PosterGestures } from './PosterGestures';
-import { DraftAside, PosterLayersEditor, starterDoc, usePosterDraft } from './PosterStudio';
+import {
+  DraftAside,
+  PosterLayersEditor,
+  freshLinks,
+  starterDoc,
+  usePosterDraft,
+  type PosterDoc,
+} from './PosterStudio';
 import { LookTop } from './LookTop';
 import { groupLook } from './MeetingPoster';
 import { MotionExport } from './MotionExport';
@@ -141,6 +157,68 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
   const layered = usePosterDraft('free.layers', starterDoc);
   const [selected, setSelected] = useState<string | null>(null);
   const [fxOpen, setFxOpen] = useState(false);
+  // Slides (own layers only): each its own layers over the background and its effects.
+  const [slides, setSlides] = useState<Slide[]>(() =>
+    fresh ? [] : (readDraft<Slide[]>('free.slides')?.data ?? []),
+  );
+  useDraft('free.slides', slides, fresh);
+  // Picture links in kept slides expire like the layers' (see freshLinks).
+  useEffect(() => {
+    if (fresh || slides.length === 0) return;
+    let stop = false;
+    void Promise.all(
+      slides.map((sl) => freshLinks({ ...starterDoc(), layers: sl.layers }).then((d) => d.layers)),
+    ).then((all) => {
+      if (!stop) setSlides((cur) => cur.map((sl, i) => ({ ...sl, layers: all[i] ?? sl.layers })));
+    });
+    return () => {
+      stop = true;
+    };
+    // Once, when the kept slides are opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Which part the editor works on: the background (null) or a slide.
+  const [editing, setEditing] = useState<number | null>(null);
+  const slideIdx = editing !== null && editing < slides.length ? editing : null;
+  // While recording: the slide the recorder asked for (see MotionExport `slideshow`).
+  const [forced, setForced] = useState<{ slide: number | null; bare: boolean } | null>(null);
+  const shown = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!shown.current) return;
+    const done = shown.current;
+    shown.current = null;
+    // Laid out and its pictures and letter masks made before the recorder looks.
+    let id = requestAnimationFrame(() => {
+      id = requestAnimationFrame(() => setTimeout(done, 450));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [forced]);
+  const slideshow =
+    source === 'layers' && slides.length > 0
+      ? {
+          seconds: slides.map((sl) => sl.seconds),
+          kinds: slides.map((sl) => sl.transition),
+          show: (slide: number | null, bare: boolean) =>
+            new Promise<void>((resolve) => {
+              shown.current = resolve;
+              setForced({ slide, bare });
+            }),
+          stop: () => setForced(null),
+        }
+      : undefined;
+  // The doc the layer editor works on: the background's, or the chosen slide's layers.
+  const editDoc: PosterDoc =
+    slideIdx === null ? layered.doc : { ...layered.doc, layers: slides[slideIdx]!.layers };
+  const setEditDoc = (upd: SetStateAction<PosterDoc>) => {
+    if (slideIdx === null) return layered.setDoc(upd);
+    const next = typeof upd === 'function' ? upd(editDoc) : upd;
+    setSlides((cur) => cur.map((sl, i) => (i === slideIdx ? { ...sl, layers: next.layers } : sl)));
+    // The background and frame stay the poster's own, shared by every slide.
+    if (next.background !== editDoc.background || next.frame !== editDoc.frame)
+      layered.setDoc((d) => ({ ...d, background: next.background, frame: next.frame }));
+  };
+  const setSlide = (i: number, p: Partial<Slide>) =>
+    setSlides((cur) => cur.map((sl, j) => (j === i ? { ...sl, ...p } : sl)));
   const tpl = templates.data?.find((x) => x.id === tplId) ?? templates.data?.[0] ?? null;
 
   const pick = async (f: File | undefined) => {
@@ -153,7 +231,7 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
     setSource('photo');
   };
   const patch = (id: string, p: Partial<PosterLayer>) =>
-    layered.setDoc((d) => ({
+    setEditDoc((d) => ({
       ...d,
       layers: d.layers.map((l) => (l.id === id ? ({ ...l, ...p } as PosterLayer) : l)),
     }));
@@ -181,7 +259,17 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
         style={shape === 'custom' ? { aspectRatio: `${size.w} / ${size.h}` } : undefined}
       >
         {source === 'layers' ? (
-          <LayeredPoster fill tpl={layered.doc} texts={textsOf(words)} />
+          slides.length ? (
+            <SlideshowPoster
+              tpl={layered.doc}
+              slides={slides}
+              texts={textsOf(words)}
+              editing={slideIdx}
+              forced={forced}
+            />
+          ) : (
+            <LayeredPoster fill tpl={layered.doc} texts={textsOf(words)} />
+          )
         ) : source === 'photo' && photo ? (
           <img
             src={photo}
@@ -204,7 +292,7 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
     // Own layers move with a finger right on the preview.
     return source === 'layers' ? (
       <PosterGestures
-        layers={layered.doc.layers}
+        layers={editDoc.layers}
         selected={selected}
         onSelect={setSelected}
         onPatch={patch}
@@ -272,9 +360,35 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
         {shape === 'custom' && <OwnSize size={size} onChange={setSize} />}
       </div>
       {source === 'layers' && (
+        <SlidesBar
+          slides={slides}
+          editing={slideIdx}
+          onEdit={(i) => {
+            haptic.tap();
+            setSelected(null);
+            setEditing(i);
+          }}
+          onAdd={() => {
+            haptic.tap();
+            setSlides((cur) => [
+              ...cur,
+              { id: `s${Date.now().toString(36)}`, layers: [], seconds: 4, transition: 'glitch' },
+            ]);
+            setSelected(null);
+            setEditing(slides.length);
+          }}
+          onChange={setSlide}
+          onDelete={(i) => {
+            setSlides((cur) => cur.filter((_, j) => j !== i));
+            setEditing(null);
+            setSelected(null);
+          }}
+        />
+      )}
+      {source === 'layers' && (
         <PosterLayersEditor
-          doc={layered.doc}
-          setDoc={layered.setDoc}
+          doc={editDoc}
+          setDoc={setEditDoc}
           g={g}
           selected={selected}
           setSelected={setSelected}
@@ -291,9 +405,166 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
       extra={settings}
       draftKey="free.text"
       size={shape === 'custom' ? size : undefined}
+      slideshow={slideshow}
     />
   );
 }
+
+/**
+ * The slideshow on the poster: the background and its layers always, and the slide of the
+ * moment over them; in the change into a slide both are on, moved as the transition says
+ * (the same formula the recording uses). While a slide is being edited it stands still
+ * on screen; while recording, the recorder chooses what is shown (`forced`).
+ */
+function SlideshowPoster({
+  tpl,
+  slides,
+  texts,
+  editing,
+  forced,
+}: {
+  tpl: PosterDoc;
+  slides: Slide[];
+  texts: PosterTexts;
+  editing: number | null;
+  forced: { slide: number | null; bare: boolean } | null;
+}) {
+  const [now, setNow] = useState(() => slideAt(slides, 0, SLIDE_CHANGE_SECONDS));
+  const playing = !forced && editing === null;
+  useEffect(() => {
+    if (!playing) return;
+    const t0 = performance.now();
+    let last = '';
+    let id = 0;
+    const step = (ms: number) => {
+      id = requestAnimationFrame(step);
+      const at = slideAt(slides, (ms - t0) / 1000, SLIDE_CHANGE_SECONDS);
+      // Re-drawn only when something changes: a new slide, or a step of a change.
+      const key = at.prev === null ? `${at.index}` : `${at.index}|${at.p.toFixed(2)}`;
+      if (key === last) return;
+      last = key;
+      setNow(at);
+    };
+    id = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(id);
+  }, [playing, slides]);
+  let shown: { key: string; layers: PosterLayer[]; style?: CSSProperties }[] = [];
+  let flash = 0;
+  if (forced) {
+    const sl = forced.slide !== null ? slides[forced.slide] : undefined;
+    shown = sl ? [{ key: sl.id, layers: sl.layers }] : [];
+  } else if (editing !== null) {
+    const sl = slides[editing];
+    shown = sl ? [{ key: sl.id, layers: sl.layers }] : [];
+  } else {
+    const cur = slides[now.index];
+    const prev = now.prev !== null ? slides[now.prev] : undefined;
+    if (cur && prev && prev !== cur) {
+      const look = transitionAt(cur.transition, now.p, now.index * 7 + 3);
+      flash = look.flash;
+      shown = [
+        { key: prev.id, layers: prev.layers, style: lookStyle(look.out) as CSSProperties },
+        { key: cur.id, layers: cur.layers, style: lookStyle(look.in) as CSSProperties },
+      ];
+    } else if (cur) shown = [{ key: cur.id, layers: cur.layers }];
+  }
+  return (
+    <LayeredPoster fill tpl={tpl} texts={texts} slides={shown} bare={!!forced?.bare}>
+      {flash > 0 && (
+        <span
+          className="pointer-events-none absolute inset-0 bg-white"
+          style={{ opacity: flash }}
+        />
+      )}
+    </LayeredPoster>
+  );
+}
+
+/** The slides: the background or a slide to edit, and each slide's length and change. */
+function SlidesBar({
+  slides,
+  editing,
+  onEdit,
+  onAdd,
+  onChange,
+  onDelete,
+}: {
+  slides: Slide[];
+  editing: number | null;
+  onEdit: (i: number | null) => void;
+  onAdd: () => void;
+  onChange: (i: number, p: Partial<Slide>) => void;
+  onDelete: (i: number) => void;
+}) {
+  const t = useT();
+  const ts = t.freePoster.slides;
+  const chip = (on: boolean, label: string, act: () => void, key: string) => (
+    <button
+      key={key}
+      type="button"
+      onClick={act}
+      className={`rounded-full px-3 py-1.5 text-[13px] font-semibold ${
+        on ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+      }`}
+    >
+      {label}
+    </button>
+  );
+  const sl = editing !== null ? slides[editing] : undefined;
+  const total = slides.reduce((a, b) => a + b.seconds, 0);
+  return (
+    <div className="flex flex-col gap-2 rounded-xl bg-hairline/50 p-2.5">
+      <div className="text-[12px] font-semibold text-hint">{ts.title}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {chip(editing === null, ts.background, () => onEdit(null), 'bg')}
+        {slides.map((_, i) => chip(editing === i, ts.slide(i + 1), () => onEdit(i), `s${i}`))}
+        {slides.length < MAX_SLIDES && chip(false, ts.add, onAdd, 'add')}
+      </div>
+      <p className="text-[11px] leading-snug text-hint">
+        {slides.length ? ts.total(Math.round(total)) : ts.hint}
+      </p>
+      {sl && editing !== null && (
+        <>
+          <label className="flex items-center gap-2 text-[12px] text-hint">
+            {ts.seconds(sl.seconds)}
+            <input
+              type="range"
+              min={1.5}
+              max={15}
+              step={0.5}
+              value={sl.seconds}
+              onChange={(e) => onChange(editing, { seconds: Number(e.target.value) })}
+              className="flex-1"
+            />
+          </label>
+          <div className="text-[12px] font-semibold text-hint">{ts.transition}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {SLIDE_TRANSITIONS.map((k: SlideTransition) =>
+              chip(
+                sl.transition === k,
+                ts.kinds[k],
+                () => {
+                  haptic.tap();
+                  onChange(editing, { transition: k });
+                },
+                k,
+              ),
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => onDelete(editing)}
+            className="self-start text-[13px] font-semibold text-[var(--color-danger,#e5484d)]"
+          >
+            {ts.remove}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+const MAX_SLIDES = 12;
 
 /**
  * «📐 Own size»: width and height in pixels (typed, or a ready size). The preview takes the

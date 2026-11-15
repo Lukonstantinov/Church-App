@@ -2150,6 +2150,27 @@ export const en: Messages = {
     notAllowed: 'Birthdays are seen by admins and those who manage people in a ministry.',
   },
   freePoster: {
+    slides: {
+      title: 'Slides',
+      background: 'Background',
+      slide: (n: number) => `Slide ${n}`,
+      add: '＋ Slide',
+      hint: 'The background and its effects are shared by all slides. Add slides — each has its own layers (text, photos, effects), length and transition.',
+      total: (s: number) =>
+        `Slideshow ${s} s. Choose «Background» or a slide to change its layers.`,
+      seconds: (s: number) => `On screen ${s} s`,
+      transition: 'Transition into this slide',
+      kinds: {
+        glitch: '⚡ Glitch',
+        fade: 'Fade',
+        zoom: 'Zoom',
+        blur: 'Blur',
+        slide: 'Slide',
+        flash: 'Flash',
+        cut: 'Cut',
+      },
+      remove: 'Delete slide',
+    },
     title: 'Animated poster',
     hint: 'A GIF or video from a photo, a poster template or the ministry’s colours — no event needed. Effects, own text or none; it comes to your chat with the bot — forward it anywhere.',
     picture: 'Picture',
@@ -2232,6 +2253,7 @@ export const en: Messages = {
       n === 0 ? 'Sent to you — nobody else to send to' : `Sent: to you and ${n} more`,
     sendVideo: '🎬 Send video',
     sendGif: '🎞 Send GIF',
+    slideshowLength: (s: number) => `Slideshow: ${s} s — its length is the slides’ lengths`,
     lengthLabel: 'Length',
     length: (s: number) => `${s} s`,
     lengthHint:
