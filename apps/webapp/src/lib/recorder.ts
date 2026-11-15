@@ -165,6 +165,80 @@ function restoreMissing(
   }
 }
 
+/**
+ * A still band kept only as big as what it holds, at its place on the frame. Full-size
+ * bands (one per effect) and kept frames once added up past the memory iPhones allow all
+ * canvases together, and the canvases made after that came out blank: a 2000×640 video
+ * lost its background gradient, texts and sublayers while its effects stayed.
+ */
+interface Piece {
+  pic: HTMLCanvasElement;
+  x: number;
+  y: number;
+}
+
+/** Whether a canvas came out fully see-through (looked at on a small copy, quickly). */
+function looksBlank(c: HTMLCanvasElement): boolean {
+  const N = 64;
+  const probe = canvasOf(N, N);
+  try {
+    const p = probe.getContext('2d', { willReadFrequently: true })!;
+    p.drawImage(c, 0, 0, N, N);
+    const d = p.getImageData(0, 0, N, N).data;
+    for (let i = 3; i < d.length; i += 4) if (d[i]! > 0) return false;
+    return true;
+  } catch {
+    return false;
+  } finally {
+    freeCanvas(probe);
+  }
+}
+
+/** Whether an element shows anything at all (a box with size, not hidden or see-through). */
+function shows(e: HTMLElement): boolean {
+  if (!e.offsetWidth || !e.offsetHeight) return false;
+  const css = getComputedStyle(e);
+  return css.visibility !== 'hidden' && css.display !== 'none' && Number(css.opacity) > 0.02;
+}
+
+/** The band cut to what it holds (null when it holds nothing); the full canvas is freed. */
+function cropped(c: HTMLCanvasElement): Piece | null {
+  const { width: w, height: h } = c;
+  let data: Uint8ClampedArray;
+  try {
+    data = c.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, w, h).data;
+  } catch {
+    return { pic: c, x: 0, y: 0 };
+  }
+  let x0 = w;
+  let y0 = h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < h; y++) {
+    const row = y * w * 4;
+    for (let x = 0; x < w; x++)
+      if (data[row + x * 4 + 3]! > 0) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        y1 = y;
+      }
+  }
+  if (x1 < 0) {
+    freeCanvas(c);
+    return null;
+  }
+  // Hardly smaller: kept as it is.
+  if ((x1 - x0 + 1) * (y1 - y0 + 1) > w * h * 0.8) return { pic: c, x: 0, y: 0 };
+  const pic = canvasOf(x1 - x0 + 1, y1 - y0 + 1);
+  pic.getContext('2d')!.drawImage(c, -x0, -y0);
+  freeCanvas(c);
+  return { pic, x: x0, y: y0 };
+}
+
+/** The largest picture of the page made at once (pixels): see stillParts. */
+const STILL_MAX_PIXELS = 3_500_000;
+
 /** A canvas of the block's size at the output scale. */
 function canvasOf(w: number, h: number) {
   const c = document.createElement('canvas');
@@ -184,8 +258,8 @@ interface Group {
   el: HTMLElement;
   /** Its effects (indices into the recording's effect list, in painting order). */
   fx: number[];
-  under: HTMLCanvasElement | null;
-  top: HTMLCanvasElement | null;
+  under: Piece | null;
+  top: Piece | null;
   blend: GlobalCompositeOperation;
   alpha: number;
 }
@@ -222,13 +296,17 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
   const topShots = [...node.querySelectorAll<HTMLElement>('[data-shot="top"]')];
   const W = node.offsetWidth;
   const H = node.offsetHeight;
-  const opts = { pixelRatio: k, skipFonts: false, width: W, height: H } as const;
-  const draw = async () => {
+  // The page's picture is made at most this big and then enlarged onto the frame: iPhones
+  // quietly give back an empty picture when it is much larger (a 4000×1300 own size lost
+  // its background gradient, texts and pictures while the effects, drawn by us, stayed).
+  const pr = Math.min(k, Math.sqrt(STILL_MAX_PIXELS / Math.max(1, W * H)));
+  const opts = { pixelRatio: pr, skipFonts: false, width: W, height: H } as const;
+  const draw = async (ratio = pr) => {
     try {
-      return await toCanvas(node, opts);
+      return await toCanvas(node, { ...opts, pixelRatio: ratio });
     } catch {
       // Embedding the fonts failed: without them.
-      return toCanvas(node, { ...opts, skipFonts: true });
+      return toCanvas(node, { ...opts, pixelRatio: ratio, skipFonts: true });
     }
   };
 
@@ -247,7 +325,12 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
     pics.filter((img) => band.some((e) => e === img || e.contains(img)));
   let undo = hideFor([...effects, ...bands.slice(1).flat(), ...allGroupStills, ...unders]);
   try {
-    const pic = await draw();
+    let pic = await draw();
+    // Out of memory, a phone gives back a blank picture: once more at half the size.
+    if (looksBlank(pic)) {
+      freeCanvas(pic);
+      pic = await draw(pr / 2);
+    }
     b.drawImage(pic, 0, 0, outW, outH);
     freeCanvas(pic);
   } finally {
@@ -265,7 +348,7 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
    * themselves: a hidden box's mask (soft edges, a cut-out's outline) isn't applied to what
    * it holds.
    */
-  const drawOnly = async (keep: HTMLElement[]) => {
+  const drawOnly = async (keep: HTMLElement[], ratio = pr) => {
     const band = canvasOf(outW, outH);
     const a = band.getContext('2d')!;
     const kept = new Set(keep);
@@ -289,7 +372,7 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
     shut.forEach((e) => (e.style.visibility = 'hidden'));
     keep.forEach((e) => (e.style.visibility = 'visible'));
     try {
-      const pic = await draw();
+      const pic = await draw(ratio);
       a.drawImage(pic, 0, 0, outW, outH);
       freeCanvas(pic);
       restoreMissing(a, node, picsOf(keep), k);
@@ -305,7 +388,19 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
     return band;
   };
 
-  const over: (HTMLCanvasElement | null)[] = [];
+  /**
+   * `keep` drawn; when the picture comes back empty although there is something to show
+   * (a phone out of memory gives back a blank picture without a word), once more at half
+   * the size — a softer band beats a missing one.
+   */
+  const kept = async (keep: HTMLElement[]) => {
+    const band = await drawOnly(keep);
+    if (!looksBlank(band) || !keep.some(shows)) return band;
+    freeCanvas(band);
+    return drawOnly(keep, pr / 2);
+  };
+
+  const over: (Piece | null)[] = [];
   for (let i = 1; i < bands.length; i++) {
     const last = i === bands.length - 1;
     // Only this band's parts (what the block paints itself was drawn below).
@@ -314,7 +409,7 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
       over.push(null);
       continue;
     }
-    const band = keep.length ? await drawOnly(keep) : canvasOf(outW, outH);
+    const band = keep.length ? await kept(keep) : canvasOf(outW, outH);
     if (last) {
       const a = band.getContext('2d')!;
       a.save();
@@ -322,7 +417,7 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
       for (const t of topShots) drawShot(a, node, t);
       a.restore();
     }
-    over.push(band);
+    over.push(cropped(band));
   }
 
   // Each group's still parts, drawn unblended and whole (its own blend and opacity are
@@ -349,8 +444,8 @@ async function stillParts(node: HTMLElement, k: number, outW: number, outH: numb
       groups.push({
         el: g,
         fx,
-        under: before.length ? await drawOnly(before) : null,
-        top: after.length ? await drawOnly(after) : null,
+        under: before.length ? cropped(await kept(before)) : null,
+        top: after.length ? cropped(await kept(after)) : null,
         blend: blend as GlobalCompositeOperation,
         alpha,
       });
@@ -1071,7 +1166,7 @@ async function drawEffects(
   list: Effect[],
   t: number,
   k: number,
-  over: (HTMLCanvasElement | null)[] = [],
+  over: (Piece | null)[] = [],
   groups: Group[] = [],
 ) {
   for (const [i, fx] of list.entries()) {
@@ -1083,9 +1178,9 @@ async function drawEffects(
         groupScratch = canvasOf(width, height);
       const g = groupScratch.getContext('2d')!;
       g.clearRect(0, 0, width, height);
-      if (group.under) g.drawImage(group.under, 0, 0);
+      if (group.under) g.drawImage(group.under.pic, group.under.x, group.under.y);
       for (const j of group.fx) await drawOne(g, list[j]!, t, k);
-      if (group.top) g.drawImage(group.top, 0, 0);
+      if (group.top) g.drawImage(group.top.pic, group.top.x, group.top.y);
       ctx.save();
       ctx.globalAlpha = group.alpha;
       ctx.globalCompositeOperation = group.blend;
@@ -1093,7 +1188,7 @@ async function drawEffects(
       ctx.restore();
     }
     const still = over[i];
-    if (still) ctx.drawImage(still, 0, 0);
+    if (still) ctx.drawImage(still.pic, still.x, still.y);
   }
 }
 
@@ -1348,9 +1443,8 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
   try {
     restoreImages = await prepareImages(node, k);
     const { below, over, effects, groups } = await stillParts(node, k, outW, outH);
-    used.push(below, ...over.filter((c): c is HTMLCanvasElement => !!c));
-    for (const g of groups)
-      used.push(...[g.under, g.top].filter((c): c is HTMLCanvasElement => !!c));
+    used.push(below, ...over.flatMap((c) => (c ? [c.pic] : [])));
+    for (const g of groups) used.push(...[g.under, g.top].flatMap((c) => (c ? [c.pic] : [])));
     const list = await prepareEffects(node, effects, k, groups);
     for (const fx of list) used.push(...fx.masks.map((m) => m.pic));
     const scratch = canvasOf(outW, outH);
@@ -1419,7 +1513,9 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
     const o = out.getContext('2d', { willReadFrequently: true })!;
     used.push(frame, out);
     // The first moments, kept to fade the loop's end into.
-    const start: HTMLCanvasElement[] = [];
+    // Kept as JPEG pictures (a fifth of a megabyte each, not five): full-size canvases
+    // here took most of the memory iPhones allow all canvases together (see Piece).
+    const start: Blob[] = [];
 
     for (let i = 0; i < total + fade; i++) {
       const t = i / fps;
@@ -1427,10 +1523,8 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
       f.drawImage(below, 0, 0);
       await drawEffects(f, list, t, k, over, groups);
       if (i < fade) {
-        const keep = canvasOf(outW, outH);
-        keep.getContext('2d')!.drawImage(frame, 0, 0);
-        start.push(keep);
-        used.push(keep);
+        const kept = await new Promise<Blob | null>((r) => frame.toBlob(r, 'image/jpeg', 0.95));
+        if (kept) start.push(kept);
         opts.onProgress?.(i / (total + fade));
         continue;
       }
@@ -1438,10 +1532,13 @@ export async function recordLoop(node: HTMLElement, opts: RecordOptions = {}): P
       const j = i - fade;
       o.globalAlpha = 1;
       o.drawImage(frame, 0, 0);
-      if (i >= total) {
+      const kept = i >= total ? start[i - total] : undefined;
+      if (kept) {
+        const bmp = await createImageBitmap(kept);
         o.globalAlpha = (i - total + 1) / (fade + 1);
-        o.drawImage(start[i - total]!, 0, 0);
+        o.drawImage(bmp, 0, 0, outW, outH);
         o.globalAlpha = 1;
+        bmp.close();
       }
       if (encoder) {
         // Handed over the way that came back right on this phone (pickFeed).
