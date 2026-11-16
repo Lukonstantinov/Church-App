@@ -219,6 +219,8 @@ export function MotionExport({
   const asFile = deliver === 'file';
   const toDevice = deliver === 'device' && isInsideTelegram();
   const out = size ? fitSize(size) : null;
+  const captioned = isInsideTelegram() && !(to === 'me' && deliver === 'device');
+  const [fine, setFine] = useState(false);
   const [quality, setQuality] = useState<keyof typeof QUALITY>('standard');
   const [length, setLength] = useState<(typeof LENGTHS)[number]>(6);
   const [fps, setFps] = useState<(typeof FPS)[number]>(30);
@@ -479,23 +481,6 @@ export function MotionExport({
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap gap-1.5">
-            {(Object.keys(QUALITY) as (keyof typeof QUALITY)[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setQuality(k)}
-                className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
-                  quality === k ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
-                }`}
-              >
-                {t.motionExport.quality[k]}
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-hint">
-            {out ? t.motionExport.sizeHint(out.w, out.h) : t.motionExport.qualityHint[quality]}
-          </p>
           <div className="text-[12px] font-semibold text-hint">{t.motionExport.lengthLabel}</div>
           {slideshow ? (
             <p className="text-[11px] text-hint">
@@ -522,36 +507,79 @@ export function MotionExport({
           {length > 6 && !slideshow && (
             <p className="text-[11px] text-hint">{t.motionExport.lengthHint}</p>
           )}
-          <div className="text-[12px] font-semibold text-hint">{t.motionExport.fpsLabel}</div>
-          <div className="flex flex-wrap gap-1.5">
-            {FPS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setFps(n)}
-                className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
-                  fps === n ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
-                }`}
-              >
-                {t.motionExport.fps(n)}
-              </button>
-            ))}
-          </div>
-          {(() => {
-            // A long video at this quality that won't fit Telegram's limit: said plainly.
-            const q = QUALITY[quality];
-            const vw = out ? out.w : q.video;
-            const vh = out ? out.h : (vw * 9) / 16;
-            const need = (q.bitrate * vw * vh * fps * length) / 8;
-            return need > VIDEO_BUDGET_BYTES && isInsideTelegram() ? (
-              <p className="text-[11px] text-hint">{t.motionExport.fitHint}</p>
-            ) : null;
-          })()}
+          {/* Fine settings, folded to one line: most posters never need them changed. */}
+          <button
+            type="button"
+            aria-expanded={fine}
+            onClick={() => {
+              haptic.tap();
+              setFine(!fine);
+            }}
+            className="self-start text-[13px] font-semibold text-link"
+          >
+            ⚙️{' '}
+            {t.motionExport.fine(
+              out ? `${out.w}×${out.h}` : t.motionExport.quality[quality],
+              t.motionExport.fps(fps),
+            )}{' '}
+            {fine ? '▴' : '▾'}
+          </button>
+          {fine && (
+            <div className="flex flex-col gap-2 rounded-xl bg-hairline/50 p-2.5">
+              <div className="flex flex-wrap gap-1.5">
+                {(Object.keys(QUALITY) as (keyof typeof QUALITY)[]).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setQuality(k)}
+                    className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                      quality === k ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                    }`}
+                  >
+                    {t.motionExport.quality[k]}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-hint">
+                {out ? t.motionExport.sizeHint(out.w, out.h) : t.motionExport.qualityHint[quality]}
+              </p>
+              <div className="text-[12px] font-semibold text-hint">{t.motionExport.fpsLabel}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {FPS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setFps(n)}
+                    className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                      fps === n ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                    }`}
+                  >
+                    {t.motionExport.fps(n)}
+                  </button>
+                ))}
+              </div>
+              {(() => {
+                // A long video at this quality that won't fit Telegram's limit: said plainly.
+                const q = QUALITY[quality];
+                const vw = out ? out.w : q.video;
+                const vh = out ? out.h : (vw * 9) / 16;
+                const need = (q.bitrate * vw * vh * fps * length) / 8;
+                return need > VIDEO_BUDGET_BYTES && isInsideTelegram() ? (
+                  <p className="text-[11px] text-hint">{t.motionExport.fitHint}</p>
+                ) : null;
+              })()}
+            </div>
+          )}
           {out && size && (out.w !== even(size.w) || out.h !== even(size.h)) && (
             <p className="text-[11px] text-hint">{t.motionExport.sizeLimited}</p>
           )}
-          <div className="text-[12px] font-semibold text-hint">{t.motionExport.textLabel}</div>
-          <TextArea value={text} onChange={setOwnText} maxLength={1024} rows={3} />
+          {/* The message text goes with what the bot sends; a file saved here has none. */}
+          {captioned && (
+            <>
+              <div className="text-[12px] font-semibold text-hint">{t.motionExport.textLabel}</div>
+              <TextArea value={text} onChange={setOwnText} maxLength={1024} rows={3} />
+            </>
+          )}
           {audiences.length > 1 && (
             <>
               <div className="text-[12px] font-semibold text-hint">{t.motionExport.toLabel}</div>

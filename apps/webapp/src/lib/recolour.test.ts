@@ -54,4 +54,37 @@ describe('colour variants', () => {
     expect(doc.background.colors[0]).toBe('#ff0000');
     expect(designColours(doc)[0]).toBe('#ff0000');
   });
+
+  it('keeps every effect on the layers, with its settings', () => {
+    const layers = [
+      posterLayerSchema.parse({
+        id: 'f',
+        type: 'fill',
+        colors: ['#ff0000'],
+        effects: [{ kind: 'snow', tune: { speed: 2, density: 1.5 } }, { kind: 'silk' }],
+      }),
+      posterLayerSchema.parse({
+        id: 'e',
+        type: 'effect',
+        kind: 'aurora',
+        tune: { speed: 0.5, color: '#ff0000', seed: 7 },
+        fade: 0.4,
+      }),
+    ];
+    const doc = {
+      background: { type: 'color' as const, colors: ['#ff0000'], angle: 160 },
+      layers,
+    };
+    const [fill, effect] = recolourDoc(doc, 120).layers;
+    // Same effects in the same order; only colours of their own are turned.
+    expect(fill).toMatchObject({
+      colors: ['#00ff00'],
+      effects: [{ kind: 'snow', tune: { speed: 2, density: 1.5 } }, { kind: 'silk' }],
+    });
+    expect(effect).toMatchObject({
+      kind: 'aurora',
+      fade: 0.4,
+      tune: { speed: 0.5, color: '#00ff00', seed: 7 },
+    });
+  });
 });

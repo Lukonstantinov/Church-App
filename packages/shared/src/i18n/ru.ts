@@ -2268,6 +2268,7 @@ export const ru = {
     fileName: 'Постер',
   },
   motionExport: {
+    fine: (what: string, fps: string) => `Качество: ${what} · ${fps}`,
     variantStep: (n: number, of: number) => `Вариант ${n} из ${of}`,
     whatLabel: 'Что сохранить',
     whatShown: 'То, что на превью',

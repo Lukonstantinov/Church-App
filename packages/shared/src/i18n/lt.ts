@@ -2306,6 +2306,7 @@ export const lt: Messages = {
     fileName: 'Plakatas',
   },
   motionExport: {
+    fine: (what: string, fps: string) => `Kokybė: ${what} · ${fps}`,
     variantStep: (n: number, of: number) => `${n} variantas iš ${of}`,
     whatLabel: 'Ką išsaugoti',
     whatShown: 'Tai, kas peržiūroje',

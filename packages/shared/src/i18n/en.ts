@@ -2250,6 +2250,7 @@ export const en: Messages = {
     fileName: 'Poster',
   },
   motionExport: {
+    fine: (what: string, fps: string) => `Quality: ${what} · ${fps}`,
     variantStep: (n: number, of: number) => `Variant ${n} of ${of}`,
     whatLabel: 'What to save',
     whatShown: 'What is on the preview',
