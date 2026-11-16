@@ -174,6 +174,58 @@ describe('birthday weeks', () => {
   });
 });
 
+describe('birthday list time', () => {
+  it('comes at the set hour and minute, once, and the day-of note at its own time', async () => {
+    const db = getDb(env.DB);
+    await api('/api/me', { user: ADMIN });
+    const g = await group('Время');
+    await apiJson('/api/dev/mock-people', {
+      method: 'POST',
+      user: ADMIN,
+      json: {
+        groupId: g,
+        people: [
+          {
+            firstName: 'Сегодня',
+            lastName: 'Именинник',
+            birthday: '07-15',
+            birthYear: null,
+            role: null,
+          },
+        ],
+      },
+    });
+    await env.DB.prepare("delete from job_runs where job like 'birthday_%'").run();
+    // Wednesday 15 July 2026, Riga (UTC+3): 16:20 there is 13:20 UTC.
+    const at = (hhmm: string) => new Date(`2026-07-15T${hhmm}:00+03:00`);
+    const report = {
+      ...DEFAULT_BIRTHDAY_REPORT,
+      weekday: 2,
+      hour: 16,
+      minute: 30,
+      dayOfHour: 17,
+      dayOfMinute: 0,
+    };
+    const church = { timezone: TZ, birthdayReport: report };
+    const count = async (like: string) =>
+      (await env.DB.prepare('select count(*) as n from outbox where dedupe_key like ?')
+        .bind(like)
+        .first<{ n: number }>())!.n;
+
+    await sendBirthdayReports(db, church, at('16:25'));
+    expect(await count('bday-week:2026-07-15:%')).toBe(0);
+    await sendBirthdayReports(db, church, at('16:30'));
+    const weekly = await count('bday-week:2026-07-15:%');
+    expect(weekly).toBeGreaterThan(0);
+    // Not yet the day-of note's time; and the weekly list isn't sent again.
+    await sendBirthdayReports(db, church, at('16:55'));
+    expect(await count('bday-week:2026-07-15:%')).toBe(weekly);
+    expect(await count('bday-day:2026-07-15:%')).toBe(0);
+    await sendBirthdayReports(db, church, at('17:05'));
+    expect(await count('bday-day:2026-07-15:%')).toBeGreaterThan(0);
+  });
+});
+
 describe('bot command menu', () => {
   it('church admins and people managers get /birthdays in their own chat; others do not', async () => {
     const { syncBirthdayMenus } = await import('../src/lib/botMenu');

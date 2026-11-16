@@ -273,18 +273,12 @@ function BirthdayReportSection({
                 </option>
               ))}
             </select>
-            <select
-              aria-label={tb.hour}
-              className="min-h-[44px] w-[100px] rounded-xl bg-hairline px-3 text-[16px] font-medium outline-none"
-              value={value.hour}
-              onChange={(e) => set({ hour: Number(e.target.value) })}
-            >
-              {Array.from({ length: 24 }, (_, h) => (
-                <option key={h} value={h}>
-                  {`${String(h).padStart(2, '0')}:00`}
-                </option>
-              ))}
-            </select>
+            <TimeField
+              label={tb.hour}
+              hour={value.hour}
+              minute={value.minute ?? 0}
+              onChange={(hour, minute) => set({ hour, minute })}
+            />
           </div>
           <span className="text-[13px] text-hint">{tb.ahead}</span>
           <div className="flex flex-wrap gap-2">
@@ -297,6 +291,17 @@ function BirthdayReportSection({
         </div>
       )}
       <Toggle label={tb.dayOf} checked={value.dayOf} onChange={(dayOf) => set({ dayOf })} />
+      {value.dayOf && (
+        <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-2">
+          <span className="text-[15px] text-hint">{tb.dayOfTime}</span>
+          <TimeField
+            label={tb.dayOfTime}
+            hour={value.dayOfHour ?? value.hour}
+            minute={value.dayOfMinute ?? value.minute ?? 0}
+            onChange={(dayOfHour, dayOfMinute) => set({ dayOfHour, dayOfMinute })}
+          />
+        </div>
+      )}
       <div className="flex flex-col gap-1.5 p-3">
         <Button
           variant="secondary"
@@ -315,6 +320,37 @@ function BirthdayReportSection({
         <p className="text-[12px] leading-snug text-hint">{tb.syncHint}</p>
       </div>
     </Section>
+  );
+}
+
+/**
+ * An hour and minute, church time: the phone's own time picker. The bot checks every 5
+ * minutes, so a message comes within 5 minutes of the time chosen.
+ */
+function TimeField({
+  label,
+  hour,
+  minute,
+  onChange,
+}: {
+  label: string;
+  hour: number;
+  minute: number;
+  onChange: (hour: number, minute: number) => void;
+}) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    <input
+      type="time"
+      aria-label={label}
+      step={300}
+      value={`${pad(hour)}:${pad(minute)}`}
+      onChange={(e) => {
+        const [h, m] = e.target.value.split(':').map(Number);
+        if (Number.isInteger(h) && Number.isInteger(m)) onChange(h!, m!);
+      }}
+      className="min-h-[44px] w-[110px] rounded-xl bg-hairline px-3 text-center text-[16px] font-medium outline-none"
+    />
   );
 }
 

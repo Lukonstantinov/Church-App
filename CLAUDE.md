@@ -106,7 +106,7 @@ positions with rights (ordered with ↑/↓, `positions.sort`; member lists foll
 labels, contacts (members' own attendance hidden unless `groups.members_see_attendance`; 📊 opens a person's
 profile for admins / `people.manage`), birthdays (`users.birthday` "MM-DD" + `birth_year`, set on the person screen;
 🎂 in the ministry calendar for people managers, `CalendarData.birthdays`; weekly bot list + day-of note to church admins,
-`church_settings.birthday_report`, hourly `sendBirthdayReports`; `/birthdays [month]` in the bot; `lib/birthdays.ts`),
+`church_settings.birthday_report` — weekday + hour:minute, the day-of note at its own time (`dayOfHour`/`dayOfMinute`); `sendBirthdayReports` runs in the 5-minute tick, due for an hour from the time, claimed per day; `/birthdays [month]` in the bot; `lib/birthdays.ts`),
 «⬇️ Таблица людей» on the People screen (`PeopleSheet.tsx`, `lib/peopleSheet.ts`: Excel of the ministry's people with ticked columns, unknown values written «нет данных»; for `people.manage`, who also get `birthday` / `birthYear` / `lastSeenAt` in `/groups/:id/members`),
 who marked each attendance mark (`attendance.marked_by`, kept per changed mark), meeting comments
 (`meeting_comments`, folded on the meeting screen), counted meetings (statistics count only `groups.stat_kinds` — 'regular' + meeting kinds, null = all — unless a meeting

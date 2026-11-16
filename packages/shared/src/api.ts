@@ -80,15 +80,19 @@ export interface ChurchInfo {
 
 /**
  * The bot's birthday report to church admins: once a week on `weekday` (0 = Monday) at
- * `hour` (church time), the birthdays of the next `days` days with names and positions;
- * `dayOf` also sends a note on the morning of each birthday.
+ * `hour`:`minute` (church time), the birthdays of the next `days` days with names and
+ * positions; `dayOf` also sends a note on each birthday, at `dayOfHour`:`dayOfMinute`
+ * (none = the weekly list's time).
  */
 export const birthdayReportSchema = z.object({
   on: z.boolean(),
   weekday: z.number().int().min(0).max(6),
   hour: z.number().int().min(0).max(23),
+  minute: z.number().int().min(0).max(59).nullish(),
   days: z.union([z.literal(7), z.literal(14), z.literal(31)]),
   dayOf: z.boolean(),
+  dayOfHour: z.number().int().min(0).max(23).nullish(),
+  dayOfMinute: z.number().int().min(0).max(59).nullish(),
 });
 export type BirthdayReport = z.output<typeof birthdayReportSchema>;
 export const DEFAULT_BIRTHDAY_REPORT: BirthdayReport = {

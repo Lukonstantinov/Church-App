@@ -1495,6 +1495,7 @@ export const en: Messages = {
       weekly: 'Weekly list',
       weekday: 'Day',
       hour: 'Time',
+      dayOfTime: 'Time of the birthday note',
       ahead: 'How far ahead',
       days: (d: number) => (d === 7 ? 'A week' : d === 14 ? '2 weeks' : 'A month'),
       dayOf: 'Reminder on the birthday itself',

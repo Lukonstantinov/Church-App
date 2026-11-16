@@ -53,6 +53,8 @@ export async function minuteTick(env: Env, now = new Date()): Promise<void> {
   await remindUpcomingEvents(db, env, now);
   await sendMeetingReminders(db, env, now);
   await clearEndedLive(db, botApi(env), now);
+  // Every 5 minutes, so a birthday list set for 16:30 comes at 16:30, not at the next hour.
+  await sendBirthdayReports(db, await getChurch(db), now, botApi(env));
 }
 
 /** Hourly: create upcoming meetings, nudge leaders about missing roll calls, tidy up. */
@@ -64,7 +66,6 @@ export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
   await remindMissingRollCalls(db, env, church.timezone, now);
   await remindUpcomingEvents(db, env, now);
   await sendLiveNotices(db, env, now);
-  await sendBirthdayReports(db, church, now, botApi(env));
   await syncBirthdayMenus(db, botApi(env), env, (userId) =>
     claim(db, 'cmd_menu', String(userId), now.toISOString().slice(0, 10)),
   ).catch(() => 0);
@@ -81,10 +82,26 @@ export async function hourlyTick(env: Env, now = new Date()): Promise<void> {
   }
 }
 
+/** Minutes of the day, church time. */
+function minuteOfDay(now: Date, timezone: string) {
+  const [h = 0, m = 0] = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: timezone,
+  })
+    .format(now)
+    .split(':')
+    .map(Number);
+  return h * 60 + m;
+}
+
 /**
- * Birthdays for the church admins, at the hour set in church settings (church time): once a
- * week on the chosen weekday the list of the coming days, and on the morning of a birthday
- * a short note. Each is claimed per day, so a repeated tick never sends it twice.
+ * Birthdays for the church admins, at the times set in church settings (church time): once
+ * a week on the chosen weekday the list of the coming days, and on the day of a birthday a
+ * short note, each at its own hour and minute. Checked every 5 minutes; each is due for an
+ * hour from its time (a late or missed tick still sends it) and claimed per day, so it is
+ * never sent twice.
  */
 export async function sendBirthdayReports(
   db: Db,
@@ -94,24 +111,26 @@ export async function sendBirthdayReports(
 ) {
   const report = church.birthdayReport;
   if (!report.on && !report.dayOf) return;
-  const hour = Number(
-    new Intl.DateTimeFormat('en-GB', {
-      hour: '2-digit',
-      hourCycle: 'h23',
-      timeZone: church.timezone,
-    }).format(now),
-  );
-  if (hour !== report.hour) return;
+  const at = minuteOfDay(now, church.timezone);
+  const due = (hour: number, minute: number) => {
+    const from = hour * 60 + minute;
+    return at >= from && at < from + 60;
+  };
   const today = localDate(now, church.timezone);
   // 0 = Monday, as the setting counts.
   const weekday = (new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7;
-  const weekly = report.on && weekday === report.weekday;
-  if (!weekly && !report.dayOf) return;
+  const weeklyDue = report.on && weekday === report.weekday && due(report.hour, report.minute ?? 0);
+  const dayDue =
+    report.dayOf && due(report.dayOfHour ?? report.hour, report.dayOfMinute ?? report.minute ?? 0);
+  // Claimed first: a list is never sent twice, and the rest below runs once a day at most.
+  const weekly = weeklyDue && (await claim(db, 'birthday_week', 'all', today));
+  const dayOf = dayDue && (await claim(db, 'birthday_day', 'all', today));
+  if (!weekly && !dayOf) return;
   // Fresh birthdays from people's Telegram profiles go into the list that is about to be sent.
   if (telegram) await syncTelegramBirthdays(db, telegram).catch(() => null);
   const rows = await birthdayRows(db);
   const admins = await adminRecipients(db);
-  if (weekly && (await claim(db, 'birthday_week', 'all', today))) {
+  if (weekly) {
     const list = comingBirthdays(rows, today, report.days);
     if (list.length)
       for (const a of admins)
@@ -130,7 +149,7 @@ export async function sendBirthdayReports(
           dedupeKey: `bday-week:${today}:${a.chatId}`,
         });
   }
-  if (report.dayOf && (await claim(db, 'birthday_day', 'all', today))) {
+  if (dayOf) {
     const list = comingBirthdays(rows, today, 1);
     if (list.length)
       for (const a of admins)

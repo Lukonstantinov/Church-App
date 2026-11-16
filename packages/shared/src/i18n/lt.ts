@@ -1537,6 +1537,7 @@ export const lt: Messages = {
       weekly: 'Savaitinis sąrašas',
       weekday: 'Diena',
       hour: 'Laikas',
+      dayOfTime: 'Gimtadienio žinutės laikas',
       ahead: 'Kiek į priekį',
       days: (d: number) => (d === 7 ? 'Savaitė' : d === 14 ? '2 savaitės' : 'Mėnuo'),
       dayOf: 'Priminimas pačią gimtadienio dieną',
