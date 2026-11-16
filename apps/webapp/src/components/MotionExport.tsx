@@ -138,6 +138,11 @@ export function MotionExport({
     render: (text: PosterTextValue) => ReactNode;
     /** The text choices (default: own words or none). */
     modes?: PosterTextMode[];
+    /**
+     * Only the words are asked for (no font, size or place): the poster's own text layers
+     * decide how they look — each line fills one (title, date, place, topic).
+     */
+    plain?: boolean;
     /** Laid out this wide (default 400). */
     width?: number;
   };
@@ -450,6 +455,7 @@ export function MotionExport({
               value={words}
               preset={preview.preset}
               modes={preview.modes}
+              plain={preview.plain}
               onChange={(v) => {
                 setStyle(v);
                 if (v.text !== words.text) setOwnWords(v.text);

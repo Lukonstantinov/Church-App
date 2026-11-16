@@ -33,6 +33,7 @@ import {
   usePosterTemplates,
   useSaveSlideshow,
   useSlideshows,
+  useUploadMedia,
 } from '../lib/queries';
 import { StillMotion } from '../lib/perf';
 import {
@@ -66,10 +67,8 @@ import {
   usePosterDraft,
   type PosterDoc,
 } from './PosterStudio';
-import { LookTop } from './LookTop';
-import { groupLook } from './MeetingPoster';
 import { MotionExport } from './MotionExport';
-import { PosterTextLayer, type PosterTextValue } from './PosterText';
+import type { PosterTextValue } from './PosterText';
 import { LivingLayers } from './ui';
 
 const SHAPES = {
@@ -115,26 +114,45 @@ const SIZE_PRESETS = {
   screen: { w: 2000, h: 640 },
   a4: { w: 2480, h: 3508 },
 } as const;
-type Source = 'photo' | 'template' | 'colours' | 'layers';
 
-/** What the maker keeps on the phone between visits (the photo separately: it is big). */
+/** What the maker keeps on the phone between visits (the layers and slides separately). */
 interface Kept {
-  source: Source;
-  tplId: number | null;
   shape: Shape;
   /** The own size, when the shape is «Own size». */
   size?: Size;
   effects: EffectsState;
+  /**
+   * Before everything became layers, the poster was one of four kinds; a draft of another
+   * kind is turned into layers once when opened (see `legacy` in the maker).
+   */
+  source?: 'photo' | 'template' | 'colours' | 'layers';
+  tplId?: number | null;
 }
 
-/** The picked photo as a data link, so it can be kept on the phone with the draft. */
-const asDataUrl = (blob: Blob) =>
-  new Promise<string>((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result));
-    r.onerror = () => reject(new Error('read'));
-    r.readAsDataURL(blob);
-  });
+/**
+ * A new poster: the ministry's own colours with its name in big letters and lines for the
+ * date and the place under it — a starting point, every part of it a layer to change.
+ */
+function ministryDoc(brand: { light: string; partner: string }): PosterDoc {
+  const doc = starterDoc();
+  return {
+    ...doc,
+    background: { ...doc.background, colors: [brand.light, brand.partner] },
+    layers: [
+      ...doc.layers.map((l) => (l.type === 'text' ? { ...l, color: '#ffffff' } : l)),
+      // The third line of the words (the place); nothing is drawn while there is none.
+      posterLayerSchema.parse({
+        type: 'text',
+        id: 'place',
+        source: 'place',
+        y: 91,
+        size: 18,
+        weight: 400,
+        color: '#ffffff',
+      }),
+    ],
+  };
+}
 
 /** A poster template's texts from the words: first line the title, then date, place, topic. */
 function textsOf(words: PosterTextValue): PosterTexts {
@@ -144,8 +162,8 @@ function textsOf(words: PosterTextValue): PosterTexts {
 }
 
 /**
- * «🎬 Animated poster» without an event: a photo from the phone, a poster template or the
- * ministry's colours, any effects (several at once, each with its settings), own words on
+ * «🎬 Animated poster» without an event: layers (photos, cut-outs, texts, colours) started
+ * from the ministry's colours, a photo or a saved poster, any effects (several at once, each with its settings), own words on
  * it or none, in a shape for a chat, a square or a story. Recorded as a video or GIF and
  * sent to one's own chat with the bot, to forward anywhere.
  */
@@ -189,20 +207,41 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
   const templates = usePosterTemplates();
   // Everything chosen here is kept as a draft: leaving or closing the app loses nothing.
   const [kept] = useState(() => (fresh ? undefined : readDraft<Kept>('free')?.data));
-  const [source, setSource] = useState<Source>(kept?.source ?? 'colours');
-  const [photo, setPhoto] = useState<string | null>(() =>
-    fresh ? null : (readDraft<string>('free.photo')?.data ?? null),
-  );
-  const [tplId, setTplId] = useState<number | null>(kept?.tplId ?? null);
   const [shape, setShape] = useState<Shape>(kept?.shape ?? '4:5');
   const [effects, setEffects] = useState<EffectsState>(
     () => kept?.effects ?? initEffects({ motion: 'aurora', motionTune: null, motionLayers: [] }),
   );
   const [size, setSize] = useState<Size>(kept?.size ?? { w: 1920, h: 1080 });
-  useDraft('free', { source, tplId, shape, size, effects } satisfies Kept, fresh);
+  useDraft('free', { shape, size, effects } satisfies Kept, fresh);
   useOpeningMark('free', !fresh);
   // Own layers, as in the poster editor (pictures, cut-outs, texts, colours, effects).
-  const layered = usePosterDraft('free.layers', starterDoc);
+  const brand = resolveBrand(g.brandColor);
+  const layered = usePosterDraft('free.layers', () => ministryDoc(brand));
+  const upload = useUploadMedia(g.id, 'event');
+  const toast = useToast();
+  // A draft from before everything became layers: its photo or poster template is made
+  // the layers' start, once (the ministry's colours are the start anyway).
+  const legacy = useRef(!fresh && kept?.source && kept.source !== 'layers' ? kept.source : null);
+  useEffect(() => {
+    const was = legacy.current;
+    if (!was) return;
+    if (was === 'template' && !templates.data) return;
+    legacy.current = null;
+    // Kept without its old kind, so this isn't done again over later work.
+    writeDraft('free', { shape, size, effects } satisfies Kept);
+    const old = readDraft<string>('free.photo')?.data;
+    dropDraft('free.photo');
+    const tpl = templates.data?.find((x) => x.id === kept?.tplId) ?? templates.data?.[0];
+    // (A layers draft already there is the person's work: a template doesn't replace it.)
+    if (was === 'template' && tpl && !layered.restored) startFrom(tpl);
+    else if (was === 'photo' && old)
+      void fetch(old)
+        .then((r) => r.blob())
+        .then((blob) => startPhoto(blob))
+        .catch(() => undefined);
+    // Once, when an old draft is opened (and its templates have come).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates.data]);
   const [selected, setSelected] = useState<string | null>(null);
   const [fxOpen, setFxOpen] = useState(false);
   // Slides (own layers only): each its own layers over the background and its effects.
@@ -276,7 +315,7 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
     return () => cancelAnimationFrame(id);
   }, [forced]);
   const slideshow =
-    source === 'layers' && slides.length > 0
+    slides.length > 0
       ? {
           seconds: slides.map((sl) => sl.seconds),
           kinds: slides.map((sl) => sl.transition),
@@ -299,11 +338,9 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
     if (next.background !== editDoc.background || next.frame !== editDoc.frame)
       layered.setDoc((d) => ({ ...d, background: next.background, frame: next.frame }));
   };
-  const tpl = templates.data?.find((x) => x.id === tplId) ?? templates.data?.[0] ?? null;
 
   // The original (first) and every colour variant, each ready to draw. Made once per
   // change: a poster given new layer objects on every redraw would remake its pictures.
-  const brand = resolveBrand(g.brandColor);
   const looks = useMemo(
     () =>
       [0, ...turns].map((deg) => ({
@@ -312,7 +349,6 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
         slides: deg
           ? slides.map((sl) => ({ ...sl, layers: recolourLayers(sl.layers, deg, tintPictures) }))
           : slides,
-        tpl: tpl && recolourDoc(tpl, deg, tintPictures),
         fx: recolourEffects(effectLayers(effects), deg),
         // Effects and parts in the ministry's colour follow it through these.
         vars: deg
@@ -323,46 +359,53 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
             } as CSSProperties)
           : undefined,
       })),
-    [
-      turns,
-      layered.doc,
-      slides,
-      tpl,
-      effects,
-      tintPictures,
-      brand.light,
-      brand.dark,
-      brand.partner,
-    ],
+    [turns, layered.doc, slides, effects, tintPictures, brand.light, brand.dark, brand.partner],
   );
   type Look = (typeof looks)[number];
   const viewed = batch ? batch.i : picked;
   const look = looks[viewed === null ? 0 : viewed + 1] ?? looks[0]!;
   // The colour a variant is named by: the design's main one (else the ministry's).
-  const fxColours = designColours(null, effectLayers(effects));
   const main =
-    mainColour(
-      source === 'layers'
-        ? [
-            ...designColours(layered.doc),
-            ...slides.flatMap((sl) => designColours({ ...layered.doc, layers: sl.layers })),
-            ...fxColours,
-          ]
-        : source === 'template' && tpl
-          ? [...designColours(tpl), ...fxColours]
-          : [brand.light, ...fxColours],
-    ) ?? brand.light;
+    mainColour([
+      ...designColours(layered.doc),
+      ...slides.flatMap((sl) => designColours({ ...layered.doc, layers: sl.layers })),
+      ...designColours(null, effectLayers(effects)),
+    ]) ?? brand.light;
   const [ratioW = 1, ratioH = 1] = SHAPE_RATIO[shape].split(' / ').map(Number);
   const ratio = shape === 'custom' ? size.w / size.h : ratioW / ratioH;
 
+  /** Starts again from a saved poster, or (none) the ministry's colours; slides stay. */
+  function startFrom(tpl: PosterTemplate | null) {
+    setSelected(null);
+    setEditing(null);
+    layered.setDoc(
+      tpl
+        ? {
+            background: tpl.background,
+            layers: tpl.layers.map((l) => ({ ...l })),
+            frame: tpl.frame,
+          }
+        : ministryDoc(brand),
+    );
+  }
+  /** A photo as the poster's background (kept in the app, like any layer's picture). */
+  async function startPhoto(blob: Blob) {
+    try {
+      const up = await upload.mutateAsync(blob);
+      layered.setDoc((d) => ({
+        ...d,
+        background: { ...d.background, type: 'photo', mediaId: up.id, url: up.url },
+      }));
+    } catch {
+      haptic.error();
+      toast(t.common.saveFailed, 'error');
+    }
+  }
   const pick = async (f: File | undefined) => {
-    if (!f) return;
-    // The chosen photo stays on the phone (made smaller first), kept with the draft.
-    const blob = await preparePhoto(f, 1400).catch(() => f);
-    const url = await asDataUrl(blob);
-    setPhoto(url);
-    if (!fresh) writeDraft('free.photo', url);
-    setSource('photo');
+    if (f) await startPhoto(await preparePhoto(f, 1400).catch(() => f));
+  };
+  const restart = async (tpl: PosterTemplate | null) => {
+    if (await confirmDialog(tf.startConfirm)) startFrom(tpl);
   };
   const patch = (id: string, p: Partial<PosterLayer>) =>
     setEditDoc((d) => ({
@@ -397,65 +440,38 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
         ...lk.vars,
       }}
     >
-      {source === 'layers' ? (
-        lk.slides.length && !thumb ? (
-          <SlideshowPoster
-            tpl={lk.doc}
-            slides={lk.slides}
-            texts={textsOf(words)}
-            editing={slideIdx}
-            forced={forced}
-          />
-        ) : (
-          <LayeredPoster
-            fill
-            tpl={lk.doc}
-            texts={textsOf(words)}
-            slides={
-              lk.slides[0] ? [{ key: lk.slides[0].id, layers: lk.slides[0].layers }] : undefined
-            }
-          />
-        )
-      ) : source === 'photo' && photo ? (
-        <img
-          src={photo}
-          alt=""
-          data-shot="under"
-          className="absolute inset-0 h-full w-full object-cover"
+      {lk.slides.length && !thumb ? (
+        <SlideshowPoster
+          tpl={lk.doc}
+          slides={lk.slides}
+          texts={textsOf(words)}
+          editing={slideIdx}
+          forced={forced}
         />
-      ) : source === 'template' && lk.tpl ? (
-        <LayeredPoster fill tpl={lk.tpl} texts={textsOf(words)} coverUrl={photo} />
       ) : (
-        <LookTop
-          look={
-            lk.deg ? { ...groupLook(g), brandColor: shiftHex(brand.light, lk.deg) } : groupLook(g)
+        <LayeredPoster
+          fill
+          tpl={lk.doc}
+          texts={textsOf(words)}
+          slides={
+            lk.slides[0] ? [{ key: lk.slides[0].id, layers: lk.slides[0].layers }] : undefined
           }
-          className="absolute inset-0"
-        >
-          {null}
-        </LookTop>
+        />
       )}
-      <LivingLayers layers={lk.fx} image={source === 'photo' ? photo : null} />
-      {/* A template (or own layers) writes the words in its own places. */}
-      {source !== 'template' && source !== 'layers' && <PosterTextLayer value={words} />}
+      <LivingLayers layers={lk.fx} />
     </div>
   );
-  const render = (words: PosterTextValue) => {
-    const poster = draw(look, words);
-    // Own layers move with a finger right on the preview.
-    return source === 'layers' ? (
-      <PosterGestures
-        layers={editDoc.layers}
-        selected={selected}
-        onSelect={setSelected}
-        onPatch={patch}
-      >
-        {poster}
-      </PosterGestures>
-    ) : (
-      poster
-    );
-  };
+  // The layers move with a finger right on the preview.
+  const render = (words: PosterTextValue) => (
+    <PosterGestures
+      layers={editDoc.layers}
+      selected={selected}
+      onSelect={setSelected}
+      onPatch={patch}
+    >
+      {draw(look, words)}
+    </PosterGestures>
+  );
 
   // «🎨 Colour variants»: small still copies to choose from, each one's colour to change.
   const thumbW = Math.round(Math.min(170, Math.max(44, 58 * ratio)));
@@ -502,12 +518,9 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
   };
   const setTurn = (i: number, deg: number) =>
     setTurns((cur) => cur.map((d, j) => (j === i ? ((Math.round(deg) % 360) + 360) % 360 : d)));
-  const hasPictures =
-    (source === 'layers' &&
-      [layered.doc.layers, ...slides.map((sl) => sl.layers)].some((ls) =>
-        ls.some((l) => l.type === 'image'),
-      )) ||
-    (source === 'template' && !!tpl?.layers.some((l) => l.type === 'image'));
+  const hasPictures = [layered.doc.layers, ...slides.map((sl) => sl.layers)].some((ls) =>
+    ls.some((l) => l.type === 'image'),
+  );
   const variantsBlock = (words: PosterTextValue) => (
     <div className="flex flex-col gap-2 rounded-2xl bg-hairline/50 p-2.5">
       <div className="text-[13px] font-semibold">🎨 {tf.variants.title}</div>
@@ -601,32 +614,11 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
   const settings = (words: PosterTextValue) => (
     <>
       <div className="flex flex-col gap-2">
-        <div className="text-[12px] font-semibold text-hint">{tf.picture}</div>
+        <div className="text-[12px] font-semibold text-hint">{tf.startFrom}</div>
         <div className="flex flex-wrap gap-1.5">
-          {pill(source === 'colours', tf.colours, () => setSource('colours'))}
-          {photo ? (
-            pill(source === 'photo', tf.photo, () => setSource('photo'))
-          ) : (
-            <label className="cursor-pointer rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold">
-              {tf.choosePhoto}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => void pick(e.target.files?.[0])}
-              />
-            </label>
-          )}
-          {(templates.data?.length ?? 0) > 0 &&
-            pill(source === 'template', tf.template, () => setSource('template'))}
-          {pill(source === 'layers', tf.layers, () => setSource('layers'))}
-        </div>
-        {source === 'layers' && (
-          <p className="text-[12px] leading-snug text-hint">{tf.layersHint}</p>
-        )}
-        {source === 'photo' && photo && (
-          <label className="cursor-pointer self-start text-[13px] font-semibold text-link">
-            {tf.otherPhoto}
+          {pill(false, tf.startColours, () => void restart(null))}
+          <label className="cursor-pointer rounded-full bg-hairline px-3 py-1.5 text-[13px] font-semibold">
+            {upload.isPending ? '…' : tf.startPhoto}
             <input
               type="file"
               accept="image/*"
@@ -634,14 +626,9 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
               onChange={(e) => void pick(e.target.files?.[0])}
             />
           </label>
-        )}
-        {source === 'template' && (
-          <div className="flex flex-wrap gap-1.5">
-            {(templates.data ?? []).map((x) =>
-              pill(tpl?.id === x.id, x.name, () => setTplId(x.id)),
-            )}
-          </div>
-        )}
+          {(templates.data ?? []).map((x) => pill(false, `🖼 ${x.name}`, () => void restart(x)))}
+        </div>
+        <p className="text-[12px] leading-snug text-hint">{tf.startHint}</p>
       </div>
       <div className="flex flex-col gap-2">
         <div className="text-[12px] font-semibold text-hint">{tf.shape}</div>
@@ -652,7 +639,7 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
         </div>
         {shape === 'custom' && <OwnSize size={size} onChange={setSize} />}
       </div>
-      {source === 'layers' && (
+      {
         <SlidesBar
           slides={slides}
           setSlides={setSlides}
@@ -668,16 +655,14 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
           aspect={shape === 'custom' ? `${size.w} / ${size.h}` : SHAPE_RATIO[shape]}
           texts={textsOf({ mode: 'none', text: '' } as never)}
         />
-      )}
-      {source === 'layers' && (
-        <PosterLayersEditor
-          doc={editDoc}
-          setDoc={setEditDoc}
-          g={g}
-          selected={selected}
-          setSelected={setSelected}
-        />
-      )}
+      }
+      <PosterLayersEditor
+        doc={editDoc}
+        setDoc={setEditDoc}
+        g={g}
+        selected={selected}
+        setSelected={setSelected}
+      />
       <CoverEffects state={effects} onChange={setEffects} open={fxOpen} onOpen={setFxOpen} />
       {variantsBlock(words)}
     </>
@@ -686,7 +671,7 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
   return (
     <MotionExport
       name={tf.fileName}
-      preview={{ preset: g.name, render, modes: ['custom', 'none'] }}
+      preview={{ preset: g.name, render, modes: ['custom', 'none'], plain: true }}
       extra={settings}
       draftKey="free.text"
       size={shape === 'custom' ? size : undefined}

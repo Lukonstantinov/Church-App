@@ -78,12 +78,15 @@ export function PosterTextControls({
   onChange,
   preset,
   modes = ['custom', 'none'],
+  plain = false,
 }: {
   value: PosterTextValue;
   onChange: (v: PosterTextValue) => void;
   preset: string;
   /** The choices this poster has ('design' only when it shows text of its own). */
   modes?: PosterTextMode[];
+  /** Only the words: the poster's own text layers set the font, size and place. */
+  plain?: boolean;
 }) {
   const t = useT();
   const tt = t.posterText;
@@ -112,7 +115,7 @@ export function PosterTextControls({
       {value.mode === 'custom' && (
         <>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-hint">{tt.hint}</span>
+            <span className="text-[11px] text-hint">{plain ? tt.linesHint : tt.hint}</span>
             <button
               type="button"
               onClick={() => set({ text: preset })}
@@ -127,19 +130,23 @@ export function PosterTextControls({
             rows={4}
             maxLength={400}
             className="w-full resize-y rounded-xl bg-hairline px-3 py-2.5 text-[15px] leading-snug outline-none"
-            style={{ fontFamily: fontFamily(value.font) }}
+            style={plain ? undefined : { fontFamily: fontFamily(value.font) }}
           />
-          <FontPicker label={tt.font} value={value.font} onChange={(font) => set({ font })} />
-          <div className="flex flex-wrap gap-1.5">
-            {(['s', 'm', 'l'] as const).map((s) =>
-              pill(value.size === s, tt.size[s], () => set({ size: s })),
-            )}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {(['top', 'middle', 'bottom'] as const).map((p) =>
-              pill(value.place === p, tt.place[p], () => set({ place: p })),
-            )}
-          </div>
+          {!plain && (
+            <>
+              <FontPicker label={tt.font} value={value.font} onChange={(font) => set({ font })} />
+              <div className="flex flex-wrap gap-1.5">
+                {(['s', 'm', 'l'] as const).map((s) =>
+                  pill(value.size === s, tt.size[s], () => set({ size: s })),
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(['top', 'middle', 'bottom'] as const).map((p) =>
+                  pill(value.place === p, tt.place[p], () => set({ place: p })),
+                )}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

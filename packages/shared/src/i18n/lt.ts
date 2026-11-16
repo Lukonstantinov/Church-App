@@ -2130,6 +2130,7 @@ export const lt: Messages = {
     },
   },
   posterText: {
+    linesHint: 'Kiekviena eilutė — atskiras tekstas plakate: pavadinimas, data, vieta, tema',
     title: 'Tekstas ant plakato',
     mode: {
       design: 'Dizaino tekstas',
@@ -2257,15 +2258,12 @@ export const lt: Messages = {
     },
     title: 'Animuotas plakatas',
     hint: 'GIF ar vaizdo įrašas iš nuotraukos, plakato šablono ar tarnystės spalvų — be renginio. Efektai, savas tekstas arba be jo; ateina į pokalbį su botu — persiųskite kur norite.',
-    picture: 'Paveikslas',
-    colours: 'Tarnystės spalvos',
-    photo: 'Nuotrauka',
-    choosePhoto: 'Pasirinkti nuotrauką',
-    otherPhoto: 'Kita nuotrauka',
-    template: 'Plakato šablonas',
-    layers: '🧩 Savi sluoksniai',
-    layersHint:
-      'Kaip plakatų redaktoriuje: nuotraukos, iškirpti žmonės, tekstas, spalva, gradientas, efektai – kiekvieną sluoksnį tempkite pirštu tiesiog peržiūroje.',
+    startFrom: 'Pradėti nuo',
+    startColours: '🎨 Tarnystės spalvos',
+    startPhoto: '📷 Nuotrauka',
+    startConfirm: 'Pradėti iš naujo? Plakato sluoksniai bus pakeisti (skaidrės ir efektai liks).',
+    startHint:
+      'Plakatas sudarytas iš sluoksnių: fonas, nuotraukos, iškirpti žmonės, tekstas, spalva, efektai — kiekvieną galima judinti pirštu tiesiog peržiūroje. Nuotrauka tampa fonu, visa kita lieka.',
     shape: 'Forma',
     shapes: {
       '4:3': 'Pokalbiui 4:3',

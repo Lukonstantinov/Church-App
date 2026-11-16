@@ -2078,6 +2078,7 @@ export const en: Messages = {
     },
   },
   posterText: {
+    linesHint: 'Each line fills its own text on the poster: title, date, place, topic',
     title: 'Text on the poster',
     mode: { design: 'The design’s text', custom: 'Own text', none: 'No text — just the picture' },
     hint: 'First line big, the rest smaller',
@@ -2201,15 +2202,12 @@ export const en: Messages = {
     },
     title: 'Animated poster',
     hint: 'A GIF or video from a photo, a poster template or the ministry’s colours — no event needed. Effects, own text or none; it comes to your chat with the bot — forward it anywhere.',
-    picture: 'Picture',
-    colours: 'Ministry colours',
-    photo: 'Photo',
-    choosePhoto: 'Choose a photo',
-    otherPhoto: 'Another photo',
-    template: 'Poster template',
-    layers: '🧩 Own layers',
-    layersHint:
-      'As in the poster editor: photos, cut-out people, text, colour, gradient, effects — move each layer with a finger right on the preview.',
+    startFrom: 'Start from',
+    startColours: '🎨 Ministry colours',
+    startPhoto: '📷 A photo',
+    startConfirm: 'Start again? The poster’s layers are replaced (slides and effects stay).',
+    startHint:
+      'A poster is made of layers: background, photos, cut-out people, text, colour, effects — move each with a finger right on the preview. A photo becomes the background; the rest stays.',
     shape: 'Shape',
     shapes: {
       '4:3': 'Chat 4:3',
