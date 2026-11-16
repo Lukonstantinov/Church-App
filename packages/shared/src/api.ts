@@ -357,6 +357,13 @@ export interface MemberRow {
   /** A church administrator (the name is shown in red). */
   isAdmin: boolean;
   guardianConsent: boolean;
+  /**
+   * Birthday "MM-DD", birth year and the last time the person used the app or the bot —
+   * only for those who manage the people (`people.manage`); null for others or when unknown.
+   */
+  birthday: string | null;
+  birthYear: number | null;
+  lastSeenAt: string | null;
   /** Attendance rate over the group's last 8 roll calls; null if none recorded yet. */
   recentPercent: number | null;
   /** Profile photo; null = initials. */

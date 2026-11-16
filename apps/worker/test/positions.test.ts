@@ -162,6 +162,31 @@ describe('positions', () => {
     expect(summary.positionName).toBe('Казначей');
   });
 
+  it('shows birthdays in the member list only to those who manage the people', async () => {
+    const g = await createEnv('Таблица людей');
+    const positions = await apiJson<PositionRow[]>(`/api/groups/${g.id}/positions`, {
+      method: 'POST',
+      user: ADMIN,
+      json: { name: 'Смотрит', permissions: ['people.view'] },
+    });
+    const viewer = fakeUser('Смотрящий');
+    const viewerRow = await join(viewer, g);
+    await assign(viewerRow.membershipId, positions.find((p) => p.name === 'Смотрит')!.id);
+    await env.DB.prepare("update users set birthday = '03-07', birth_year = 2005 where id = ?")
+      .bind(viewerRow.userId)
+      .run();
+
+    const own = (rows: MemberRow[]) => rows.find((m) => m.userId === viewerRow.userId)!;
+    const forAdmin = own(
+      await apiJson<MemberRow[]>(`/api/groups/${g.id}/members`, { user: ADMIN }),
+    );
+    expect(forAdmin).toMatchObject({ birthday: '03-07', birthYear: 2005 });
+    const forViewer = own(
+      await apiJson<MemberRow[]>(`/api/groups/${g.id}/members`, { user: viewer }),
+    );
+    expect(forViewer).toMatchObject({ birthday: null, birthYear: null, lastSeenAt: null });
+  });
+
   it('prevents handing out rights one does not hold, and editing one’s own position', async () => {
     const g = await createEnv('Эскалация');
     const [posAdmin] = await apiJson<PositionRow[]>(`/api/groups/${g.id}/positions`, {

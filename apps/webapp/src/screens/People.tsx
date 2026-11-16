@@ -7,6 +7,7 @@ import { PersonName } from '../components/LabelLook';
 import { IconSearch, IconTag, IconTelegram, IconUserPlus, IconUsers } from '../components/icons';
 import { LinkShare } from '../components/LinkShare';
 import { PercentChip } from '../components/Status';
+import { PeopleSheet } from '../components/PeopleSheet';
 import { Sheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import {
@@ -56,6 +57,7 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
   const order = new Map((positions.data ?? []).map((p, i) => [p.id, p.isDefault ? 999 : i]));
   const rank = (m: MemberRow) => order.get(m.positionId ?? -1) ?? 999;
   const [byName, setByName] = useState(false);
+  const [sheet, setSheet] = useState(false);
   const sorted = [...activeList].sort(
     (a, b) => (byName ? 0 : rank(a) - rank(b)) || displayName(a).localeCompare(displayName(b)),
   );
@@ -287,6 +289,14 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
           )}
           {can('people.manage') && (
             <ActionRow
+              icon={<span className="text-[18px]">⬇️</span>}
+              onClick={() => setSheet(true)}
+            >
+              {t.peopleSheet.title}
+            </ActionRow>
+          )}
+          {can('people.manage') && (
+            <ActionRow
               icon={<IconTag size={20} />}
               onClick={() => push({ name: 'labels', groupId: active.id })}
             >
@@ -311,6 +321,9 @@ export function People({ groups, active }: { groups: GroupSummary[]; active: Gro
             {t.people.rotate}
           </ActionRow>
         </Section>
+      )}
+      {sheet && (
+        <PeopleSheet g={active} rank={rank} byName={byName} onClose={() => setSheet(false)} />
       )}
     </Screen>
   );

@@ -515,6 +515,8 @@ groupRoutes.get('/:id/members', async (c) => {
   const db = c.get('db');
   const user = c.get('user');
   const group = await assertCan(db, user, idParam(c), 'people.view');
+  // Birthdays and when someone was last here are for those who manage the people.
+  const manages = await can(db, user, group.id, 'people.manage');
   const statuses =
     c.req.query('status') === 'all'
       ? (['pending', 'active', 'left', 'rejected'] as const)
@@ -606,6 +608,9 @@ groupRoutes.get('/:id/members', async (c) => {
     isReachable: u.isReachable,
     isAdmin: u.isAdmin,
     guardianConsent: u.guardianConsentAt !== null,
+    birthday: manages ? u.birthday : null,
+    birthYear: manages ? u.birthYear : null,
+    lastSeenAt: manages ? u.lastSeenAt : null,
     recentPercent: rates.get(u.id)?.counted
       ? Math.round((rates.get(u.id)!.attended / rates.get(u.id)!.counted) * 100)
       : null,
