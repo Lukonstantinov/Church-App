@@ -458,6 +458,7 @@ export const ru = {
       crossglass: 'Стеклянный крест',
       crossrays: 'Крест из лучей',
       downpour: 'Ливень',
+      icicles: 'Сосульки',
       threadwave: 'Волна из нитей',
       particlewave: 'Волна частиц (3D)',
       liquidmetal: 'Жидкий металл',

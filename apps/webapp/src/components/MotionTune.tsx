@@ -143,6 +143,7 @@ export function MotionTuneControls({
     'goldburst',
     'goldwave',
     'downpour',
+    'icicles',
     'particlewave',
     'dust',
     'swarm',

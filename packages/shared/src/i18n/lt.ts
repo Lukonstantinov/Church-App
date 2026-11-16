@@ -455,6 +455,7 @@ export const lt: Messages = {
       crossglass: 'Stiklinis kryžius',
       crossrays: 'Kryžius iš spindulių',
       downpour: 'Liūtis',
+      icicles: 'Varvekliai',
       threadwave: 'Gijų banga',
       particlewave: 'Dalelių banga (3D)',
       liquidmetal: 'Skystas metalas',

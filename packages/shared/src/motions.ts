@@ -179,6 +179,7 @@ export const MEETING_MOTIONS = [
   'crossglass',
   'crossrays',
   'downpour',
+  'icicles',
   // A painting filter and glitches that change the photo itself (graphics chip, GpuEffect.tsx).
   'oilfilter',
   'datamosh',
@@ -246,7 +247,10 @@ export const MOTION_GROUPS: {
       'goldburst',
     ],
   },
-  { key: 'nature', items: ['downpour', 'nebula', 'clouds', 'caustics', 'ink', 'lightning'] },
+  {
+    key: 'nature',
+    items: ['downpour', 'icicles', 'nebula', 'clouds', 'caustics', 'ink', 'lightning'],
+  },
   {
     key: 'cosmic',
     items: ['galaxy', 'starfield', 'planet', 'nebula', 'stardust', 'meteors', 'warp'],
@@ -669,6 +673,7 @@ export const MOTION_KNOBS: Partial<Record<MeetingMotion, MotionKnob[]>> = {
   crossglass: ['place', 'weight', 'sharp', 'glow', 'colors'],
   crossrays: ['place', 'weight', 'density', 'glow', 'seed', 'colors'],
   downpour: ['density', 'weight', 'chaos', 'seed', 'colors'],
+  icicles: ['density', 'weight', 'chaos', 'seed', 'colors', 'bg'],
   threadwave: [...SHADER_KNOBS, 'weight', 'glow'],
   particlewave: [...SHADER_KNOBS, 'weight', 'glow'],
   liquidmetal: [...SHADER_KNOBS, 'weight'],

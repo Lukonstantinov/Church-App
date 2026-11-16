@@ -453,6 +453,7 @@ export const en: Messages = {
       crossglass: 'Glass cross',
       crossrays: 'Cross of light rays',
       downpour: 'Downpour',
+      icicles: 'Icicles',
       threadwave: 'Thread wave',
       particlewave: 'Particle wave (3D)',
       liquidmetal: 'Liquid metal',

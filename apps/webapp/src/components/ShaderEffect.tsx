@@ -76,6 +76,7 @@ export type ShaderKind =
   | 'crossglass'
   | 'crossrays'
   | 'downpour'
+  | 'icicles'
   | 'threadwave'
   | 'particlewave'
   | 'liquidmetal'
@@ -152,6 +153,7 @@ export const SHADER_KINDS: ReadonlySet<string> = new Set<ShaderKind>([
   'crossglass',
   'crossrays',
   'downpour',
+  'icicles',
   'threadwave',
   'particlewave',
   'liquidmetal',
@@ -230,6 +232,7 @@ const RES: Record<ShaderKind, number> = {
   crossglass: 0.75,
   crossrays: 1,
   downpour: 0.75,
+  icicles: 1,
   threadwave: 1,
   particlewave: 1,
   liquidmetal: 0.6,
@@ -2692,6 +2695,52 @@ void main() {
   a = max(a, ring * 0.8);
   gl_FragColor = vec4(min(col, vec3(1.0)) * u_strength, clamp(a, 0.0, 1.0) * u_strength);
 }`,
+  // Icicles: square-cut bars of light hanging from the top at four depths, each its own
+  // length (a slow wave runs along the row of tips), blue above and lit white towards the
+  // tip with an ice-blue cap, in steps like pixel art. Each hangs from its own point and
+  // sways a little, in its own time and to its own side — sheared, not turned, so the bars
+  // stay square. A bar swung out of its column is found from the two columns either side.
+  icicles: `
+void main() {
+  vec2 p = place() / u_size;
+  float t = u_t;
+  // How far below the top edge.
+  float yd = 0.5 / u_size - p.y;
+  vec3 col = vec3(0.0);
+  float a = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float z = fi / 3.0;
+    float nx = mix(46.0, 26.0, z) * (0.5 + 0.7 * u_density);
+    float gx = p.x * nx + fi * 5.37;
+    float first = floor(gx);
+    for (int j = -2; j <= 2; j++) {
+      float colm = first + float(j);
+      float h = hash1(colm + fi * 31.7);
+      float h2 = hash1(colm * 1.7 + fi * 11.3 + 4.0);
+      float keep = step(hash1(colm * 3.3 + fi * 2.0), 0.55 + 0.4 * u_density);
+      float env = fbm3(vec2(colm * 0.09 + fi * 3.1, fi * 5.0 + t * 0.02) + seedShift());
+      float len = (0.16 + 0.8 * env) * (0.55 + 0.45 * h) * mix(0.8, 1.15, z)
+        * (0.5 + 0.7 * u_weight);
+      // The sway at the tip, in column widths; nothing at the top where it hangs.
+      float sway = sin(t * (0.5 + 0.9 * h2) + h * 6.2832) * (0.4 + 1.5 * u_chaos)
+        * (0.45 + 0.55 * h2);
+      float lx = gx - (colm + 0.5) - sway * clamp(yd / len, 0.0, 1.0);
+      float hw = 0.5 * mix(0.55, 1.05, h2);
+      float m = (1.0 - aaStep(hw, abs(lx))) * (1.0 - aaStep(len, yd)) * keep;
+      float v = floor(clamp(yd / len, 0.0, 1.0) * 14.0) / 14.0;
+      vec3 c = mix(u_c[0], u_c[1], smoothstep(0.15, 0.75, v));
+      c = mix(c, u_c[2], smoothstep(0.5, 1.0, v) * step(0.45, h2) * (0.5 + 0.5 * z));
+      // The cap: a square of ice at the very tip.
+      c = mix(c, u_c[3], step(len - 1.2 / nx, yd) * 0.85);
+      c *= mix(0.55, 1.0, z);
+      float al = m * mix(0.75, 1.0, z);
+      col = col * (1.0 - al) + c * al;
+      a = a * (1.0 - al) + al;
+    }
+  }
+  gl_FragColor = overSpace(vec4(min(col, vec3(1.0)), a) * u_strength);
+}`,
 };
 
 // ---------- The one context ----------
@@ -2913,6 +2962,8 @@ const OWN_DEFAULTS: Partial<Record<ShaderKind, string[]>> = {
   crossglass: ['#8b5cf6', '#f5ecff', '#f472b6', '#0d0522'],
   crossrays: ['#ffffff', '#ffe9a8', '#ff9f43'],
   downpour: ['#e2ecff', '#8fa9cc', '#ffffff'],
+  // Deep blue at the top, blue, the white of the lit tips, the ice-blue cap.
+  icicles: ['#1e3fae', '#3b82f6', '#eaf6ff', '#5fd0f5'],
   // Darkness, deep blue, light blue: light grazing a dark cloth.
   threadwave: ['#0b1e6b', '#2563eb', '#9bd4ff'],
   particlewave: ['#1d4ed8', '#22d3ee', '#e0f7ff'],
@@ -2995,6 +3046,7 @@ class Painter {
         p.kind === 'crossglass' ||
         p.kind === 'crossrays' ||
         p.kind === 'downpour' ||
+        p.kind === 'icicles' ||
         p.kind === 'galaxy' ||
         p.kind === 'planet' ||
         p.kind === 'bethlehem' ||
