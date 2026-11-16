@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState, type CSSProperties, type SetStateAction } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type SetStateAction,
+} from 'react';
 import {
   MAX_POSTER_LAYERS,
   MAX_SLIDES,
   posterLayerSchema,
+  resolveBrand,
   type GroupSummary,
   type PosterLayer,
   type PosterTemplate,
@@ -27,6 +35,15 @@ import {
   useSlideshows,
 } from '../lib/queries';
 import { StillMotion } from '../lib/perf';
+import {
+  designColours,
+  hueBetween,
+  mainColour,
+  recolourDoc,
+  recolourEffects,
+  recolourLayers,
+  shiftHex,
+} from '../lib/recolour';
 import { useToast } from './Toast';
 import { confirmDialog, haptic } from '../lib/telegram';
 import {
@@ -73,6 +90,12 @@ const SHAPE_RATIO: Record<Shape, string> = {
   custom: '16 / 9',
 };
 
+/** How many colour variants one design can have, and the ones «create 5» starts with. */
+const MAX_VARIANTS = 5;
+const STARTER_TURNS = [60, 120, 180, 240, 300];
+/** Small copies of the poster are laid out this wide and shrunk, so they match the big one. */
+const THUMB_LAID = 400;
+
 /** An own size, in pixels of the finished video / picture. */
 interface Size {
   w: number;
@@ -89,6 +112,7 @@ const SIZE_PRESETS = {
   square: { w: 1080, h: 1080 },
   post: { w: 1080, h: 1350 },
   banner: { w: 1500, h: 500 },
+  screen: { w: 2000, h: 640 },
   a4: { w: 2480, h: 3508 },
 } as const;
 type Source = 'photo' | 'template' | 'colours' | 'layers';
@@ -201,6 +225,40 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
     // Once, when the kept slides are opened.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Colour variants: the whole design turned this many degrees round the colour wheel each.
+  const [keptTints] = useState(() =>
+    fresh ? undefined : readDraft<{ turns: number[]; pictures: boolean }>('free.variants')?.data,
+  );
+  const [turns, setTurns] = useState<number[]>(keptTints?.turns ?? []);
+  const [tintPictures, setTintPictures] = useState(keptTints?.pictures ?? false);
+  useDraft('free.variants', { turns, pictures: tintPictures }, fresh);
+  // The variant on the preview (null = the original); while all are being saved, the
+  // one the recording asked for.
+  const [picked, setPicked] = useState<number | null>(null);
+  const [batch, setBatch] = useState<{ i: number | null } | null>(null);
+  const batchShown = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!batchShown.current) return;
+    const done = batchShown.current;
+    batchShown.current = null;
+    // The poster is drawn anew in the variant's colours: its pictures, letter masks and
+    // effects are given time to be ready before the recorder looks.
+    let id = requestAnimationFrame(() => {
+      id = requestAnimationFrame(() => setTimeout(done, 700));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [batch]);
+  const variantRun = turns.length
+    ? {
+        count: turns.length,
+        show: (i: number | null) =>
+          new Promise<void>((resolve) => {
+            batchShown.current = resolve;
+            setBatch({ i });
+          }),
+        stop: () => setBatch(null),
+      }
+    : undefined;
   // Which part the editor works on: the background (null) or a slide.
   const [editing, setEditing] = useState<number | null>(null);
   const slideIdx = editing !== null && editing < slides.length ? editing : null;
@@ -243,6 +301,60 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
   };
   const tpl = templates.data?.find((x) => x.id === tplId) ?? templates.data?.[0] ?? null;
 
+  // The original (first) and every colour variant, each ready to draw. Made once per
+  // change: a poster given new layer objects on every redraw would remake its pictures.
+  const brand = resolveBrand(g.brandColor);
+  const looks = useMemo(
+    () =>
+      [0, ...turns].map((deg) => ({
+        deg,
+        doc: recolourDoc(layered.doc, deg, tintPictures),
+        slides: deg
+          ? slides.map((sl) => ({ ...sl, layers: recolourLayers(sl.layers, deg, tintPictures) }))
+          : slides,
+        tpl: tpl && recolourDoc(tpl, deg, tintPictures),
+        fx: recolourEffects(effectLayers(effects), deg),
+        // Effects and parts in the ministry's colour follow it through these.
+        vars: deg
+          ? ({
+              '--brand': shiftHex(brand.light, deg),
+              '--brand-dark': shiftHex(brand.dark, deg),
+              '--brand-partner': shiftHex(brand.partner, deg),
+            } as CSSProperties)
+          : undefined,
+      })),
+    [
+      turns,
+      layered.doc,
+      slides,
+      tpl,
+      effects,
+      tintPictures,
+      brand.light,
+      brand.dark,
+      brand.partner,
+    ],
+  );
+  type Look = (typeof looks)[number];
+  const viewed = batch ? batch.i : picked;
+  const look = looks[viewed === null ? 0 : viewed + 1] ?? looks[0]!;
+  // The colour a variant is named by: the design's main one (else the ministry's).
+  const fxColours = designColours(null, effectLayers(effects));
+  const main =
+    mainColour(
+      source === 'layers'
+        ? [
+            ...designColours(layered.doc),
+            ...slides.flatMap((sl) => designColours({ ...layered.doc, layers: sl.layers })),
+            ...fxColours,
+          ]
+        : source === 'template' && tpl
+          ? [...designColours(tpl), ...fxColours]
+          : [brand.light, ...fxColours],
+    ) ?? brand.light;
+  const [ratioW = 1, ratioH = 1] = SHAPE_RATIO[shape].split(' / ').map(Number);
+  const ratio = shape === 'custom' ? size.w / size.h : ratioW / ratioH;
+
   const pick = async (f: File | undefined) => {
     if (!f) return;
     // The chosen photo stays on the phone (made smaller first), kept with the draft.
@@ -274,43 +386,62 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
     </button>
   );
 
-  const render = (words: PosterTextValue) => {
-    const poster = (
-      <div
-        className={`relative w-full ${SHAPES[shape]}`}
-        style={shape === 'custom' ? { aspectRatio: `${size.w} / ${size.h}` } : undefined}
-      >
-        {source === 'layers' ? (
-          slides.length ? (
-            <SlideshowPoster
-              tpl={layered.doc}
-              slides={slides}
-              texts={textsOf(words)}
-              editing={slideIdx}
-              forced={forced}
-            />
-          ) : (
-            <LayeredPoster fill tpl={layered.doc} texts={textsOf(words)} />
-          )
-        ) : source === 'photo' && photo ? (
-          <img
-            src={photo}
-            alt=""
-            data-shot="under"
-            className="absolute inset-0 h-full w-full object-cover"
+  /** The poster in one look's colours; `thumb` = a small still copy (the first slide). */
+  const draw = (lk: Look, words: PosterTextValue, thumb = false) => (
+    <div
+      // Drawn anew for another variant: effects read the ministry's colour when they start.
+      key={thumb ? undefined : lk.deg}
+      className={`relative w-full ${SHAPES[shape]}`}
+      style={{
+        ...(shape === 'custom' ? { aspectRatio: `${size.w} / ${size.h}` } : null),
+        ...lk.vars,
+      }}
+    >
+      {source === 'layers' ? (
+        lk.slides.length && !thumb ? (
+          <SlideshowPoster
+            tpl={lk.doc}
+            slides={lk.slides}
+            texts={textsOf(words)}
+            editing={slideIdx}
+            forced={forced}
           />
-        ) : source === 'template' && tpl ? (
-          <LayeredPoster fill tpl={tpl} texts={textsOf(words)} coverUrl={photo} />
         ) : (
-          <LookTop look={groupLook(g)} className="absolute inset-0">
-            {null}
-          </LookTop>
-        )}
-        <LivingLayers layers={effectLayers(effects)} image={source === 'photo' ? photo : null} />
-        {/* A template (or own layers) writes the words in its own places. */}
-        {source !== 'template' && source !== 'layers' && <PosterTextLayer value={words} />}
-      </div>
-    );
+          <LayeredPoster
+            fill
+            tpl={lk.doc}
+            texts={textsOf(words)}
+            slides={
+              lk.slides[0] ? [{ key: lk.slides[0].id, layers: lk.slides[0].layers }] : undefined
+            }
+          />
+        )
+      ) : source === 'photo' && photo ? (
+        <img
+          src={photo}
+          alt=""
+          data-shot="under"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : source === 'template' && lk.tpl ? (
+        <LayeredPoster fill tpl={lk.tpl} texts={textsOf(words)} coverUrl={photo} />
+      ) : (
+        <LookTop
+          look={
+            lk.deg ? { ...groupLook(g), brandColor: shiftHex(brand.light, lk.deg) } : groupLook(g)
+          }
+          className="absolute inset-0"
+        >
+          {null}
+        </LookTop>
+      )}
+      <LivingLayers layers={lk.fx} image={source === 'photo' ? photo : null} />
+      {/* A template (or own layers) writes the words in its own places. */}
+      {source !== 'template' && source !== 'layers' && <PosterTextLayer value={words} />}
+    </div>
+  );
+  const render = (words: PosterTextValue) => {
+    const poster = draw(look, words);
     // Own layers move with a finger right on the preview.
     return source === 'layers' ? (
       <PosterGestures
@@ -326,8 +457,148 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
     );
   };
 
+  // «🎨 Colour variants»: small still copies to choose from, each one's colour to change.
+  const thumbW = Math.round(Math.min(170, Math.max(44, 58 * ratio)));
+  const variantTile = (i: number | null, words: PosterTextValue) => {
+    const lk = looks[i === null ? 0 : i + 1];
+    if (!lk) return null;
+    return (
+      <button
+        key={i ?? 'original'}
+        type="button"
+        onClick={() => {
+          haptic.tap();
+          setPicked(i);
+        }}
+        className={`relative shrink-0 overflow-hidden rounded-lg bg-black ring-2 transition ${
+          picked === i ? 'ring-[var(--brand)]' : 'ring-transparent'
+        }`}
+        style={{ width: thumbW, height: Math.round(thumbW / ratio) }}
+      >
+        {/* A still picture: no effects run in the strip. */}
+        <StillMotion.Provider value>
+          <div
+            className="pointer-events-none absolute left-0 top-0 text-white"
+            style={{
+              width: THUMB_LAID,
+              transform: `scale(${thumbW / THUMB_LAID})`,
+              transformOrigin: 'top left',
+            }}
+          >
+            {draw(lk, words, true)}
+          </div>
+        </StillMotion.Provider>
+        <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/60 px-1 py-0.5 text-[10px] font-semibold text-white">
+          {i !== null && (
+            <span
+              className="h-2 w-2 rounded-full ring-1 ring-white/70"
+              style={{ background: shiftHex(main, lk.deg) }}
+            />
+          )}
+          {i === null ? tf.variants.original : i + 1}
+        </span>
+      </button>
+    );
+  };
+  const setTurn = (i: number, deg: number) =>
+    setTurns((cur) => cur.map((d, j) => (j === i ? ((Math.round(deg) % 360) + 360) % 360 : d)));
+  const hasPictures =
+    (source === 'layers' &&
+      [layered.doc.layers, ...slides.map((sl) => sl.layers)].some((ls) =>
+        ls.some((l) => l.type === 'image'),
+      )) ||
+    (source === 'template' && !!tpl?.layers.some((l) => l.type === 'image'));
+  const variantsBlock = (words: PosterTextValue) => (
+    <div className="flex flex-col gap-2 rounded-2xl bg-hairline/50 p-2.5">
+      <div className="text-[13px] font-semibold">🎨 {tf.variants.title}</div>
+      <p className="text-[11px] leading-snug text-hint">{tf.variants.hint}</p>
+      {turns.length === 0 ? (
+        <button
+          type="button"
+          onClick={() => {
+            haptic.tap();
+            setTurns(STARTER_TURNS);
+          }}
+          className="self-start rounded-full bg-[var(--brand)] px-3 py-1.5 text-[13px] font-semibold text-white"
+        >
+          {tf.variants.create}
+        </button>
+      ) : (
+        <>
+          <div className="flex gap-2 overflow-x-auto p-0.5 pb-1">
+            {variantTile(null, words)}
+            {turns.map((_, i) => variantTile(i, words))}
+            {turns.length < MAX_VARIANTS && (
+              <button
+                type="button"
+                aria-label={tf.variants.add}
+                onClick={() => {
+                  haptic.tap();
+                  // A colour of its own: a step on from the last one.
+                  setTurns((cur) => [...cur, ((cur[cur.length - 1] ?? 0) + 45) % 360 || 45]);
+                  setPicked(turns.length);
+                }}
+                className="flex shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-hint/40 text-[20px] text-hint"
+                style={{ width: 44, height: Math.round(thumbW / ratio) }}
+              >
+                ＋
+              </button>
+            )}
+          </div>
+          {picked !== null && turns[picked] !== undefined && (
+            <div className="flex flex-col gap-2 rounded-xl bg-[var(--color-section)] p-2">
+              <div className="flex items-center gap-2 text-[12px] text-hint">
+                <label className="flex items-center gap-2">
+                  {tf.variants.colour}
+                  <input
+                    type="color"
+                    value={shiftHex(main, turns[picked])}
+                    onChange={(e) => setTurn(picked, hueBetween(main, e.target.value))}
+                    className="h-8 w-10 rounded-lg border-0 bg-transparent p-0"
+                  />
+                </label>
+                <input
+                  type="range"
+                  min={1}
+                  max={359}
+                  value={turns[picked] || 1}
+                  aria-label={tf.variants.shade}
+                  onChange={(e) => setTurn(picked, Number(e.target.value))}
+                  className="min-w-0 flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic.tap();
+                    setTurns((cur) => cur.filter((_, j) => j !== picked));
+                    setPicked(null);
+                  }}
+                  className="rounded-full bg-hairline px-2.5 py-1 font-semibold text-[var(--color-danger,#e5484d)]"
+                >
+                  🗑 {tf.variants.remove}
+                </button>
+              </div>
+              <p className="text-[11px] leading-snug text-hint">{tf.variants.shown(picked + 1)}</p>
+            </div>
+          )}
+          {hasPictures && (
+            <label className="flex items-center gap-2 text-[12px]">
+              <input
+                type="checkbox"
+                checked={tintPictures}
+                onChange={(e) => setTintPictures(e.target.checked)}
+              />
+              {tf.variants.pictures}
+            </label>
+          )}
+          <p className="text-[11px] leading-snug text-hint">{tf.variants.saveHint}</p>
+        </>
+      )}
+    </div>
+  );
+
   // The preview first, pinned while everything that changes it scrolls below.
-  const settings = (
+  const settings = (words: PosterTextValue) => (
     <>
       <div className="flex flex-col gap-2">
         <div className="text-[12px] font-semibold text-hint">{tf.picture}</div>
@@ -408,6 +679,7 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
         />
       )}
       <CoverEffects state={effects} onChange={setEffects} open={fxOpen} onOpen={setFxOpen} />
+      {variantsBlock(words)}
     </>
   );
 
@@ -419,6 +691,7 @@ function FreePosterMaker({ g, fresh }: { g: GroupSummary; fresh: boolean }) {
       draftKey="free.text"
       size={shape === 'custom' ? size : undefined}
       slideshow={slideshow}
+      variants={variantRun}
     />
   );
 }

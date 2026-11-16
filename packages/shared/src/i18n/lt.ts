@@ -2285,11 +2285,33 @@ export const lt: Messages = {
       square: 'Kvadratas 1080×1080',
       post: 'Įrašas 1080×1350',
       banner: 'Reklamjuostė 1500×500',
+      screen: 'Salės ekranas 2000×640',
       a4: 'A4 2480×3508',
+    },
+    variants: {
+      title: 'Spalvų variantai',
+      hint: 'Tas pats dizainas kitomis spalvomis: visos spalvos pasukamos kartu, todėl šviesa, šešėliai ir kontrastas lieka kaip originale. Balta, juoda ir pilka nesikeičia.',
+      create: '🎨 Sukurti 5 variantus',
+      add: 'Pridėti variantą',
+      original: 'Originalas',
+      colour: 'Pagrindinė spalva',
+      shade: 'Atspalvis',
+      remove: 'Pašalinti',
+      shown: (n: number) =>
+        `Peržiūroje — ${n} variantas. Dizaino pakeitimai keičia originalą, variantai juos pakartoja savo spalvomis.`,
+      pictures: 'Perspalvinti ir nuotraukas',
+      saveHint:
+        'Bakstelėkite variantą, kad pamatytumėte jį judantį. Apačioje galima išsaugoti tai, kas peržiūroje, arba visus variantus iš karto.',
     },
     fileName: 'Plakatas',
   },
   motionExport: {
+    variantStep: (n: number, of: number) => `${n} variantas iš ${of}`,
+    whatLabel: 'Ką išsaugoti',
+    whatShown: 'Tai, kas peržiūroje',
+    whatAll: (n: number) => `Visi variantai (${n})`,
+    whatHint:
+      'Originalas ir kiekvienas spalvų variantas įrašomi paeiliui — failai ateis vienas po kito.',
     saved: 'Išsaugota šiame įrenginyje',
     sizeHint: (w: number, h: number) =>
       `Savas dydis: vaizdo įrašas ir paveikslėlis bus ${w}×${h} px`,

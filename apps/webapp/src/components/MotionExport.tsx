@@ -125,6 +125,7 @@ export function MotionExport({
   draftKey,
   size,
   slideshow,
+  variants,
 }: {
   /** The poster to record, drawn by the caller (no preview here). */
   node?: RefObject<HTMLElement | null>;
@@ -148,8 +149,11 @@ export function MotionExport({
    * chosen people, the whole ministry, the whole church (church admins) or those serving.
    */
   share?: { kind: 'event' | 'meeting'; id: number; groupId: number };
-  /** More settings shown right under the pinned preview (the poster maker's picture, shape, effects). */
-  extra?: ReactNode;
+  /**
+   * More settings shown right under the pinned preview (the poster maker's picture, shape,
+   * effects); as a function it is given the words on the poster (for small copies of it).
+   */
+  extra?: ReactNode | ((text: PosterTextValue) => ReactNode);
   /** Keeps the words and the message on this phone under this name until changed again. */
   draftKey?: string;
   /**
@@ -165,6 +169,16 @@ export function MotionExport({
     seconds: number[];
     kinds: SlideTransition[];
     show: (slide: number | null, bare: boolean) => Promise<void>;
+    stop: () => void;
+  };
+  /**
+   * Colour variants (the poster maker's): «all variants» saves the original and each
+   * variant one after another — the caller puts each on the preview in turn (null = the
+   * original) and `stop` brings back what was shown.
+   */
+  variants?: {
+    count: number;
+    show: (variant: number | null) => Promise<void>;
     stop: () => void;
   };
 }) {
@@ -200,7 +214,8 @@ export function MotionExport({
   const [busy, setBusy] = useState<'video' | 'gif' | 'picture' | null>(null);
   // Plays in the chat (an animation) or comes as a file to save, full size and untouched.
   // Plays in the chat, comes as a file there, or is saved straight onto this device.
-  const [deliver, setDeliver] = useState<'play' | 'file' | 'device'>('play');
+  // A poster in an own size is made for a screen or print: it starts as a file to keep.
+  const [deliver, setDeliver] = useState<'play' | 'file' | 'device'>(size ? 'device' : 'play');
   const asFile = deliver === 'file';
   const toDevice = deliver === 'device' && isInsideTelegram();
   const out = size ? fitSize(size) : null;
@@ -210,8 +225,30 @@ export function MotionExport({
   const [progress, setProgress] = useState(0);
   const [sending, setSending] = useState(false);
   const [shrinking, setShrinking] = useState(false);
+  // Colour variants: only what is on the preview, or the original and every variant.
+  const [all, setAll] = useState(false);
+  const [step, setStep] = useState<{ n: number; of: number } | null>(null);
+  const everyVariant = !!variants && variants.count > 0 && all && to === 'me';
 
-  const fileName = () => name.replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 50) || 'poster';
+  const fileName = (tag = '') =>
+    (name.replace(/[^\p{L}\p{N} ._()-]/gu, '').slice(0, 50) || 'poster') + tag;
+
+  /**
+   * Makes what is on the preview — or, for «all variants», the original and then each
+   * colour variant, numbered from 2. Stops at the first that could not be made.
+   */
+  async function each(act: (tag: string) => Promise<boolean>) {
+    if (!variants || !everyVariant) return void (await act(''));
+    const of = variants.count + 1;
+    for (let n = 0; n < of; n++) {
+      setStep({ n: n + 1, of });
+      setSending(false);
+      setShrinking(false);
+      setProgress(0);
+      await variants.show(n === 0 ? null : n - 1);
+      if (!(await act(n === 0 ? '' : ` ${n + 1}`))) break;
+    }
+  }
 
   /** Kept by the worker for a day, then Telegram's save dialog opens on this device. */
   async function saveOnDevice(file: Blob, name: string) {
@@ -229,24 +266,26 @@ export function MotionExport({
     onRecording?.(true);
     try {
       await new Promise((r) => setTimeout(r, 400));
-      const el = node.current;
-      if (!el) throw new Error('no_poster');
       const { recordLoop } = await import('../lib/recorder');
-      const rec = await recordLoop(el, {
-        width: out?.w ?? Math.max(1080, videoWidth(quality, el)),
-        height: out?.h,
-        still: 1.5,
-        onProgress: setProgress,
+      await each(async (tag) => {
+        const el = node.current;
+        if (!el) throw new Error('no_poster');
+        const rec = await recordLoop(el, {
+          width: out?.w ?? Math.max(1080, videoWidth(quality, el)),
+          height: out?.h,
+          still: 1.5,
+          onProgress: setProgress,
+        });
+        if (!rec.png) throw new Error('no_file');
+        setSending(true);
+        if (toDevice) await saveOnDevice(rec.png, fileName(tag));
+        else if (!isInsideTelegram()) saveHere(rec.png, `${fileName(tag)}.png`);
+        // A photo is squeezed by Telegram (and refused over 9 MB): big ones go as a file.
+        else await sendPictureToChat(rec.png, fileName(tag), asFile || rec.png.size > 9_000_000);
+        return true;
       });
-      if (!rec.png) throw new Error('no_file');
-      setSending(true);
-      if (toDevice) {
-        await saveOnDevice(rec.png, fileName());
-        return;
-      }
-      if (!isInsideTelegram()) saveHere(rec.png, `${fileName()}.png`);
-      // A photo is squeezed by Telegram (and refused over 9 MB): big ones go as a file.
-      else await sendPictureToChat(rec.png, fileName(), asFile || rec.png.size > 9_000_000);
+      // (Saving onto the device has said so itself.)
+      if (toDevice) return;
       haptic.success();
       toast(isInsideTelegram() ? t.motionExport.sent : t.motionExport.saved);
     } catch (err) {
@@ -255,9 +294,113 @@ export function MotionExport({
       toast(t.motionExport.failed, 'error');
     } finally {
       onRecording?.(false);
+      variants?.stop();
+      setStep(null);
       setSending(false);
       setBusy(null);
     }
+  }
+
+  /** One video or GIF of what is on the preview, sent or saved; false when it has no effects. */
+  async function record(kind: 'video' | 'gif', tag: string): Promise<boolean> {
+    const el = node.current;
+    const { hasEffects, recordLoop } = await import('../lib/recorder');
+    if (!el || !hasEffects(el)) {
+      haptic.error();
+      toast(t.motionExport.noEffects, 'error');
+      return false;
+    }
+    const q = QUALITY[quality];
+    const slideTotal = slideshow ? slideshow.seconds.reduce((a, b) => a + b, 0) : 0;
+    // A slideshow runs its slides' lengths (a GIF of it too, however long).
+    const seconds = slideshow
+      ? slideTotal
+      : kind === 'gif'
+        ? Math.min(length, GIF_MAX_SECONDS)
+        : length;
+    // The video's detail (bits per pixel per frame), lowered for a long one to fit the
+    // budget: the width it is drawn at times the block's shape gives its pixels.
+    const vw = out ? out.w : videoWidth(quality, el);
+    const vh = out ? out.h : vw * (el.offsetHeight / Math.max(1, el.offsetWidth));
+    const viaBot = isInsideTelegram() || to !== 'me';
+    const bitrate = viaBot
+      ? Math.min(q.bitrate, (VIDEO_BUDGET_BYTES * 8) / (seconds * vw * vh * fps))
+      : q.bitrate;
+    const make = (gifWidth: number) =>
+      recordLoop(el, {
+        seconds,
+        gifFps: gifFpsFor(seconds),
+        slides: slideshow
+          ? {
+              seconds: slideshow.seconds,
+              kinds: slideshow.kinds,
+              change: SLIDE_CHANGE_SECONDS,
+              show: slideshow.show,
+            }
+          : undefined,
+        gif: kind === 'gif',
+        // A GIF only: no video is made alongside (quicker).
+        video: kind === 'video',
+        // The picture is drawn at least as wide as the file that is made from it; an
+        // own size is the video's exact size.
+        width: out
+          ? kind === 'gif'
+            ? Math.min(out.w, Math.max(720, gifWidth))
+            : out.w
+          : kind === 'gif'
+            ? Math.max(720, q.gif)
+            : videoWidth(quality, el),
+        gifWidth: out ? Math.min(out.w, gifWidth) : gifWidth,
+        // The video exactly the own size (the GIF follows its shape).
+        height: out && kind === 'video' ? out.h : undefined,
+        fps,
+        quality: bitrate,
+        onProgress: setProgress,
+      });
+    let rec = await make(q.gif);
+    // Too big for Telegram to play: again, narrower by about as much as needed.
+    let width: number = q.gif;
+    // (A file to save may stay big: it isn't played in the chat.)
+    for (
+      let tries = 0;
+      rec.gif &&
+      rec.gif.size > GIF_MAX_BYTES &&
+      !((asFile || toDevice) && to === 'me') &&
+      tries < 3;
+      tries++
+    ) {
+      width = even(width * Math.sqrt(GIF_MAX_BYTES / rec.gif.size) * 0.92);
+      if (width < 300) break;
+      setShrinking(true);
+      setProgress(0);
+      rec = await make(width);
+    }
+    const file = kind === 'gif' ? rec.gif : (rec.mp4 ?? rec.gif);
+    if (!file) throw new Error('no_file');
+    if (kind === 'video' && !rec.mp4) toast(t.motionExport.noVideo);
+    setSending(true);
+    const safe = fileName(tag);
+    // On a computer's browser (outside Telegram) the file is simply saved here.
+    if (to === 'me' && !isInsideTelegram()) {
+      saveHere(file, `${safe}.${file.type === 'image/gif' ? 'gif' : 'mp4'}`);
+      haptic.success();
+      toast(t.motionExport.saved);
+      return true;
+    }
+    if (to === 'me' && toDevice) {
+      await saveOnDevice(file, safe);
+      return true;
+    }
+    const res = await sendAnimationToChat(
+      file,
+      safe,
+      text.trim() || undefined,
+      share && to !== 'me' ? { to, kind: share.kind, id: share.id, users: chosen } : undefined,
+      asFile && to === 'me',
+    );
+    haptic.success();
+    toast(to === 'me' ? t.motionExport.sent : t.motionExport.sentTo(res.sent));
+    return true;
   }
 
   async function run(kind: 'video' | 'gif') {
@@ -274,103 +417,7 @@ export function MotionExport({
     try {
       // The effects are switched on and laid out before recording starts.
       await new Promise((r) => setTimeout(r, 400));
-      const el = node.current;
-      const { hasEffects, recordLoop } = await import('../lib/recorder');
-      if (!el || !hasEffects(el)) {
-        haptic.error();
-        toast(t.motionExport.noEffects, 'error');
-        return;
-      }
-      const q = QUALITY[quality];
-      const slideTotal = slideshow ? slideshow.seconds.reduce((a, b) => a + b, 0) : 0;
-      // A slideshow runs its slides' lengths (a GIF of it too, however long).
-      const seconds = slideshow
-        ? slideTotal
-        : kind === 'gif'
-          ? Math.min(length, GIF_MAX_SECONDS)
-          : length;
-      // The video's detail (bits per pixel per frame), lowered for a long one to fit the
-      // budget: the width it is drawn at times the block's shape gives its pixels.
-      const vw = out ? out.w : videoWidth(quality, el);
-      const vh = out ? out.h : vw * (el.offsetHeight / Math.max(1, el.offsetWidth));
-      const viaBot = isInsideTelegram() || to !== 'me';
-      const bitrate = viaBot
-        ? Math.min(q.bitrate, (VIDEO_BUDGET_BYTES * 8) / (seconds * vw * vh * fps))
-        : q.bitrate;
-      const record = (gifWidth: number) =>
-        recordLoop(el, {
-          seconds,
-          gifFps: gifFpsFor(seconds),
-          slides: slideshow
-            ? {
-                seconds: slideshow.seconds,
-                kinds: slideshow.kinds,
-                change: SLIDE_CHANGE_SECONDS,
-                show: slideshow.show,
-              }
-            : undefined,
-          gif: kind === 'gif',
-          // A GIF only: no video is made alongside (quicker).
-          video: kind === 'video',
-          // The picture is drawn at least as wide as the file that is made from it; an
-          // own size is the video's exact size.
-          width: out
-            ? kind === 'gif'
-              ? Math.min(out.w, Math.max(720, gifWidth))
-              : out.w
-            : kind === 'gif'
-              ? Math.max(720, q.gif)
-              : videoWidth(quality, el),
-          gifWidth: out ? Math.min(out.w, gifWidth) : gifWidth,
-          // The video exactly the own size (the GIF follows its shape).
-          height: out && kind === 'video' ? out.h : undefined,
-          fps,
-          quality: bitrate,
-          onProgress: setProgress,
-        });
-      let rec = await record(q.gif);
-      // Too big for Telegram to play: again, narrower by about as much as needed.
-      let width: number = q.gif;
-      // (A file to save may stay big: it isn't played in the chat.)
-      for (
-        let tries = 0;
-        rec.gif &&
-        rec.gif.size > GIF_MAX_BYTES &&
-        !((asFile || toDevice) && to === 'me') &&
-        tries < 3;
-        tries++
-      ) {
-        width = even(width * Math.sqrt(GIF_MAX_BYTES / rec.gif.size) * 0.92);
-        if (width < 300) break;
-        setShrinking(true);
-        setProgress(0);
-        rec = await record(width);
-      }
-      const file = kind === 'gif' ? rec.gif : (rec.mp4 ?? rec.gif);
-      if (!file) throw new Error('no_file');
-      if (kind === 'video' && !rec.mp4) toast(t.motionExport.noVideo);
-      setSending(true);
-      const safe = fileName();
-      // On a computer's browser (outside Telegram) the file is simply saved here.
-      if (to === 'me' && !isInsideTelegram()) {
-        saveHere(file, `${safe}.${file.type === 'image/gif' ? 'gif' : 'mp4'}`);
-        haptic.success();
-        toast(t.motionExport.saved);
-        return;
-      }
-      if (to === 'me' && toDevice) {
-        await saveOnDevice(file, safe);
-        return;
-      }
-      const res = await sendAnimationToChat(
-        file,
-        safe,
-        text.trim() || undefined,
-        share && to !== 'me' ? { to, kind: share.kind, id: share.id, users: chosen } : undefined,
-        asFile && to === 'me',
-      );
-      haptic.success();
-      toast(to === 'me' ? t.motionExport.sent : t.motionExport.sentTo(res.sent));
+      await each((tag) => record(kind, tag));
     } catch (err) {
       console.warn('recording failed', err);
       haptic.error();
@@ -378,6 +425,8 @@ export function MotionExport({
     } finally {
       onRecording?.(false);
       slideshow?.stop();
+      variants?.stop();
+      setStep(null);
       setSending(false);
       setShrinking(false);
       setBusy(null);
@@ -393,7 +442,7 @@ export function MotionExport({
           <LivePreview node={own} width={preview.width}>
             {preview.render(words)}
           </LivePreview>
-          {!busy && extra}
+          {!busy && (typeof extra === 'function' ? extra(words) : extra)}
           {!busy && (
             <PosterTextControls
               value={words}
@@ -409,6 +458,11 @@ export function MotionExport({
       )}
       {busy ? (
         <div className="flex flex-col gap-1.5 py-1">
+          {step && (
+            <div className="text-center text-[13px] font-semibold">
+              {t.motionExport.variantStep(step.n, step.of)}
+            </div>
+          )}
           <div className="h-2 overflow-hidden rounded-full bg-hairline">
             <div
               className="h-full rounded-full bg-[var(--brand)] transition-[width] duration-200"
@@ -571,6 +625,31 @@ export function MotionExport({
               <p className="text-[11px] leading-snug text-hint">
                 {t.motionExport.deliverHint[deliver]}
               </p>
+            </>
+          )}
+          {variants && variants.count > 0 && to === 'me' && (
+            <>
+              <div className="text-[12px] font-semibold text-hint">{t.motionExport.whatLabel}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {[false, true].map((every) => (
+                  <button
+                    key={String(every)}
+                    type="button"
+                    onClick={() => {
+                      haptic.tap();
+                      setAll(every);
+                    }}
+                    className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
+                      all === every ? 'bg-[var(--brand)] text-white' : 'bg-hairline'
+                    }`}
+                  >
+                    {every ? t.motionExport.whatAll(variants.count + 1) : t.motionExport.whatShown}
+                  </button>
+                ))}
+              </div>
+              {all && (
+                <p className="text-[11px] leading-snug text-hint">{t.motionExport.whatHint}</p>
+              )}
             </>
           )}
           <div className="flex flex-wrap gap-2">

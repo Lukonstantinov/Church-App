@@ -2229,11 +2229,33 @@ export const en: Messages = {
       square: 'Square 1080×1080',
       post: 'Post 1080×1350',
       banner: 'Banner 1500×500',
+      screen: 'Hall screen 2000×640',
       a4: 'A4 2480×3508',
+    },
+    variants: {
+      title: 'Colour variants',
+      hint: 'The same design in other colours: all colours turn together, so light, shadow and contrast stay as in the original. White, black and grey do not change.',
+      create: '🎨 Create 5 variants',
+      add: 'Add a variant',
+      original: 'Original',
+      colour: 'Main colour',
+      shade: 'Shade',
+      remove: 'Remove',
+      shown: (n: number) =>
+        `The preview shows variant ${n}. Design changes go to the original; the variants repeat them in their own colours.`,
+      pictures: 'Recolour photos too',
+      saveHint:
+        'Tap a variant to see it moving. Below you can save what is on the preview, or all variants at once.',
     },
     fileName: 'Poster',
   },
   motionExport: {
+    variantStep: (n: number, of: number) => `Variant ${n} of ${of}`,
+    whatLabel: 'What to save',
+    whatShown: 'What is on the preview',
+    whatAll: (n: number) => `All variants (${n})`,
+    whatHint:
+      'The original and each colour variant are recorded in turn — the files come one after another.',
     saved: 'Saved on this device',
     sizeHint: (w: number, h: number) => `Own size: the video and picture come out ${w}×${h} px`,
     sizeLimited:
